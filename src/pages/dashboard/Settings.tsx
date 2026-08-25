@@ -109,7 +109,7 @@ export default function Settings() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const updatedUser = await api.patch('/api/profile', profileForm);
+      const updatedUser = await api.patch('/profile', profileForm);
       updateUser(updatedUser);
       toast.success('Profile updated successfully');
       setIsEditing(false);

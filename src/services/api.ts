@@ -1,6 +1,30 @@
 import { useAuthStore } from '@/store/authStore';
 
-const API_BASE = '/api';
+const getApiBase = (): string => {
+  const envUrl = (
+    (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL)) ||
+    ''
+  ).trim();
+
+  if (!envUrl) {
+    return '/api';
+  }
+  const cleanUrl = envUrl.replace(/\/+$/, '');
+  return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
+};
+
+export const API_BASE = getApiBase();
+
+export function normalizeEndpoint(endpoint: string): string {
+  const clean = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  if (clean.startsWith('/api/')) {
+    return clean.slice(4);
+  }
+  if (clean === '/api') {
+    return '';
+  }
+  return clean;
+}
 
 // Global callback to trigger InactivityGuard logout flow from api.ts (set by InactivityGuard on mount)
 let _onInactivityExpired: (() => void) | null = null;
@@ -94,6 +118,7 @@ async function doRefreshToken(): Promise<string | null> {
 
 async function request(endpoint: string, options: any = {}) {
   const { token } = useAuthStore.getState();
+  const cleanEndpoint = normalizeEndpoint(endpoint);
   
   const headers = {
     ...options.headers,
@@ -102,7 +127,7 @@ async function request(endpoint: string, options: any = {}) {
 
   let res;
   try {
-    res = await fetch(`${API_BASE}${endpoint}`, { 
+    res = await fetch(`${API_BASE}${cleanEndpoint}`, { 
       ...options, 
       headers,
       credentials: 'include'
@@ -113,7 +138,7 @@ async function request(endpoint: string, options: any = {}) {
   }
 
   // Handle 401 - try synchronized refresh if token exists and endpoint is not auth/refresh or auth/login
-  if (res.status === 401 && token && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/resend-verification')) {
+  if (res.status === 401 && token && !cleanEndpoint.includes('/auth/refresh') && !cleanEndpoint.includes('/auth/login') && !cleanEndpoint.includes('/auth/resend-verification')) {
     // Peek at the error body to detect InactivityExpired — if so, skip refresh and logout immediately
     const errClone = res.clone();
     try {
@@ -147,7 +172,7 @@ async function request(endpoint: string, options: any = {}) {
         Authorization: `Bearer ${newToken}`,
       };
       try {
-        res = await fetch(`${API_BASE}${endpoint}`, { 
+        res = await fetch(`${API_BASE}${cleanEndpoint}`, { 
           ...options, 
           headers: retryHeaders,
           credentials: 'include'
@@ -203,19 +228,20 @@ export const api = {
   get: (endpoint: string) => request(endpoint),
   getBlob: async (endpoint: string, options: any = {}) => {
     const { token } = useAuthStore.getState();
+    const cleanEndpoint = normalizeEndpoint(endpoint);
     const headers = {
       ...options.headers,
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     };
-    let res = await fetch(`${API_BASE}${endpoint}`, {
+    let res = await fetch(`${API_BASE}${cleanEndpoint}`, {
       ...options,
       headers,
       credentials: 'include'
     });
-    if (res.status === 401 && token && !endpoint.includes('/auth/refresh')) {
+    if (res.status === 401 && token && !cleanEndpoint.includes('/auth/refresh')) {
       const newToken = await doRefreshToken();
       if (newToken) {
-        res = await fetch(`${API_BASE}${endpoint}`, {
+        res = await fetch(`${API_BASE}${cleanEndpoint}`, {
           ...options,
           headers: {
             ...options.headers,
@@ -240,18 +266,19 @@ export const api = {
   },
   download: async (endpoint: string, fallbackFilename?: string) => {
     const { token } = useAuthStore.getState();
+    const cleanEndpoint = normalizeEndpoint(endpoint);
     const headers: any = {
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     };
-    let res = await fetch(`${API_BASE}${endpoint}`, {
+    let res = await fetch(`${API_BASE}${cleanEndpoint}`, {
       method: 'GET',
       headers,
       credentials: 'include'
     });
-    if (res.status === 401 && token && !endpoint.includes('/auth/refresh')) {
+    if (res.status === 401 && token && !cleanEndpoint.includes('/auth/refresh')) {
       const newToken = await doRefreshToken();
       if (newToken) {
-        res = await fetch(`${API_BASE}${endpoint}`, {
+        res = await fetch(`${API_BASE}${cleanEndpoint}`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${newToken}`

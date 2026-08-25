@@ -501,23 +501,10 @@ export default function ManagerDashboard() {
         if (customEndDate) queryParams.set('endDate', customEndDate);
       }
 
-      const res = await fetch(`/api/repairs/export?${queryParams.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-        }
-      });
-
-      if (!res.ok) throw new Error("Export failed");
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `MTS_Lab_Manager_Repairs_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      await api.download(
+        `/repairs/export?${queryParams.toString()}`,
+        `MTS_Lab_Manager_Repairs_${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+      );
       toast.success("Repair records exported successfully.");
     } catch (err: any) {
       toast.error(err.message || "Failed to export Excel.");

@@ -50,6 +50,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { useAuthStore } from '@/store/authStore';
 import { useRealtimeSync } from '@/services/realtime';
+import { api } from '@/services/api';
 import { toast } from 'sonner';
 
 // Official MTS Lab Kathmandu Hub Contact Configurations
@@ -500,12 +501,8 @@ export default function Services() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/public/repair-prices');
-      if (!res.ok) {
-        throw new Error('Failed to load repair price catalog');
-      }
-      const data: RepairPriceItem[] = await res.json();
-      setPrices(data.filter(item => item.status === 'ACTIVE'));
+      const data: RepairPriceItem[] = await api.get('/public/repair-prices');
+      setPrices(Array.isArray(data) ? data.filter(item => item.status === 'ACTIVE') : []);
     } catch (err: any) {
       console.error('Error fetching repair prices:', err);
       setError('Unable to load repair services. Please try again or contact MTS Lab directly.');

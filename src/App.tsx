@@ -52,6 +52,8 @@ export default function App() {
             <Route path="/price-finder" element={<Services />} />
             <Route path="/about" element={<About />} />
             <Route path="/track" element={<Tracking />} />
+            <Route path="/track-repair" element={<Tracking />} />
+            <Route path="/tracking" element={<Tracking />} />
             <Route path="/shop" element={<Shop />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/terms" element={<Terms />} />
@@ -61,6 +63,12 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/pending-approval" element={<PendingApproval />} />
             <Route path="/rejected-access" element={<RejectedAccess />} />
+
+            {/* Role & Dashboard Navigation Aliases */}
+            <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/technician" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/manager" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/receptionist" element={<Navigate to="/dashboard" replace />} />
 
             {/* Protected Dashboard Routes */}
             <Route 

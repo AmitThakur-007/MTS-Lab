@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { rtdb } from '@/lib/firebase';
+import { API_BASE } from './api';
 import { 
   ref as rtdbRef, 
   onValue as rtdbOnValue, 
@@ -262,7 +263,7 @@ class RealtimeService {
     try {
       const token = this.getAuthToken();
       const queryParam = token ? `?token=${encodeURIComponent(token)}` : '';
-      const url = `/api/events${queryParam}`;
+      const url = `${API_BASE}/events${queryParam}`;
 
       const es = new EventSource(url, { withCredentials: true });
       this.eventSource = es;
