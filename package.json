@@ -10,7 +10,9 @@
     "postinstall": "prisma generate",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "db:migrate": "prisma db push",
+    "db:seed": "node scripts/migrate_to_postgres.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
