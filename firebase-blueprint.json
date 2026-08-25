@@ -1,0 +1,168 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user (Super Admin, Admin, Technician, Receptionist)",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["RECEPTIONIST", "TECHNICIAN", "ADMIN", "SUPER_ADMIN"] },
+        "branchId": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "accountStatus": { "type": "string", "enum": ["ACTIVE", "APPROVED", "PENDING", "REJECTED", "DISABLED"] },
+        "phoneNumber": { "type": "string" },
+        "department": { "type": "string" },
+        "address": { "type": "string" },
+        "profileImage": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "name", "role"]
+    },
+    "Branch": {
+      "title": "Branch",
+      "description": "Laboratory branch office",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "location"]
+    },
+    "Repair": {
+      "title": "Repair",
+      "description": "Repair request and status order",
+      "type": "object",
+      "properties": {
+        "repairNumber": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "deviceBrand": { "type": "string" },
+        "deviceModel": { "type": "string" },
+        "problemDescription": { "type": "string" },
+        "status": { "type": "string", "enum": ["RECEIVED", "DIAGNOSING", "IN_PROCESS", "WAITING_FOR_PARTS", "TESTING", "REPAIRED", "READY_FOR_PICKUP", "DELIVERED", "REPROBLEM_FIXED", "CANNOT_REPAIR", "PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"] },
+        "estimatedCost": { "type": "number" },
+        "finalCost": { "type": "number" },
+        "branchId": { "type": "string" },
+        "technicianId": { "type": "string" },
+        "createdById": { "type": "string" },
+        "remarks": { "type": "string" },
+        "partsUsed": { "type": "string" },
+        "expectedCompletionDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["repairNumber", "customerName", "customerPhone", "deviceBrand", "deviceModel", "status", "createdById"]
+    },
+    "RepairPrice": {
+      "title": "RepairPrice",
+      "description": "Public repair and replacement price catalogue",
+      "type": "object",
+      "properties": {
+        "brand": { "type": "string" },
+        "model": { "type": "string" },
+        "variant": { "type": "string" },
+        "category": { "type": "string" },
+        "problem": { "type": "string" },
+        "serviceName": { "type": "string" },
+        "price": { "type": "number" },
+        "priceType": { "type": "string", "enum": ["FIXED", "STARTING_FROM", "ON_INSPECTION", "CONTACT_FOR_PRICE"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "notes": { "type": "string" },
+        "estimatedTime": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["brand", "model", "category", "problem", "serviceName", "price", "status"]
+    },
+    "HomeSlide": {
+      "title": "HomeSlide",
+      "description": "Home page hero slideshow slides",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "buttonText": { "type": "string" },
+        "buttonLink": { "type": "string" },
+        "displayOrder": { "type": "number" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "imageUrl", "displayOrder", "status"]
+    },
+    "AccessRequest": {
+      "title": "AccessRequest",
+      "description": "Multi-device staff access authorization request",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "googleId": { "type": "string" },
+        "deviceIdentifier": { "type": "string" },
+        "deviceName": { "type": "string" },
+        "deviceType": { "type": "string" },
+        "browser": { "type": "string" },
+        "os": { "type": "string" },
+        "ipAddress": { "type": "string" },
+        "userAgent": { "type": "string" },
+        "requestedRole": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "requestNumber": { "type": "number" },
+        "totalRequests": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "deviceIdentifier", "status"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Staff in-app notification alerts",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "/branches/{branchId}": {
+      "schema": { "$ref": "#/entities/Branch" },
+      "description": "Branches"
+    },
+    "/repairs/{repairId}": {
+      "schema": { "$ref": "#/entities/Repair" },
+      "description": "Repair orders"
+    },
+    "/repairPrices/{priceId}": {
+      "schema": { "$ref": "#/entities/RepairPrice" },
+      "description": "Repair prices catalogue"
+    },
+    "/homeSlides/{slideId}": {
+      "schema": { "$ref": "#/entities/HomeSlide" },
+      "description": "Home page hero slides"
+    },
+    "/accessRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/AccessRequest" },
+      "description": "Access requests"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Staff notifications"
+    }
+  }
+}

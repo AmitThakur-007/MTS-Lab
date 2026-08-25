@@ -1,0 +1,733 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  username            String?              @unique
+  password            String
+  name                String
+  role                String               @default("RECEPTIONIST")
+  phoneNumber         String?
+  department          String?
+  address             String?
+  profileImage        String?
+  branchId            String?
+  firebaseUid         String?              @unique
+  googleId            String?              @unique
+  profilePhoto        String?
+  authProvider        String?              @default("LOCAL")
+  accountStatus       String               @default("ACTIVE")
+  requestCount        Int                  @default(0)
+  requestLimitReached Boolean              @default(false)
+  isActive            Boolean              @default(true)
+  emailVerified       Boolean              @default(false)
+  deletedAt           DateTime?
+  failedLoginAttempts Int                  @default(0)
+  lockoutUntil        DateTime?
+  lastLoginAt         DateTime?
+  twoFactorEnabled    Boolean              @default(true)
+  twoFactorType       String?              @default("EMAIL")
+  emailChangePending  String?
+  emailChangeCodeHash String?
+  emailChangeExpiresAt DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  auditLogs           AuditLog[]
+  loginActivity       LoginActivity[]
+  otps                OTPVerification[]
+  resetTokens         PasswordResetToken[]
+  createdRepairs      Repair[]             @relation("CreatorRepairs")
+  assignedRepairs     Repair[]             @relation("TechnicianRepairs")
+  sessions            Session[]
+  notes               TechnicianNote[]
+  approvedDevices     ApprovedDevice[]
+  accessRequests      AccessRequest[]
+  batteryWarranties   BatteryWarranty[]    @relation("BatteryWarrantyCreator")
+  attendances         Attendance[]         @relation("UserAttendances")
+  markedAttendances   Attendance[]         @relation("MarkedAttendances")
+  damageRecords       RepairRelatedDamage[] @relation("StaffDamageRecords")
+  recordedDamages     RepairRelatedDamage[] @relation("RecordedDamageRecords")
+  branch              Branch?              @relation(fields: [branchId], references: [id])
+}
+
+model ApprovedDevice {
+  id               String    @id @default(uuid())
+  userId           String
+  deviceIdentifier String
+  deviceName       String?
+  deviceType       String?   @default("DESKTOP") // SMARTPHONE, TABLET, LAPTOP, DESKTOP
+  browser          String?
+  os               String?
+  ipAddress        String?
+  userAgent        String?
+  status           String    @default("APPROVED") // APPROVED, REVOKED
+  approvedBy       String?
+  approvedAt       DateTime?
+  revokedAt        DateTime?
+  lastUsedAt       DateTime? @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceIdentifier])
+  @@index([userId])
+  @@index([deviceIdentifier])
+  @@index([status])
+}
+
+model AccessRequest {
+  id               String    @id @default(uuid())
+  userId           String?
+  fullName         String
+  email            String
+  googleId         String
+  profilePhoto     String?
+  deviceIdentifier String?
+  deviceName       String?
+  deviceType       String?   @default("DESKTOP") // SMARTPHONE, TABLET, LAPTOP, DESKTOP
+  browser          String?
+  os               String?
+  ipAddress        String?
+  userAgent        String?
+  requestedRole    String    @default("RECEPTIONIST")
+  status           String    @default("PENDING") // PENDING, APPROVED, REJECTED, EXPIRED
+  requestNumber    Int       @default(1)
+  totalRequests    Int       @default(1)
+  approvedBy       String?
+  approvedAt       DateTime?
+  rejectedBy       String?
+  rejectedAt       DateTime?
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([status])
+  @@index([deviceIdentifier])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model OTPVerification {
+  id          String   @id @default(uuid())
+  code        String?
+  codeHash    String?
+  userId      String
+  email       String?
+  purpose     String   @default("LOGIN_2FA")
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(5)
+  expiresAt   DateTime
+  isUsed      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([purpose])
+  @@index([expiresAt])
+}
+
+model LoginActivity {
+  id               String   @id @default(uuid())
+  userId           String
+  ipAddress        String?
+  userAgent        String?
+  deviceIdentifier String?
+  deviceName       String?
+  deviceType       String?  @default("DESKTOP")
+  browser          String?
+  os               String?
+  status           String
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  refreshToken     String    @unique
+  deviceIdentifier String?
+  deviceName       String?
+  deviceType       String?   @default("DESKTOP")
+  browser          String?
+  os               String?
+  userAgent        String?
+  ipAddress        String?
+  lastActiveAt     DateTime? @default(now())
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Branch {
+  id        String   @id @default(uuid())
+  name      String
+  location  String
+  phone     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  repairs   Repair[]
+  users     User[]
+}
+
+model Product {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  price         Float
+  discountPrice Float?
+  stockQuantity Int      @default(0)
+  category      String
+  imageUrl      String?
+  rating        Float    @default(4.5)
+  isFeatured    Boolean  @default(false)
+  isBestSeller  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model InventoryCategory {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  description  String?
+  icon         String?
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model InventoryItem {
+  id              String                 @id @default(uuid())
+  name            String
+  brand           String?
+  model           String?
+  sku             String?                @unique
+  category        String                 @default("Spare Parts")
+  subcategory     String?
+  compatibility   String?
+  unit            String                 @default("Piece") // Piece, Set, Box, Roll, Meter, Gram, Bottle
+  currentStock    Int                    @default(0)
+  minStockLevel   Int                    @default(5)
+  maxStockLevel   Int?
+  purchasePrice   Float?                 // Strictly optional
+  sellingPrice    Float?                 // Strictly optional
+  supplier        String?
+  storageLocation String?
+  description     String?
+  notes           String?
+  imageUrl        String?
+  status          String                 @default("ACTIVE") // ACTIVE, INACTIVE, ARCHIVED
+  createdById     String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  transactions    InventoryTransaction[]
+
+  @@index([category])
+  @@index([brand])
+  @@index([status])
+  @@index([sku])
+}
+
+model InventoryTransaction {
+  id              String        @id @default(uuid())
+  itemId          String
+  type            String        // STOCK_IN, STOCK_OUT, STOCK_ADJUSTMENT, RETURN, DAMAGE, CORRECTION
+  quantity        Int
+  previousStock   Int
+  newStock        Int
+  reason          String?       // New Stock Purchase, Used for Repair, RMA Return, Damaged / Defective, Inventory Audit Correction
+  repairNumber    String?
+  repairId        String?
+  performedById   String?
+  performedByName String?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([repairNumber])
+}
+
+model Customer {
+  id                String            @id @default(uuid())
+  customerId        String            @unique
+  name              String
+  phone             String
+  alternativePhone  String?
+  email             String?
+  district          String?
+  municipality      String?
+  address           String?
+  landmark          String?
+  notes             String?
+  archived          Boolean           @default(false)
+  archivedAt        DateTime?
+  archivedBy        String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  repairs           Repair[]
+  batteryWarranties BatteryWarranty[]
+
+  @@index([phone])
+  @@index([customerId])
+  @@index([archived])
+}
+
+model Repair {
+  id                          String           @id @default(uuid())
+  repairNumber                String           @unique
+  customerId                  String?
+  customerName                String
+  customerPhone               String
+  customerEmail               String?
+  customerAddress             String?
+  deviceBrand                 String
+  deviceModel                 String
+  imeiNumber                  String?
+  deviceColor                 String?
+  deviceCondition             String
+  conditionNotes              String?
+  problemDescription          String
+  accessoriesReceived         String?
+  estimatedCost               Float?
+  advancePaid                 Float            @default(0)
+  totalPaid                   Float            @default(0)
+  paymentStatus               String           @default("UNPAID")
+  status                      String           @default("PENDING")
+  priority                    String           @default("NORMAL") // NORMAL, HIGH, URGENT
+  expectedCompletionDate      DateTime?
+  remarks                     String?
+  partsUsed                   String?
+  repairImages                String?
+  branchId                    String
+  technicianId                String?
+  assignedAt                  DateTime?
+  assignedById                String?
+  assignedByName              String?
+  priorityUpdatedAt           DateTime?
+  managerUpdatedAt            DateTime?
+  managerUpdatedBy            String?
+
+  // --- Courier Receiving (Courier-In) ---
+  receivingMethod             String           @default("WALK_IN") // WALK_IN, COURIER
+  isCourierIn                 Boolean          @default(false)
+  courierInStatus             String?          // COURIER_REQUESTED, PICKUP_SCHEDULED, PICKED_UP, IN_TRANSIT, RECEIVED_AT_LAB
+  courierCompany              String?
+  courierTrackingNumber       String?
+  courierDate                 DateTime?
+  courierReceivedDate         DateTime?
+  courierInPickupDate         DateTime?
+  senderName                  String?
+  senderPhone                 String?
+  senderWhatsapp              String?
+  originDistrict              String?
+  originAddress               String?
+  courierInCharge             Float?
+  courierInPaymentStatus      String?          @default("UNPAID") // PAID, UNPAID
+  courierNotes                String?
+
+  // --- Courier Return / Dispatch (Courier-Out) ---
+  courierStatus               String?          // RECEIVED_AT_LAB, UNDER_DIAGNOSIS, REPAIR_IN_PROGRESS, READY_FOR_RETURN, COURIER_DISPATCHED, DELIVERED
+  isCourierOut                Boolean          @default(false)
+  courierOutStatus            String?          // READY_FOR_DISPATCH, COURIER_BOOKED, DISPATCHED, IN_TRANSIT, DELIVERED
+  returnCourierCompany        String?
+  returnCourierTrackingNumber String?
+  returnCourierDispatchDate   DateTime?
+  courierOutDeliveredDate     DateTime?
+  destinationDistrict         String?
+  destinationAddress          String?
+  receiverName                String?
+  receiverPhone               String?
+  receiverWhatsapp            String?
+  courierOutCharge            Float?
+  courierOutPaymentStatus     String?          @default("UNPAID") // PAID, UNPAID
+  returnCourierNotes          String?
+  isReturnCourierDispatched   Boolean          @default(false)
+  returnCourierDispatchedAt   DateTime?
+  returnCourierDispatchedById String?
+  returnCourierDispatchedByName String?
+  courierArchived             Boolean          @default(false)
+
+  createdById                 String
+  createdAt                   DateTime         @default(now())
+  updatedAt                   DateTime         @updatedAt
+  payments                    Payment[]
+
+  @@index([customerPhone])
+  @@index([repairNumber])
+  @@index([customerId])
+  customer                    Customer?        @relation(fields: [customerId], references: [id])
+  createdBy                   User             @relation("CreatorRepairs", fields: [createdById], references: [id])
+  technician                  User?            @relation("TechnicianRepairs", fields: [technicianId], references: [id])
+  branch                      Branch           @relation(fields: [branchId], references: [id])
+  logs                        RepairLog[]
+  notes                       TechnicianNote[]
+  batteryWarranty             BatteryWarranty?
+  damageRecords               RepairRelatedDamage[]
+}
+
+model RepairLog {
+  id        String   @id @default(uuid())
+  repairId  String
+  status    String
+  message   String
+  createdAt DateTime @default(now())
+  repair    Repair   @relation(fields: [repairId], references: [id])
+}
+
+model TechnicianNote {
+  id           String   @id @default(uuid())
+  repairId     String
+  technicianId String
+  authorName   String?
+  authorRole   String?
+  note         String
+  isInternal   Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  technician   User     @relation(fields: [technicianId], references: [id])
+  repair       Repair   @relation(fields: [repairId], references: [id])
+
+  @@index([repairId])
+  @@index([technicianId])
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  repairId  String
+  amount    Float
+  method    String
+  reference String?
+  createdAt DateTime @default(now())
+  repair    Repair   @relation(fields: [repairId], references: [id])
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  userId        String?
+  userEmail     String?
+  userName      String?
+  userRole      String?
+  action        String
+  resource      String
+  resourceId    String?
+  status        String   @default("SUCCESS")
+  ipAddress     String?
+  userAgent     String?
+  deviceInfo    String?
+  details       String?
+  previousValue String?
+  newValue      String?
+  metadata      String?
+  createdAt     DateTime @default(now())
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([resource])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model Notification {
+  id           String    @id @default(uuid())
+  userId       String
+  title        String
+  message      String
+  type         String    @default("GENERAL") // REPAIR_ASSIGNED, REPAIR_ALERT, TRANSFER_REQUEST, TRANSFER_ACCEPTED, TRANSFER_REJECTED, NOTE_ADDED, GENERAL
+  repairId     String?
+  repairNumber String?
+  senderId     String?
+  senderName   String?
+  metadata     String?
+  isRead       Boolean   @default(false)
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model RepairTransferRequest {
+  id                   String    @id @default(uuid())
+  repairId             String
+  repairNumber         String
+  senderTechnicianId   String
+  senderTechnicianName String
+  targetTechnicianId   String
+  targetTechnicianName String
+  reason               String
+  status               String    @default("PENDING") // PENDING, ACCEPTED, REJECTED, CANCELLED
+  respondedAt          DateTime?
+  responseNote         String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([repairId])
+  @@index([targetTechnicianId])
+  @@index([senderTechnicianId])
+  @@index([status])
+}
+
+model AppletShare {
+  id             String   @id @default(uuid())
+  userId         String
+  appletName     String
+  description    String?
+  visibility     String   @default("PUBLIC") // PUBLIC, PRIVATE, SHARED
+  sharingTarget  String?
+  allowFork      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model RepairPrice {
+  id            String   @id @default(uuid())
+  brand         String
+  model         String
+  variant       String?
+  category      String
+  problem       String
+  serviceName   String
+  description   String?
+  price         Float    @default(0)
+  priceType     String   @default("FIXED") // FIXED, STARTING_FROM, ON_INSPECTION, CONTACT_FOR_PRICE
+  status        String   @default("ACTIVE") // ACTIVE, INACTIVE
+  notes         String?
+  estimatedTime String?
+  createdBy     String?
+  updatedBy     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([brand])
+  @@index([model])
+  @@index([category])
+  @@index([status])
+}
+
+model HomeSlide {
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  imageUrl     String
+  buttonText   String?  @default("Check Repair Price")
+  buttonLink   String?  @default("/services?focus=search")
+  displayOrder Int      @default(1)
+  status       String   @default("ACTIVE") // ACTIVE, INACTIVE
+  createdBy    String?
+  updatedBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+  @@index([displayOrder])
+}
+
+model BatteryWarranty {
+  id               String                 @id @default(uuid())
+  warrantyNumber   String                 @unique // e.g. "BW-2026-0001"
+  repairId         String                 @unique
+  repairNumber     String
+  customerId       String?
+  customerName     String
+  customerPhone    String
+  customerEmail    String?
+  customerAddress  String?
+  deviceBrand      String
+  deviceModel      String
+  imeiNumber       String?
+  batteryType      String?                @default("Original Replacement Battery")
+  warrantyPeriod   String                 @default("6_MONTHS") // "6_MONTHS" or "1_YEAR"
+  registrationDate DateTime               @default(now())
+  expiryDate       DateTime
+  status           String                 @default("ACTIVE") // ACTIVE, EXPIRING_SOON, EXPIRED, CLAIMED, REPLACED, CANCELLED
+  claimCount       Int                    @default(0)
+  lastClaimDate    DateTime?
+  terms            String?
+  createdById      String
+  branchId         String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  repair           Repair                 @relation(fields: [repairId], references: [id], onDelete: Cascade)
+  customer         Customer?              @relation(fields: [customerId], references: [id])
+  createdBy        User                   @relation("BatteryWarrantyCreator", fields: [createdById], references: [id])
+  claims           BatteryWarrantyClaim[]
+
+  @@index([repairNumber])
+  @@index([customerPhone])
+  @@index([customerName])
+  @@index([status])
+  @@index([expiryDate])
+  @@index([warrantyNumber])
+}
+
+model BatteryWarrantyClaim {
+  id                  String          @id @default(uuid())
+  claimNumber         String          @unique // e.g. "BWC-2026-0001"
+  warrantyId          String
+  repairNumber        String
+  customerName        String
+  customerPhone       String
+  deviceBrand         String
+  deviceModel         String
+  claimDate           DateTime        @default(now())
+  issueDescription    String
+  status              String          @default("APPROVED") // PENDING, APPROVED, REPLACED, REJECTED
+  actionTaken         String?         @default("BATTERY_REPLACED") // BATTERY_REPLACED, DIAGNOSTIC_COMPLETED, SERVICED
+  notes               String?
+  processedById       String
+  processedByName     String
+  replacementRepairId String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  warranty            BatteryWarranty @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+
+  @@index([warrantyId])
+  @@index([claimNumber])
+}
+
+model Attendance {
+  id              String               @id @default(uuid())
+  userId          String
+  date            String               // Format: "YYYY-MM-DD" in Asia/Kathmandu authoritative business date
+  status          String               @default("PENDING") // PRESENT, ABSENT, PENDING, REJECTED, LATE
+  markedById      String
+  markedByName    String?
+  markedByRole    String?
+  markedAt        DateTime             @default(now())
+  method          String               @default("MANAGER_REQUEST") // DIRECT_SUPER_ADMIN, DIRECT_ADMIN, MANAGER_SELF, MANAGER_REQUEST
+  requestStatus   String               @default("PENDING") // PENDING, ACCEPTED, REJECTED, DIRECT
+  respondedAt     DateTime?
+  rejectionReason String?
+  notes           String?
+  branchId        String?
+  isArchived      Boolean              @default(false)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  user            User                 @relation("UserAttendances", fields: [userId], references: [id], onDelete: Cascade)
+  markedBy        User                 @relation("MarkedAttendances", fields: [markedById], references: [id])
+  auditLogs       AttendanceAuditLog[]
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@index([status])
+  @@index([requestStatus])
+  @@index([markedById])
+  @@index([isArchived])
+}
+
+model AttendanceAuditLog {
+  id              String     @id @default(uuid())
+  attendanceId    String
+  action          String     // CREATED, ACCEPTED, REJECTED, EDITED, ARCHIVED, RESTORED
+  performedById   String
+  performedByName String?
+  performedByRole String?
+  previousStatus  String?
+  newStatus       String?
+  reason          String?
+  metadata        String?
+  createdAt       DateTime   @default(now())
+
+  attendance      Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+
+  @@index([attendanceId])
+  @@index([performedById])
+  @@index([createdAt])
+}
+
+model RepairRelatedDamage {
+  id                  String                      @id @default(uuid())
+  recordNumber        String                      @unique // e.g. "RRD-2026-0001"
+  staffId             String
+  staffName           String
+  staffRole           String
+  repairId            String?
+  repairNumber        String?
+  customerId          String?
+  customerName        String?
+  deviceBrand         String?
+  deviceModel         String?
+  damagedComponent    String                      // Display, Back Glass / Back Panel, Battery, Camera, Charging Port, Speaker, Earpiece, Flex Cable, Connector, IC / Board Component, Other
+  damageType          String?                     // CRACKED, TORN_FLEX, SHORT_CIRCUIT, SCRATCHED, BURNT, COMPONENT_LOST, OTHER
+  damageDescription   String
+  damageDate          String                      // Format: "YYYY-MM-DD"
+  damageTime          String?                     // Format: "HH:mm"
+  damageTimestamp     DateTime                    @default(now())
+  quantity            Int                         @default(1)
+  estimatedCost       Float?
+  notes               String?
+  inventoryItemId     String?
+  inventoryDeducted   Boolean                     @default(false)
+  inventoryTxId       String?
+  recordedById        String
+  recordedByName      String
+  recordedByRole      String
+  branchId            String?
+  status              String                      @default("ACTIVE") // ACTIVE, RESOLVED, REPLACED, ARCHIVED
+  isArchived          Boolean                     @default(false)
+  deletedAt           DateTime?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+
+  staff               User                        @relation("StaffDamageRecords", fields: [staffId], references: [id], onDelete: Cascade)
+  recordedBy          User                        @relation("RecordedDamageRecords", fields: [recordedById], references: [id])
+  repair              Repair?                     @relation(fields: [repairId], references: [id], onDelete: SetNull)
+  auditLogs           RepairRelatedDamageAudit[]
+
+  @@index([staffId])
+  @@index([staffRole])
+  @@index([repairId])
+  @@index([repairNumber])
+  @@index([damagedComponent])
+  @@index([damageDate])
+  @@index([status])
+  @@index([isArchived])
+  @@index([recordedById])
+  @@index([createdAt])
+  @@index([recordNumber])
+}
+
+model RepairRelatedDamageAudit {
+  id              String               @id @default(uuid())
+  damageRecordId  String
+  action          String               // CREATED, UPDATED, ARCHIVED, RESTORED, DELETED, INVENTORY_DEDUCTED
+  performedById   String
+  performedByName String?
+  performedByRole String?
+  previousData    String?              // JSON snapshot
+  newData         String?              // JSON snapshot
+  reason          String?
+  notes           String?
+  createdAt       DateTime             @default(now())
+
+  damageRecord    RepairRelatedDamage  @relation(fields: [damageRecordId], references: [id], onDelete: Cascade)
+
+  @@index([damageRecordId])
+  @@index([performedById])
+  @@index([createdAt])
+}
+

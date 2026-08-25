@@ -1,0 +1,121 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      ".read": "auth != null",
+      ".indexOn": ["email", "role", "branchId", "accountStatus"],
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'SUPER_ADMIN' || root.child('users').child(auth.uid).child('role').val() === 'ADMIN')"
+      }
+    },
+
+    "repairs": {
+      ".read": "auth != null",
+      ".indexOn": ["repairNumber", "customerPhone", "technicianId", "status", "branchId", "createdAt", "updatedAt"],
+      "$repairId": {
+        ".write": "auth != null && (
+          root.child('users').child(auth.uid).child('role').val() === 'SUPER_ADMIN' ||
+          root.child('users').child(auth.uid).child('role').val() === 'ADMIN' ||
+          root.child('users').child(auth.uid).child('role').val() === 'RECEPTIONIST' ||
+          (
+            (root.child('users').child(auth.uid).child('role').val() === 'TECHNICIAN' || 
+             root.child('users').child(auth.uid).child('role').val() === 'LEAD_TECHNICIAN' ||
+             root.child('users').child(auth.uid).child('role').val() === 'TECHNICAL_ASSISTANT') &&
+            (data.child('technicianId').val() === auth.uid || !data.exists() || newData.child('technicianId').val() === auth.uid)
+          )
+        )"
+      }
+    },
+
+    "repairLogs": {
+      ".read": "auth != null",
+      "$repairId": {
+        ".read": "auth != null",
+        "$logId": {
+          ".write": "auth != null"
+        }
+      }
+    },
+
+    "technicianNotes": {
+      ".read": "auth != null",
+      "$repairId": {
+        ".read": "auth != null",
+        "$noteId": {
+          ".write": "auth != null"
+        }
+      }
+    },
+
+    "payments": {
+      ".read": "auth != null",
+      ".indexOn": ["repairId", "createdAt", "method", "status"],
+      "$paymentId": {
+        ".write": "auth != null && (
+          root.child('users').child(auth.uid).child('role').val() === 'SUPER_ADMIN' ||
+          root.child('users').child(auth.uid).child('role').val() === 'ADMIN' ||
+          root.child('users').child(auth.uid).child('role').val() === 'RECEPTIONIST' ||
+          root.child('users').child(auth.uid).child('role').val() === 'ACCOUNTANT'
+        )"
+      }
+    },
+
+    "products": {
+      ".read": "auth != null",
+      ".indexOn": ["category", "brand", "model", "sku"],
+      "$productId": {
+        ".write": "auth != null && (
+          root.child('users').child(auth.uid).child('role').val() === 'SUPER_ADMIN' ||
+          root.child('users').child(auth.uid).child('role').val() === 'ADMIN' ||
+          root.child('users').child(auth.uid).child('role').val() === 'INVENTORY_MANAGER'
+        )"
+      }
+    },
+
+    "branches": {
+      ".read": true,
+      "$branchId": {
+        ".write": "auth != null && (
+          root.child('users').child(auth.uid).child('role').val() === 'SUPER_ADMIN' ||
+          root.child('users').child(auth.uid).child('role').val() === 'ADMIN'
+        )"
+      }
+    },
+
+    "repairPrices": {
+      ".read": true,
+      ".indexOn": ["brand", "model", "repairType"],
+      "$priceId": {
+        ".write": "auth != null && (
+          root.child('users').child(auth.uid).child('role').val() === 'SUPER_ADMIN' ||
+          root.child('users').child(auth.uid).child('role').val() === 'ADMIN'
+        )"
+      }
+    },
+
+    "homeSlides": {
+      ".read": true,
+      "$slideId": {
+        ".write": "auth != null && (
+          root.child('users').child(auth.uid).child('role').val() === 'SUPER_ADMIN' ||
+          root.child('users').child(auth.uid).child('role').val() === 'ADMIN'
+        )"
+      }
+    },
+
+    "publicTracking": {
+      ".read": true,
+      ".indexOn": ["repairNumber", "customerPhone"],
+      "$trackId": {
+        ".write": "auth != null"
+      }
+    },
+
+    "syncTimestamp": {
+      ".read": true,
+      ".write": "auth != null"
+    }
+  }
+}
