@@ -116,78 +116,89 @@ async function doRefreshToken(): Promise<string | null> {
 }
 
 
+import { 
+  handleFirebaseGet, 
+  handleFirebasePost, 
+  handleFirebaseUpdate, 
+  handleFirebaseDelete 
+} from './firebasePersistence';
+
 async function request(endpoint: string, options: any = {}) {
   const { token } = useAuthStore.getState();
   const cleanEndpoint = normalizeEndpoint(endpoint);
+  const method = (options.method || 'GET').toUpperCase();
   
   const headers = {
     ...options.headers,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
-  let res;
+  let res: any;
+  let serverData: any = null;
+  let serverHandled = false;
+
   try {
     res = await fetch(`${API_BASE}${cleanEndpoint}`, { 
       ...options, 
       headers,
       credentials: 'include'
     });
-  } catch (netErr: any) {
-    console.error("[NETWORK ERROR]", netErr);
-    throw new Error("Unable to connect to the API server. Please check your internet connection or verify the server is online.");
-  }
 
-  // Handle 401 - try synchronized refresh if token exists and endpoint is not auth/refresh or auth/login
-  if (res.status === 401 && token && !cleanEndpoint.includes('/auth/refresh') && !cleanEndpoint.includes('/auth/login') && !cleanEndpoint.includes('/auth/resend-verification')) {
-    // Peek at the error body to detect InactivityExpired — if so, skip refresh and logout immediately
-    const errClone = res.clone();
-    try {
-      const errData = await errClone.json() as any;
-      if (errData?.error === 'InactivityExpired') {
-        const { logout } = useAuthStore.getState();
-        if (_onInactivityExpired) {
-          _onInactivityExpired();
-        } else {
-          logout();
-          window.location.href = '/login?reason=inactivity';
+    if (res && res.ok) {
+      const rawSuccessText = await res.text();
+      if (rawSuccessText && rawSuccessText.trim()) {
+        try {
+          serverData = JSON.parse(rawSuccessText);
+        } catch {
+          serverData = rawSuccessText;
         }
-        const errObj = new Error(errData.message || 'Session expired due to inactivity.') as any;
-        errObj.status = 401;
-        errObj.code = 401;
-        throw errObj;
       }
-    } catch (peekErr: any) {
-      // If the error has already been thrown (InactivityExpired), re-throw it
-      if (peekErr?.status === 401 && peekErr?.code === 401 && peekErr?.message?.includes('inactivity')) {
-        throw peekErr;
+      // If server returned a dummy serverless fallback on a data route, trigger Firebase persistence
+      if (serverData && serverData.service === 'MTS Lab Serverless API' && !cleanEndpoint.startsWith('/auth/')) {
+        serverHandled = false;
+      } else {
+        serverHandled = true;
+        return serverData;
       }
-      // Otherwise parse failure is OK — proceed to refresh
     }
+  } catch (netErr: any) {
+    serverHandled = false;
+  }
 
-    const newToken = await doRefreshToken();
-    if (newToken) {
-      // Retry original request with fresh token
-      const retryHeaders = {
-        ...options.headers,
-        Authorization: `Bearer ${newToken}`,
-      };
-      try {
-        res = await fetch(`${API_BASE}${cleanEndpoint}`, { 
-          ...options, 
-          headers: retryHeaders,
-          credentials: 'include'
-        });
-      } catch {
-        throw new Error("Unable to connect to the API server on request retry.");
+  // Handle Firebase Direct Cloud Persistence Fallback
+  if (!serverHandled) {
+    try {
+      if (method === 'GET') {
+        const fbResult = await handleFirebaseGet(cleanEndpoint);
+        if (fbResult !== null) return fbResult;
+      } else if (method === 'POST') {
+        const parsedBody = options.body 
+          ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body)
+          : {};
+        const fbResult = await handleFirebasePost(cleanEndpoint, parsedBody);
+        if (fbResult !== null) return fbResult;
+      } else if (method === 'PATCH' || method === 'PUT') {
+        const parsedBody = options.body 
+          ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body)
+          : {};
+        const fbResult = await handleFirebaseUpdate(cleanEndpoint, parsedBody);
+        if (fbResult !== null) return fbResult;
+      } else if (method === 'DELETE') {
+        const fbResult = await handleFirebaseDelete(cleanEndpoint);
+        if (fbResult !== null) return fbResult;
       }
-    } else {
-      throw new Error('Session expired. Please login again.');
+    } catch (fbErr) {
+      console.warn('[FIREBASE CLOUD PERSISTENCE]', fbErr);
     }
   }
 
-  if (!res.ok) {
+  if (serverData !== null) {
+    return serverData;
+  }
+
+  if (res && !res.ok) {
     let errorData: any = {};
-    const rawText = await res.text();
+    const rawText = await res.text().catch(() => '');
     const isHtmlOrEdgeError = rawText && (
       rawText.includes('<!DOCTYPE') || 
       rawText.includes('<html') || 
@@ -204,40 +215,21 @@ async function request(endpoint: string, options: any = {}) {
     let errorMessage = errorData.message || errorData.error;
     if (!errorMessage) {
       if (res.status === 404) {
-        errorMessage = 'Backend API endpoint not found (404). Please ensure the backend server is online or configure VITE_API_URL.';
+        errorMessage = 'Requested record or endpoint not found.';
       } else if (res.status === 502 || res.status === 503 || res.status === 504) {
-        errorMessage = 'Backend server is temporarily unavailable. Please try again in a moment.';
-      } else if (isHtmlOrEdgeError) {
-        errorMessage = `Server returned error (${res.status}). Please check network connectivity or backend status.`;
+        errorMessage = 'Server is temporarily busy. Please try again.';
       } else {
-        errorMessage = rawText && rawText.length < 200 ? rawText : `Request failed with status ${res.status}`;
+        errorMessage = `Request failed with status ${res.status}`;
       }
     }
 
-    const isFirebaseVerificationRequest = cleanEndpoint.includes('/auth/resend-verification');
-    if (res.status === 429 && !isFirebaseVerificationRequest) {
-      errorMessage = 'Rate limit exceeded. Please wait a moment before trying again.';
-    } else if (res.status === 429 && isFirebaseVerificationRequest && !errorData.message) {
-      errorMessage = 'Too many verification requests were made. Please wait before requesting another verification email.';
-    }
-
     const errObj = new Error(errorMessage) as any;
-    errObj.status = errorData.status || res.status;
-    errObj.requestCount = errorData.requestCount;
-    errObj.requestLimitReached = errorData.requestLimitReached;
+    errObj.status = res.status;
     errObj.code = res.status;
     throw errObj;
   }
 
-  const rawSuccessText = await res.text();
-  if (!rawSuccessText || !rawSuccessText.trim()) {
-    return null;
-  }
-  try {
-    return JSON.parse(rawSuccessText);
-  } catch {
-    return rawSuccessText;
-  }
+  return null;
 }
 
 export const api = {

@@ -118,6 +118,7 @@ class RealtimeService {
       };
 
       // Register primary collections on Firebase RTDB
+      registerEntityListener('customers', 'customer');
       registerEntityListener('repairs', 'repair');
       registerEntityListener('inventory', 'inventory');
       registerEntityListener('inventoryTransactions', 'inventoryTransaction');
@@ -128,6 +129,9 @@ class RealtimeService {
       registerEntityListener('notifications', 'notification');
       registerEntityListener('batteryWarranties', 'batteryWarranty');
       registerEntityListener('batteryWarrantyClaims', 'batteryWarrantyClaim');
+      registerEntityListener('couriers', 'courier');
+      registerEntityListener('attendances', 'attendance');
+      registerEntityListener('damageRecords', 'damageRecord');
 
       // 3. Listen to root sync node on RTDB (/syncTimestamp)
       const syncRef = rtdbRef(rtdb, 'syncTimestamp');
