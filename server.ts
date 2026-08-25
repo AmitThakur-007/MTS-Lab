@@ -91,6 +91,9 @@ const __dirname = typeof import.meta !== "undefined" && import.meta && import.me
 
 // Sync db schema automatically at runtime with automatic corruption recovery
 function initializeDatabase() {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.SERVERLESS) {
+    return;
+  }
   const dbPath = path.join(process.cwd(), "prisma/dev.db");
   try {
     console.log("[STARTUP] Running Prisma DB push programmatically...");
@@ -2415,9 +2418,8 @@ const upload = multer({
   }
 });
 
-async function startServer() {
+export async function createServerApp() {
   const app = express();
-  const PORT = 3000;
 
   // Connect to database and seed defaults
   try {
@@ -18771,14 +18773,35 @@ async function startServer() {
     });
   });
 
+  return app;
+}
+
+let cachedApp: express.Express | null = null;
+let initPromise: Promise<express.Express> | null = null;
+
+export async function getApp(): Promise<express.Express> {
+  if (cachedApp) return cachedApp;
+  if (!initPromise) {
+    initPromise = createServerApp().then((app) => {
+      cachedApp = app;
+      return app;
+    });
+  }
+  return initPromise;
+}
+
+export async function startServer() {
+  const app = await getApp();
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
@@ -18794,6 +18817,11 @@ async function startServer() {
     console.log(`📱 ALL DEVICES (LAN): http://192.168.1.66:${PORT}`);
     console.log("--------------------------------------------------");
   });
+
+  return app;
 }
 
-startServer().catch(console.error);
+// Auto-start only when executed directly as standalone Node server
+if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME && !process.env.SERVERLESS && process.env.NODE_ENV !== "test") {
+  startServer().catch(console.error);
+}

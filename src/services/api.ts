@@ -188,17 +188,33 @@ async function request(endpoint: string, options: any = {}) {
   if (!res.ok) {
     let errorData: any = {};
     const rawText = await res.text();
+    const isHtmlOrEdgeError = rawText && (
+      rawText.includes('<!DOCTYPE') || 
+      rawText.includes('<html') || 
+      rawText.includes('NOT_FOUND') ||
+      rawText.includes('could not be found')
+    );
+
     try {
-      errorData = rawText ? JSON.parse(rawText) : {};
+      errorData = (!isHtmlOrEdgeError && rawText) ? JSON.parse(rawText) : {};
     } catch {
-      // Server or reverse proxy returned plain text (e.g. "Rate exceeded.", "Bad Gateway")
-      errorData = { 
-        message: rawText && rawText.length < 300 ? rawText : `Server returned status ${res.status}: ${res.statusText}` 
-      };
+      errorData = {};
     }
 
-    let errorMessage = errorData.message || errorData.error || rawText || `Request failed with status ${res.status}`;
-    const isFirebaseVerificationRequest = endpoint.includes('/auth/resend-verification');
+    let errorMessage = errorData.message || errorData.error;
+    if (!errorMessage) {
+      if (res.status === 404) {
+        errorMessage = 'Backend API endpoint not found (404). Please ensure the backend server is online or configure VITE_API_URL.';
+      } else if (res.status === 502 || res.status === 503 || res.status === 504) {
+        errorMessage = 'Backend server is temporarily unavailable. Please try again in a moment.';
+      } else if (isHtmlOrEdgeError) {
+        errorMessage = `Server returned error (${res.status}). Please check network connectivity or backend status.`;
+      } else {
+        errorMessage = rawText && rawText.length < 200 ? rawText : `Request failed with status ${res.status}`;
+      }
+    }
+
+    const isFirebaseVerificationRequest = cleanEndpoint.includes('/auth/resend-verification');
     if (res.status === 429 && !isFirebaseVerificationRequest) {
       errorMessage = 'Rate limit exceeded. Please wait a moment before trying again.';
     } else if (res.status === 429 && isFirebaseVerificationRequest && !errorData.message) {

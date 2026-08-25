@@ -9,6 +9,10 @@
       "destination": "/assets/$1"
     },
     {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
