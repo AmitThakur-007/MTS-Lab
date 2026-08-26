@@ -524,10 +524,6 @@ export default function ManagerDashboard() {
               <Briefcase className="h-3.5 w-3.5 text-blue-600" />
               Repair Operations Hub
             </Badge>
-            <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold px-2.5 py-1 rounded-xl text-xs flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Live Sync Active
-            </Badge>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
             Manager Control Center
@@ -558,10 +554,9 @@ export default function ManagerDashboard() {
 
           <DashboardRefreshButton
             onRefresh={fetchData}
-            showLiveBadge={false}
             showLastUpdated={false}
             size="sm"
-            label="Sync"
+            label="Refresh"
             variant="outline"
             className="h-10 sm:h-11 rounded-2xl border-slate-200 font-bold text-xs shrink-0"
           />

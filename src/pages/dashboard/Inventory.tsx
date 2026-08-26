@@ -1109,10 +1109,9 @@ export default function Inventory() {
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
           <DashboardRefreshButton
             onRefresh={fetchData}
-            showLiveBadge={false}
             showLastUpdated={false}
             size="sm"
-            label="Sync Stock"
+            label="Refresh Stock"
           />
 
           {canManage && (

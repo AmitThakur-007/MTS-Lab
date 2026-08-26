@@ -624,10 +624,9 @@ export default function BatteryWarrantyManagement() {
           <DashboardRefreshButton
             onRefresh={handleRefresh}
             isRefreshing={refreshing}
-            showLiveBadge={false}
             showLastUpdated={false}
-            label="Sync"
-            refreshingLabel="Syncing..."
+            label="Refresh"
+            refreshingLabel="Refreshing..."
             size="sm"
           />
 

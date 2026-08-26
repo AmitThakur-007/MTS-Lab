@@ -295,10 +295,6 @@ export default function AccessRequests() {
               <ShieldCheck className="h-8 w-8 text-slate-800" />
               ACCESS & DEVICE CONTROL
             </h2>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold uppercase tracking-wider">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
-              Live Sync
-            </span>
           </div>
           <p className="text-slate-500 font-bold mt-1">
             Authorize new smartphones, laptops, tablets, and Google Sign-In access requests in real time.
@@ -308,7 +304,7 @@ export default function AccessRequests() {
           <DashboardRefreshButton
             onRefresh={handleManualRefresh}
             size="default"
-            label="Sync Requests"
+            label="Refresh Requests"
           />
           <Button
             onClick={handleSystemRepair}

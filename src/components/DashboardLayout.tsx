@@ -290,12 +290,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Global Modern Refresh Button with Live Indicator */}
+            {/* Global Refresh Button */}
             <DashboardRefreshButton 
               size="sm"
               variant="outline"
-              label="Sync"
-              refreshingLabel="Syncing..."
+              label="Refresh"
+              refreshingLabel="Refreshing..."
               onRefresh={async () => {
                 await fetchNotifications();
                 await fetchPendingAccessCount();
