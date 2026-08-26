@@ -68,6 +68,7 @@ import { api } from '@/services/api';
 import { Link } from 'react-router-dom';
 import { useRealtimeSync } from '@/services/realtime';
 import { syncEntityToRtdb, deleteEntityFromRtdb } from '@/lib/firebase';
+import { normalizeRole } from '@/lib/rbac';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 
 export interface RepairPriceRecord {
@@ -183,7 +184,9 @@ function getCategoryVisuals(categoryName: string) {
 
 export default function RepairPrices() {
   const { token, user } = useAuthStore();
-  const isAdmin = user && (user.role === 'SUPER_ADMIN' || user.role === 'SUPERADMIN' || user.role === 'ADMIN');
+  const normRole = normalizeRole(user?.role);
+  const isSuperAdmin = normRole === 'SUPERADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
+  const isAdmin = isSuperAdmin || normRole === 'ADMIN' || user?.role === 'ADMIN';
 
   // Main Data States
   const [records, setRecords] = useState<RepairPriceRecord[]>([]);

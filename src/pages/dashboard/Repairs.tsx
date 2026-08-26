@@ -95,6 +95,7 @@ import { formatNPR, formatRepairCost, formatNepalPhone } from '@/lib/format';
 import { useRealtimeSync } from '@/services/realtime';
 import { syncRepairToRtdb, deleteRepairFromRtdb } from '@/lib/firebase';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
+import { normalizeRole } from '@/lib/rbac';
 import ServiceSlipModal from '@/components/repair/ServiceSlipModal';
 import EditRepairModal from '@/components/repair/EditRepairModal';
 
@@ -180,16 +181,16 @@ export default function Repairs() {
   const [reProblemDescription, setReProblemDescription] = useState('');
   const [reProblemLoading, setReProblemLoading] = useState(false);
 
-  // Role permissions - Permanent deletion strictly restricted to SUPER_ADMIN ONLY
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
-  const isAdmin = user?.role === 'ADMIN' || isSuperAdmin;
-  const isManager = user?.role === 'MANAGER';
-  const isReceptionist = user?.role === 'RECEPTIONIST';
+  const normRole = normalizeRole(user?.role);
+  const isSuperAdmin = normRole === 'SUPERADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
+  const isAdmin = isSuperAdmin || normRole === 'ADMIN' || user?.role === 'ADMIN';
+  const isManager = normRole === 'MANAGER' || user?.role === 'MANAGER';
+  const isReceptionist = normRole === 'RECEPTIONIST' || user?.role === 'RECEPTIONIST';
   const canDelete = isSuperAdmin;
   const canAssign = isSuperAdmin || isAdmin || isManager || isReceptionist;
   const canEdit = isSuperAdmin || isAdmin || isManager || isReceptionist;
   const canCreate = isSuperAdmin || isAdmin || isManager || isReceptionist;
-  const canManageExcel = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(user?.role || '');
+  const canManageExcel = isSuperAdmin || ['SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(normRole || '');
 
   // Excel Import / Export state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);

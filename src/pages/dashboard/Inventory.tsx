@@ -79,6 +79,7 @@ import { useRealtimeSync } from '@/services/realtime';
 import { syncEntityToRtdb, deleteEntityFromRtdb } from '@/lib/firebase';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { format } from 'date-fns';
+import { normalizeRole } from '@/lib/rbac';
 
 const REPAIR_CATEGORIES = [
   'Displays',
@@ -149,14 +150,15 @@ export interface CustomInventoryFolder {
 
 export default function Inventory() {
   const { token, user } = useAuthStore();
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
-  const isAdmin = isSuperAdmin || user?.role === 'ADMIN';
-  const isManager = user?.role === 'MANAGER';
-  const isReceptionist = user?.role === 'RECEPTIONIST';
-  const isInventoryManager = user?.role === 'INVENTORY_MANAGER';
-  const isTechnician = user?.role === 'TECHNICIAN' || user?.role === 'LEAD_TECHNICIAN';
+  const normRole = normalizeRole(user?.role);
+  const isSuperAdmin = normRole === 'SUPERADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
+  const isAdmin = isSuperAdmin || normRole === 'ADMIN' || user?.role === 'ADMIN';
+  const isManager = normRole === 'MANAGER' || user?.role === 'MANAGER';
+  const isReceptionist = normRole === 'RECEPTIONIST' || user?.role === 'RECEPTIONIST';
+  const isInventoryManager = normRole === 'MANAGER' || user?.role === 'INVENTORY_MANAGER';
+  const isTechnician = normRole === 'TECHNICIAN' || normRole === 'HEAD_TECHNICIAN' || user?.role === 'TECHNICIAN' || user?.role === 'LEAD_TECHNICIAN';
 
-  const canManage = isSuperAdmin || isAdmin || isManager || isReceptionist || isInventoryManager;
+  const canManage = isSuperAdmin || isAdmin || isManager || isReceptionist || isInventoryManager || isTechnician;
   const canDelete = isSuperAdmin || isAdmin;
 
   // Data states

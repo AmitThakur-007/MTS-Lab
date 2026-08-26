@@ -2502,11 +2502,64 @@ export async function createServerApp() {
     'TECHNICAL_ASSISTANT'
   ];
 
-  // Role Guard Middleware Helper
+  // Centralized Role Normalizer in Server Engine
+  const normalizeRole = (role: string | undefined | null): string => {
+    if (!role || typeof role !== 'string') return '';
+    const clean = role.trim().toUpperCase().replace(/[\s-]+/g, '_');
+    switch (clean) {
+      case 'SUPERADMIN':
+      case 'SUPER_ADMIN':
+      case 'OWNER':
+      case 'DIRECTOR':
+        return 'SUPERADMIN';
+      case 'ADMIN':
+      case 'ADMINISTRATOR':
+        return 'ADMIN';
+      case 'MANAGER':
+      case 'OPERATIONS_MANAGER':
+        return 'MANAGER';
+      case 'HEAD_TECHNICIAN':
+      case 'HEADTECHNICIAN':
+      case 'LEAD_TECHNICIAN':
+      case 'LEADTECHNICIAN':
+      case 'CHIEF_TECHNICIAN':
+        return 'HEAD_TECHNICIAN';
+      case 'TECHNICIAN':
+      case 'TECH':
+      case 'STAFF':
+      case 'EMPLOYEE':
+        return 'TECHNICIAN';
+      case 'RECEPTIONIST':
+      case 'FRONT_DESK':
+      case 'COUNTER':
+        return 'RECEPTIONIST';
+      default:
+        return clean;
+    }
+  };
+
+  // Role Guard Middleware Helper (Normalized RBAC Protection)
   const authorize = (roles: string[]) => {
     return (req: any, res: any, next: any) => {
       if (!req.user) return res.status(401).json({ error: "Unauthorized" });
-      if (!roles.includes(req.user.role)) {
+      
+      const userRoleRaw = String(req.user.role || '').trim().toUpperCase();
+      const userRoleNorm = normalizeRole(userRoleRaw);
+      const isSuperAdminUser = userRoleNorm === 'SUPERADMIN' || userRoleRaw === 'SUPER_ADMIN' || userRoleRaw === 'SUPERADMIN' || (req.user.email && req.user.email.toLowerCase() === 'mtsmobilelab@gmail.com');
+
+      // Super Admin ALWAYS passes all administrative endpoint permission checks
+      if (isSuperAdminUser) {
+        return next();
+      }
+
+      // Check if user's role matches any allowed role (checking both raw and normalized values)
+      const allowedNorms = roles.map(r => normalizeRole(r));
+      const hasMatch = roles.includes(userRoleRaw) || 
+                       roles.includes(userRoleNorm) || 
+                       allowedNorms.includes(userRoleNorm) ||
+                       allowedNorms.includes(userRoleRaw);
+
+      if (!hasMatch) {
         return res.status(403).json({ error: "Forbidden: You do not have permission" });
       }
       next();

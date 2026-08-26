@@ -127,7 +127,7 @@ export default function CustomerProfile() {
   const canonicalRole = normalizeRole(user?.role) || 'RECEPTIONIST';
   const canEdit = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(canonicalRole) || ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '');
   const canCreateRepair = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(canonicalRole) || ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(user?.role || '');
-  const canHardDelete = canonicalRole === 'SUPERADMIN' || user?.role === 'SUPER_ADMIN';
+  const canHardDelete = canonicalRole === 'SUPERADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
 
   const editDirty = JSON.stringify(editForm) !== JSON.stringify(editInitial);
 
