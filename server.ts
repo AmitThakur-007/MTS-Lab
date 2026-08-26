@@ -6748,6 +6748,439 @@ export async function createServerApp() {
     }
   });
 
+  // ==========================================
+  // BULK USER DELETE / DEACTIVATION ENDPOINT
+  // ==========================================
+  app.post("/api/admin/users/bulk-delete", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
+    try {
+      const { userIds } = req.body;
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).json({ error: "No user IDs provided for deletion" });
+      }
+
+      const targetUsers = await prisma.user.findMany({
+        where: { id: { in: userIds }, deletedAt: null }
+      });
+
+      if (targetUsers.length === 0) {
+        return res.status(404).json({ error: "No valid user accounts found for the provided IDs" });
+      }
+
+      const currentUserId = req.user.id;
+      const primaryAdminEmail = 'mtsmobilelab@gmail.com';
+
+      const deletableUsers = targetUsers.filter(u => {
+        if (u.id === currentUserId) return false;
+        if (u.email?.toLowerCase() === primaryAdminEmail) return false;
+        return true;
+      });
+
+      if (deletableUsers.length === 0) {
+        return res.status(400).json({ 
+          error: "Selected accounts are protected (current user or primary Super Admin) and cannot be deleted." 
+        });
+      }
+
+      const deletableIds = deletableUsers.map(u => u.id);
+      const now = new Date();
+
+      await prisma.$transaction([
+        prisma.user.updateMany({
+          where: { id: { in: deletableIds } },
+          data: {
+            isActive: false,
+            accountStatus: "DEACTIVATED",
+            deletedAt: now
+          }
+        }),
+        prisma.session.deleteMany({
+          where: { userId: { in: deletableIds } }
+        })
+      ]);
+
+      for (const u of deletableUsers) {
+        try {
+          const firestore = getDb();
+          await firestore.collection("users").doc(u.id).set({
+            isActive: false,
+            accountStatus: "DEACTIVATED",
+            deletedAt: now.toISOString(),
+            updatedAt: now.toISOString()
+          }, { merge: true });
+        } catch (fsErr) {
+          console.warn(`[BULK DELETE] Firestore sync notice for user ${u.id}:`, fsErr);
+        }
+      }
+
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userRole: req.user.role,
+        userName: req.user.name || req.user.email,
+        action: 'BULK_DELETE_USERS',
+        resource: 'User',
+        details: `Bulk deactivated ${deletableUsers.length} user accounts: ${deletableUsers.map(u => u.email).join(', ')}`
+      });
+
+      return res.json({
+        success: true,
+        message: `Successfully deactivated ${deletableUsers.length} user record(s).`,
+        deactivatedCount: deletableUsers.length,
+        skippedCount: targetUsers.length - deletableUsers.length
+      });
+    } catch (err: any) {
+      console.error("[BULK DELETE USERS ERROR]", err);
+      return res.status(500).json({ error: err.message || "Failed to bulk delete user records" });
+    }
+  });
+
+  // ==========================================
+  // REPAIR DATA EXCEL EXPORT ENDPOINT
+  // ==========================================
+  app.get("/api/repairs/export", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res: any) => {
+    try {
+      const { search, status, technicianId } = req.query as any;
+      const userRoleNorm = normalizeRole(req.user.role);
+      const isSuperOrAdmin = userRoleNorm === 'SUPERADMIN' || userRoleNorm === 'ADMIN' || req.user.role === 'SUPER_ADMIN' || req.user.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
+      const isTech = userRoleNorm === 'TECHNICIAN' || userRoleNorm === 'HEAD_TECHNICIAN';
+
+      const where: any = {};
+      if (status && status !== 'ALL') {
+        where.status = status;
+      }
+      if (technicianId && technicianId !== 'ALL') {
+        where.technicianId = technicianId;
+      } else if (isTech && !isSuperOrAdmin) {
+        where.technicianId = req.user.id;
+      }
+
+      if (search && typeof search === 'string' && search.trim()) {
+        const term = search.trim();
+        where.OR = [
+          { repairNumber: { contains: term } },
+          { customerName: { contains: term } },
+          { customerPhone: { contains: term } },
+          { deviceBrand: { contains: term } },
+          { deviceModel: { contains: term } },
+          { problemDescription: { contains: term } }
+        ];
+      }
+
+      const repairs = await prisma.repair.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          customer: true,
+          technician: true
+        }
+      });
+
+      const exportRows = repairs.map(r => {
+        const row: any = {
+          "Repair Number": r.repairNumber,
+          "Customer Name": r.customerName || r.customer?.name || "N/A",
+          "Customer Phone": r.customerPhone || r.customer?.phone || "N/A",
+          "Device Brand": r.deviceBrand || "N/A",
+          "Device Model": r.deviceModel || "N/A",
+          "Problem Description": r.problemDescription || "N/A",
+          "Status": r.status || "PENDING",
+          "Priority": r.priority || "NORMAL",
+          "Assigned Technician": r.technician?.name || "Unassigned",
+          "Created Date": r.createdAt ? r.createdAt.toISOString().split('T')[0] : "N/A"
+        };
+
+        if (isSuperOrAdmin || userRoleNorm === 'MANAGER' || userRoleNorm === 'RECEPTIONIST') {
+          row["Estimated Cost (NPR)"] = r.estimatedCost ?? 0;
+          row["Amount Paid (NPR)"] = r.totalPaid ?? 0;
+          row["Payment Status"] = r.paymentStatus || "UNPAID";
+        }
+
+        if (isSuperOrAdmin) {
+          row["Internal Notes"] = r.remarks || "";
+          row["Problem Notes"] = r.conditionNotes || "";
+        }
+
+        return row;
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Repairs");
+
+      const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userRole: req.user.role,
+        userName: req.user.name || req.user.email,
+        action: 'EXPORT_REPAIRS_EXCEL',
+        resource: 'Repair',
+        details: `Exported ${repairs.length} repair records to Excel`
+      });
+
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="MTS_Lab_Repairs_${Date.now()}.xlsx"`);
+      return res.send(buffer);
+    } catch (err: any) {
+      console.error("[REPAIR EXPORT ERROR]", err);
+      return res.status(500).json({ error: "Failed to export repair records to Excel" });
+    }
+  });
+
+  // ==========================================
+  // REPAIR DATA EXCEL IMPORT TEMPLATE
+  // ==========================================
+  app.get("/api/repairs/import/template", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res: any) => {
+    try {
+      const templateRows = [
+        {
+          "Repair Number": "MTS-10001",
+          "Customer Name": "Ram Shrestha",
+          "Customer Phone": "9841234567",
+          "Customer Email": "ram@example.com",
+          "Device Brand": "Apple",
+          "Device Model": "iPhone 14 Pro",
+          "Serial / IMEI": "356789123456789",
+          "Problem Description": "Cracked display screen replacement",
+          "Status": "PENDING",
+          "Priority": "NORMAL",
+          "Assigned Technician": "Manish Sharma",
+          "Estimated Cost (NPR)": 16500,
+          "Amount Paid (NPR)": 5000,
+          "Payment Status": "PARTIAL",
+          "Remarks": "Customer requested original OLED screen replacement"
+        }
+      ];
+
+      const worksheet = XLSX.utils.json_to_sheet(templateRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Repair Import Template");
+
+      const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", 'attachment; filename="MTS_Lab_Repair_Import_Template.xlsx"');
+      return res.send(buffer);
+    } catch (err: any) {
+      console.error("[IMPORT TEMPLATE ERROR]", err);
+      return res.status(500).json({ error: "Failed to generate import template" });
+    }
+  });
+
+  // ==========================================
+  // REPAIR DATA EXCEL IMPORT PREVIEW
+  // ==========================================
+  app.post("/api/repairs/import/preview", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), upload.single('file'), async (req: any, res: any) => {
+    try {
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({ error: "No Excel file uploaded" });
+      }
+
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return res.status(400).json({ error: "Excel file contains no sheets" });
+      }
+
+      const rawRows: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
+
+      if (rawRows.length === 0) {
+        return res.status(400).json({ error: "Uploaded Excel file contains no data rows" });
+      }
+
+      const sanitizeCell = (val: any): string => {
+        if (val === null || val === undefined) return "";
+        let str = String(val).trim();
+        if (str.startsWith("=") || str.startsWith("+") || str.startsWith("-") || str.startsWith("@")) {
+          str = str.substring(1).trim();
+        }
+        return str;
+      };
+
+      const existingRepairNumbers = new Set(
+        (await prisma.repair.findMany({ select: { repairNumber: true } })).map(r => r.repairNumber)
+      );
+
+      let validCount = 0;
+      let invalidCount = 0;
+      let duplicateCount = 0;
+      const items: any[] = [];
+      const errors: any[] = [];
+
+      rawRows.forEach((row, idx) => {
+        const rowNum = idx + 2;
+        const repairNumber = sanitizeCell(row["Repair Number"] || row["repairNumber"] || row["Repair ID"]);
+        const customerName = sanitizeCell(row["Customer Name"] || row["customerName"] || row["Customer"]);
+        const customerPhone = sanitizeCell(row["Customer Phone"] || row["customerPhone"] || row["Phone"]);
+        const deviceBrand = sanitizeCell(row["Device Brand"] || row["deviceBrand"] || row["Brand"]);
+        const deviceModel = sanitizeCell(row["Device Model"] || row["deviceModel"] || row["Model"]);
+        const problemDescription = sanitizeCell(row["Problem Description"] || row["problemDescription"] || row["Problem"] || row["Issue"]);
+        const status = sanitizeCell(row["Status"] || row["status"] || "PENDING").toUpperCase();
+        const priority = sanitizeCell(row["Priority"] || row["priority"] || "NORMAL").toUpperCase();
+        const costVal = parseFloat(String(row["Estimated Cost (NPR)"] || row["estimatedCost"] || row["Cost"] || "0"));
+        const paidVal = parseFloat(String(row["Amount Paid (NPR)"] || row["amountPaid"] || row["Paid"] || "0"));
+        const paymentStatus = sanitizeCell(row["Payment Status"] || row["paymentStatus"] || "UNPAID").toUpperCase();
+        const remarks = sanitizeCell(row["Remarks"] || row["remarks"] || row["Notes"]);
+
+        const rowErrors: string[] = [];
+
+        if (!customerName && !customerPhone) {
+          rowErrors.push("Customer Name or Customer Phone is required");
+        }
+        if (!deviceBrand && !deviceModel) {
+          rowErrors.push("Device Brand or Device Model is required");
+        }
+
+        let isDuplicate = false;
+        if (repairNumber && existingRepairNumbers.has(repairNumber)) {
+          isDuplicate = true;
+          duplicateCount++;
+          rowErrors.push(`Repair Number '${repairNumber}' already exists in database`);
+        }
+
+        const isValidStatus = ["PENDING", "IN_PROGRESS", "COMPLETED", "DELIVERED", "CANCELLED", "REJECTED"].includes(status);
+        if (!isValidStatus) {
+          rowErrors.push(`Invalid status '${status}'. Must be PENDING, IN_PROGRESS, COMPLETED, DELIVERED, CANCELLED, or REJECTED.`);
+        }
+
+        const isValid = rowErrors.length === 0;
+
+        if (isValid) {
+          validCount++;
+        } else if (!isDuplicate) {
+          invalidCount++;
+        }
+
+        const itemObj = {
+          rowNumber: rowNum,
+          repairNumber: repairNumber || `MTS-${Math.floor(10000 + Math.random() * 90000)}`,
+          customerName: customerName || "Guest Customer",
+          customerPhone: customerPhone || "9800000000",
+          deviceBrand: deviceBrand || "General Mobile",
+          deviceModel: deviceModel || "Standard Model",
+          problemDescription: problemDescription || "Hardware diagnostic & repair service",
+          status: isValidStatus ? status : "PENDING",
+          priority: ["LOW", "NORMAL", "HIGH", "URGENT"].includes(priority) ? priority : "NORMAL",
+          estimatedCost: isNaN(costVal) || costVal < 0 ? 0 : costVal,
+          amountPaid: isNaN(paidVal) || paidVal < 0 ? 0 : paidVal,
+          paymentStatus: ["UNPAID", "PARTIAL", "PAID"].includes(paymentStatus) ? paymentStatus : "UNPAID",
+          remarks: remarks || null,
+          rowStatus: isValid ? "VALID" : isDuplicate ? "DUPLICATE" : "INVALID",
+          errors: rowErrors
+        };
+
+        items.push(itemObj);
+
+        if (!isValid) {
+          errors.push({ row: rowNum, message: rowErrors.join("; ") });
+        }
+      });
+
+      return res.json({
+        success: true,
+        totalRows: rawRows.length,
+        validRows: validCount,
+        invalidRows: invalidCount,
+        duplicateRows: duplicateCount,
+        errors,
+        items
+      });
+    } catch (err: any) {
+      console.error("[REPAIR IMPORT PREVIEW ERROR]", err);
+      return res.status(500).json({ error: err.message || "Failed to parse Excel import file" });
+    }
+  });
+
+  // ==========================================
+  // REPAIR DATA EXCEL IMPORT CONFIRM
+  // ==========================================
+  app.post("/api/repairs/import/confirm", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res: any) => {
+    try {
+      const { items } = req.body;
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: "No valid repair items provided to import" });
+      }
+
+      const validItems = items.filter(item => item.rowStatus === 'VALID' || !item.errors || item.errors.length === 0);
+      if (validItems.length === 0) {
+        return res.status(400).json({ error: "No valid records available for database insertion" });
+      }
+
+      const defaultBranch = await prisma.branch.findFirst();
+      const branchId = defaultBranch ? defaultBranch.id : "main-branch";
+
+      const createdRepairs: any[] = [];
+
+      await prisma.$transaction(async (tx) => {
+        for (const item of validItems) {
+          let customer = await tx.customer.findFirst({
+            where: {
+              OR: [
+                { phone: item.customerPhone },
+                { name: item.customerName }
+              ]
+            }
+          });
+
+          if (!customer) {
+            customer = await tx.customer.create({
+              data: {
+                customerId: `CUST-${Math.floor(10000 + Math.random() * 90000)}`,
+                name: item.customerName,
+                phone: item.customerPhone,
+                address: "Imported Record"
+              }
+            });
+          }
+
+          const newRepair = await tx.repair.create({
+            data: {
+              repairNumber: item.repairNumber,
+              customerName: customer.name,
+              customerPhone: customer.phone,
+              customerId: customer.id,
+              deviceBrand: item.deviceBrand,
+              deviceModel: item.deviceModel,
+              deviceCondition: "Standard Used Condition",
+              problemDescription: item.problemDescription,
+              status: item.status || "PENDING",
+              priority: item.priority || "NORMAL",
+              estimatedCost: item.estimatedCost || 0,
+              totalPaid: item.amountPaid || 0,
+              advancePaid: item.amountPaid || 0,
+              paymentStatus: item.paymentStatus || "UNPAID",
+              remarks: item.remarks || null,
+              branchId,
+              createdById: req.user.id
+            }
+          });
+
+          createdRepairs.push(newRepair);
+        }
+      });
+
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userRole: req.user.role,
+        userName: req.user.name || req.user.email,
+        action: 'CONFIRM_IMPORT_REPAIRS',
+        resource: 'Repair',
+        details: `Successfully imported ${createdRepairs.length} repair records from Excel workbook.`
+      });
+
+      return res.json({
+        success: true,
+        message: `Successfully imported ${createdRepairs.length} repair records.`,
+        importedCount: createdRepairs.length
+      });
+    } catch (err: any) {
+      console.error("[REPAIR IMPORT CONFIRM ERROR]", err);
+      return res.status(500).json({ error: err.message || "Failed to execute repair data import" });
+    }
+  });
+
   // Paginated Activity & Security Audit Logs for Super Admin
   app.get("/api/admin/audit-logs", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
     try {

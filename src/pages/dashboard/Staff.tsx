@@ -224,6 +224,11 @@ export function StaffManagementContent() {
     confirmPassword: ''
   });
 
+  // Bulk Selection States
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   const fetchUsers = useCallback(async (silent = false) => {
     if (!silent) {
       setLoading(true);
@@ -294,6 +299,49 @@ export function StaffManagementContent() {
       return matchesSearch && matchesRole && matchesStatus;
     });
   }, [users, searchTerm, roleFilter, statusFilter]);
+
+  const selectableUserIds = useMemo(() => {
+    return filteredUsers
+      .filter(u => u.id !== currentUser?.id && u.email?.toLowerCase() !== 'mtsmobilelab@gmail.com')
+      .map(u => u.id);
+  }, [filteredUsers, currentUser]);
+
+  const isAllSelected = selectableUserIds.length > 0 && selectableUserIds.every(id => selectedUserIds.includes(id));
+  const isSomeSelected = selectedUserIds.length > 0 && !isAllSelected;
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedUserIds([]);
+    } else {
+      setSelectedUserIds(selectableUserIds);
+    }
+  };
+
+  const handleToggleUserSelect = (id: string) => {
+    if (id === currentUser?.id || users.find(u => u.id === id)?.email?.toLowerCase() === 'mtsmobilelab@gmail.com') {
+      toast.warning('Protected account cannot be selected for deletion.');
+      return;
+    }
+    setSelectedUserIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleExecuteBulkDelete = async () => {
+    if (selectedUserIds.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      const res: any = await api.post('/admin/users/bulk-delete', { userIds: selectedUserIds });
+      toast.success(res?.message || `Deactivated ${selectedUserIds.length} user records.`);
+      setSelectedUserIds([]);
+      setIsBulkDeleteModalOpen(false);
+      fetchUsers(true);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to bulk delete user records');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   // Role Protection Guard
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'SUPERADMIN' || currentUser?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
@@ -891,6 +939,41 @@ export function StaffManagementContent() {
         </div>
       </div>
 
+      {/* Selection Banner */}
+      {selectedUserIds.length > 0 && (
+        <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg border border-indigo-800 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <Badge className="bg-indigo-600 text-white font-black px-3 py-1 rounded-xl text-xs">
+              Selected: {selectedUserIds.length}
+            </Badge>
+            <span className="text-xs font-bold text-slate-200">
+              {isAllSelected ? 'All eligible staff records selected' : `${selectedUserIds.length} of ${selectableUserIds.length} eligible records selected`}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedUserIds([])}
+              className="text-slate-300 hover:text-white text-xs font-bold"
+            >
+              Clear Selection
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setIsBulkDeleteModalOpen(true)}
+              className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl h-9 px-4 gap-1.5 shadow-md shadow-rose-600/30 cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Selected ({selectedUserIds.length})
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Main Staff Content */}
       {filteredUsers.length === 0 ? (
         <Card className="rounded-3xl border border-slate-200/80 bg-white p-12 text-center shadow-sm">
@@ -1080,6 +1163,16 @@ export function StaffManagementContent() {
               <Table>
                 <TableHeader className="bg-slate-50/80 border-b border-slate-200">
                   <TableRow className="hover:bg-transparent">
+                    <TableHead className="py-4 px-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        ref={el => { if (el) el.indeterminate = isSomeSelected; }}
+                        onChange={handleToggleSelectAll}
+                        title="Select All Staff Records"
+                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                    </TableHead>
                     <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4">
                       Staff Personnel
                     </TableHead>
@@ -1113,6 +1206,16 @@ export function StaffManagementContent() {
                         key={u.id} 
                         className="hover:bg-slate-50/70 transition-colors border-b border-slate-100 last:border-none"
                       >
+                        {/* Checkbox */}
+                        <TableCell className="py-3.5 px-4 w-10">
+                          <input
+                            type="checkbox"
+                            checked={selectedUserIds.includes(u.id)}
+                            disabled={u.id === currentUser?.id || u.email?.toLowerCase() === 'mtsmobilelab@gmail.com'}
+                            onChange={() => handleToggleUserSelect(u.id)}
+                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:opacity-30"
+                          />
+                        </TableCell>
                         {/* Personnel */}
                         <TableCell className="px-4 lg:px-6 py-3.5">
                           <div className="flex items-center gap-3">
@@ -2453,6 +2556,40 @@ export function StaffManagementContent() {
                   <span>Verify Email</span>
                 </>
               )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ========================================================================= */}
+      {/* 9. BULK DELETE CONFIRMATION DIALOG */}
+      {/* ========================================================================= */}
+      <AlertDialog open={isBulkDeleteModalOpen} onOpenChange={setIsBulkDeleteModalOpen}>
+        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
+          <AlertDialogHeader>
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-1 border border-rose-100 mx-auto">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <AlertDialogTitle className="text-xl font-extrabold text-slate-900 text-center">
+              Deactivate Selected Users?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-slate-500 text-center font-medium leading-relaxed">
+              You are about to deactivate <strong className="text-slate-900">{selectedUserIds.length} user record(s)</strong>.
+              Accounts will be safely disabled while preserving historical repairs, attendance, and audit logs.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter className="pt-2 flex items-center justify-center gap-3">
+            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-600 border-slate-200 h-10 px-5 cursor-pointer">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleExecuteBulkDelete}
+              disabled={bulkDeleting}
+              className="rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-10 px-5 shadow-md shadow-rose-600/30 cursor-pointer"
+            >
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              Confirm Deactivation
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
