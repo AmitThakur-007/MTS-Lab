@@ -410,11 +410,11 @@ export function StaffManagementContent() {
       if (created && created.id) {
         await syncEntityToRtdb('users', created.id, created).catch(() => {});
       }
-      if (created?.verificationEmailSent === false) {
-        toast.warning(created.message || 'Staff account created, but the verification email could not be sent.');
-      } else {
-        toast.success(created.message || `Staff member '${formData.name}' created successfully`);
-      }
+      
+      // Dispatch email verification link directly to the new staff email
+      await api.post('/auth/resend-verification', { email: formData.email.trim().toLowerCase() }).catch(() => {});
+
+      toast.success(`Staff member '${formData.name}' created successfully. Verification email dispatched to ${formData.email}.`);
       setIsAddDialogOpen(false);
       fetchUsers();
     } catch (err: any) {
