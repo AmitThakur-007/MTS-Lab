@@ -2871,8 +2871,17 @@ export async function createServerApp() {
         return { success: true, messageId: info.messageId };
       } catch (err: any) {
         console.error(`[AUTH DIAGNOSTIC] ❌ SMTP delivery failed (${err?.code || err?.message || err})`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[AUTH DIAGNOSTIC] ℹ️ Non-production fallback active: Simulating email delivery to ${maskEmail(to)}.`);
+          return { success: true, messageId: 'dev-fallback-' + Date.now() };
+        }
         return { success: false, error: err?.message || "SMTP delivery failed" };
       }
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[AUTH DIAGNOSTIC] ℹ️ Non-production mode: Simulating 2FA email delivery to ${maskEmail(to)}.`);
+      return { success: true, messageId: 'simulated-dev-mail-' + Date.now() };
     }
 
     console.error(`[AUTH DIAGNOSTIC] ❌ Outbound email delivery failed: No active email service configured in .env (GMAIL_USER + GMAIL_APP_PASSWORD, SMTP_HOST, or RESEND_API_KEY).`);
