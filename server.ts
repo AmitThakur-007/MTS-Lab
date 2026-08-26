@@ -5277,7 +5277,9 @@ export async function createServerApp() {
       }
 
       // 5. Password Validated! Check authoritative per-user Two-Factor Authentication (2FA) setting
-      const is2faActive = isUser2FAEnabled(user);
+      const freshUser = await prisma.user.findUnique({ where: { id: user.id } }) || user;
+      const is2faActive = isUser2FAEnabled(freshUser);
+      user = freshUser;
 
       // If 2FA is DISABLED for this user by Super Admin, log in directly without OTP
       if (!is2faActive) {
@@ -6816,13 +6818,22 @@ export async function createServerApp() {
         }
       });
 
-      // 5. Synchronize central Firestore document if available
+      // 5. Synchronize central Firestore document & RTDB
       try {
-        const db = getDb();
-        await db.collection("users").doc(targetUser.id).set({
-          emailVerified: true,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
+        await syncUserToFirestore(updatedPrismaUser).catch(() => {});
+        await syncToRtdb("user", "UPDATE", updatedPrismaUser).catch(() => {});
+        broadcastRealtimeEvent({
+          entity: "user",
+          action: "UPDATE",
+          id: updatedPrismaUser.id,
+          data: {
+            id: updatedPrismaUser.id,
+            email: updatedPrismaUser.email,
+            name: updatedPrismaUser.name,
+            role: updatedPrismaUser.role,
+            emailVerified: true
+          }
+        });
       } catch (fsErr) {
         console.warn("[FIRESTORE VERIFY SYNC WARNING]", fsErr);
       }
@@ -6857,9 +6868,110 @@ export async function createServerApp() {
     }
   };
 
-  // SUPERADMIN-Only Endpoint Registrations
+  // SUPERADMIN-Only Verification Endpoint Registrations
   app.post("/api/admin/staff/:userId/verify-email", authenticate, authorize(['SUPER_ADMIN']), verifyStaffEmailHandler);
   app.post("/api/users/:userId/verify-email", authenticate, authorize(['SUPER_ADMIN']), verifyStaffEmailHandler);
+  app.patch("/api/admin/staff/:userId/verify-email", authenticate, authorize(['SUPER_ADMIN']), verifyStaffEmailHandler);
+  app.patch("/api/users/:userId/verify-email", authenticate, authorize(['SUPER_ADMIN']), verifyStaffEmailHandler);
+
+  // ==========================================
+  // SUPERADMIN TOGGLE STAFF 2FA ENDPOINTS
+  // ==========================================
+  const handleToggleStaff2FA = async (req: any, res: any) => {
+    try {
+      const id = req.params.id || req.params.userId;
+      let { twoFactorEnabled, enabled } = req.body;
+
+      if (twoFactorEnabled === undefined && enabled !== undefined) {
+        twoFactorEnabled = enabled;
+      }
+
+      if (twoFactorEnabled === undefined) {
+        return res.status(400).json({ success: false, error: "A boolean 'twoFactorEnabled' or 'enabled' field is required." });
+      }
+
+      const isEnabled = twoFactorEnabled === true || twoFactorEnabled === 'true' || twoFactorEnabled === 1 || twoFactorEnabled === '1';
+
+      // 1. Fetch target staff user
+      const targetUser = await prisma.user.findUnique({
+        where: { id }
+      });
+
+      if (!targetUser || targetUser.deletedAt) {
+        return res.status(404).json({ success: false, error: "Staff member account not found." });
+      }
+
+      const prev2FA = isUser2FAEnabled(targetUser);
+
+      // 2. Authoritative database update
+      const updatedUser = await prisma.user.update({
+        where: { id },
+        data: {
+          twoFactorEnabled: isEnabled,
+          updatedAt: new Date()
+        }
+      });
+
+      // 3. Synchronize with Firestore, RTDB & Real-time hub
+      await syncUserToFirestore(updatedUser).catch(() => {});
+      await syncToRtdb("user", "UPDATE", updatedUser).catch(() => {});
+      broadcastRealtimeEvent({
+        entity: "user",
+        action: "UPDATE",
+        id: updatedUser.id,
+        data: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          role: updatedUser.role,
+          twoFactorEnabled: isEnabled
+        }
+      });
+
+      // 4. Create Audit Record
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: isEnabled ? "STAFF_2FA_ENABLED" : "STAFF_2FA_DISABLED",
+        resource: "SECURITY",
+        resourceId: targetUser.id,
+        status: "SUCCESS",
+        details: `SUPERADMIN ${req.user.name} set 2FA for staff member ${updatedUser.name} (${updatedUser.email}): ${prev2FA ? 'ENABLED' : 'DISABLED'} -> ${isEnabled ? 'ENABLED' : 'DISABLED'}`,
+        previousValue: JSON.stringify({ twoFactorEnabled: prev2FA }),
+        newValue: JSON.stringify({ twoFactorEnabled: isEnabled })
+      });
+
+      return res.json({
+        success: true,
+        twoFactorEnabled: isEnabled,
+        message: isEnabled
+          ? `Two-Factor Authentication has been enabled for ${updatedUser.name}.`
+          : `Two-Factor Authentication has been disabled for ${updatedUser.name}.`,
+        user: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          role: updatedUser.role,
+          twoFactorEnabled: isEnabled
+        }
+      });
+
+    } catch (err: any) {
+      console.error("[TOGGLE STAFF 2FA ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Failed to update 2FA setting for staff member." });
+    }
+  };
+
+  // Register 2FA management routes for SUPERADMIN
+  app.patch("/api/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
+  app.post("/api/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
+  app.patch("/api/admin/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
+  app.post("/api/admin/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
+  app.patch("/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
+  app.post("/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
 
   // ==========================================
   // BULK USER DELETE / DEACTIVATION ENDPOINT
