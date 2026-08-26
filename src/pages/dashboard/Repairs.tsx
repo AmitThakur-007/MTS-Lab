@@ -181,7 +181,7 @@ export default function Repairs() {
   const [reProblemLoading, setReProblemLoading] = useState(false);
 
   // Role permissions - Permanent deletion strictly restricted to SUPER_ADMIN ONLY
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
   const isAdmin = user?.role === 'ADMIN' || isSuperAdmin;
   const isManager = user?.role === 'MANAGER';
   const isReceptionist = user?.role === 'RECEPTIONIST';

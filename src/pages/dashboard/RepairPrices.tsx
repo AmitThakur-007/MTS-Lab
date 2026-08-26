@@ -183,7 +183,7 @@ function getCategoryVisuals(categoryName: string) {
 
 export default function RepairPrices() {
   const { token, user } = useAuthStore();
-  const isAdmin = user && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN');
+  const isAdmin = user && (user.role === 'SUPER_ADMIN' || user.role === 'SUPERADMIN' || user.role === 'ADMIN');
 
   // Main Data States
   const [records, setRecords] = useState<RepairPriceRecord[]>([]);

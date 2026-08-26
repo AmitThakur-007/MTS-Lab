@@ -46,7 +46,7 @@ import { motion } from 'motion/react';
 
 export default function PermanentDeletionHub() {
   const { user } = useAuthStore();
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
 
   // Sub-tabs: REPAIRS vs WARRANTIES
   const [activeSection, setActiveSection] = useState<'REPAIRS' | 'WARRANTIES'>('REPAIRS');

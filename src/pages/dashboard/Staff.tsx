@@ -260,7 +260,7 @@ export function StaffManagementContent() {
     const total = users.length;
     const active = users.filter(u => u && u.isActive && (u.accountStatus || 'ACTIVE') === 'ACTIVE').length;
     const disabled = total - active;
-    const admins = users.filter(u => u && (u.role === 'SUPER_ADMIN' || u.role === 'ADMIN')).length;
+    const admins = users.filter(u => u && (u.role === 'SUPER_ADMIN' || u.role === 'SUPERADMIN' || u.role === 'ADMIN')).length;
     const technicians = users.filter(u => u && u.role && String(u.role).includes('TECH')).length;
     return { total, active, disabled, admins, technicians };
   }, [users]);
@@ -296,7 +296,7 @@ export function StaffManagementContent() {
   }, [users, searchTerm, roleFilter, statusFilter]);
 
   // Role Protection Guard
-  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'SUPERADMIN' || currentUser?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
   if (currentUser && !isSuperAdmin) {
     return (
       <div className="p-6 max-w-2xl mx-auto my-8">
@@ -1495,8 +1495,8 @@ export function StaffManagementContent() {
                 </div>
               </button>
 
-              {/* 7. Super Admin Direct Verify Email (When Unverified & SUPER_ADMIN) */}
-              {!selectedUser?.emailVerified && currentUser?.role === 'SUPER_ADMIN' && (
+              {/* 7. Super Admin Direct Verify Email (When Unverified & isSuperAdmin) */}
+              {!selectedUser?.emailVerified && isSuperAdmin && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1767,7 +1767,7 @@ export function StaffManagementContent() {
                         : 'Resend Verification Email'}
                     </Button>
                   )}
-                  {!selectedUser?.emailVerified && currentUser?.role === 'SUPER_ADMIN' && (
+                  {!selectedUser?.emailVerified && isSuperAdmin && (
                     <Button
                       type="button"
                       size="sm"

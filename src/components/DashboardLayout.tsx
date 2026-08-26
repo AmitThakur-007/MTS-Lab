@@ -447,7 +447,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     })
                   )}
                 </div>
-                {user?.role === 'SUPER_ADMIN' && (
+                {(user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com') && (
                   <div className="p-2 border-t border-slate-100 bg-slate-50/50">
                     <Button 
                       variant="ghost" 

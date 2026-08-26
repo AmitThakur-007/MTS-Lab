@@ -149,7 +149,7 @@ export interface CustomInventoryFolder {
 
 export default function Inventory() {
   const { token, user } = useAuthStore();
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
   const isAdmin = isSuperAdmin || user?.role === 'ADMIN';
   const isManager = user?.role === 'MANAGER';
   const isReceptionist = user?.role === 'RECEPTIONIST';
