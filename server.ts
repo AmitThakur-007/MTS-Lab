@@ -379,9 +379,10 @@ async function generateUniqueRepairNumber(): Promise<string> {
   return `MTS-${currentYear}-${padded}`;
 }
 
-// Authoritative Helper to determine if 2FA is active for a user
+// Authoritative Centralized Helper to determine if 2FA is active for a user
 function isUser2FAEnabled(user: any): boolean {
   if (!user) return false;
+  const isSuperAdmin = user.role === 'SUPER_ADMIN' || user.role === 'SUPERADMIN' || user.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
   const val = user.twoFactorEnabled;
   if (val === false || val === 'false' || val === 0 || val === '0') {
     return false;
@@ -389,7 +390,11 @@ function isUser2FAEnabled(user: any): boolean {
   if (val === true || val === 'true' || val === 1 || val === '1') {
     return true;
   }
-  return user.twoFactorEnabled !== false;
+  // Default for Super Admin is OFF (false), while other staff roles default to ON (true)
+  if (isSuperAdmin) {
+    return false;
+  }
+  return true;
 }
 
 // Helper to generate next unique sequential battery warranty number (e.g. BW-2026-0001)
@@ -14122,8 +14127,102 @@ export async function createServerApp() {
   app.patch("/api/users/:id/verify-email", authenticate, authorize(['SUPER_ADMIN']), handleSuperAdminDirectEmailVerify);
   app.post("/api/users/:id/direct-verify-email", authenticate, authorize(['SUPER_ADMIN']), handleSuperAdminDirectEmailVerify);
   app.patch("/api/users/:id/direct-verify-email", authenticate, authorize(['SUPER_ADMIN']), handleSuperAdminDirectEmailVerify);
-  app.post("/api/staff/:id/verify-email", authenticate, authorize(['SUPER_ADMIN']), handleSuperAdminDirectEmailVerify);
-  app.patch("/api/staff/:id/verify-email", authenticate, authorize(['SUPER_ADMIN']), handleSuperAdminDirectEmailVerify);
+  // Super Admin 2FA Configuration Status Endpoint
+  const handleGetSuperAdmin2FA = async (req: any, res: any) => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.id }
+      });
+      const isEnabled = isUser2FAEnabled(user);
+      return res.json({
+        success: true,
+        twoFactorEnabled: isEnabled,
+        user: {
+          id: user?.id,
+          email: user?.email,
+          role: user?.role,
+          twoFactorEnabled: isEnabled
+        }
+      });
+    } catch (err: any) {
+      console.error("[GET 2FA STATUS ERROR]", err);
+      res.status(500).json({ success: false, error: "Failed to retrieve 2FA status." });
+    }
+  };
+
+  // Super Admin 2FA Configuration Update Endpoint (Authoritative backend mutation)
+  const handleUpdateSuperAdmin2FA = async (req: any, res: any) => {
+    try {
+      const { enabled } = req.body;
+      if (enabled === undefined || (typeof enabled !== 'boolean' && enabled !== 'true' && enabled !== 'false')) {
+        return res.status(400).json({ success: false, error: "A boolean 'enabled' field is required." });
+      }
+
+      const isEnabled = enabled === true || enabled === 'true';
+      const currentUser = await prisma.user.findUnique({
+        where: { id: req.user.id }
+      });
+
+      if (!currentUser) {
+        return res.status(404).json({ success: false, error: "User account not found." });
+      }
+
+      const prev2FA = isUser2FAEnabled(currentUser);
+
+      const updatedUser = await prisma.user.update({
+        where: { id: req.user.id },
+        data: {
+          twoFactorEnabled: isEnabled,
+          updatedAt: new Date()
+        }
+      });
+
+      // Synchronize with Firestore & RTDB
+      await syncUserToFirestore(updatedUser).catch(() => {});
+      await syncToRtdb("user", "UPDATE", updatedUser).catch(() => {});
+
+      // Record Audit Log
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: "SUPERADMIN_2FA_TOGGLED",
+        resource: "SECURITY",
+        resourceId: req.user.id,
+        status: "SUCCESS",
+        details: `Super Administrator ${req.user.name} toggled 2FA: ${prev2FA ? 'ENABLED' : 'DISABLED'} -> ${isEnabled ? 'ENABLED' : 'DISABLED'}`,
+        previousValue: JSON.stringify({ twoFactorEnabled: prev2FA }),
+        newValue: JSON.stringify({ twoFactorEnabled: isEnabled })
+      });
+
+      return res.json({
+        success: true,
+        twoFactorEnabled: isEnabled,
+        message: isEnabled 
+          ? "Two-factor authentication is now enabled for Super Admin. 2FA OTP will be required on your next login." 
+          : "Two-factor authentication is now disabled for Super Admin. You can now log in directly without OTP.",
+        user: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          role: updatedUser.role,
+          twoFactorEnabled: isEnabled
+        }
+      });
+    } catch (err: any) {
+      console.error("[UPDATE 2FA SETTING ERROR]", err);
+      res.status(500).json({ success: false, error: "Failed to update 2FA setting. Please try again." });
+    }
+  };
+
+  app.get("/api/admin/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleGetSuperAdmin2FA);
+  app.patch("/api/admin/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleUpdateSuperAdmin2FA);
+  app.post("/api/admin/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleUpdateSuperAdmin2FA);
+  app.get("/api/settings/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleGetSuperAdmin2FA);
+  app.patch("/api/settings/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleUpdateSuperAdmin2FA);
+  app.post("/api/settings/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleUpdateSuperAdmin2FA);
 
   app.patch("/api/users/:id", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
     const { id } = req.params;

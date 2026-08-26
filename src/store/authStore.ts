@@ -13,6 +13,8 @@ export interface User {
   phoneNumber?: string;
   department?: string;
   address?: string;
+  twoFactorEnabled?: boolean;
+  emailVerified?: boolean;
 }
 
 interface AuthState {

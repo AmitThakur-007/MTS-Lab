@@ -268,6 +268,34 @@ function setVerificationCooldown(email: string): void {
   }
 }
 
+// Serverless in-memory Super Admin 2FA Configuration (Default: false / OFF)
+let serverlessSuperAdmin2faEnabled: boolean = false;
+
+export function isServerlessSuperAdmin2faActive(): boolean {
+  return serverlessSuperAdmin2faEnabled;
+}
+
+export function setServerlessSuperAdmin2faActive(enabled: boolean): void {
+  serverlessSuperAdmin2faEnabled = Boolean(enabled);
+}
+
+// Centralized 2FA Enforcement Policy Function
+export function requiresTwoFactorAuthentication(user: {
+  role?: string;
+  email?: string;
+  twoFactorEnabled?: boolean;
+}): boolean {
+  if (!user) return false;
+  const isSuperAdmin = user.role === 'SUPERADMIN' || user.role === 'SUPER_ADMIN' || user.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
+  if (user.twoFactorEnabled === false) return false;
+  if (user.twoFactorEnabled === true) return true;
+  // Default for Super Admin is OFF (false), while other staff roles default to ON (true)
+  if (isSuperAdmin) {
+    return serverlessSuperAdmin2faEnabled;
+  }
+  return true;
+}
+
 // Dispatch Official Firebase Email Verification via Identity Toolkit REST API
 async function sendFirebaseVerificationEmail(params: {
   email: string;
@@ -417,6 +445,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const userName = isSuperAdmin ? 'MTS Lab Super Admin' : (identity.split('@')[0] || 'Staff Member');
       const userId = `usr_${crypto.createHash('md5').update(identity || 'anonymous').digest('hex').slice(0, 12)}`;
+
+      const needs2fa = requiresTwoFactorAuthentication({ role, email: identity, twoFactorEnabled: body.twoFactorEnabled });
+
+      // Direct Login when 2FA is not required (Super Admin with 2FA disabled)
+      if (!needs2fa) {
+        const accessToken = `mts_${crypto.randomBytes(32).toString('hex')}`;
+        const refreshToken = `mts_ref_${crypto.randomBytes(32).toString('hex')}`;
+        return sendJson(res, 200, {
+          success: true,
+          token: accessToken,
+          refreshToken,
+          user: {
+            id: userId,
+            email: identity || 'mtsmobilelab@gmail.com',
+            name: userName,
+            role,
+            emailVerified: true,
+            twoFactorEnabled: false
+          },
+          mfaRequired: false,
+          message: isSuperAdmin ? 'Welcome back, MTS Lab Super Admin!' : 'Authenticated successfully.'
+        });
+      }
 
       // Generate Cryptographically Secure 6-Digit OTP Code
       const otpCode = generate6DigitOtp();
@@ -799,6 +850,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: true,
         message: 'Super Admin email changed successfully.'
       });
+    }
+
+    // 3e-2. GET & PATCH /api/admin/security/2fa or /api/settings/security/2fa
+    if (pathname.includes('/security/2fa') || pathname.endsWith('/admin/security/2fa')) {
+      if (req.method === 'GET') {
+        return sendJson(res, 200, {
+          success: true,
+          twoFactorEnabled: serverlessSuperAdmin2faEnabled,
+          message: `Super Admin 2FA is currently ${serverlessSuperAdmin2faEnabled ? 'ENABLED' : 'DISABLED'}.`
+        });
+      }
+      if (req.method === 'PATCH' || req.method === 'POST') {
+        const body = await parseJsonBody(req);
+        const { enabled } = body;
+        if (enabled !== undefined) {
+          serverlessSuperAdmin2faEnabled = enabled === true || enabled === 'true';
+        }
+        return sendJson(res, 200, {
+          success: true,
+          twoFactorEnabled: serverlessSuperAdmin2faEnabled,
+          message: serverlessSuperAdmin2faEnabled
+            ? 'Two-factor authentication is now enabled for Super Admin. 2FA will be required on your next login.'
+            : 'Two-factor authentication is now disabled for Super Admin. You can now log in directly without OTP.'
+        });
+      }
     }
 
     // 3f. DELETE /api/auth/sessions/:id or /sessions-revoke-other

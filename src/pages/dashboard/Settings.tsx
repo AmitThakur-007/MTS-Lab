@@ -175,14 +175,30 @@ function SettingsContent() {
   const [emailChangeNewTicket, setEmailChangeNewTicket] = useState('');
   const [emailChangeLoading, setEmailChangeLoading] = useState(false);
 
+  // Super Admin 2FA Configuration State
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState<boolean>(user?.twoFactorEnabled === true);
+  const [twoFactorLoading, setTwoFactorLoading] = useState<boolean>(false);
+  const [showDisable2faModal, setShowDisable2faModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (user) {
+      setTwoFactorEnabled(user.twoFactorEnabled === true);
+    }
+  }, [user?.twoFactorEnabled]);
+
   const fetchData = async () => {
     try {
-      const [actData, sessData] = await Promise.all([
+      const [actData, sessData, twoFaData] = await Promise.all([
         api.get('/auth/activity').catch(() => []),
-        api.get('/auth/sessions').catch(() => [])
+        api.get('/auth/sessions').catch(() => []),
+        isSuperAdmin ? api.get('/admin/security/2fa').catch(() => null) : Promise.resolve(null)
       ]);
       setActivities(Array.isArray(actData) ? actData : []);
       setSessions(Array.isArray(sessData) ? sessData : []);
+      if (twoFaData && typeof twoFaData.twoFactorEnabled === 'boolean') {
+        setTwoFactorEnabled(twoFaData.twoFactorEnabled);
+        updateUser({ twoFactorEnabled: twoFaData.twoFactorEnabled });
+      }
     } catch (err) {
       console.warn('[SETTINGS LOAD NOTICE]', err);
       setActivities([]);
@@ -200,6 +216,36 @@ function SettingsContent() {
   useRealtimeSync(['session', 'user', 'sync'], () => {
     fetchData();
   });
+
+  const handleToggle2FA = (targetState: boolean) => {
+    if (!targetState) {
+      setShowDisable2faModal(true);
+      return;
+    }
+    execute2faUpdate(true);
+  };
+
+  const execute2faUpdate = async (enabled: boolean) => {
+    setTwoFactorLoading(true);
+    setShowDisable2faModal(false);
+    try {
+      const res: any = await api.patch('/admin/security/2fa', { enabled });
+      const newState = typeof res?.twoFactorEnabled === 'boolean' ? res.twoFactorEnabled : enabled;
+      setTwoFactorEnabled(newState);
+      updateUser({ twoFactorEnabled: newState });
+      if (newState) {
+        toast.success('Two-factor authentication is now enabled for Super Admin. 2FA OTP will be required on your next login.');
+      } else {
+        toast.success('Two-factor authentication is now disabled for Super Admin. You can now log in directly without OTP.');
+      }
+    } catch (err: any) {
+      // Rollback to actual state
+      setTwoFactorEnabled(user?.twoFactorEnabled === true);
+      toast.error(err.message || 'Unable to update 2FA setting. Please try again.');
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -600,6 +646,82 @@ function SettingsContent() {
 
         {/* 2. SECURITY TAB */}
         <TabsContent value="security" className="space-y-6">
+          {/* Super Admin 2FA Security Control (Exclusive to SUPERADMIN) */}
+          {isSuperAdmin && (
+            <Card className="rounded-[32px] sm:rounded-[40px] border border-slate-200/80 shadow-sm overflow-hidden bg-white">
+              <CardHeader className="p-6 sm:p-10 pb-4">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-4">
+                    <div className={`h-12 w-12 rounded-2xl flex items-center justify-center text-white shadow-xs ${twoFactorEnabled ? 'bg-emerald-600' : 'bg-slate-900'}`}>
+                      <Shield className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <CardTitle className="text-xl sm:text-2xl font-bold">SUPERADMIN Two-Factor Authentication</CardTitle>
+                        <Badge variant="outline" className={`font-black text-[11px] px-2.5 py-0.5 rounded-full ${twoFactorEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                          {twoFactorEnabled ? 'Status: Enabled' : 'Status: Disabled'}
+                        </Badge>
+                      </div>
+                      <CardDescription className="text-xs text-slate-500 font-medium mt-1">
+                        Protect your Super Admin account with an additional verification code during login.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6 sm:p-10 pt-2 space-y-4">
+                <div className={`p-5 rounded-2xl border transition-all ${twoFactorEnabled ? 'bg-emerald-50/60 border-emerald-200/80 text-emerald-950' : 'bg-slate-50 border-slate-200/80 text-slate-800'}`}>
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="space-y-1 max-w-xl">
+                      <p className="font-bold text-xs sm:text-sm flex items-center gap-2">
+                        {twoFactorEnabled ? (
+                          <>
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            Two-factor authentication is currently enabled.
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="h-4 w-4 text-slate-500" />
+                            Two-factor authentication is currently disabled.
+                          </>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                        {twoFactorEnabled 
+                          ? 'Every new Super Admin login attempt will require an email OTP verification code sent via MTS Lab security transport.'
+                          : 'Super Administrator can log in directly after entering credentials without an additional 2FA OTP code.'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1 sm:pt-0">
+                      {twoFactorEnabled ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={twoFactorLoading}
+                          onClick={() => handleToggle2FA(false)}
+                          className="h-10 px-4 rounded-xl border-red-200 bg-white hover:bg-red-50 text-red-700 font-bold text-xs gap-2 shadow-xs"
+                        >
+                          {twoFactorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4 text-red-600" />}
+                          Disable 2FA
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          disabled={twoFactorLoading}
+                          onClick={() => handleToggle2FA(true)}
+                          className="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 shadow-xs"
+                        >
+                          {twoFactorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+                          Enable 2FA
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="rounded-[32px] sm:rounded-[40px] border border-slate-200/80 shadow-sm overflow-hidden bg-white">
             <CardHeader className="p-6 sm:p-10 pb-4">
               <div className="flex items-center gap-4">
@@ -1001,6 +1123,49 @@ function SettingsContent() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Confirmation Modal for Disabling Super Admin 2FA */}
+      {showDisable2faModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }} 
+            animate={{ scale: 1, opacity: 1 }} 
+            className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-6"
+          >
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shrink-0">
+                <ShieldAlert className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">Disable Two-Factor Authentication?</h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">Super Administrator Security</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed font-medium">
+              Disabling 2FA reduces the security protection of the Super Admin account. Are you sure you want to continue?
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowDisable2faModal(false)}
+                className="h-10 px-4 rounded-xl text-xs font-bold border-slate-200"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={twoFactorLoading}
+                onClick={() => execute2faUpdate(false)}
+                className="h-10 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs gap-2 shadow-xs"
+              >
+                {twoFactorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Disable 2FA
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
