@@ -48,16 +48,99 @@ export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
 
   // 1. Customers
   if (primaryResource === 'customers') {
+    // 1a. Customer Lookup / Search by Phone, Name, or General query (used by New Repair autocomplete)
+    if (resourceId === 'lookup' || resourceId === 'search') {
+      const snap = await rtdbGet(rtdbRef(rtdb, 'customers'));
+      const map = snap.exists() ? snap.val() : {};
+      const list = Object.values(map).filter(Boolean);
+
+      const phoneParam = (url.searchParams.get('phone') || '').replace(/\D/g, '');
+      const nameParam = (url.searchParams.get('name') || '').trim().toLowerCase();
+      const queryParam = (url.searchParams.get('q') || url.searchParams.get('query') || '').trim().toLowerCase();
+
+      const matched = list.filter((c: any) => {
+        if (c.archived) return false;
+        const cPhone = (c.phone || '').replace(/\D/g, '');
+        const cAltPhone = (c.alternativePhone || '').replace(/\D/g, '');
+        if (phoneParam && (cPhone.includes(phoneParam) || (cAltPhone && cAltPhone.includes(phoneParam)))) {
+          return true;
+        }
+        if (nameParam && c.name && c.name.toLowerCase().includes(nameParam)) {
+          return true;
+        }
+        if (queryParam) {
+          return (
+            (c.name && c.name.toLowerCase().includes(queryParam)) ||
+            (cPhone && cPhone.includes(queryParam)) ||
+            (c.customerId && c.customerId.toLowerCase().includes(queryParam))
+          );
+        }
+        return false;
+      });
+
+      return matched;
+    }
+
+    // 1b. Customer Repair History (/customers/:id/repairs)
+    if (resourceId && segments[2] === 'repairs') {
+      const custSnap = await rtdbGet(rtdbRef(rtdb, `customers/${resourceId}`));
+      const customer = custSnap.exists() ? custSnap.val() : { id: resourceId };
+      const cleanPhone = (customer.phone || '').replace(/\D/g, '');
+
+      const repairsSnap = await rtdbGet(rtdbRef(rtdb, 'repairs'));
+      const repairsMap = repairsSnap.exists() ? repairsSnap.val() : {};
+      let repairs = Object.values(repairsMap).filter((r: any) => {
+        if (!r) return false;
+        const rPhone = (r.customerPhone || '').replace(/\D/g, '');
+        return r.customerId === resourceId || (cleanPhone && rPhone === cleanPhone);
+      });
+
+      // Apply status filter
+      const statusParam = url.searchParams.get('status');
+      if (statusParam && statusParam !== 'ALL') {
+        repairs = repairs.filter((r: any) => r.status === statusParam);
+      }
+
+      // Sort newest first
+      repairs.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+      const page = parseInt(url.searchParams.get('page') || '1', 10);
+      const limit = parseInt(url.searchParams.get('limit') || '15', 10);
+      const total = repairs.length;
+      const totalPages = Math.max(1, Math.ceil(total / limit));
+      const paginated = repairs.slice((page - 1) * limit, page * limit);
+
+      return {
+        repairs: paginated,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages
+        }
+      };
+    }
+
+    // 1c. Single Customer Details (/customers/:id)
     if (resourceId && resourceId !== 'export') {
       const snap = await rtdbGet(rtdbRef(rtdb, `customers/${resourceId}`));
       if (!snap.exists()) {
         throw new Error('Customer not found');
       }
       const customer = snap.val();
-      // Fetch customer's repairs
+      const cleanPhone = (customer.phone || '').replace(/\D/g, '');
+
+      // Fetch customer's linked repairs
       const repairsSnap = await rtdbGet(rtdbRef(rtdb, 'repairs'));
       const repairsMap = repairsSnap.exists() ? repairsSnap.val() : {};
-      const repairs = Object.values(repairsMap).filter((r: any) => r && (r.customerId === resourceId || r.customerPhone === customer.phone));
+      const repairs = Object.values(repairsMap).filter((r: any) => {
+        if (!r) return false;
+        const rPhone = (r.customerPhone || '').replace(/\D/g, '');
+        return r.customerId === resourceId || (cleanPhone && rPhone === cleanPhone);
+      });
+
+      repairs.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
       return {
         ...customer,
         repairs,
@@ -66,6 +149,7 @@ export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
       };
     }
 
+    // 1d. Customer List / Hub with Pagination, Search & Sorting
     const snap = await rtdbGet(rtdbRef(rtdb, 'customers'));
     const map = snap.exists() ? snap.val() : {};
     let list = Object.values(map).filter(Boolean);
@@ -266,6 +350,67 @@ export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
   return null;
 }
 
+// Helper to automatically find or create customer records when repairs are submitted
+async function findOrCreateCustomerRecord(custInput: any, now: string): Promise<any> {
+  if (!custInput) return null;
+  const snap = await rtdbGet(rtdbRef(rtdb, 'customers'));
+  const map = snap.exists() ? snap.val() : {};
+  const list: any[] = Object.values(map).filter(Boolean);
+
+  const cleanPhone = (custInput.phone || custInput.customerPhone || '').replace(/\D/g, '');
+  const custId = custInput.id || custInput.customerId;
+
+  let existing = list.find((c: any) => {
+    if (custId && (c.id === custId || c.customerId === custId)) return true;
+    if (cleanPhone && cleanPhone.length >= 7 && (c.phone || '').replace(/\D/g, '') === cleanPhone) return true;
+    return false;
+  });
+
+  if (existing) {
+    // Update existing customer record with any fresh details and increment repair count
+    const updated = {
+      ...existing,
+      name: custInput.name || custInput.customerName || existing.name,
+      email: custInput.email || custInput.customerEmail || existing.email || null,
+      district: custInput.district || custInput.customerDistrict || existing.district || 'Kathmandu',
+      municipality: custInput.municipality || custInput.customerMunicipality || existing.municipality || null,
+      address: custInput.address || custInput.customerAddress || existing.address || null,
+      landmark: custInput.landmark || custInput.customerLandmark || existing.landmark || null,
+      notes: custInput.notes || custInput.customerNotes || existing.notes || null,
+      totalRepairs: (existing.totalRepairs || 0) + 1,
+      lastRepairDate: now,
+      archived: false,
+      updatedAt: now
+    };
+    await rtdbSet(rtdbRef(rtdb, `customers/${existing.id}`), updated);
+    return updated;
+  }
+
+  // Create new customer automatically in Customer Hub
+  const newId = generateId('cust');
+  const customerNumber = `CUST-${Date.now().toString().slice(-6)}`;
+  const newCustomer = {
+    id: newId,
+    customerId: customerNumber,
+    name: (custInput.name || custInput.customerName || 'Walk-in Customer').trim(),
+    phone: (custInput.phone || custInput.customerPhone || '').trim(),
+    alternativePhone: (custInput.alternativePhone || custInput.customerAlternativePhone || '').trim() || null,
+    email: (custInput.email || custInput.customerEmail || '').trim() || null,
+    district: (custInput.district || custInput.customerDistrict || 'Kathmandu').trim(),
+    municipality: (custInput.municipality || custInput.customerMunicipality || '').trim() || null,
+    address: (custInput.address || custInput.customerAddress || '').trim() || null,
+    landmark: (custInput.landmark || custInput.customerLandmark || '').trim() || null,
+    notes: (custInput.notes || custInput.customerNotes || '').trim() || null,
+    archived: false,
+    totalRepairs: 1,
+    lastRepairDate: now,
+    createdAt: now,
+    updatedAt: now
+  };
+  await rtdbSet(rtdbRef(rtdb, `customers/${newId}`), newCustomer);
+  return newCustomer;
+}
+
 /**
  * Handle POST Persistence
  */
@@ -298,6 +443,7 @@ export async function handleFirebasePost(cleanEndpoint: string, payload: any): P
       id,
       customerId,
       archived: false,
+      totalRepairs: Number(payload.totalRepairs || 0),
       createdAt: payload.createdAt || now,
       updatedAt: now
     };
@@ -309,16 +455,27 @@ export async function handleFirebasePost(cleanEndpoint: string, payload: any): P
 
   // 2. POST /repairs
   if (primaryResource === 'repairs') {
-    // Handle /repairs/batch
-    if (subAction === 'batch' && Array.isArray(payload.repairs)) {
+    // Handle /repairs/batch (multi-device tickets)
+    if (subAction === 'batch') {
+      const custData = payload.customer || payload;
+      const linkedCust = await findOrCreateCustomerRecord(custData, now);
+      const devices = Array.isArray(payload.devices) 
+        ? payload.devices 
+        : (Array.isArray(payload.repairs) ? payload.repairs : []);
+      
       const createdRepairs = [];
-      for (const item of payload.repairs) {
+      for (const item of devices) {
         const id = item.id || generateId('rep');
         const repairNumber = item.repairNumber || generateNumber('MTS');
         const newRepair = {
           ...item,
           id,
           repairNumber,
+          customerId: linkedCust?.id || item.customerId || null,
+          customerName: linkedCust?.name || item.customerName || custData.name || '',
+          customerPhone: linkedCust?.phone || item.customerPhone || custData.phone || '',
+          customerDistrict: linkedCust?.district || item.customerDistrict || custData.district || 'Kathmandu',
+          customerAddress: linkedCust?.address || item.customerAddress || custData.address || null,
           status: item.status || 'RECEIVED',
           priority: item.priority || 'NORMAL',
           advancePaid: Number(item.advancePaid || 0),
@@ -331,8 +488,23 @@ export async function handleFirebasePost(cleanEndpoint: string, payload: any): P
         await rtdbSet(rtdbRef(rtdb, `repairs/${id}`), newRepair);
         createdRepairs.push(newRepair);
       }
+
+      // Adjust total repairs for batch
+      if (linkedCust && devices.length > 1) {
+        await rtdbUpdate(rtdbRef(rtdb, `customers/${linkedCust.id}`), {
+          totalRepairs: (linkedCust.totalRepairs || 0) + devices.length - 1,
+          updatedAt: now
+        });
+      }
+
       await touchSync();
-      return { success: true, count: createdRepairs.length, repairs: createdRepairs };
+      return { 
+        success: true, 
+        count: createdRepairs.length, 
+        totalRegistered: createdRepairs.length, 
+        repairs: createdRepairs, 
+        customer: linkedCust 
+      };
     }
 
     // Handle /repairs/:id/notes
@@ -377,12 +549,19 @@ export async function handleFirebasePost(cleanEndpoint: string, payload: any): P
       return payment;
     }
 
+    // Single Repair Submission: Auto link or create customer in Customer Hub
+    const linkedCust = await findOrCreateCustomerRecord(payload, now);
     const id = payload.id || generateId('rep');
     const repairNumber = payload.repairNumber || generateNumber('MTS');
     const newRepair = {
       ...payload,
       id,
       repairNumber,
+      customerId: linkedCust?.id || payload.customerId || null,
+      customerName: linkedCust?.name || payload.customerName || '',
+      customerPhone: linkedCust?.phone || payload.customerPhone || '',
+      customerDistrict: linkedCust?.district || payload.customerDistrict || 'Kathmandu',
+      customerAddress: linkedCust?.address || payload.customerAddress || null,
       status: payload.status || 'RECEIVED',
       priority: payload.priority || 'NORMAL',
       advancePaid: Number(payload.advancePaid || 0),
@@ -394,22 +573,8 @@ export async function handleFirebasePost(cleanEndpoint: string, payload: any): P
     };
 
     await rtdbSet(rtdbRef(rtdb, `repairs/${id}`), newRepair);
-
-    // Also update/sync customer repair count
-    if (newRepair.customerId) {
-      const custRef = rtdbRef(rtdb, `customers/${newRepair.customerId}`);
-      const custSnap = await rtdbGet(custRef);
-      if (custSnap.exists()) {
-        const cust = custSnap.val();
-        await rtdbUpdate(custRef, {
-          totalRepairs: (cust.totalRepairs || 0) + 1,
-          updatedAt: now
-        });
-      }
-    }
-
     await touchSync();
-    return newRepair;
+    return { ...newRepair, customer: linkedCust };
   }
 
   // 3. POST /inventory
@@ -618,6 +783,61 @@ export async function handleFirebaseUpdate(cleanEndpoint: string, payload: any):
   if (primaryResource === 'repair-prices') targetCollection = 'repairPrices';
 
   if (resourceId) {
+    // 1. Two-way sync: Updating a Customer in Customer Hub
+    if (primaryResource === 'customers') {
+      const targetRef = rtdbRef(rtdb, `customers/${resourceId}`);
+      await rtdbUpdate(targetRef, updates);
+
+      // If customer contact/name/address changes, propagate to active repair tickets
+      if (updates.name || updates.phone || updates.address || updates.district) {
+        const repairsSnap = await rtdbGet(rtdbRef(rtdb, 'repairs'));
+        if (repairsSnap.exists()) {
+          const repMap = repairsSnap.val();
+          for (const [repId, rep] of Object.entries<any>(repMap)) {
+            if (rep && (rep.customerId === resourceId || (updates.phone && (rep.customerPhone || '').replace(/\D/g, '') === (updates.phone || '').replace(/\D/g, '')))) {
+              const repUpdates: any = { updatedAt: now };
+              if (updates.name) repUpdates.customerName = updates.name;
+              if (updates.phone) repUpdates.customerPhone = updates.phone;
+              if (updates.address) repUpdates.customerAddress = updates.address;
+              if (updates.district) repUpdates.customerDistrict = updates.district;
+              await rtdbUpdate(rtdbRef(rtdb, `repairs/${repId}`), repUpdates);
+            }
+          }
+        }
+      }
+
+      const snap = await rtdbGet(targetRef);
+      await touchSync();
+      return snap.val() || { id: resourceId, ...updates };
+    }
+
+    // 2. Two-way sync: Updating customer details from a Repair Ticket
+    if (primaryResource === 'repairs') {
+      const targetRef = rtdbRef(rtdb, `repairs/${resourceId}`);
+      await rtdbUpdate(targetRef, updates);
+
+      // If customer info modified inside repair, propagate to customer profile
+      if (updates.customerName || updates.customerPhone || updates.customerAddress || updates.customerDistrict) {
+        const repSnap = await rtdbGet(targetRef);
+        if (repSnap.exists()) {
+          const currentRep = repSnap.val();
+          const targetCustId = currentRep.customerId;
+          if (targetCustId) {
+            const custUpdates: any = { updatedAt: now };
+            if (updates.customerName) custUpdates.name = updates.customerName;
+            if (updates.customerPhone) custUpdates.phone = updates.customerPhone;
+            if (updates.customerAddress) custUpdates.address = updates.customerAddress;
+            if (updates.customerDistrict) custUpdates.district = updates.customerDistrict;
+            await rtdbUpdate(rtdbRef(rtdb, `customers/${targetCustId}`), custUpdates);
+          }
+        }
+      }
+
+      const snap = await rtdbGet(targetRef);
+      await touchSync();
+      return snap.val() || { id: resourceId, ...updates };
+    }
+
     const targetRef = rtdbRef(rtdb, `${targetCollection}/${resourceId}`);
     await rtdbUpdate(targetRef, updates);
     const snap = await rtdbGet(targetRef);
