@@ -53,6 +53,8 @@ import {
 } from '@/components/ui/dialog';
 import ServiceSlipModal from '@/components/repair/ServiceSlipModal';
 import EditRepairModal from '@/components/repair/EditRepairModal';
+import TransferRepairModal from '@/components/repairs/TransferRepairModal';
+import RepairTransferHistoryTimeline from '@/components/repairs/RepairTransferHistoryTimeline';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -866,7 +868,7 @@ export default function RepairDetails() {
                     </div>
 
                     {/* Quick Transfer Button */}
-                    {['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LEAD_TECHNICIAN', 'TECHNICIAN'].includes(user?.role || '') && (
+                    {['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'TECHNICIAN'].includes(user?.role || '') && (
                       <Button
                         type="button"
                         variant="outline"
@@ -881,6 +883,9 @@ export default function RepairDetails() {
                 )}
               </CardContent>
           </Card>
+
+          {/* Chronological Assignment & Transfer Audit History */}
+          <RepairTransferHistoryTimeline repairId={repair.id} />
         </div>
       </div>
 
@@ -1000,69 +1005,14 @@ export default function RepairDetails() {
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* 3. REPAIR TRANSFER MODAL                                                  */}
+      {/* 3. STANDARDIZED REPAIR TRANSFER & ASSIGNMENT MODAL                         */}
       {/* ========================================================================= */}
-      <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
-          <DialogHeader>
-            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 border border-amber-100">
-              <ArrowRightLeft className="h-5 w-5" />
-            </div>
-            <DialogTitle className="text-xl font-bold text-slate-900">Transfer Repair Case</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Transfer Job <b>#{repair?.repairNumber}</b> to another lab technician
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Target Specialist *</Label>
-              <Select value={transferTargetId} onValueChange={setTransferTargetId}>
-                <SelectTrigger className="rounded-xl h-11 border-slate-200 text-xs font-bold">
-                  <SelectValue placeholder="Select target technician..." />
-                </SelectTrigger>
-                <SelectContent className="rounded-2xl max-h-56">
-                  {technicians.filter(t => t.id !== repair?.technicianId).map((t) => (
-                    <SelectItem key={t.id} value={t.id} className="text-xs font-bold py-2.5">
-                      {t.name} ({t.role.replace(/_/g, ' ')})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Reason for Transfer *</Label>
-              <Textarea
-                placeholder="e.g. Requires specialized microscope setup for CPU reballing..."
-                value={transferReason}
-                onChange={e => setTransferReason(e.target.value)}
-                className="rounded-xl border-slate-200 min-h-[90px] text-xs font-medium"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="pt-2 flex items-center justify-between gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setIsTransferDialogOpen(false)}
-              className="rounded-xl text-xs font-bold text-slate-500"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={sendingTransfer || !transferTargetId || !transferReason.trim()}
-              onClick={handleSendTransfer}
-              className="rounded-xl h-10 px-5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-600/20"
-            >
-              {sendingTransfer ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <ArrowRightLeft className="h-4 w-4 mr-1.5" />}
-              Submit Transfer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TransferRepairModal
+        isOpen={isTransferDialogOpen}
+        onClose={() => setIsTransferDialogOpen(false)}
+        repair={repair}
+        onTransferComplete={() => fetchData()}
+      />
 
       {/* ========================================================================= */}
       {/* 4. COURIER RETURN DISPATCH DIALOG                                         */}

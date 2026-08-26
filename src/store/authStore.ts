@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { StaffRole, normalizeRole } from '@/lib/rbac';
 
-interface User {
+export interface User {
   id: string;
   email: string;
   name: string;
   username?: string;
-  role: 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'LEAD_TECHNICIAN' | 'TECHNICIAN' | 'TECHNICAL_ASSISTANT' | 'RECEPTIONIST' | 'INVENTORY_MANAGER' | 'ACCOUNTANT' | 'CUSTOMER' | string;
+  role: StaffRole | string;
   branchId?: string;
   profileImage?: string;
   phoneNumber?: string;
@@ -31,14 +32,20 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       refreshToken: null,
-      setAuth: (user, token, refreshToken) => set((state) => ({ 
-        user, 
-        token, 
-        refreshToken: refreshToken !== undefined ? refreshToken : state.refreshToken 
-      })),
-      updateUser: (partialUser) => set((state) => ({ 
-        user: state.user ? { ...state.user, ...partialUser } : null 
-      })),
+      setAuth: (user, token, refreshToken) => {
+        const normalized = normalizeRole(user?.role) || 'RECEPTIONIST';
+        const cleanUser = user ? { ...user, role: normalized } : null;
+        set((state) => ({ 
+          user: cleanUser, 
+          token, 
+          refreshToken: refreshToken !== undefined ? refreshToken : state.refreshToken 
+        }));
+      },
+      updateUser: (partialUser) => set((state) => {
+        if (!state.user) return { user: null };
+        const updatedRole = partialUser.role ? (normalizeRole(partialUser.role) || state.user.role) : state.user.role;
+        return { user: { ...state.user, ...partialUser, role: updatedRole } };
+      }),
       setToken: (token) => set({ token }),
       setRefreshToken: (refreshToken) => set({ refreshToken }),
       logout: () => set({ user: null, token: null, refreshToken: null }),

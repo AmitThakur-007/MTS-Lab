@@ -38,6 +38,7 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog';
+import PendingTransfersBanner from '@/components/repairs/PendingTransfersBanner';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -621,6 +622,11 @@ export default function TechnicianDashboard() {
           />
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* 🔄 INCOMING REPAIR TRANSFER REQUESTS BANNER                                */}
+      {/* ========================================================================= */}
+      <PendingTransfersBanner onTransferResolved={fetchDashboardData} />
 
       {/* ========================================================================= */}
       {/* 🚨 HIGH PRIORITY & PRIORITY REPAIRS ACTION QUEUE BANNER                    */}

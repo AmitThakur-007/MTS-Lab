@@ -25,6 +25,7 @@ import { getDeviceDetails } from '@/lib/device';
 import mtsLogo from '@/assets/images/mts-logo.jpg';
 import { auth } from '@/lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { normalizeRole } from '@/lib/rbac';
 
 export default function Login() {
   const [stage, setStage] = useState<'CREDENTIALS' | '2FA'>('CREDENTIALS');
@@ -442,8 +443,14 @@ export default function Login() {
       });
 
       if (res.success && res.token && res.user) {
-        setAuth(res.user, res.token, res.refreshToken);
-        toast.success(`Welcome back, ${res.user.name}!`);
+        const canonicalRole = normalizeRole(res.user.role);
+        if (!canonicalRole) {
+          toast.error('Access Denied: Invalid account role. Please contact an administrator.');
+          return;
+        }
+        const validatedUser = { ...res.user, role: canonicalRole };
+        setAuth(validatedUser, res.token, res.refreshToken);
+        toast.success(`Welcome back, ${validatedUser.name}!`);
         navigate('/dashboard');
       } else {
         throw new Error(res.message || 'Verification failed');

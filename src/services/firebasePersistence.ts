@@ -199,6 +199,14 @@ export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
 
   // 2. Repairs
   if (primaryResource === 'repairs') {
+    if (resourceId && segments[2] === 'transfers') {
+      const snap = await rtdbGet(rtdbRef(rtdb, `repairTransferHistory/${resourceId}`));
+      const map = snap.exists() ? snap.val() : {};
+      const list = Object.values(map).filter(Boolean);
+      list.sort((a: any, b: any) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+      return list;
+    }
+
     if (resourceId && resourceId !== 'stats' && resourceId !== 'export') {
       const snap = await rtdbGet(rtdbRef(rtdb, `repairs/${resourceId}`));
       if (!snap.exists()) {
@@ -230,6 +238,36 @@ export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
       return dateB - dateA;
     });
 
+    return list;
+  }
+
+  // 2a. Repair Transfers
+  if (primaryResource === 'repair-transfers') {
+    if (resourceId && !['pending', 'history'].includes(resourceId)) {
+      const snap = await rtdbGet(rtdbRef(rtdb, `repairTransfers/${resourceId}`));
+      return snap.exists() ? snap.val() : null;
+    }
+
+    const snap = await rtdbGet(rtdbRef(rtdb, 'repairTransfers'));
+    const map = snap.exists() ? snap.val() : {};
+    let list = Object.values(map).filter(Boolean);
+
+    const statusParam = url.searchParams.get('status');
+    if (statusParam && statusParam !== 'ALL') {
+      list = list.filter((t: any) => t.status === statusParam);
+    }
+
+    const targetTechId = url.searchParams.get('targetTechnicianId');
+    if (targetTechId) {
+      list = list.filter((t: any) => t.targetTechnicianId === targetTechId);
+    }
+
+    const repairIdParam = url.searchParams.get('repairId');
+    if (repairIdParam) {
+      list = list.filter((t: any) => t.repairId === repairIdParam);
+    }
+
+    list.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     return list;
   }
 
@@ -777,6 +815,209 @@ export async function handleFirebasePost(cleanEndpoint: string, payload: any): P
       return payment;
     }
 
+    // Handle Direct Assignment: POST /repairs/:id/assign
+    if (subAction && segments[2] === 'assign') {
+      const targetTechId = payload.technicianId || payload.targetTechnicianId;
+      const targetTechName = payload.technicianName || payload.targetTechnicianName;
+
+      const repairSnap = await rtdbGet(rtdbRef(rtdb, `repairs/${subAction}`));
+      if (!repairSnap.exists()) throw new Error('Repair record not found.');
+      const repair = repairSnap.val();
+
+      const previousTechId = repair.technicianId || null;
+      const previousTechName = repair.technicianName || null;
+
+      // Update repair assignment in RTDB
+      const updatedRepair = {
+        ...repair,
+        technicianId: targetTechId || null,
+        technicianName: targetTechName || null,
+        assignedAt: now,
+        updatedAt: now
+      };
+      await rtdbSet(rtdbRef(rtdb, `repairs/${subAction}`), updatedRepair);
+
+      // Record in permanent Repair Assignment / Transfer History
+      const historyId = generateId('hist');
+      const transferType = (currentUser?.role === 'MANAGER' ? 'MANAGER_DIRECT_ASSIGNMENT' :
+                            currentUser?.role === 'HEAD_TECHNICIAN' ? 'HEAD_TECHNICIAN_DIRECT_ASSIGNMENT' :
+                            'ADMIN_DIRECT_ASSIGNMENT');
+      const historyItem = {
+        id: historyId,
+        repairId: subAction,
+        repairNumber: repair.repairNumber,
+        previousAssigneeId: previousTechId,
+        previousAssigneeName: previousTechName,
+        newAssigneeId: targetTechId,
+        newAssigneeName: targetTechName || 'Technician',
+        newAssigneeRole: 'TECHNICIAN',
+        assignedById: currentUser?.id || 'usr_mgr',
+        assignedByName: currentUser?.name || 'Manager',
+        assignedByRole: currentUser?.role || 'MANAGER',
+        transferType,
+        reason: payload.reason || 'Direct workshop assignment',
+        timestamp: now
+      };
+      await rtdbSet(rtdbRef(rtdb, `repairTransferHistory/${subAction}/${historyId}`), historyItem);
+
+      // Record Activity Log
+      const logId = generateId('log');
+      await rtdbSet(rtdbRef(rtdb, `repairLogs/${subAction}/${logId}`), {
+        id: logId,
+        repairId: subAction,
+        status: repair.status || 'RECEIVED',
+        message: `Repair directly assigned to ${targetTechName || 'Technician'} by ${currentUser?.name || 'Manager'} (${currentUser?.role || 'MANAGER'}).`,
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        createdAt: now
+      });
+
+      // Push real-time notification to assigned technician
+      if (targetTechId) {
+        const notifId = generateId('notif');
+        await rtdbSet(rtdbRef(rtdb, `notifications/${notifId}`), {
+          id: notifId,
+          userId: targetTechId,
+          type: 'REPAIR_ASSIGNED',
+          title: 'New Repair Assignment',
+          message: `Repair #${repair.repairNumber} (${repair.deviceBrand || ''} ${repair.deviceModel || 'Device'}) has been assigned to you.`,
+          repairId: subAction,
+          read: false,
+          createdAt: now
+        });
+      }
+
+      await touchSync();
+      return updatedRepair;
+    }
+
+    // Handle Transfer Request / Direct Transfer: POST /repairs/:id/transfer
+    if (subAction && segments[2] === 'transfer') {
+      const targetTechId = payload.targetTechnicianId || payload.technicianId;
+      const targetTechName = payload.targetTechnicianName || payload.technicianName || 'Technician';
+      const reason = (payload.reason || '').trim();
+
+      const repairSnap = await rtdbGet(rtdbRef(rtdb, `repairs/${subAction}`));
+      if (!repairSnap.exists()) throw new Error('Repair record not found.');
+      const repair = repairSnap.val();
+
+      // Block technician -> manager transfers
+      if (payload.targetRole === 'MANAGER' && currentUser?.role === 'TECHNICIAN') {
+        throw new Error('Technicians cannot directly assign repairs to Managers. Please use escalation.');
+      }
+
+      // If user can directly assign (Manager, Head Tech, Admin, Super Admin), perform direct transfer immediately
+      const isDirectAssigner = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN'].includes(currentUser?.role || '');
+      if (isDirectAssigner) {
+        const previousTechId = repair.technicianId || null;
+        const previousTechName = repair.technicianName || null;
+
+        const updatedRepair = {
+          ...repair,
+          technicianId: targetTechId,
+          technicianName: targetTechName,
+          assignedAt: now,
+          updatedAt: now
+        };
+        await rtdbSet(rtdbRef(rtdb, `repairs/${subAction}`), updatedRepair);
+
+        const historyId = generateId('hist');
+        const transferType = currentUser?.role === 'HEAD_TECHNICIAN' ? 'HEAD_TECHNICIAN_DIRECT_ASSIGNMENT' : 'MANAGER_DIRECT_ASSIGNMENT';
+        await rtdbSet(rtdbRef(rtdb, `repairTransferHistory/${subAction}/${historyId}`), {
+          id: historyId,
+          repairId: subAction,
+          repairNumber: repair.repairNumber,
+          previousAssigneeId: previousTechId,
+          previousAssigneeName: previousTechName,
+          newAssigneeId: targetTechId,
+          newAssigneeName: targetTechName,
+          newAssigneeRole: payload.targetRole || 'TECHNICIAN',
+          assignedById: currentUser?.id,
+          assignedByName: currentUser?.name,
+          assignedByRole: currentUser?.role,
+          transferType,
+          reason: reason || 'Direct workshop transfer',
+          timestamp: now
+        });
+
+        // Activity log
+        const logId = generateId('log');
+        await rtdbSet(rtdbRef(rtdb, `repairLogs/${subAction}/${logId}`), {
+          id: logId,
+          repairId: subAction,
+          status: repair.status || 'RECEIVED',
+          message: `Repair transferred to ${targetTechName} by ${currentUser?.name} (${currentUser?.role}). Reason: ${reason || 'Direct transfer'}`,
+          userId: currentUser?.id,
+          userName: currentUser?.name,
+          createdAt: now
+        });
+
+        // Notification to recipient
+        const notifId = generateId('notif');
+        await rtdbSet(rtdbRef(rtdb, `notifications/${notifId}`), {
+          id: notifId,
+          userId: targetTechId,
+          type: 'REPAIR_ASSIGNED',
+          title: 'New Repair Assignment',
+          message: `Repair #${repair.repairNumber} has been transferred to you by ${currentUser?.name}.`,
+          repairId: subAction,
+          read: false,
+          createdAt: now
+        });
+
+        await touchSync();
+        return updatedRepair;
+      }
+
+      // For Technician -> Technician or Technician -> Head Technician: Create a Transfer Request (requires acceptance)
+      const transferType = payload.targetRole === 'HEAD_TECHNICIAN'
+        ? 'TECHNICIAN_TO_HEAD_TECHNICIAN_REQUEST'
+        : 'TECHNICIAN_TO_TECHNICIAN_REQUEST';
+
+      const transferId = generateId('trf');
+      const transferRecord = {
+        id: transferId,
+        repairId: subAction,
+        repairNumber: repair.repairNumber,
+        customerName: repair.customerName || '',
+        deviceBrand: repair.deviceBrand || '',
+        deviceModel: repair.deviceModel || '',
+        senderId: currentUser?.id || 'usr_sender',
+        senderName: currentUser?.name || 'Technician',
+        senderRole: currentUser?.role || 'TECHNICIAN',
+        targetTechnicianId: targetTechId,
+        targetTechnicianName: targetTechName,
+        targetTechnicianRole: payload.targetRole || 'TECHNICIAN',
+        previousTechnicianId: repair.technicianId || currentUser?.id,
+        previousTechnicianName: repair.technicianName || currentUser?.name,
+        transferType,
+        status: 'PENDING',
+        reason: reason || 'Transfer requested by technician',
+        createdAt: now,
+        updatedAt: now,
+        respondedAt: null
+      };
+
+      await rtdbSet(rtdbRef(rtdb, `repairTransfers/${transferId}`), transferRecord);
+
+      // Notification to recipient technician
+      const notifId = generateId('notif');
+      await rtdbSet(rtdbRef(rtdb, `notifications/${notifId}`), {
+        id: notifId,
+        userId: targetTechId,
+        type: 'TRANSFER_REQUEST',
+        title: 'New Repair Transfer Request',
+        message: `${currentUser?.name} has requested to transfer Repair #${repair.repairNumber} (${repair.deviceBrand || ''} ${repair.deviceModel || ''}) to you. Reason: ${reason || 'Workload adjustment'}. Please Accept or Reject.`,
+        repairId: subAction,
+        transferId,
+        read: false,
+        createdAt: now
+      });
+
+      await touchSync();
+      return transferRecord;
+    }
+
     // Single Repair Submission: Auto link or create customer in Customer Hub
     const linkedCust = await findOrCreateCustomerRecord(payload, now);
     const id = payload.id || generateId('rep');
@@ -984,6 +1225,164 @@ export async function handleFirebasePost(cleanEndpoint: string, payload: any): P
     await rtdbSet(rtdbRef(rtdb, `notifications/${id}`), newNotif);
     await touchSync();
     return newNotif;
+  }
+
+  // 12. POST /repair-transfers/:id/accept, /reject, /cancel
+  if (primaryResource === 'repair-transfers') {
+    const transferId = subAction;
+    const actionType = segments[2];
+
+    if (!transferId) {
+      const id = payload.id || generateId('trf');
+      const newTransfer = {
+        ...payload,
+        id,
+        status: payload.status || 'PENDING',
+        createdAt: now,
+        updatedAt: now
+      };
+      await rtdbSet(rtdbRef(rtdb, `repairTransfers/${id}`), newTransfer);
+      await touchSync();
+      return newTransfer;
+    }
+
+    const trfSnap = await rtdbGet(rtdbRef(rtdb, `repairTransfers/${transferId}`));
+    if (!trfSnap.exists()) throw new Error('Transfer request not found.');
+    const transfer = trfSnap.val();
+
+    if (actionType === 'accept') {
+      if (transfer.status !== 'PENDING') {
+        throw new Error(`This transfer request is already ${transfer.status.toLowerCase()}.`);
+      }
+
+      // Conflict protection: check repair's current assignment
+      const repSnap = await rtdbGet(rtdbRef(rtdb, `repairs/${transfer.repairId}`));
+      if (!repSnap.exists()) throw new Error('Associated repair record not found.');
+      const repair = repSnap.val();
+
+      // Verify the repair is still assigned to the sender/previous tech
+      if (repair.technicianId && transfer.senderId && repair.technicianId !== transfer.senderId && repair.technicianId !== transfer.previousTechnicianId) {
+        await rtdbUpdate(rtdbRef(rtdb, `repairTransfers/${transferId}`), {
+          status: 'EXPIRED',
+          updatedAt: now
+        });
+        throw new Error('Cannot accept transfer: Repair was reassigned to another staff member in the meantime.');
+      }
+
+      // Apply new assignment to repair
+      const updatedRepair = {
+        ...repair,
+        technicianId: transfer.targetTechnicianId,
+        technicianName: transfer.targetTechnicianName,
+        assignedAt: now,
+        updatedAt: now
+      };
+      await rtdbSet(rtdbRef(rtdb, `repairs/${transfer.repairId}`), updatedRepair);
+
+      // Update transfer status
+      const updatedTransfer = {
+        ...transfer,
+        status: 'ACCEPTED',
+        respondedAt: now,
+        updatedAt: now
+      };
+      await rtdbSet(rtdbRef(rtdb, `repairTransfers/${transferId}`), updatedTransfer);
+
+      // Record in permanent Repair Transfer History
+      const historyId = generateId('hist');
+      await rtdbSet(rtdbRef(rtdb, `repairTransferHistory/${transfer.repairId}/${historyId}`), {
+        id: historyId,
+        repairId: transfer.repairId,
+        repairNumber: transfer.repairNumber,
+        previousAssigneeId: transfer.senderId || transfer.previousTechnicianId,
+        previousAssigneeName: transfer.senderName || transfer.previousTechnicianName,
+        newAssigneeId: transfer.targetTechnicianId,
+        newAssigneeName: transfer.targetTechnicianName,
+        newAssigneeRole: transfer.targetTechnicianRole || 'TECHNICIAN',
+        assignedById: currentUser?.id || transfer.targetTechnicianId,
+        assignedByName: currentUser?.name || transfer.targetTechnicianName,
+        assignedByRole: currentUser?.role || 'TECHNICIAN',
+        transferType: transfer.transferType,
+        reason: transfer.reason || 'Accepted transfer request',
+        timestamp: now
+      });
+
+      // Activity log on repair
+      const logId = generateId('log');
+      await rtdbSet(rtdbRef(rtdb, `repairLogs/${transfer.repairId}/${logId}`), {
+        id: logId,
+        repairId: transfer.repairId,
+        status: repair.status || 'RECEIVED',
+        message: `Repair transfer accepted by ${transfer.targetTechnicianName} from ${transfer.senderName}.`,
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        createdAt: now
+      });
+
+      // Notification to Sender
+      if (transfer.senderId) {
+        const notifId = generateId('notif');
+        await rtdbSet(rtdbRef(rtdb, `notifications/${notifId}`), {
+          id: notifId,
+          userId: transfer.senderId,
+          type: 'TRANSFER_ACCEPTED',
+          title: 'Repair Transfer Accepted',
+          message: `Your transfer request for Repair #${transfer.repairNumber} was accepted by ${transfer.targetTechnicianName}.`,
+          repairId: transfer.repairId,
+          transferId,
+          read: false,
+          createdAt: now
+        });
+      }
+
+      await touchSync();
+      return { success: true, transfer: updatedTransfer, repair: updatedRepair };
+    }
+
+    if (actionType === 'reject') {
+      if (transfer.status !== 'PENDING') {
+        throw new Error(`This transfer request is already ${transfer.status.toLowerCase()}.`);
+      }
+
+      const updatedTransfer = {
+        ...transfer,
+        status: 'REJECTED',
+        rejectionReason: payload.rejectionReason || payload.reason || 'Declined by recipient technician',
+        respondedAt: now,
+        updatedAt: now
+      };
+      await rtdbSet(rtdbRef(rtdb, `repairTransfers/${transferId}`), updatedTransfer);
+
+      // Notification to Sender
+      if (transfer.senderId) {
+        const notifId = generateId('notif');
+        await rtdbSet(rtdbRef(rtdb, `notifications/${notifId}`), {
+          id: notifId,
+          userId: transfer.senderId,
+          type: 'TRANSFER_REJECTED',
+          title: 'Repair Transfer Declined',
+          message: `Your transfer request for Repair #${transfer.repairNumber} was declined by ${transfer.targetTechnicianName}.${payload.rejectionReason ? ` Reason: ${payload.rejectionReason}` : ''}`,
+          repairId: transfer.repairId,
+          transferId,
+          read: false,
+          createdAt: now
+        });
+      }
+
+      await touchSync();
+      return { success: true, transfer: updatedTransfer };
+    }
+
+    if (actionType === 'cancel') {
+      const updatedTransfer = {
+        ...transfer,
+        status: 'CANCELLED',
+        updatedAt: now
+      };
+      await rtdbSet(rtdbRef(rtdb, `repairTransfers/${transferId}`), updatedTransfer);
+      await touchSync();
+      return { success: true, transfer: updatedTransfer };
+    }
   }
 
   return { success: true, message: 'Saved successfully' };

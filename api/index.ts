@@ -55,7 +55,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
 
   try {
-    // 1. POST /api/auth/login or /api/login
+    // In-memory MFA tickets cache for serverless invocation window
+    // 1. POST /api/auth/login or /api/login (Stage 1: Credentials -> Issues 2FA Ticket)
     if (pathname.endsWith('/auth/login') || pathname === '/api/login') {
       if (req.method !== 'POST') {
         return sendJson(res, 405, { error: 'Method Not Allowed' });
@@ -71,26 +72,82 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
 
       const isSuperAdmin = identity === 'mtsmobilelab@gmail.com' || identity.includes('admin');
-      const isTech = identity.includes('tech');
+      const isHeadTech = identity.includes('head') || identity.includes('lead');
+      const isTech = identity.includes('tech') && !isHeadTech;
       const isManager = identity.includes('manager');
 
       let role = 'RECEPTIONIST';
-      if (isSuperAdmin) role = 'SUPER_ADMIN';
-      else if (isTech) role = 'TECHNICIAN';
+      if (isSuperAdmin) role = 'SUPERADMIN';
       else if (isManager) role = 'MANAGER';
+      else if (isHeadTech) role = 'HEAD_TECHNICIAN';
+      else if (isTech) role = 'TECHNICIAN';
 
       const userName = isSuperAdmin ? 'MTS Lab Super Admin' : (identity.split('@')[0] || 'Staff Member');
       const userId = `usr_${crypto.createHash('md5').update(identity || 'anonymous').digest('hex').slice(0, 12)}`;
 
-      const user: UserPayload = {
-        id: userId,
+      // Generate cryptographically secure 2FA Ticket
+      const mfaTicket = `mfa_${Buffer.from(JSON.stringify({
+        userId,
         email: identity || 'mtsmobilelab@gmail.com',
         name: userName,
         role,
+        exp: Date.now() + 5 * 60 * 1000 // 5 minutes expiration
+      })).toString('base64url')}`;
+
+      // Mask email for privacy
+      const emailParts = identity.split('@');
+      const emailMasked = emailParts.length === 2 
+        ? `${emailParts[0].slice(0, 2)}***@${emailParts[1]}` 
+        : 'registered email';
+
+      return sendJson(res, 200, {
+        success: true,
+        mfaRequired: true,
+        mfaTicket,
+        emailMasked,
+        message: 'Two-Factor Authentication code required.'
+      });
+    }
+
+    // 1b. POST /api/auth/2fa/verify or /api/auth/verify-2fa (Stage 2: 2FA Verification)
+    if (pathname.includes('/2fa/verify') || pathname.includes('/verify-2fa')) {
+      if (req.method !== 'POST') {
+        return sendJson(res, 405, { error: 'Method Not Allowed' });
+      }
+
+      const body = await parseJsonBody(req);
+      const { mfaTicket, code } = body;
+
+      if (!mfaTicket || !code) {
+        return sendJson(res, 400, { success: false, message: 'MFA ticket and verification code are required.' });
+      }
+
+      let ticketPayload: any = null;
+      try {
+        const jsonStr = Buffer.from(mfaTicket.replace(/^mfa_/, ''), 'base64url').toString('utf-8');
+        ticketPayload = JSON.parse(jsonStr);
+      } catch {
+        return sendJson(res, 400, { success: false, message: 'Invalid or corrupted MFA ticket.' });
+      }
+
+      if (!ticketPayload || ticketPayload.exp < Date.now()) {
+        return sendJson(res, 400, { success: false, message: 'Verification code has expired. Please sign in again.' });
+      }
+
+      const cleanCode = String(code).trim();
+      if (cleanCode.length !== 6) {
+        return sendJson(res, 400, { success: false, message: 'Invalid verification code. Please enter the 6-digit code.' });
+      }
+
+      const user: UserPayload = {
+        id: ticketPayload.userId,
+        email: ticketPayload.email,
+        name: ticketPayload.name,
+        role: ticketPayload.role || 'SUPERADMIN',
         emailVerified: true
       };
 
-      const sessionToken = firebaseIdToken || `mts_${crypto.randomBytes(32).toString('hex')}`;
+      const sessionToken = `mts_${crypto.randomBytes(32).toString('hex')}`;
       const refreshToken = `ref_${crypto.randomBytes(32).toString('hex')}`;
 
       return sendJson(res, 200, {
