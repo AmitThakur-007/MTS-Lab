@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   UserPlus, 
@@ -197,6 +198,7 @@ const getRoleConfig = (role: string | null | undefined) => {
 };
 
 export function StaffManagementContent() {
+  const navigate = useNavigate();
   const { user: currentUser } = useAuthStore();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -240,8 +242,10 @@ export function StaffManagementContent() {
     confirmPassword: ''
   });
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
+  const fetchUsers = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     setFetchError(null);
     try {
       const data = await api.get('/users');
@@ -249,20 +253,24 @@ export function StaffManagementContent() {
     } catch (err: any) {
       console.error('[FETCH STAFF DIRECTORY ERROR]', err);
       const errorMsg = err?.message || 'Unable to load staff information. Please try again.';
-      setFetchError(errorMsg);
-      toast.error(errorMsg);
+      if (!silent) {
+        setFetchError(errorMsg);
+        toast.error(errorMsg);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    fetchUsers();
+    fetchUsers(false);
   }, [fetchUsers]);
 
-  // Multi-device real-time sync
+  // Multi-device real-time sync (silent background update - no flickering)
   useRealtimeSync(['user', 'session', 'auditLog', 'sync'], () => {
-    fetchUsers();
+    fetchUsers(true);
   });
 
   // Calculate high-level summary counts
@@ -323,7 +331,7 @@ export function StaffManagementContent() {
           <div className="pt-2">
             <Button
               type="button"
-              onClick={() => { window.location.href = '/dashboard'; }}
+              onClick={() => { navigate('/dashboard'); }}
               className="h-11 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm gap-2 shadow-md shadow-slate-900/10 cursor-pointer"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -709,7 +717,7 @@ export function StaffManagementContent() {
           <Button
             type="button"
             size="sm"
-            onClick={fetchUsers}
+            onClick={() => fetchUsers(false)}
             className="h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs gap-1.5 shrink-0"
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -720,25 +728,26 @@ export function StaffManagementContent() {
 
       {/* Top Header & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-md shadow-slate-900/10">
-              <Users className="h-5 w-5 text-indigo-400" />
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100/80 rounded-2xl text-indigo-600 shadow-inner">
+            <Users className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Staff Management</h1>
+              <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-slate-50 border-slate-200 text-slate-700">
+                Administration
+              </Badge>
             </div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-                Staff Management
-              </h1>
-              <p className="text-xs sm:text-sm font-medium text-slate-500">
-                Manage accounts, assign operational roles, and enforce security policies
-              </p>
-            </div>
+            <p className="text-xs sm:text-sm font-medium text-slate-500">
+              Manage accounts, assign operational roles, and enforce security policies
+            </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 pt-2 md:pt-0">
           <DashboardRefreshButton
-            onRefresh={fetchUsers}
+            onRefresh={() => fetchUsers(false)}
             size="default"
             label="Refresh Directory"
           />

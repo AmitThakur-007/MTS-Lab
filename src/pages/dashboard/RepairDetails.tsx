@@ -107,29 +107,40 @@ export default function RepairDetails() {
   const [newNote, setNewNote] = useState('');
   const [submittingNote, setSubmittingNote] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = async (silent = false) => {
+    if (!silent && !repair) {
+      setLoading(true);
+    }
     try {
       const [repairData, staffData, notesData] = await Promise.all([
         api.get(`/repairs/${id}`),
-        api.get('/staff'),
+        api.get('/staff').catch(() => []),
         api.get(`/repairs/${id}/notes`).catch(() => [])
       ]);
-      setRepair(repairData);
-      setTechnicians(staffData.filter((s: any) => ['TECHNICIAN', 'LEAD_TECHNICIAN'].includes(s.role) && s.isActive !== false));
+      if (repairData) {
+        setRepair(repairData);
+      }
+      if (Array.isArray(staffData)) {
+        setTechnicians(staffData.filter((s: any) => ['TECHNICIAN', 'LEAD_TECHNICIAN'].includes(s.role) && s.isActive !== false));
+      }
       setNotes(Array.isArray(notesData) ? notesData : []);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to load repair details');
-      navigate('/dashboard/repairs');
+      if (!silent && !repair) {
+        toast.error(err.message || 'Failed to load repair details');
+        navigate('/dashboard/repairs');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(false);
   }, [id]);
 
-  // Real-time synchronization for instant status, payment, and technician assignment updates across all devices
+  // Real-time synchronization for instant status, payment, and technician assignment updates across all devices (silent background update)
   useRealtimeSync(['repair', 'technicianNote', 'repairLog', 'notification', 'repairTransfer', 'payment', 'user', 'sync'], (event) => {
     if (
       !event.id || 
@@ -138,7 +149,7 @@ export default function RepairDetails() {
       event.data?.repairId === id ||
       ['user', 'payment', 'technicianNote', 'repairLog', 'repair', 'sync', 'notification', 'repairTransfer'].includes(event.entity)
     ) {
-      fetchData();
+      fetchData(true);
     }
   });
 

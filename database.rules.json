@@ -1,79 +1,123 @@
 {
   "rules": {
-    ".read": true,
-    ".write": true,
+    ".read": false,
+    ".write": false,
 
     "users": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["email", "role", "branchId", "accountStatus"]
     },
 
     "repairs": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["repairNumber", "customerPhone", "technicianId", "status", "branchId", "createdAt", "updatedAt"]
     },
 
+    "repairLogs": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    "technicianNotes": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
     "customers": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["phone", "customerId", "name", "archived"]
     },
 
     "inventory": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["category", "brand", "model", "sku", "status"]
     },
 
     "inventoryTransactions": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["itemId", "type", "createdAt", "repairNumber"]
     },
 
     "payments": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["repairId", "createdAt", "method", "status"]
     },
 
     "products": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["category", "brand", "model", "sku"]
     },
 
     "branches": {
+      ".read": true,
+      ".write": "auth != null",
       ".indexOn": ["name"]
     },
 
     "repairPrices": {
+      ".read": true,
+      ".write": "auth != null",
       ".indexOn": ["brand", "model", "category", "status"]
     },
 
     "homeSlides": {
+      ".read": true,
+      ".write": "auth != null",
       ".indexOn": ["status", "displayOrder"]
     },
 
     "publicTracking": {
+      ".read": true,
+      ".write": "auth != null",
       ".indexOn": ["repairNumber", "customerPhone"]
     },
 
     "batteryWarranties": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["repairNumber", "customerPhone", "warrantyNumber", "status"]
     },
 
     "batteryWarrantyClaims": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["warrantyId", "claimNumber"]
     },
 
     "attendances": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["userId", "date", "status"]
     },
 
     "damageRecords": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["staffId", "repairId", "status", "damageDate"]
     },
 
     "accessRequests": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["email", "status", "deviceIdentifier"]
     },
 
     "notifications": {
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": ["userId", "isRead", "type", "createdAt"]
     },
 
     "syncTimestamp": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null"
     }
   }
 }

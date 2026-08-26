@@ -318,7 +318,10 @@ export default function Repairs() {
   };
 
   // Fetch all repair records and staff from the real database
-  const fetchData = async () => {
+  const fetchData = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       const [repairRes, staffRes] = await Promise.all([
         api.get('/repairs'),
@@ -327,23 +330,27 @@ export default function Repairs() {
       setRepairs(Array.isArray(repairRes) ? repairRes : []);
       setStaffList(Array.isArray(staffRes) ? staffRes : []);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to fetch repair records');
+      if (!silent) {
+        toast.error(err.message || 'Failed to fetch repair records');
+      }
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(false);
   }, []);
 
-  // Real-Time Event Sync across Super Admin, Admin, and Receptionist
+  // Real-Time Event Sync across Super Admin, Admin, and Receptionist (silent background update)
   useRealtimeSync(
     ['repair', 'repairLog', 'technicianNote', 'payment', 'user', 'sync'],
-    (event) => {
-      // Refresh current dataset immediately on any server-side database change
-      fetchData();
+    () => {
+      // Refresh current dataset silently without UI flashing
+      fetchData(true);
     }
   );
 

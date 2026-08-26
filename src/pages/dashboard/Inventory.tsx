@@ -284,7 +284,10 @@ export default function Inventory() {
   });
 
   // Fetch Inventory Data
-  const fetchData = async () => {
+  const fetchData = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       const [itemsRes, statsRes, catRes, foldersRes, supRes, locRes] = await Promise.all([
         api.get('/inventory?status=ALL'),
@@ -316,19 +319,23 @@ export default function Inventory() {
       }
     } catch (err: any) {
       console.error("[INVENTORY FETCH ERROR]", err);
-      toast.error(err.message || 'Failed to load inventory data');
+      if (!silent) {
+        toast.error(err.message || 'Failed to load inventory data');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(false);
   }, [token]);
 
-  // Real-Time Database Synchronization across dashboards
+  // Real-Time Database Synchronization across dashboards (silent background update)
   useRealtimeSync(['inventoryItem', 'inventoryTransaction', 'inventoryFolder', 'repair', 'sync'], () => {
-    fetchData();
+    fetchData(true);
   });
 
   // ==========================================

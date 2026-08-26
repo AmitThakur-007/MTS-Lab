@@ -342,6 +342,8 @@ class RealtimeService {
     }, delay);
   }
 
+  private pendingEventDebounceTimers: Map<string, any> = new Map();
+
   private handleIncomingEvent(event: RealtimeEvent) {
     const rawEntity = (event.entity || '').toLowerCase();
 
@@ -372,16 +374,26 @@ class RealtimeService {
     }
 
     targetEntities.forEach((ent) => {
-      const entitySet = this.listeners.get(ent);
-      if (entitySet) {
-        entitySet.forEach((listener) => {
-          try {
-            listener(event);
-          } catch (err) {
-            console.error('[REALTIME LISTENER ERROR]', err);
-          }
-        });
+      const timerKey = `ent_${ent}`;
+      if (this.pendingEventDebounceTimers.has(timerKey)) {
+        clearTimeout(this.pendingEventDebounceTimers.get(timerKey));
       }
+
+      const timer = setTimeout(() => {
+        this.pendingEventDebounceTimers.delete(timerKey);
+        const entitySet = this.listeners.get(ent);
+        if (entitySet) {
+          entitySet.forEach((listener) => {
+            try {
+              listener(event);
+            } catch (err) {
+              console.error('[REALTIME LISTENER ERROR]', err);
+            }
+          });
+        }
+      }, 150);
+
+      this.pendingEventDebounceTimers.set(timerKey, timer);
     });
 
     // Global listeners
