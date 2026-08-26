@@ -7000,6 +7000,54 @@ export async function createServerApp() {
   app.patch("/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
   app.post("/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
 
+  // Email Provider Status & Outbound Test Diagnostics for SUPERADMIN
+  app.get("/api/admin/email-status", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res: any) => {
+    const hasResend = Boolean(process.env.RESEND_API_KEY);
+    const hasSendGrid = Boolean(process.env.SENDGRID_API_KEY);
+    const hasGmail = Boolean((process.env.GMAIL_USER || process.env.EMAIL_USER) && (process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS));
+    const hasSmtp = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+
+    const configuredProvider = hasResend ? 'RESEND' : (hasSendGrid ? 'SENDGRID' : (hasGmail ? 'GMAIL_SMTP' : (hasSmtp ? 'CUSTOM_SMTP' : 'NONE')));
+
+    return res.json({
+      success: true,
+      configuredProvider,
+      isConfigured: configuredProvider !== 'NONE',
+      details: {
+        hasResend,
+        hasSendGrid,
+        hasGmail,
+        hasSmtp,
+        fromAddress: process.env.SMTP_FROM || process.env.GMAIL_USER || process.env.EMAIL_USER || "no-reply@mtslab.com"
+      },
+      message: configuredProvider !== 'NONE' 
+        ? `Active outbound email provider: ${configuredProvider}` 
+        : "No live outbound email provider credentials set in .env. 2FA emails will simulate delivery in development mode."
+    });
+  });
+
+  app.post("/api/admin/test-email", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res: any) => {
+    try {
+      const { targetEmail } = req.body;
+      const recipient = targetEmail || req.user.email;
+
+      const result = await sendEmail({
+        to: recipient,
+        subject: "MTS Lab — Email Delivery Test",
+        text: `Hello ${req.user.name},\n\nThis is a test email sent from MTS Lab Repair Management System to confirm outbound mail delivery.\n\nTime: ${new Date().toISOString()}`,
+        html: `<h3>MTS Lab Email Test</h3><p>Hello ${req.user.name},</p><p>This is a test email sent from MTS Lab Repair Management System to confirm outbound mail delivery.</p><p><b>Time:</b> ${new Date().toISOString()}</p>`
+      });
+
+      return res.json({
+        success: result.success,
+        recipient,
+        result
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Failed to send test email" });
+    }
+  });
+
   // ==========================================
   // BULK USER DELETE / DEACTIVATION ENDPOINT
   // ==========================================
