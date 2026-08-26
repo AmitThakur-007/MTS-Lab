@@ -14497,7 +14497,6 @@ export async function createServerApp() {
         problemDescription: r.problemDescription,
         accessoriesReceived: r.accessoriesReceived,
         status: r.status,
-        technician: "Technician",
         expectedCompletionDate: r.expectedCompletionDate,
         estimatedCost: r.estimatedCost,
         advancePaid: r.advancePaid,
@@ -14521,18 +14520,24 @@ export async function createServerApp() {
         logs: (r.logs || []).map((l: any) => {
           let sanitized = l.message || "";
           if (typeof sanitized === 'string') {
-            sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, 'Technician');
-            sanitized = sanitized.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)\s*\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, 'by Technician');
-            sanitized = sanitized.replace(/\bby\s+(?:MTS\s+)?(?:super\s*admin|admin|manager|receptionist|staff|specialist)\b/gi, 'by Technician');
-            sanitized = sanitized.replace(/\bby\s+specialist\s+[^,\.\n]+/gi, 'by Technician');
-            sanitized = sanitized.replace(/\b(handled|updated|diagnosed|logged|received|repaired|inspected|completed|verified|transitioned)\s+by\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, '$1 by Technician');
-            sanitized = sanitized.replace(/\bassigned\s+(?:to|by)\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, 'Assigned to Technician');
-            sanitized = sanitized.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, 'by Technician');
-            sanitized = sanitized.replace(/\bby\s+Technician(?:\s+by\s+Technician)+/gi, 'by Technician');
+            if (/^Status (?:changed|updated) to ([A-Z_]+)/i.test(sanitized)) {
+              sanitized = 'Repair progress updated.';
+            } else {
+              sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, '');
+              sanitized = sanitized.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)\s*\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, '');
+              sanitized = sanitized.replace(/\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, '');
+              sanitized = sanitized.replace(/\bby\s+(?:MTS\s+)?(?:super\s*admin|admin|manager|receptionist|staff|specialist|technician|user)\b/gi, '');
+              sanitized = sanitized.replace(/\bby\s+[A-Z][a-zA-Z0-9_.'-]+(?:\s+[A-Z][a-zA-Z0-9_.'-]+)*/g, '');
+              sanitized = sanitized.replace(/\b(handled|updated|diagnosed|logged|received|repaired|inspected|completed|verified|transitioned)\s+by\s+[^,\.\n]+/gi, '$1');
+              sanitized = sanitized.replace(/\bassigned\s+(?:to|by)\s+[^,\.\n]+/gi, 'Assigned for laboratory service');
+              sanitized = sanitized.replace(/\b(?:updated|created|processed|handled|logged|verified)\s+by\s*:\s*[^,\.\n]+/gi, '');
+              sanitized = sanitized.replace(/\b(?:technician|specialist|staff|user|engineer)\s*:\s*[^,\.\n]+/gi, '');
+              sanitized = sanitized.replace(/\s+/g, ' ').replace(/\s+([,\.;])/g, '$1').replace(/^[\s,;.-]+|[\s,;.-]+$/g, '').trim();
+            }
           }
           return {
             status: l.status,
-            message: (sanitized || "").trim(),
+            message: (sanitized || "Repair progress updated.").trim(),
             createdAt: l.createdAt
           };
         })

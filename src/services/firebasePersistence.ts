@@ -233,6 +233,151 @@ export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
     return list;
   }
 
+  // 2b. Public Track Repair (Customer-Safe: Completely strips staff/user names & internal identities)
+  if (primaryResource === 'track') {
+    const queryParam = (url.searchParams.get('query') || '').trim();
+    const repNoParam = (url.searchParams.get('repairNumber') || '').replace(/^#+/, '').trim();
+    const phoneParam = (url.searchParams.get('phone') || '').trim();
+
+    let searchRepairNo = repNoParam;
+    let searchPhone = phoneParam.replace(/\D/g, '');
+
+    if (queryParam) {
+      const qClean = queryParam.replace(/^#+/, '');
+      const qDigits = qClean.replace(/\D/g, '');
+      if (qDigits.length >= 7 && !/[a-zA-Z]/.test(qClean)) {
+        searchPhone = qDigits;
+      } else {
+        searchRepairNo = qClean;
+      }
+    }
+
+    if (!searchRepairNo && !searchPhone) {
+      throw new Error('Please enter your Repair Number or Phone Number.');
+    }
+
+    const repairsSnap = await rtdbGet(rtdbRef(rtdb, 'repairs'));
+    const repairsMap = repairsSnap.exists() ? repairsSnap.val() : {};
+    const allRepairs: any[] = Object.values(repairsMap).filter(Boolean);
+
+    let matchedRepairs: any[] = [];
+    if (searchRepairNo && searchPhone) {
+      matchedRepairs = allRepairs.filter((r: any) => {
+        const rNo = (r.repairNumber || '').toLowerCase();
+        const rPhone = (r.customerPhone || '').replace(/\D/g, '');
+        const matchNo = rNo === searchRepairNo.toLowerCase() || rNo.includes(searchRepairNo.toLowerCase()) || r.id === searchRepairNo;
+        const matchPhone = rPhone.includes(searchPhone) || (searchPhone.length >= 10 && rPhone.endsWith(searchPhone.slice(-10)));
+        return matchNo && matchPhone;
+      });
+    } else if (searchRepairNo) {
+      matchedRepairs = allRepairs.filter((r: any) => {
+        const rNo = (r.repairNumber || '').toLowerCase();
+        return rNo === searchRepairNo.toLowerCase() || rNo.includes(searchRepairNo.toLowerCase()) || r.id === searchRepairNo;
+      });
+    } else if (searchPhone) {
+      matchedRepairs = allRepairs.filter((r: any) => {
+        const rPhone = (r.customerPhone || '').replace(/\D/g, '');
+        return rPhone.includes(searchPhone) || (searchPhone.length >= 10 && rPhone.endsWith(searchPhone.slice(-10)));
+      });
+    }
+
+    if (matchedRepairs.length === 0) {
+      throw new Error('No repair records found matching your query. Please double-check your Repair Number or Phone Number.');
+    }
+
+    // Find all sibling devices under the same customer phone
+    const primaryPhone = (matchedRepairs[0].customerPhone || '').replace(/\D/g, '');
+    let customerRepairs = matchedRepairs;
+    if (primaryPhone) {
+      customerRepairs = allRepairs.filter((r: any) => {
+        const rPhone = (r.customerPhone || '').replace(/\D/g, '');
+        return rPhone === primaryPhone || (primaryPhone.length >= 10 && rPhone.endsWith(primaryPhone.slice(-10)));
+      });
+    }
+
+    customerRepairs.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+    // Fetch and sanitize logs for each repair (Strip all staff names & IDs)
+    const sanitizedDevices = await Promise.all(customerRepairs.map(async (r: any) => {
+      let logs: any[] = [];
+      try {
+        const logsSnap = await rtdbGet(rtdbRef(rtdb, `repairLogs/${r.id}`));
+        if (logsSnap.exists()) {
+          logs = Object.values(logsSnap.val() || {}).filter(Boolean);
+          logs.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        }
+      } catch {}
+
+      if (logs.length === 0) {
+        logs = [{
+          id: `log_init_${r.id}`,
+          status: r.status || 'RECEIVED',
+          message: getFriendlyStatusDescription(r.status || 'RECEIVED'),
+          createdAt: r.createdAt || new Date().toISOString()
+        }];
+      }
+
+      // Customer-Safe Sanitized Logs (ZERO staff names or user identities)
+      const sanitizedLogs = logs.map((l: any) => ({
+        id: l.id,
+        status: l.status || r.status || 'RECEIVED',
+        message: sanitizePublicProgressMessage(l.message, l.status || r.status),
+        createdAt: l.createdAt
+      }));
+
+      // Customer-Safe Sanitized Repair Object (NO technicianId, createdById, staff names, etc.)
+      return {
+        id: r.id,
+        repairNumber: r.repairNumber,
+        customerName: r.customerName,
+        deviceBrand: r.deviceBrand,
+        deviceModel: r.deviceModel,
+        deviceCondition: r.deviceCondition,
+        problemDescription: r.problemDescription,
+        accessoriesReceived: r.accessoriesReceived,
+        status: r.status,
+        expectedCompletionDate: r.expectedCompletionDate,
+        estimatedCost: r.estimatedCost,
+        advancePaid: r.advancePaid,
+        totalPaid: r.totalPaid,
+        paymentStatus: r.paymentStatus,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        receivingMethod: r.receivingMethod || (r.isCourierIn ? 'COURIER' : 'WALK_IN'),
+        isCourierIn: Boolean(r.isCourierIn),
+        courierCompany: r.courierCompany || null,
+        courierTrackingNumber: r.courierTrackingNumber || null,
+        courierReceivedDate: r.courierReceivedDate || null,
+        courierStatus: r.courierStatus || null,
+        originDistrict: r.originDistrict || null,
+        isReturnCourierDispatched: Boolean(r.isReturnCourierDispatched),
+        returnCourierCompany: r.returnCourierCompany || null,
+        returnCourierTrackingNumber: r.returnCourierTrackingNumber || null,
+        returnCourierDispatchDate: r.returnCourierDispatchDate || null,
+        destinationDistrict: r.destinationDistrict || null,
+        logs: sanitizedLogs,
+        branch: {
+          name: 'MTS Central Lab — New Road, Kathmandu',
+          phone: '015364307',
+          location: 'Pako New Road, Kathmandu'
+        }
+      };
+    }));
+
+    const activeSelected = sanitizedDevices.find((d: any) => 
+      searchRepairNo && (d.repairNumber.toLowerCase() === searchRepairNo.toLowerCase() || d.id === searchRepairNo)
+    ) || sanitizedDevices[0];
+
+    return {
+      ...activeSelected,
+      customer: {
+        name: activeSelected.customerName,
+        phone: primaryPhone
+      },
+      devices: sanitizedDevices
+    };
+  }
+
   // 3. Inventory
   if (primaryResource === 'inventory') {
     if (resourceId === 'categories') {
@@ -348,6 +493,89 @@ export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
   }
 
   return null;
+}
+
+// Helpers to sanitize public tracking progress messages (Completely strip staff identities)
+function sanitizePublicProgressMessage(msg: string, status?: string): string {
+  if (!msg || typeof msg !== 'string') {
+    return getFriendlyStatusDescription(status || 'RECEIVED');
+  }
+
+  let cleaned = msg.trim();
+
+  // If message matches generic status change "Status changed to STATUS by Name (ROLE)"
+  if (/^Status (?:changed|updated) to ([A-Z_]+)/i.test(cleaned)) {
+    const match = cleaned.match(/^Status (?:changed|updated) to ([A-Z_]+)/i);
+    const targetStatus = match ? match[1] : status;
+    return getFriendlyStatusDescription(targetStatus || status || 'RECEIVED');
+  }
+
+  // 1. Strip emails
+  cleaned = cleaned.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, '');
+
+  // 2. Strip "by [Name] (ROLE)" or "(ROLE)"
+  cleaned = cleaned.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)\s*\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, '');
+  cleaned = cleaned.replace(/\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, '');
+
+  // 3. Strip "by Technician/Specialist [Name]"
+  cleaned = cleaned.replace(/\bby\s+(?:technician|specialist|engineer|staff|user|super\s*admin|admin|manager|receptionist)\s+[A-Za-z0-9_.'-]+/gi, '');
+
+  // 4. Strip "by [Staff Name / Role]"
+  cleaned = cleaned.replace(/\bby\s+(?:MTS\s+)?(?:super\s*admin|admin|manager|receptionist|staff|specialist|technician|user|engineer)\b/gi, '');
+  cleaned = cleaned.replace(/\bby\s+[A-Z][a-zA-Z0-9_.'-]+(?:\s+[A-Z][a-zA-Z0-9_.'-]+)*/g, '');
+
+  // 5. Strip "Technician/Specialist/Engineer [Name]" anywhere
+  cleaned = cleaned.replace(/\b(?:technician|specialist|engineer|staff)\s+[A-Z][a-zA-Z0-9_.'-]+/gi, 'Technician');
+  cleaned = cleaned.replace(/\bTechnician\b/gi, '');
+
+  // 6. Strip action verbs followed by "by ..."
+  cleaned = cleaned.replace(/\b(handled|updated|diagnosed|logged|received|repaired|inspected|completed|verified|transitioned)\s+by\s+[^,\.\n]+/gi, '$1');
+
+  // 7. Strip "Assigned to [Name]" or "Assigned to/by ..."
+  cleaned = cleaned.replace(/\bassigned\s+(?:to|by)\s+[^,\.\n]+/gi, 'Assigned for laboratory service');
+
+  // 8. Strip "Updated by: ...", "Created by: ...", "Technician: ...", "Staff: ...", "User: ..."
+  cleaned = cleaned.replace(/\b(?:updated|created|processed|handled|logged|verified)\s+by\s*:\s*[^,\.\n]+/gi, '');
+  cleaned = cleaned.replace(/\b(?:technician|specialist|staff|user|engineer)\s*:\s*[^,\.\n]+/gi, '');
+
+  // 9. Clean trailing punctuation or orphan spaces
+  cleaned = cleaned.replace(/\s+/g, ' ').replace(/\s+([,\.;])/g, '$1').replace(/^[\s,;.-]+|[\s,;.-]+$/g, '').trim();
+
+  if (!cleaned || cleaned.length < 5) {
+    return getFriendlyStatusDescription(status || 'RECEIVED');
+  }
+
+  return cleaned;
+}
+
+function getFriendlyStatusDescription(status: string): string {
+  switch (status?.toUpperCase()) {
+    case 'RECEIVED':
+      return 'Device safely received and cataloged into laboratory inventory.';
+    case 'DIAGNOSING':
+      return 'Motherboard circuit and diagnostic inspection in progress.';
+    case 'IN_PROCESS':
+      return 'Active technical repair, micro-soldering, and OEM component replacement in progress.';
+    case 'WAITING_FOR_PARTS':
+      return 'Sourcing genuine Grade-A replacement components from inventory.';
+    case 'TESTING':
+      return 'Performing comprehensive 36-point diagnostic inspection and display calibration.';
+    case 'REPAIRED':
+      return 'Device repair and restoration completed successfully.';
+    case 'READY_FOR_PICKUP':
+      return 'Restoration verified. Device packaged and ready for collection / return dispatch.';
+    case 'COURIER_DISPATCHED':
+      return 'Repaired device has been safely packed and dispatched via courier logistics.';
+    case 'DELIVERED':
+      return 'Device has been collected / delivered to the customer.';
+    case 'CANNOT_REPAIR':
+      return 'Catastrophic circuit damage exceeds viable safe restoration standards.';
+    case 'RE_PROBLEM':
+    case 'REPROBLEM':
+      return 'Device reopened for priority post-delivery warranty inspection.';
+    default:
+      return 'Repair progress updated.';
+  }
 }
 
 // Helper to automatically find or create customer records when repairs are submitted
