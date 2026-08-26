@@ -70,11 +70,20 @@ function validateAndSetupEnvironment() {
 validateAndSetupEnvironment();
 
 // Load Firebase Config
-let firebaseConfig: any = {};
+let firebaseConfig: any = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || process.env.FIREBASE_DATABASE_URL || "https://mts-lab-eb8d2-default-rtdb.firebaseio.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "mts-lab-eb8d2",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID,
+};
 try {
   const configPath = path.join(process.cwd(), "firebase-applet-config.json");
   if (fs.existsSync(configPath)) {
-    firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    const fileConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    firebaseConfig = { ...fileConfig, ...firebaseConfig };
   }
 } catch (err) {
   console.warn("[FIREBASE] Could not load firebase-applet-config.json", err);
@@ -2184,7 +2193,7 @@ function deserializeFromFirestore(modelName: string, data: any): any {
   return sanitizeModelData(modelName, result);
 }
 
-const RTDB_BASE_URL = "https://mts-lab-eb8d2-default-rtdb.firebaseio.com";
+const RTDB_BASE_URL = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || firebaseConfig.databaseURL || "https://mts-lab-eb8d2-default-rtdb.firebaseio.com";
 
 async function syncToRtdb(modelName: string, action: string, record: any) {
   try {

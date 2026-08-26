@@ -39,12 +39,46 @@ import {
   type Unsubscribe as RtdbUnsubscribe
 } from 'firebase/database';
 import { useEffect, useState, useRef } from 'react';
-import firebaseConfig from '../../firebase-applet-config.json';
+
+const getEnvVar = (key: string): string => {
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key] as string;
+  }
+  if (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as any)[key]) {
+    return (import.meta.env as any)[key] as string;
+  }
+  return '';
+};
+
+export const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_API_KEY) || '',
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) || '',
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_DATABASE_URL) || 'https://mts-lab-eb8d2-default-rtdb.firebaseio.com',
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_PROJECT_ID) || 'mts-lab-eb8d2',
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) || '',
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID) || '',
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_APP_ID) || '',
+};
+
+function validateFirebaseConfig() {
+  const missingKeys: string[] = [];
+  if (!firebaseConfig.apiKey) missingKeys.push('NEXT_PUBLIC_FIREBASE_API_KEY');
+  if (!firebaseConfig.projectId) missingKeys.push('NEXT_PUBLIC_FIREBASE_PROJECT_ID');
+  if (!firebaseConfig.appId) missingKeys.push('NEXT_PUBLIC_FIREBASE_APP_ID');
+
+  if (missingKeys.length > 0) {
+    console.error(
+      `[MTS Lab] Firebase configuration is incomplete. Please configure the required NEXT_PUBLIC_FIREBASE_* environment variables: ${missingKeys.join(', ')}`
+    );
+  }
+}
+
+validateFirebaseConfig();
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const rtdb = getDatabase(app, "https://mts-lab-eb8d2-default-rtdb.firebaseio.com/");
+export const db = getFirestore(app);
+export const rtdb = getDatabase(app, firebaseConfig.databaseURL);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
