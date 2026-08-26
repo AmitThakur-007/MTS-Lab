@@ -22,6 +22,7 @@ import CourierManagement from './dashboard/CourierManagement';
 import RepairRelatedDamage from './dashboard/RepairRelatedDamage';
 import CustomerHub from './dashboard/CustomerHub';
 import CustomerProfile from './dashboard/CustomerProfile';
+import ShopManagement from './dashboard/ShopManagement';
 import { useAuthStore } from '@/store/authStore';
 import { normalizeRole } from '@/lib/rbac';
 
@@ -72,6 +73,7 @@ export default function Dashboard() {
             />
             <Route path="staff" element={canAccessStaff ? <Staff /> : defaultElement} />
             <Route path="repair-prices" element={<RepairPrices />} />
+            <Route path="shop-management" element={<ShopManagement />} />
             <Route path="slides" element={<SlideshowManagement />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="products" element={<Inventory />} />

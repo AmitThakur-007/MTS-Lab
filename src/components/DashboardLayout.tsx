@@ -28,6 +28,7 @@ import {
   UserCheck,
   Truck,
   FileWarning,
+  ShoppingBag,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
@@ -195,6 +196,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       name: 'Services & Repair Prices', 
       path: '/dashboard/repair-prices', 
       icon: Tag, 
+      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN'] 
+    },
+    { 
+      name: 'Shop Management', 
+      path: '/dashboard/shop-management', 
+      icon: ShoppingBag, 
       roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN'] 
     },
     { 

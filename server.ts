@@ -2438,6 +2438,91 @@ const upload = multer({
   }
 });
 
+async function ensureDefaultShopProducts() {
+  try {
+    const count = await prisma.shopProduct.count({ where: { isArchived: false } });
+    if (count === 0) {
+      const defaultProducts = [
+        {
+          name: 'Genuine 120Hz AMOLED Screen Assembly (iPhone 13 / 14 Series)',
+          category: 'Displays & Screens',
+          brand: 'Apple',
+          model: 'iPhone 13 / 14',
+          sku: 'MTS-SCR-IP1314',
+          description: 'Factory calibrated OLED panel with True Tone, 120Hz ProMotion response, and oleophobic coating. Precision tested in our Kathmandu lab.',
+          price: 18500,
+          discountPrice: 16500,
+          stockQuantity: 12,
+          availability: 'IN_STOCK',
+          imageUrl: '/assets/images/display_replace_1786719191504.jpg',
+          status: 'PUBLISHED',
+          isFeatured: true,
+          isBestSeller: true,
+          displayOrder: 1
+        },
+        {
+          name: 'High-Capacity Certified Replacement Battery (5000mAh Class)',
+          category: 'Batteries',
+          brand: 'Universal / OEM',
+          model: 'Multi-Brand',
+          sku: 'MTS-BAT-5000',
+          description: 'Grade-A lithium polymer battery with intelligent protection IC, zero cycle count, and guaranteed 100% health calibration support.',
+          price: 3800,
+          discountPrice: 3200,
+          stockQuantity: 25,
+          availability: 'IN_STOCK',
+          imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
+          status: 'PUBLISHED',
+          isFeatured: true,
+          isBestSeller: true,
+          displayOrder: 2
+        },
+        {
+          name: 'OEM Dynamic Island AMOLED Assembly (iPhone 15 Pro Max)',
+          category: 'Displays & Screens',
+          brand: 'Apple',
+          model: 'iPhone 15 Pro Max',
+          sku: 'MTS-SCR-IP15PM',
+          description: 'Ultra-bright 2000-nit original display module with ceramic shield glass and pre-installed sensor proximity bracket.',
+          price: 34000,
+          discountPrice: 31500,
+          stockQuantity: 8,
+          availability: 'IN_STOCK',
+          imageUrl: '/assets/images/display_replace_1786719191504.jpg',
+          status: 'PUBLISHED',
+          isFeatured: true,
+          isBestSeller: false,
+          displayOrder: 3
+        },
+        {
+          name: 'MTS Lab Master IC Micro-Soldering Flux & Solder Wire Pack',
+          category: 'Tools & Essentials',
+          brand: 'MTS Lab Pro',
+          model: 'Universal',
+          sku: 'MTS-TOOL-FLUX',
+          description: 'High-purity Japanese halogen-free no-clean soldering paste and lead-free micro-wire for precision logic board repairs.',
+          price: 2900,
+          discountPrice: 2450,
+          stockQuantity: 15,
+          availability: 'IN_STOCK',
+          imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
+          status: 'PUBLISHED',
+          isFeatured: false,
+          isBestSeller: true,
+          displayOrder: 4
+        }
+      ];
+
+      for (const prod of defaultProducts) {
+        await prisma.shopProduct.create({ data: prod });
+      }
+      console.log("[DB SEED] Successfully initialized default Shop products.");
+    }
+  } catch (err) {
+    console.error("[DB ERROR] Failed to seed default shop products:", err);
+  }
+}
+
 export async function createServerApp() {
   const app = express();
 
@@ -2450,6 +2535,7 @@ export async function createServerApp() {
     await ensureDefaultRepairPrices();
     await ensureDefaultHomeSlides();
     await ensureDefaultInventoryData();
+    await ensureDefaultShopProducts();
     await syncFromFirestore();
     await fixInvalidStatuses();
     await syncAndMigrateCustomers();
@@ -6379,6 +6465,286 @@ export async function createServerApp() {
     } catch (err: any) {
       console.error("[CONFIRM EMAIL CHANGE ERROR]", err);
       res.status(500).json({ success: false, message: "Failed to finalize email change." });
+    }
+  });
+
+  // ==========================================
+  // SHOP MANAGEMENT & PUBLIC SHOP ENDPOINTS
+  // ==========================================
+
+  // Public Endpoint: Get all active, published shop products
+  app.get("/api/public/products", async (req: any, res: any) => {
+    try {
+      const products = await prisma.shopProduct.findMany({
+        where: {
+          isArchived: false,
+          status: "PUBLISHED"
+        },
+        orderBy: [
+          { displayOrder: "asc" },
+          { createdAt: "desc" }
+        ]
+      });
+      return res.json(products);
+    } catch (err: any) {
+      console.error("[PUBLIC PRODUCTS ERROR]", err);
+      return res.status(500).json({ error: "Failed to fetch public products" });
+    }
+  });
+
+  // Admin Endpoint: Get all shop products (including DRAFT, HIDDEN) for Shop Management
+  app.get("/api/admin/products", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
+    try {
+      const products = await prisma.shopProduct.findMany({
+        where: {
+          isArchived: false
+        },
+        orderBy: [
+          { displayOrder: "asc" },
+          { createdAt: "desc" }
+        ]
+      });
+      return res.json(products);
+    } catch (err: any) {
+      console.error("[ADMIN PRODUCTS LOAD ERROR]", err);
+      return res.status(500).json({ error: "Failed to load shop management products" });
+    }
+  });
+
+  // Admin Endpoint: Create Product
+  app.post("/api/admin/products", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
+    try {
+      const { 
+        name, 
+        description, 
+        category, 
+        brand, 
+        model, 
+        sku, 
+        price, 
+        discountPrice, 
+        stockQuantity, 
+        availability, 
+        imageUrl, 
+        additionalImages,
+        status, 
+        isFeatured, 
+        isBestSeller, 
+        displayOrder 
+      } = req.body;
+
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ error: "Product name is required" });
+      }
+
+      const numPrice = Number(price);
+      if (isNaN(numPrice) || numPrice < 0) {
+        return res.status(400).json({ error: "Price must be a valid non-negative number" });
+      }
+
+      const numStock = Number(stockQuantity ?? 0);
+      if (isNaN(numStock) || numStock < 0) {
+        return res.status(400).json({ error: "Stock quantity must be a non-negative number" });
+      }
+
+      if (sku && typeof sku === 'string' && sku.trim()) {
+        const existingSku = await prisma.shopProduct.findFirst({
+          where: { sku: sku.trim(), isArchived: false }
+        });
+        if (existingSku) {
+          return res.status(400).json({ error: `Product with SKU '${sku.trim()}' already exists` });
+        }
+      }
+
+      const newProduct = await prisma.shopProduct.create({
+        data: {
+          name: name.trim(),
+          description: description ? String(description).trim() : null,
+          category: category ? String(category).trim() : 'Hardware & Accessories',
+          brand: brand ? String(brand).trim() : null,
+          model: model ? String(model).trim() : null,
+          sku: sku ? String(sku).trim() : null,
+          price: numPrice,
+          discountPrice: discountPrice !== undefined && discountPrice !== null && discountPrice !== '' ? Number(discountPrice) : null,
+          stockQuantity: numStock,
+          availability: availability || (numStock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK'),
+          imageUrl: imageUrl || null,
+          additionalImages: Array.isArray(additionalImages) ? JSON.stringify(additionalImages) : (typeof additionalImages === 'string' ? additionalImages : null),
+          status: status || 'PUBLISHED',
+          isFeatured: Boolean(isFeatured),
+          isBestSeller: Boolean(isBestSeller),
+          displayOrder: Number(displayOrder || 0)
+        }
+      });
+
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userRole: req.user.role,
+        userName: req.user.name || req.user.email,
+        action: 'CREATE_SHOP_PRODUCT',
+        resource: 'ShopProduct',
+        resourceId: newProduct.id,
+        details: `Created shop product: ${newProduct.name} (SKU: ${newProduct.sku || 'N/A'}, Price: NPR ${newProduct.price})`
+      });
+
+      return res.status(201).json(newProduct);
+    } catch (err: any) {
+      console.error("[ADMIN PRODUCT CREATE ERROR]", err);
+      return res.status(500).json({ error: err.message || "Failed to create shop product" });
+    }
+  });
+
+  // Admin Endpoint: Update Product
+  app.put("/api/admin/products/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const existing = await prisma.shopProduct.findUnique({ where: { id } });
+      if (!existing || existing.isArchived) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+
+      const { 
+        name, 
+        description, 
+        category, 
+        brand, 
+        model, 
+        sku, 
+        price, 
+        discountPrice, 
+        stockQuantity, 
+        availability, 
+        imageUrl, 
+        additionalImages,
+        status, 
+        isFeatured, 
+        isBestSeller, 
+        displayOrder 
+      } = req.body;
+
+      if (name !== undefined && (!name || typeof name !== 'string' || !name.trim())) {
+        return res.status(400).json({ error: "Product name cannot be empty" });
+      }
+
+      if (price !== undefined) {
+        const numPrice = Number(price);
+        if (isNaN(numPrice) || numPrice < 0) {
+          return res.status(400).json({ error: "Price must be a valid non-negative number" });
+        }
+      }
+
+      if (stockQuantity !== undefined) {
+        const numStock = Number(stockQuantity);
+        if (isNaN(numStock) || numStock < 0) {
+          return res.status(400).json({ error: "Stock quantity must be a non-negative number" });
+        }
+      }
+
+      if (sku && typeof sku === 'string' && sku.trim() && sku.trim() !== existing.sku) {
+        const existingSku = await prisma.shopProduct.findFirst({
+          where: { sku: sku.trim(), isArchived: false, NOT: { id } }
+        });
+        if (existingSku) {
+          return res.status(400).json({ error: `Product with SKU '${sku.trim()}' already exists` });
+        }
+      }
+
+      const updated = await prisma.shopProduct.update({
+        where: { id },
+        data: {
+          name: name !== undefined ? String(name).trim() : existing.name,
+          description: description !== undefined ? (description ? String(description).trim() : null) : existing.description,
+          category: category !== undefined ? String(category).trim() : existing.category,
+          brand: brand !== undefined ? (brand ? String(brand).trim() : null) : existing.brand,
+          model: model !== undefined ? (model ? String(model).trim() : null) : existing.model,
+          sku: sku !== undefined ? (sku ? String(sku).trim() : null) : existing.sku,
+          price: price !== undefined ? Number(price) : existing.price,
+          discountPrice: discountPrice !== undefined ? (discountPrice !== null && discountPrice !== '' ? Number(discountPrice) : null) : existing.discountPrice,
+          stockQuantity: stockQuantity !== undefined ? Number(stockQuantity) : existing.stockQuantity,
+          availability: availability !== undefined ? String(availability) : existing.availability,
+          imageUrl: imageUrl !== undefined ? (imageUrl ? String(imageUrl).trim() : null) : existing.imageUrl,
+          additionalImages: additionalImages !== undefined ? (Array.isArray(additionalImages) ? JSON.stringify(additionalImages) : (typeof additionalImages === 'string' ? additionalImages : null)) : existing.additionalImages,
+          status: status !== undefined ? String(status) : existing.status,
+          isFeatured: isFeatured !== undefined ? Boolean(isFeatured) : existing.isFeatured,
+          isBestSeller: isBestSeller !== undefined ? Boolean(isBestSeller) : existing.isBestSeller,
+          displayOrder: displayOrder !== undefined ? Number(displayOrder) : existing.displayOrder
+        }
+      });
+
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userRole: req.user.role,
+        userName: req.user.name || req.user.email,
+        action: 'UPDATE_SHOP_PRODUCT',
+        resource: 'ShopProduct',
+        resourceId: updated.id,
+        details: `Updated shop product: ${updated.name}`
+      });
+
+      return res.json(updated);
+    } catch (err: any) {
+      console.error("[ADMIN PRODUCT UPDATE ERROR]", err);
+      return res.status(500).json({ error: err.message || "Failed to update shop product" });
+    }
+  });
+
+  // Admin Endpoint: Toggle Publish / Status
+  app.patch("/api/admin/products/:id/toggle-publish", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const existing = await prisma.shopProduct.findUnique({ where: { id } });
+      if (!existing || existing.isArchived) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+
+      const nextStatus = existing.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
+      const updated = await prisma.shopProduct.update({
+        where: { id },
+        data: { status: nextStatus }
+      });
+
+      return res.json(updated);
+    } catch (err: any) {
+      console.error("[ADMIN PRODUCT TOGGLE ERROR]", err);
+      return res.status(500).json({ error: "Failed to toggle product status" });
+    }
+  });
+
+  // Admin Endpoint: Delete / Archive Product
+  app.delete("/api/admin/products/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const existing = await prisma.shopProduct.findUnique({ where: { id } });
+      if (!existing || existing.isArchived) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+
+      const archived = await prisma.shopProduct.update({
+        where: { id },
+        data: {
+          isArchived: true,
+          status: 'ARCHIVED',
+          deletedAt: new Date()
+        }
+      });
+
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userRole: req.user.role,
+        userName: req.user.name || req.user.email,
+        action: 'ARCHIVE_SHOP_PRODUCT',
+        resource: 'ShopProduct',
+        resourceId: archived.id,
+        details: `Archived shop product: ${archived.name}`
+      });
+
+      return res.json({ success: true, message: "Product archived successfully", id });
+    } catch (err: any) {
+      console.error("[ADMIN PRODUCT ARCHIVE ERROR]", err);
+      return res.status(500).json({ error: "Failed to archive product" });
     }
   });
 

@@ -105,6 +105,17 @@ export type Permission =
   | 'notifications.update'
   | 'notifications.delete'
 
+  // Shop Management Hub
+  | 'shop.view'
+  | 'shop.create'
+  | 'shop.edit'
+  | 'shop.update'
+  | 'shop.delete'
+  | 'shop.publish'
+  | 'shop.manageImages'
+  | 'shop.managePrices'
+  | 'shop.manageInventory'
+
   // System & Auditing
   | 'auditLogs.view'
   | 'system.settings';
@@ -124,6 +135,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
     'services.view', 'services.create', 'services.edit', 'services.update', 'services.delete',
     'revenue.view', 'revenue.create', 'revenue.edit', 'revenue.update', 'revenue.delete', 'revenue.export',
     'notifications.view', 'notifications.create', 'notifications.update', 'notifications.delete',
+    'shop.view', 'shop.create', 'shop.edit', 'shop.update', 'shop.delete', 'shop.publish', 'shop.manageImages', 'shop.managePrices', 'shop.manageInventory',
     'auditLogs.view', 'system.settings'
   ],
 
@@ -140,6 +152,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
     'services.view', 'services.create', 'services.edit', 'services.update', 'services.delete',
     'revenue.view', 'revenue.create', 'revenue.edit', 'revenue.update', 'revenue.export',
     'notifications.view', 'notifications.create', 'notifications.update', 'notifications.delete',
+    'shop.view', 'shop.create', 'shop.edit', 'shop.update', 'shop.delete', 'shop.publish', 'shop.manageImages', 'shop.managePrices', 'shop.manageInventory',
     'auditLogs.view'
   ],
 
