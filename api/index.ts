@@ -418,6 +418,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const userName = isSuperAdmin ? 'MTS Lab Super Admin' : (identity.split('@')[0] || 'Staff Member');
       const userId = `usr_${crypto.createHash('md5').update(identity || 'anonymous').digest('hex').slice(0, 12)}`;
 
+      // Direct Login for Superadmin (2FA bypassed for Superadmin)
+      if (isSuperAdmin) {
+        const accessToken = `mts_${crypto.randomBytes(32).toString('hex')}`;
+        const refreshToken = `mts_ref_${crypto.randomBytes(32).toString('hex')}`;
+        return sendJson(res, 200, {
+          success: true,
+          token: accessToken,
+          refreshToken,
+          user: {
+            id: userId,
+            email: identity || 'mtsmobilelab@gmail.com',
+            name: 'MTS Lab Super Admin',
+            role: 'SUPERADMIN',
+            emailVerified: true
+          },
+          message: 'Welcome back, MTS Lab Super Admin!'
+        });
+      }
+
       // Generate Cryptographically Secure 6-Digit OTP Code
       const otpCode = generate6DigitOtp();
       const otpHash = hashOtp(otpCode);
