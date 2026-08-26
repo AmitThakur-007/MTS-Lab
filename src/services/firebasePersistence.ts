@@ -517,17 +517,19 @@ export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
   }
 
   // 12. Products
-  if (primaryResource === 'products') {
+  if (primaryResource === 'products' || (primaryResource === 'public' && segments[1] === 'products')) {
     const snap = await rtdbGet(rtdbRef(rtdb, 'products'));
     const map = snap.exists() ? snap.val() : {};
-    return Object.values(map).filter(Boolean);
+    const items = Object.values(map).filter(Boolean);
+    return items;
   }
 
   // 13. Home Slides
-  if (primaryResource === 'home-slides') {
+  if (primaryResource === 'home-slides' || primaryResource === 'slides' || (primaryResource === 'public' && segments[1] === 'slides')) {
     const snap = await rtdbGet(rtdbRef(rtdb, 'homeSlides'));
     const map = snap.exists() ? snap.val() : {};
-    return Object.values(map).filter(Boolean);
+    const items = Object.values(map).filter(Boolean);
+    return items;
   }
 
   // 14. Auth Sessions & Activities

@@ -6,6 +6,8 @@ interface Props {
   children: React.ReactNode;
   fallbackTitle?: string;
   fallbackDescription?: string;
+  returnUrl?: string;
+  returnLabel?: string;
 }
 
 interface State {
@@ -33,33 +35,38 @@ export class RouteErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const returnUrl = this.props.returnUrl || '/';
+      const returnLabel = this.props.returnLabel || 'Return to Homepage';
+
       return (
-        <div className="p-6 sm:p-12 max-w-2xl mx-auto text-center space-y-6 animate-in fade-in duration-300">
-          <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto border border-red-100 shadow-sm">
-            <AlertCircle className="w-8 h-8" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-              {this.props.fallbackTitle || 'Unable to load this section'}
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-md mx-auto leading-relaxed">
-              {this.props.fallbackDescription || 'A temporary display issue occurred while rendering this dashboard component.'}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <Button 
-              onClick={this.handleRetry} 
-              className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs h-10 px-5 gap-2 shadow-sm"
-            >
-              <RefreshCw className="w-4 h-4" /> Try Again
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => window.location.href = '/dashboard'} 
-              className="rounded-xl border-slate-200 text-slate-700 font-bold text-xs h-10 px-5 gap-2 hover:bg-slate-50"
-            >
-              <Home className="w-4 h-4" /> Return to Overview
-            </Button>
+        <div className="min-h-[50vh] flex items-center justify-center p-6 sm:p-12 max-w-2xl mx-auto text-center space-y-6 animate-in fade-in duration-300">
+          <div className="w-full space-y-6">
+            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto border border-red-100 shadow-sm">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+                {this.props.fallbackTitle || 'Unable to load this page section'}
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-md mx-auto leading-relaxed">
+                {this.props.fallbackDescription || 'A temporary issue occurred while rendering this component. Please click retry or return home.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button 
+                onClick={this.handleRetry} 
+                className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs h-10 px-5 gap-2 shadow-sm cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" /> Try Again
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => window.location.href = returnUrl} 
+                className="rounded-xl border-slate-200 text-slate-700 font-bold text-xs h-10 px-5 gap-2 hover:bg-slate-50 cursor-pointer"
+              >
+                <Home className="w-4 h-4" /> {returnLabel}
+              </Button>
+            </div>
           </div>
         </div>
       );
