@@ -165,8 +165,8 @@ async function request(endpoint: string, options: any = {}) {
     serverHandled = false;
   }
 
-  // Handle Firebase Direct Cloud Persistence Fallback
-  if (!serverHandled) {
+  // Handle Firebase Direct Cloud Persistence Fallback (Never on auth endpoints)
+  if (!serverHandled && !cleanEndpoint.startsWith('/auth/')) {
     try {
       if (method === 'GET') {
         const fbResult = await handleFirebaseGet(cleanEndpoint);
@@ -216,6 +216,8 @@ async function request(endpoint: string, options: any = {}) {
     if (!errorMessage) {
       if (res.status === 404) {
         errorMessage = 'Requested record or endpoint not found.';
+      } else if (res.status === 429) {
+        errorMessage = 'Too many requests. Please wait before trying again.';
       } else if (res.status === 502 || res.status === 503 || res.status === 504) {
         errorMessage = 'Server is temporarily busy. Please try again.';
       } else {
@@ -223,9 +225,13 @@ async function request(endpoint: string, options: any = {}) {
       }
     }
 
+    const retryAfter = res.headers.get('retry-after');
     const errObj = new Error(errorMessage) as any;
     errObj.status = res.status;
-    errObj.code = res.status;
+    errObj.code = errorData.code || res.status;
+    if (retryAfter) {
+      errObj.retryAfter = parseInt(retryAfter, 10) || 60;
+    }
     throw errObj;
   }
 

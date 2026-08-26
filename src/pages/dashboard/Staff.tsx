@@ -634,8 +634,9 @@ export function StaffManagementContent() {
       toast.success(res?.message || `Verification email dispatched to ${user.email}`);
     } catch (err: any) {
       console.error('[RESEND VERIFICATION ERROR]', err);
-      if (err?.status === 429 || err?.code === 429) {
-        setVerificationCooldowns((current) => ({ ...current, [userKey]: 60 }));
+      const remaining = err?.retryAfter || (err?.status === 429 || err?.code === 429 ? 60 : 0);
+      if (remaining > 0) {
+        setVerificationCooldowns((current) => ({ ...current, [userKey]: remaining }));
       }
       toast.error(err.message || 'Unable to send verification email.');
     } finally {

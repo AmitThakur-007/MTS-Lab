@@ -1446,16 +1446,17 @@ export async function handleFirebasePost(cleanEndpoint: string, payload: any): P
     if (subAction === 'resend-verification') {
       return {
         success: true,
-        message: 'Verification email sent through Firebase. Please check your Gmail inbox and spam folder.'
+        message: 'Verification request processed. Please check your Gmail inbox.'
       };
     }
     if (subAction === 'verify-email-status') {
+      const isVerified = Boolean(auth.currentUser?.emailVerified);
       return {
         success: true,
-        emailVerified: true,
+        emailVerified: isVerified,
         user: {
-          email: payload.email || 'mtsmobilelab@gmail.com',
-          emailVerified: true
+          email: payload.email || auth.currentUser?.email || 'staff@mtslab.com',
+          emailVerified: isVerified
         }
       };
     }

@@ -283,16 +283,16 @@ export default function Login() {
     }
   };
 
-  // Handle Resend Verification Email
+  // Handle Resend Verification Email (Strict One-Click = One-Request Protocol)
   const handleResendVerificationEmail = async () => {
     if (!unverifiedEmail || resendingVerif || resendVerifCooldown > 0) return;
     setResendingVerif(true);
+    setEmailVerificationError(null);
+
     try {
-      let clientEmailSent = false;
       let firebaseIdToken: string | undefined;
 
-      // Prefer the signed-in Firebase client when available. Refresh its
-      // current user before checking or sending so the provider state is live.
+      // Check current Firebase client auth session
       if (auth.currentUser && auth.currentUser.email?.toLowerCase() === unverifiedEmail.toLowerCase()) {
         try {
           await auth.currentUser.reload();
@@ -300,43 +300,41 @@ export default function Login() {
         } catch (refreshErr) {
           console.warn('[FIREBASE AUTH] Client state refresh notice:', refreshErr);
         }
+
+        // If client is already verified, update state without sending unnecessary email
         if (auth.currentUser.emailVerified) {
           setEmailVerificationSuccess(true);
           setUnverifiedEmail(null);
           toast.success('Your email is already verified. You can now sign in.');
           return;
         }
-        try {
-          // Use Firebase's hosted verification handler without a temporary or
-          // unallowlisted continue URL. One explicit click makes one provider
-          // request; known Firebase failures are not retried automatically.
-          await sendEmailVerification(auth.currentUser);
-          clientEmailSent = true;
-        } catch (clientSendErr: any) {
-          console.warn('[FIREBASE AUTH] Client sendEmailVerification failed:', clientSendErr?.code || 'unknown');
-        }
       }
 
-      if (clientEmailSent) {
-        toast.success('Verification email sent through Firebase. Please check your Gmail inbox and spam folder.');
-      } else {
-        // The backend uses the refreshed Firebase ID token to call Firebase's
-        // official sendOobCode operation. It never sends a fake URL.
-        const res: any = await api.post('/auth/resend-verification', {
-          email: unverifiedEmail,
-          password,
-          firebaseIdToken
-        });
-        toast.success(res.message || 'Verification email sent through Firebase. Please check your Gmail inbox and spam folder.');
+      // Single authoritative application request to backend
+      const res: any = await api.post('/auth/resend-verification', {
+        email: unverifiedEmail,
+        password,
+        firebaseIdToken
+      });
+
+      if (res.emailVerified) {
+        setEmailVerificationSuccess(true);
+        setUnverifiedEmail(null);
+        toast.success('Your email is already verified. You can now sign in.');
+        return;
       }
+
+      toast.success(res.message || 'Verification email sent through Firebase. Please check your Gmail inbox and spam folder.');
       setResendVerifCooldown(60);
     } catch (err: any) {
-      if (err?.status === 429 || err?.code === 429) {
-        // UX protection only; Firebase remains authoritative for abuse limits.
-        // Do not retry automatically after a provider rate-limit response.
-        setResendVerifCooldown((current) => Math.max(current, 60));
+      const remaining = err?.retryAfter || (err?.status === 429 || err?.code === 429 ? 60 : 0);
+      if (remaining > 0) {
+        setResendVerifCooldown(remaining);
       }
-      toast.error(err.message || 'Failed to resend verification email.');
+
+      const errMsg = err.message || 'Failed to resend verification email.';
+      setEmailVerificationError(errMsg);
+      toast.error(errMsg);
     } finally {
       setResendingVerif(false);
     }

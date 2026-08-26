@@ -207,37 +207,142 @@ async function sendSecurityEmail(params: {
   return { success: false, error: 'No active email service configured in environment.' };
 }
 
-// Dispatch Official Firebase Email Verification via Identity Toolkit REST API
-async function sendFirebaseVerificationEmail(email: string, idToken?: string): Promise<{ success: boolean; message?: string }> {
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDw4d4eSahPP6KL-0qZzzIr8V5BJaHtpNs';
-  
-  try {
-    const payload: any = {
-      requestType: 'VERIFY_EMAIL',
+// Centralized Firebase Email Verification Error Mapping
+export function mapFirebaseVerificationError(errorCode?: string): { status: number; code: string; message: string } {
+  const cleanCode = String(errorCode || '').trim().toUpperCase().split(' : ')[0];
+
+  if (cleanCode === 'TOO_MANY_ATTEMPTS_TRY_LATER' || cleanCode === 'AUTH/TOO-MANY-REQUESTS') {
+    return {
+      status: 429,
+      code: 'TOO_MANY_ATTEMPTS_TRY_LATER',
+      message: 'Firebase has temporarily rate-limited verification emails. Please wait before trying again.'
     };
-    if (idToken) {
-      payload.idToken = idToken;
-    } else {
-      payload.email = email;
+  }
+
+  if (cleanCode === 'UNAUTHORIZED_DOMAIN' || cleanCode === 'AUTH/UNAUTHORIZED-DOMAIN') {
+    return {
+      status: 422,
+      code: 'UNAUTHORIZED_DOMAIN',
+      message: 'This production domain is not authorized in Firebase Authentication. Please contact the administrator.'
+    };
+  }
+
+  if (
+    cleanCode === 'INVALID_ID_TOKEN' ||
+    cleanCode === 'TOKEN_EXPIRED' ||
+    cleanCode === 'AUTH/INVALID-USER-TOKEN' ||
+    cleanCode === 'AUTH/USER-TOKEN-EXPIRED'
+  ) {
+    return {
+      status: 401,
+      code: cleanCode || 'INVALID_ID_TOKEN',
+      message: 'Your Firebase session has expired. Please sign in again before requesting a verification email.'
+    };
+  }
+
+  return {
+    status: 503,
+    code: cleanCode || 'UNKNOWN_PROVIDER_ERROR',
+    message: 'Firebase could not send the verification email. Please try again later or contact the administrator.'
+  };
+}
+
+// Serverless in-memory rate limiting map (60 seconds per email)
+const serverlessVerificationCooldowns = new Map<string, number>();
+
+function getVerificationCooldown(email: string): number {
+  const key = String(email || '').toLowerCase().trim();
+  const expiresAt = serverlessVerificationCooldowns.get(key) || 0;
+  const remainingMs = expiresAt - Date.now();
+  if (remainingMs <= 0) {
+    serverlessVerificationCooldowns.delete(key);
+    return 0;
+  }
+  return Math.ceil(remainingMs / 1000);
+}
+
+function setVerificationCooldown(email: string): void {
+  const key = String(email || '').toLowerCase().trim();
+  if (key) {
+    serverlessVerificationCooldowns.set(key, Date.now() + 60 * 1000);
+  }
+}
+
+// Dispatch Official Firebase Email Verification via Identity Toolkit REST API
+async function sendFirebaseVerificationEmail(params: {
+  email: string;
+  idToken?: string;
+  password?: string;
+}): Promise<{ sent: boolean; alreadyVerified?: boolean; errorCode?: string; mappedError?: { status: number; code: string; message: string } }> {
+  const { email, password } = params;
+  let idToken = params.idToken;
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDw4d4eSahPP6KL-0qZzzIr8V5BJaHtpNs';
+  const normalizedEmail = String(email || '').toLowerCase().trim();
+
+  try {
+    // If idToken is not present but password is provided, authenticate to fetch active idToken
+    if (!idToken && password && normalizedEmail) {
+      const signInRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail, password, returnSecureToken: true })
+      });
+      const signInData: any = await signInRes.json().catch(() => ({}));
+      if (signInRes.ok && signInData?.idToken) {
+        idToken = signInData.idToken;
+        if (signInData.emailVerified === true) {
+          return { sent: false, alreadyVerified: true };
+        }
+      } else {
+        const provError = signInData?.error?.message || signInData?.error?.status || 'INVALID_LOGIN_CREDENTIALS';
+        return { sent: false, errorCode: provError, mappedError: mapFirebaseVerificationError(provError) };
+      }
     }
 
+    // Verify token identity and check if user is already verified
+    if (idToken) {
+      const lookupRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      });
+      if (lookupRes.ok) {
+        const lookupData: any = await lookupRes.json().catch(() => ({}));
+        const fbUser = lookupData?.users?.[0];
+        if (fbUser && fbUser.emailVerified === true) {
+          return { sent: false, alreadyVerified: true };
+        }
+      } else {
+        const lookupError: any = await lookupRes.json().catch(() => ({}));
+        const provError = lookupError?.error?.message || lookupError?.error?.status || 'INVALID_ID_TOKEN';
+        return { sent: false, errorCode: provError, mappedError: mapFirebaseVerificationError(provError) };
+      }
+    }
+
+    if (!idToken) {
+      const missingTokenErr = 'INVALID_ID_TOKEN';
+      return { sent: false, errorCode: missingTokenErr, mappedError: mapFirebaseVerificationError(missingTokenErr) };
+    }
+
+    // Dispatch official verification email link from Firebase mail servers
     const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ requestType: 'VERIFY_EMAIL', idToken })
     });
 
-    const resData: any = await response.json().catch(() => ({}));
     if (response.ok) {
-      return { success: true, message: 'Verification email dispatched through Firebase.' };
+      return { sent: true };
     }
-    
-    // If idToken wasn't provided, try fallback custom email verification link
-    console.warn('[FIREBASE REST VERIFY NOTICE]', resData?.error?.message || resData);
-    return { success: false, message: resData?.error?.message || 'Firebase email verification request failed.' };
+
+    const resData: any = await response.json().catch(() => ({}));
+    const providerMessage = resData?.error?.message || resData?.error?.status || 'UNKNOWN_PROVIDER_ERROR';
+    const mapped = mapFirebaseVerificationError(providerMessage);
+
+    return { sent: false, errorCode: providerMessage, mappedError: mapped };
   } catch (err: any) {
-    console.warn('[FIREBASE REST VERIFY ERROR]', err);
-    return { success: false, message: err?.message || 'Verification service error' };
+    const errorString = err?.message || 'NETWORK_ERROR';
+    return { sent: false, errorCode: errorString, mappedError: mapFirebaseVerificationError(errorString) };
   }
 }
 
@@ -260,36 +365,6 @@ function render2faEmailTemplate(name: string, otpCode: string): string {
         <p style="color: #e11d48; font-size: 13px; font-weight: 700; margin: 0 0 16px 0;">This code will expire in 5 minutes.</p>
         <p style="color: #64748b; font-size: 12px; line-height: 1.5; margin: 0;">
           If you did not attempt to sign in to MTS Lab, please contact the Super Administrator immediately.
-        </p>
-      </div>
-      <div style="margin-top: 24px; text-align: center; font-size: 11px; color: #94a3b8; font-weight: 500;">
-        MTS Lab &bull; Kathmandu, Nepal &bull; Automated Security System
-      </div>
-    </div>
-  `;
-}
-
-function renderVerificationEmailTemplate(name: string, verifyLink: string): string {
-  return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 20px; background-color: #f8fafc; border-radius: 20px;">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <div style="display: inline-block; padding: 8px 18px; background-color: #0f172a; border-radius: 12px; color: #ffffff; font-size: 16px; font-weight: 900; letter-spacing: 0.5px;">MTS LAB</div>
-        <h2 style="color: #0f172a; margin: 14px 0 4px 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">Verify Your Email Address</h2>
-        <p style="color: #64748b; margin: 0; font-size: 13px; font-weight: 500;">Staff Account Activation</p>
-      </div>
-      <div style="background-color: #ffffff; padding: 32px 28px; border-radius: 18px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); text-align: center;">
-        <p style="color: #334155; font-size: 15px; margin: 0 0 8px 0; font-weight: 600;">Welcome, ${name || 'Staff Member'}!</p>
-        <p style="color: #64748b; font-size: 14px; margin: 0 0 24px 0;">Please click the button below to verify your email address and activate your MTS Lab access:</p>
-        
-        <div style="margin: 0 auto 24px auto;">
-          <a href="${verifyLink}" style="display: inline-block; background-color: #0f172a; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: 800; font-size: 14px;">
-            Verify Email Address
-          </a>
-        </div>
-
-        <p style="color: #64748b; font-size: 12px; line-height: 1.5; margin: 0;">
-          If the button above does not work, copy and paste this link into your browser:<br/>
-          <a href="${verifyLink}" style="color: #4f46e5; word-break: break-all;">${verifyLink}</a>
         </p>
       </div>
       <div style="margin-top: 24px; text-align: center; font-size: 11px; color: #94a3b8; font-weight: 500;">
@@ -491,7 +566,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // 1d. POST /api/auth/resend-verification (Resend Email Verification Link)
+    // 1d. POST /api/auth/resend-verification (Resend Official Firebase Email Verification Link)
     if (pathname.includes('/auth/resend-verification')) {
       if (req.method !== 'POST') {
         return sendJson(res, 405, { error: 'Method Not Allowed' });
@@ -500,61 +575,120 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const body = await parseJsonBody(req);
       const email = String(body.email || '').trim().toLowerCase();
       const firebaseIdToken = body.firebaseIdToken;
+      const password = body.password;
 
       if (!email) {
         return sendJson(res, 400, { success: false, message: 'Email address is required.' });
       }
 
-      // Try Firebase Official sendOobCode
-      const fbResult = await sendFirebaseVerificationEmail(email, firebaseIdToken);
-      if (fbResult.success) {
-        return sendJson(res, 200, {
-          success: true,
-          message: 'Verification email sent successfully. Please check your Gmail inbox and spam folder.'
+      // Check server-side 60-second cooldown
+      const remainingCooldown = getVerificationCooldown(email);
+      if (remainingCooldown > 0) {
+        res.setHeader('Retry-After', String(remainingCooldown));
+        return sendJson(res, 429, {
+          success: false,
+          code: 'TOO_MANY_ATTEMPTS_TRY_LATER',
+          message: 'Firebase has temporarily rate-limited verification emails. Please wait before trying again.'
         });
       }
 
-      // Fallback: Dispatch custom verification link via SMTP / Resend
-      const verifyToken = crypto.randomBytes(24).toString('hex');
-      const appUrl = process.env.APP_URL || 'https://www.mobiletechnologystation.com.np';
-      const verifyLink = `${appUrl}/login?mode=verifyEmail&oobCode=${verifyToken}&email=${encodeURIComponent(email)}`;
-
-      const emailHtml = renderVerificationEmailTemplate('Staff Member', verifyLink);
-      const emailText = `Hello,\n\nPlease verify your email for MTS Lab by opening this link: ${verifyLink}`;
-
-      const sendResult = await sendSecurityEmail({
-        to: email,
-        subject: 'MTS Lab — Verify Your Email Address',
-        text: emailText,
-        html: emailHtml
+      // Dispatch single official Firebase Identity Toolkit verification request
+      const fbResult = await sendFirebaseVerificationEmail({
+        email,
+        idToken: firebaseIdToken,
+        password
       });
 
-      if (sendResult.success) {
+      if (fbResult.alreadyVerified) {
         return sendJson(res, 200, {
           success: true,
-          message: 'Verification email sent successfully. Please check your Gmail inbox and spam folder.'
+          emailVerified: true,
+          message: 'Your email address is already verified.'
         });
       }
 
-      return sendJson(res, 200, {
-        success: true,
-        message: 'Verification request received. Please check your Gmail inbox and spam folder.'
+      if (fbResult.sent) {
+        setVerificationCooldown(email);
+        return sendJson(res, 200, {
+          success: true,
+          message: 'Verification email sent through Firebase. Please check your Gmail inbox and spam folder.'
+        });
+      }
+
+      const mapped = fbResult.mappedError || mapFirebaseVerificationError(fbResult.errorCode);
+      if (mapped.status === 429) {
+        setVerificationCooldown(email);
+        res.setHeader('Retry-After', '60');
+      }
+
+      return sendJson(res, mapped.status, {
+        success: false,
+        code: mapped.code,
+        message: mapped.message
       });
     }
 
-    // 1e. POST /api/auth/verify-email-status (Synchronize verification status)
+    // 1e. POST /api/auth/verify-email-status (Real-Time Live Status Check Only - NEVER Sends Email)
     if (pathname.includes('/auth/verify-email-status')) {
+      if (req.method !== 'POST') {
+        return sendJson(res, 405, { error: 'Method Not Allowed' });
+      }
+
       const body = await parseJsonBody(req);
       const email = String(body.email || '').trim().toLowerCase();
+      const firebaseIdToken = body.firebaseIdToken;
+      const oobCode = body.oobCode;
+      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDw4d4eSahPP6KL-0qZzzIr8V5BJaHtpNs';
+
+      let isVerified = false;
+
+      // 1. If oobCode is passed, apply verification code with Firebase Identity Toolkit
+      if (oobCode && apiKey) {
+        try {
+          const updateRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:update?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ oobCode: String(oobCode).trim(), returnSecureToken: true })
+          });
+          if (updateRes.ok) {
+            const updateData: any = await updateRes.json().catch(() => ({}));
+            if (updateData?.emailVerified === true) {
+              isVerified = true;
+            }
+          }
+        } catch (oobErr) {
+          console.warn('[VERIFY STATUS OOB CHECK NOTICE]', oobErr);
+        }
+      }
+
+      // 2. If idToken is passed, lookup live account state with Firebase Identity Toolkit
+      if (!isVerified && firebaseIdToken && apiKey) {
+        try {
+          const lookupRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken: firebaseIdToken })
+          });
+          if (lookupRes.ok) {
+            const lookupData: any = await lookupRes.json().catch(() => ({}));
+            const fbUser = lookupData?.users?.[0];
+            if (fbUser?.emailVerified === true) {
+              isVerified = true;
+            }
+          }
+        } catch (lookupErr) {
+          console.warn('[VERIFY STATUS LOOKUP NOTICE]', lookupErr);
+        }
+      }
 
       return sendJson(res, 200, {
         success: true,
-        emailVerified: true,
+        emailVerified: isVerified,
         user: {
-          email: email || 'mtsmobilelab@gmail.com',
-          emailVerified: true
+          email: email || 'staff@mtslab.com',
+          emailVerified: isVerified
         },
-        message: 'Email verification confirmed.'
+        message: isVerified ? 'Email address is verified.' : 'Email is not yet verified.'
       });
     }
 
