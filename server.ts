@@ -6749,6 +6749,119 @@ export async function createServerApp() {
   });
 
   // ==========================================
+  // SUPERADMIN DIRECT STAFF EMAIL VERIFICATION
+  // ==========================================
+  const verifyStaffEmailHandler = async (req: any, res: any) => {
+    try {
+      const { userId } = req.params;
+      if (!userId || typeof userId !== "string") {
+        return res.status(400).json({ success: false, error: "Valid staff user ID is required." });
+      }
+
+      // 1. Fetch local staff member
+      const targetUser = await prisma.user.findUnique({
+        where: { id: userId }
+      });
+
+      if (!targetUser || targetUser.deletedAt) {
+        return res.status(404).json({ success: false, error: "Staff member record not found." });
+      }
+
+      // 2. Validate canonical 6 staff roles
+      const canonicalRoles = ["SUPERADMIN", "SUPER_ADMIN", "ADMIN", "MANAGER", "HEAD_TECHNICIAN", "TECHNICIAN", "RECEPTIONIST"];
+      if (!canonicalRoles.includes(targetUser.role?.toUpperCase())) {
+        return res.status(400).json({ success: false, error: "Email verification management is restricted to staff accounts." });
+      }
+
+      const emailToVerify = targetUser.email.toLowerCase().trim();
+
+      // 3. Update Real Server-Side Firebase Authentication User
+      let firebaseUpdated = false;
+      let firebaseUser: admin.auth.UserRecord | null = null;
+
+      try {
+        const auth = getAdminAuth();
+        if (auth) {
+          try {
+            firebaseUser = await auth.getUser(targetUser.id);
+          } catch {
+            try {
+              firebaseUser = await auth.getUserByEmail(emailToVerify);
+            } catch {
+              firebaseUser = null;
+            }
+          }
+
+          if (firebaseUser) {
+            if (!firebaseUser.emailVerified) {
+              await auth.updateUser(firebaseUser.uid, { emailVerified: true });
+              firebaseUpdated = true;
+              console.log(`[FIREBASE AUTH] Successfully set emailVerified = true for Firebase UID ${firebaseUser.uid} (${emailToVerify})`);
+            } else {
+              firebaseUpdated = true;
+              console.log(`[FIREBASE AUTH] Firebase UID ${firebaseUser.uid} (${emailToVerify}) is already verified.`);
+            }
+          }
+        }
+      } catch (fbErr: any) {
+        console.warn("[FIREBASE AUTH VERIFY WARNING] Failed to update Firebase Admin user:", fbErr?.message || fbErr);
+      }
+
+      // 4. Synchronize local Prisma User.emailVerified
+      const updatedPrismaUser = await prisma.user.update({
+        where: { id: targetUser.id },
+        data: {
+          emailVerified: true,
+          updatedAt: new Date()
+        }
+      });
+
+      // 5. Synchronize central Firestore document if available
+      try {
+        const db = getDb();
+        await db.collection("users").doc(targetUser.id).set({
+          emailVerified: true,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (fsErr) {
+        console.warn("[FIRESTORE VERIFY SYNC WARNING]", fsErr);
+      }
+
+      // 6. Create Immutable Audit Log
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userRole: req.user.role,
+        userName: req.user.name || req.user.email,
+        action: 'STAFF_EMAIL_MANUALLY_VERIFIED',
+        resource: 'User',
+        resourceId: targetUser.id,
+        details: `SUPERADMIN manually verified staff email for ${updatedPrismaUser.name} (${updatedPrismaUser.email}). Firebase Auth updated: ${firebaseUpdated ? 'YES' : 'PENDING'}`
+      });
+
+      return res.json({
+        success: true,
+        message: `Email verified successfully for ${updatedPrismaUser.name}.`,
+        user: {
+          id: updatedPrismaUser.id,
+          name: updatedPrismaUser.name,
+          email: updatedPrismaUser.email,
+          emailVerified: true,
+          firebaseUpdated
+        }
+      });
+
+    } catch (err: any) {
+      console.error("[STAFF VERIFY EMAIL ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Failed to manually verify staff email." });
+    }
+  };
+
+  // SUPERADMIN-Only Endpoint Registrations
+  app.post("/api/admin/staff/:userId/verify-email", authenticate, authorize(['SUPER_ADMIN']), verifyStaffEmailHandler);
+  app.post("/api/users/:userId/verify-email", authenticate, authorize(['SUPER_ADMIN']), verifyStaffEmailHandler);
+
+  // ==========================================
   // BULK USER DELETE / DEACTIVATION ENDPOINT
   // ==========================================
   app.post("/api/admin/users/bulk-delete", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {

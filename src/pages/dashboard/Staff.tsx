@@ -696,9 +696,9 @@ export function StaffManagementContent() {
     if (!userToDirectVerify || directVerifying) return;
     setDirectVerifying(true);
     try {
-      const res: any = await api.post(`/users/${userToDirectVerify.id}/verify-email`, {});
+      const res: any = await api.post(`/admin/staff/${userToDirectVerify.id}/verify-email`, {});
       if (res.success) {
-        toast.success(res.message || 'Email verified successfully.');
+        toast.success(res.message || `Email verified successfully for ${userToDirectVerify.name || 'Staff User'}.`);
         setUsers((prevUsers) =>
           prevUsers.map((u) =>
             u.id === userToDirectVerify.id ? { ...u, emailVerified: true } : u
@@ -707,13 +707,13 @@ export function StaffManagementContent() {
         if (selectedUser?.id === userToDirectVerify.id) {
           setSelectedUser((prev: any) => (prev ? { ...prev, emailVerified: true } : null));
         }
-        fetchUsers();
+        fetchUsers(true);
       } else {
         toast.error(res.error || res.message || 'Unable to verify this email.');
       }
     } catch (err: any) {
       console.error('[DIRECT EMAIL VERIFICATION ERROR]', err);
-      toast.error(err.message || 'Unable to verify this email. Please try again or check the system logs.');
+      toast.error(err.message || 'Unable to verify this email. Please try again.');
     } finally {
       setDirectVerifying(false);
       setUserToDirectVerify(null);
