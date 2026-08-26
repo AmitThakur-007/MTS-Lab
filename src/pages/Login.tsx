@@ -12,11 +12,14 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  Shield,
+  ShieldAlert
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
@@ -28,11 +31,19 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVe
 import { normalizeRole } from '@/lib/rbac';
 
 export default function Login() {
-  const [stage, setStage] = useState<'CREDENTIALS' | '2FA'>('CREDENTIALS');
+  const [stage, setStage] = useState<'CREDENTIALS' | '2FA' | 'FIRST_LOGIN_SETUP'>('CREDENTIALS');
   const [identity, setIdentity] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Super Admin First-Login Setup State
+  const [pendingSetupSession, setPendingSetupSession] = useState<{ user: any; token: string; refreshToken?: string | null } | null>(null);
+  const [setupStep, setSetupStep] = useState<'CHOOSE' | 'VERIFY_OTP'>('CHOOSE');
+  const [setupOtpDigits, setSetupOtpDigits] = useState(['', '', '', '', '', '']);
+  const [showDisableWarning, setShowDisableWarning] = useState(false);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const setupOtpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Email verification state
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
@@ -245,6 +256,18 @@ export default function Login() {
           return;
         }
         throw apiErr;
+      }
+
+      if (res?.requiresSecuritySetup) {
+        setPendingSetupSession({
+          user: res.user,
+          token: res.token,
+          refreshToken: res.refreshToken
+        });
+        setStage('FIRST_LOGIN_SETUP');
+        setSetupStep('CHOOSE');
+        toast.info('Welcome! Please configure your Super Admin security preferences.');
+        return;
       }
 
       if (res?.mfaRequired && res?.mfaTicket) {
@@ -476,6 +499,106 @@ export default function Login() {
       toast.error(err.message || 'Failed to resend verification code');
     } finally {
       setResending(false);
+    }
+  };
+
+  // Super Admin First-Login Setup Interaction Handlers
+  const handleSetupOtpChange = (index: number, value: string) => {
+    const cleanVal = value.replace(/\D/g, '').slice(-1);
+    const newDigits = [...setupOtpDigits];
+    newDigits[index] = cleanVal;
+    setSetupOtpDigits(newDigits);
+    if (cleanVal && index < 5) {
+      setupOtpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleSetupOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !setupOtpDigits[index] && index > 0) {
+      setupOtpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleSetupOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!pasted) return;
+    const newDigits = [...setupOtpDigits];
+    for (let i = 0; i < 6; i++) {
+      newDigits[i] = pasted[i] || '';
+    }
+    setSetupOtpDigits(newDigits);
+    const nextIdx = Math.min(pasted.length, 5);
+    setupOtpInputRefs.current[nextIdx]?.focus();
+  };
+
+  const handleChooseEnable2FA = async () => {
+    setSetupLoading(true);
+    try {
+      const res: any = await api.post('/admin/security/2fa/request-otp', {});
+      setSetupStep('VERIFY_OTP');
+      setSetupOtpDigits(['', '', '', '', '', '']);
+      toast.success(res?.message || 'A 6-digit verification code has been dispatched to your email.');
+      setTimeout(() => {
+        setupOtpInputRefs.current[0]?.focus();
+      }, 150);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to dispatch verification code. Please try again.');
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
+  const handleVerifyAndEnableFirstLogin2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = setupOtpDigits.join('').trim();
+    if (code.length !== 6) {
+      toast.error('Please enter all 6 digits of the verification code');
+      return;
+    }
+    setSetupLoading(true);
+    try {
+      const res: any = await api.post('/admin/security/2fa/verify-and-enable', { code });
+      if (pendingSetupSession) {
+        const canonicalRole = normalizeRole(pendingSetupSession.user.role) || 'SUPERADMIN';
+        const upgradedUser = {
+          ...pendingSetupSession.user,
+          role: canonicalRole,
+          twoFactorEnabled: true,
+          securitySetupCompleted: true
+        };
+        setAuth(upgradedUser, pendingSetupSession.token, pendingSetupSession.refreshToken);
+        toast.success('Super Admin security setup completed with 2FA enabled!');
+        navigate('/dashboard');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Incorrect or expired verification code. Please try again.');
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
+  const handleConfirmDisableFirstLogin2FA = async () => {
+    setSetupLoading(true);
+    setShowDisableWarning(false);
+    try {
+      const res: any = await api.post('/admin/security/first-login-setup/disable', {});
+      if (pendingSetupSession) {
+        const canonicalRole = normalizeRole(pendingSetupSession.user.role) || 'SUPERADMIN';
+        const upgradedUser = {
+          ...pendingSetupSession.user,
+          role: canonicalRole,
+          twoFactorEnabled: false,
+          securitySetupCompleted: true
+        };
+        setAuth(upgradedUser, pendingSetupSession.token, pendingSetupSession.refreshToken);
+        toast.success('Super Admin security setup completed with 2FA disabled. You can log in directly on future visits.');
+        navigate('/dashboard');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to complete security setup. Please try again.');
+    } finally {
+      setSetupLoading(false);
     }
   };
 
@@ -784,8 +907,183 @@ export default function Login() {
                 </form>
               </motion.div>
             )}
+
+            {/* SUPERADMIN First-Login Security Setup Screen */}
+            {stage === 'FIRST_LOGIN_SETUP' && (
+              <motion.div
+                key="stage-first-login-setup"
+                initial={{ opacity: 0, x: 15 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -15 }}
+                transition={{ duration: 0.2 }}
+              >
+                <CardHeader className="pt-7 pb-3 text-center space-y-1.5">
+                  <div className="mx-auto w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-1 shadow-xs">
+                    <Shield className="w-6 h-6" />
+                  </div>
+                  <Badge variant="outline" className="mx-auto bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                    SUPERADMIN Security Setup
+                  </Badge>
+                  <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight pt-1">
+                    Protect Your Account
+                  </CardTitle>
+                  <CardDescription className="text-slate-500 text-xs font-medium max-w-xs mx-auto leading-relaxed">
+                    Choose how you want to protect your Super Administrator account during login.
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent className="px-6 sm:px-8 space-y-4 pt-1 pb-7">
+                  {setupStep === 'CHOOSE' ? (
+                    <div className="space-y-3">
+                      {/* Option 1: Enable 2FA */}
+                      <button
+                        type="button"
+                        onClick={handleChooseEnable2FA}
+                        disabled={setupLoading}
+                        className="w-full text-left p-4 rounded-2xl border-2 border-indigo-600/30 bg-indigo-50/40 hover:bg-indigo-50 hover:border-indigo-600 transition-all cursor-pointer group space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-xs sm:text-sm text-slate-900 flex items-center gap-2">
+                            <Shield className="w-4 h-4 text-indigo-600" />
+                            Enable 2FA
+                          </span>
+                          <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full">
+                            Recommended
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                          Requires a 6-digit email OTP verification code on every future login attempt for maximum security.
+                        </p>
+                      </button>
+
+                      {/* Option 2: Disable 2FA */}
+                      <button
+                        type="button"
+                        onClick={() => setShowDisableWarning(true)}
+                        disabled={setupLoading}
+                        className="w-full text-left p-4 rounded-2xl border border-slate-200 hover:border-slate-300 bg-slate-50/60 hover:bg-slate-100/70 transition-all cursor-pointer space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs sm:text-sm text-slate-700 flex items-center gap-2">
+                            <Lock className="w-4 h-4 text-slate-500" />
+                            Disable 2FA
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">
+                            Direct Login
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                          Allows direct login with your password without requiring an email verification code.
+                        </p>
+                      </button>
+
+                      <p className="text-[11px] text-slate-400 text-center font-medium pt-1">
+                        You can change this preference anytime from <span className="font-bold text-slate-600">Settings → Security</span>.
+                      </p>
+                    </div>
+                  ) : (
+                    /* Step 2: Verify OTP before enabling */
+                    <form onSubmit={handleVerifyAndEnableFirstLogin2FA} className="space-y-4">
+                      <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs font-medium leading-relaxed">
+                        Enter the 6-digit verification code sent to <b>{identity}</b> to verify email delivery and activate 2FA.
+                      </div>
+
+                      <div className="flex justify-between gap-1.5 sm:gap-2">
+                        {setupOtpDigits.map((digit, index) => (
+                          <input
+                            key={index}
+                            ref={(el) => {
+                              setupOtpInputRefs.current[index] = el;
+                            }}
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={1}
+                            value={digit}
+                            onChange={(e) => handleSetupOtpChange(index, e.target.value)}
+                            onKeyDown={(e) => handleSetupOtpKeyDown(index, e)}
+                            onPaste={index === 0 ? handleSetupOtpPaste : undefined}
+                            className="w-10 h-12 sm:w-12 sm:h-14 text-center text-lg sm:text-xl font-black rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10 transition-all outline-none"
+                          />
+                        ))}
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs px-1">
+                        <button
+                          type="button"
+                          onClick={handleChooseEnable2FA}
+                          disabled={setupLoading}
+                          className="font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                        >
+                          Resend Code
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSetupStep('CHOOSE')}
+                          className="font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                        >
+                          Change Choice
+                        </button>
+                      </div>
+
+                      <Button
+                        type="submit"
+                        disabled={setupLoading || setupOtpDigits.join('').length !== 6}
+                        className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-850 text-white font-bold text-xs sm:text-sm shadow-md cursor-pointer"
+                      >
+                        {setupLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                        Confirm & Enable 2FA
+                      </Button>
+                    </form>
+                  )}
+                </CardContent>
+              </motion.div>
+            )}
           </AnimatePresence>
         </Card>
+
+        {/* Warning Modal for Disabling 2FA during First-Login Setup */}
+        {showDisableWarning && (
+          <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-6"
+            >
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shrink-0">
+                  <ShieldAlert className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">Disable Two-Factor Authentication?</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Super Administrator Security</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                Disabling 2FA reduces the security of your SUPERADMIN account. You can enable it again later from Security Settings.
+              </p>
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowDisableWarning(false)}
+                  className="h-10 px-4 rounded-xl text-xs font-bold border-slate-200"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={setupLoading}
+                  onClick={handleConfirmDisableFirstLogin2FA}
+                  className="h-10 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs gap-2 shadow-xs"
+                >
+                  {setupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Confirm Disable 2FA
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         {/* Clean, Non-Technical Footer */}
         <div className="mt-6 text-center">

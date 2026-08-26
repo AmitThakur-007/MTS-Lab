@@ -36,6 +36,7 @@ model User {
   lastLoginAt         DateTime?
   twoFactorEnabled    Boolean              @default(true)
   twoFactorType       String?              @default("EMAIL")
+  securitySetupCompleted Boolean           @default(false)
   emailChangePending  String?
   emailChangeCodeHash String?
   emailChangeExpiresAt DateTime?

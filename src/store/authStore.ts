@@ -14,6 +14,8 @@ export interface User {
   department?: string;
   address?: string;
   twoFactorEnabled?: boolean;
+  securitySetupCompleted?: boolean;
+  requiresSecuritySetup?: boolean;
   emailVerified?: boolean;
 }
 

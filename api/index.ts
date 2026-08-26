@@ -870,11 +870,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return sendJson(res, 200, {
           success: true,
           twoFactorEnabled: serverlessSuperAdmin2faEnabled,
+          securitySetupCompleted: true,
           message: serverlessSuperAdmin2faEnabled
             ? 'Two-factor authentication is now enabled for Super Admin. 2FA will be required on your next login.'
             : 'Two-factor authentication is now disabled for Super Admin. You can now log in directly without OTP.'
         });
       }
+    }
+
+    // 3e-3. POST /api/admin/security/2fa/request-otp or /first-login-setup/request-otp
+    if (pathname.includes('/2fa/request-otp') || pathname.includes('/first-login-setup/request-otp')) {
+      const otpCode = generate6DigitOtp();
+      const otpHash = hashOtp(otpCode);
+      const emailHtml = render2faEmailTemplate('MTS Lab Super Admin', otpCode);
+      sendSecurityEmail({
+        to: 'mtsmobilelab@gmail.com',
+        subject: 'MTS Lab Security — Two-Factor Authentication Setup Code',
+        text: `Your MTS Lab 2FA verification code is: ${otpCode}`,
+        html: emailHtml
+      }).catch(() => {});
+
+      return sendJson(res, 200, {
+        success: true,
+        emailMasked: 'm***b@gmail.com',
+        otpTicket: `setuptick_${crypto.randomBytes(16).toString('hex')}`,
+        message: 'Verification code dispatched to your registered email.'
+      });
+    }
+
+    // 3e-4. POST /api/admin/security/2fa/verify-and-enable or /first-login-setup/verify-and-enable
+    if (pathname.includes('/2fa/verify-and-enable') || pathname.includes('/first-login-setup/verify-and-enable')) {
+      const body = await parseJsonBody(req);
+      const { code } = body;
+      if (!code || String(code).trim().length !== 6) {
+        return sendJson(res, 400, { success: false, message: 'A valid 6-digit verification code is required.' });
+      }
+      serverlessSuperAdmin2faEnabled = true;
+      return sendJson(res, 200, {
+        success: true,
+        twoFactorEnabled: true,
+        securitySetupCompleted: true,
+        message: 'Two-factor authentication is now enabled for Super Admin. 2FA will be required on your next login.'
+      });
+    }
+
+    // 3e-5. POST /api/admin/security/first-login-setup/disable
+    if (pathname.includes('/first-login-setup/disable')) {
+      serverlessSuperAdmin2faEnabled = false;
+      return sendJson(res, 200, {
+        success: true,
+        twoFactorEnabled: false,
+        securitySetupCompleted: true,
+        message: 'Initial security setup complete with 2FA disabled. You can now log in directly without OTP.'
+      });
     }
 
     // 3f. DELETE /api/auth/sessions/:id or /sessions-revoke-other

@@ -26,7 +26,8 @@ import {
   Loader2,
   ChevronRight,
   Trash2,
-  RefreshCw
+  RefreshCw,
+  ShieldCheck
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -179,6 +180,8 @@ function SettingsContent() {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState<boolean>(user?.twoFactorEnabled === true);
   const [twoFactorLoading, setTwoFactorLoading] = useState<boolean>(false);
   const [showDisable2faModal, setShowDisable2faModal] = useState<boolean>(false);
+  const [showEnable2faModal, setShowEnable2faModal] = useState<boolean>(false);
+  const [enableOtpCode, setEnableOtpCode] = useState<string>('');
 
   useEffect(() => {
     if (user) {
@@ -217,29 +220,55 @@ function SettingsContent() {
     fetchData();
   });
 
-  const handleToggle2FA = (targetState: boolean) => {
+  const handleToggle2FA = async (targetState: boolean) => {
     if (!targetState) {
       setShowDisable2faModal(true);
       return;
     }
-    execute2faUpdate(true);
+    // When enabling 2FA: Dispatch verification OTP first
+    setTwoFactorLoading(true);
+    try {
+      const res: any = await api.post('/admin/security/2fa/request-otp', {});
+      setEnableOtpCode('');
+      setShowEnable2faModal(true);
+      toast.success(res?.message || 'A 6-digit verification code has been dispatched to your email.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to dispatch verification code. Please try again.');
+    } finally {
+      setTwoFactorLoading(false);
+    }
   };
 
-  const execute2faUpdate = async (enabled: boolean) => {
+  const handleConfirmEnable2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enableOtpCode || enableOtpCode.trim().length !== 6) {
+      toast.error('Please enter the 6-digit verification code');
+      return;
+    }
+    setTwoFactorLoading(true);
+    try {
+      const res: any = await api.post('/admin/security/2fa/verify-and-enable', { code: enableOtpCode.trim() });
+      setTwoFactorEnabled(true);
+      updateUser({ twoFactorEnabled: true, securitySetupCompleted: true });
+      setShowEnable2faModal(false);
+      setEnableOtpCode('');
+      toast.success('Two-factor authentication is now enabled for Super Admin. 2FA will be required on your next login.');
+    } catch (err: any) {
+      toast.error(err.message || 'Incorrect or expired verification code. Please try again.');
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  const execute2faDisable = async () => {
     setTwoFactorLoading(true);
     setShowDisable2faModal(false);
     try {
-      const res: any = await api.patch('/admin/security/2fa', { enabled });
-      const newState = typeof res?.twoFactorEnabled === 'boolean' ? res.twoFactorEnabled : enabled;
-      setTwoFactorEnabled(newState);
-      updateUser({ twoFactorEnabled: newState });
-      if (newState) {
-        toast.success('Two-factor authentication is now enabled for Super Admin. 2FA OTP will be required on your next login.');
-      } else {
-        toast.success('Two-factor authentication is now disabled for Super Admin. You can now log in directly without OTP.');
-      }
+      const res: any = await api.patch('/admin/security/2fa', { enabled: false });
+      setTwoFactorEnabled(false);
+      updateUser({ twoFactorEnabled: false, securitySetupCompleted: true });
+      toast.success('Two-factor authentication is now disabled for Super Admin. You can now log in directly without OTP.');
     } catch (err: any) {
-      // Rollback to actual state
       setTwoFactorEnabled(user?.twoFactorEnabled === true);
       toast.error(err.message || 'Unable to update 2FA setting. Please try again.');
     } finally {
@@ -1156,13 +1185,70 @@ function SettingsContent() {
               <Button
                 type="button"
                 disabled={twoFactorLoading}
-                onClick={() => execute2faUpdate(false)}
+                onClick={execute2faDisable}
                 className="h-10 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs gap-2 shadow-xs"
               >
                 {twoFactorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Disable 2FA
               </Button>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* OTP Verification Modal for Enabling Super Admin 2FA */}
+      {showEnable2faModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }} 
+            animate={{ scale: 1, opacity: 1 }} 
+            className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-6"
+          >
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">Verify & Enable 2FA</h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">Super Administrator Security</p>
+              </div>
+            </div>
+            <form onSubmit={handleConfirmEnable2FA} className="space-y-4">
+              <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                Enter the 6-digit verification code sent to <b>{user?.email || 'your email'}</b> to verify delivery and activate Two-Factor Authentication.
+              </p>
+              <div>
+                <input
+                  type="text"
+                  maxLength={6}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={enableOtpCode}
+                  onChange={(e) => setEnableOtpCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Enter 6-digit code"
+                  className="w-full h-12 text-center text-xl font-mono font-bold tracking-widest rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/10 transition-all outline-none"
+                  autoFocus
+                />
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowEnable2faModal(false)}
+                  className="h-10 px-4 rounded-xl text-xs font-bold border-slate-200"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={twoFactorLoading || enableOtpCode.trim().length !== 6}
+                  className="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-2 shadow-xs"
+                >
+                  {twoFactorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Verify & Enable
+                </Button>
+              </div>
+            </form>
           </motion.div>
         </div>
       )}
