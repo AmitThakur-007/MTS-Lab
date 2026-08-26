@@ -335,7 +335,11 @@ class RealtimeService {
   private scheduleReconnect() {
     if (this.reconnectTimer) return;
     this.reconnectAttempts++;
-    const delay = Math.min(1000 * Math.pow(1.4, this.reconnectAttempts), this.maxReconnectDelay);
+    // If Firebase RTDB is natively connected, SSE is secondary fallback — use longer backoff to avoid spamming serverless
+    const delay = this.rtdbConnected 
+      ? Math.min(30000 + (this.reconnectAttempts * 5000), 120000)
+      : Math.min(1000 * Math.pow(1.4, this.reconnectAttempts), this.maxReconnectDelay);
+
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
