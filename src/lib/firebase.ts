@@ -83,11 +83,18 @@ export const googleProvider = new GoogleAuthProvider();
 // Connectivity check
 async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn("Please check your Firebase configuration. You might be offline or the project setup is incomplete.");
+    if (typeof window !== 'undefined' && rtdb) {
+      const connectedRef = ref(rtdb, '.info/connected');
+      onValue(connectedRef, (snap) => {
+        if (snap.val() === true) {
+          console.info('[FIREBASE] Successfully connected to Firebase Realtime Database');
+        }
+      }, (err) => {
+        // Non-blocking connection notice
+      });
     }
+  } catch {
+    // Non-blocking
   }
 }
 

@@ -83,6 +83,8 @@ class RealtimeService {
               timestamp: Date.now()
             });
           }
+        }, (err) => {
+          // Silent permission guard
         });
 
         const unsubAdded = rtdbOnChildAdded(collectionRef, (snapshot) => {
@@ -97,6 +99,8 @@ class RealtimeService {
               timestamp: Date.now()
             });
           }
+        }, (err) => {
+          // Silent permission guard
         });
 
         const unsubRemoved = rtdbOnChildRemoved(collectionRef, (snapshot) => {
@@ -108,9 +112,13 @@ class RealtimeService {
               timestamp: Date.now()
             });
           }
+        }, (err) => {
+          // Silent permission guard
         });
 
         const unsubInitial = rtdbOnValue(collectionRef, () => {
+          initialLoaded = true;
+        }, (err) => {
           initialLoaded = true;
         }, { onlyOnce: true });
 
