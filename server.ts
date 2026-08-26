@@ -2798,6 +2798,7 @@ export async function createServerApp() {
     if (process.env.RESEND_API_KEY) {
       try {
         console.log(`[AUTH DIAGNOSTIC] Dispatching 2FA email via Resend API to ${maskEmail(to)}...`);
+        const resendFrom = process.env.SMTP_FROM || "MTS Lab <onboarding@resend.dev>";
         const resendRes = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: {
@@ -2805,7 +2806,7 @@ export async function createServerApp() {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            from: fromAddress.includes("<") ? fromAddress : `MTS Lab <${fromAddress}>`,
+            from: resendFrom.includes("<") ? resendFrom : `MTS Lab <${resendFrom}>`,
             to: [to],
             subject,
             text: body,
@@ -2818,6 +2819,9 @@ export async function createServerApp() {
           return { success: true, messageId: resData?.id };
         } else {
           console.error(`[AUTH DIAGNOSTIC] ⚠️ Resend API returned error:`, resData?.message || resData);
+          if (resData?.name === 'validation_error' && resData?.message?.includes('testing emails')) {
+            console.warn(`[AUTH DIAGNOSTIC] 💡 Resend Free Tier Notice: Resend currently only allows sending to the account owner email. Verify your domain at https://resend.com/domains to send to all staff emails.`);
+          }
         }
       } catch (resendErr: any) {
         console.error(`[AUTH DIAGNOSTIC] ⚠️ Resend fetch failed:`, resendErr?.message || resendErr);
