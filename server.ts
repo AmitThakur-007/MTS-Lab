@@ -6921,7 +6921,25 @@ export async function createServerApp() {
         }
       });
 
-      // 3. Synchronize with Firestore, RTDB & Real-time hub
+      // 3. Synchronize with Firestore, RTDB, Firebase Custom Claims & Real-time hub
+      try {
+        const auth = getAdminAuth();
+        if (auth && (updatedUser.firebaseUid || updatedUser.email)) {
+          let fbUid = updatedUser.firebaseUid;
+          if (!fbUid) {
+            try {
+              const fbUser = await auth.getUserByEmail(updatedUser.email);
+              fbUid = fbUser?.uid;
+            } catch {}
+          }
+          if (fbUid) {
+            await auth.setCustomUserClaims(fbUid, { twoFactorEnabled: isEnabled, role: updatedUser.role }).catch(() => {});
+          }
+        }
+      } catch (fbClaimsErr) {
+        console.warn("[FIREBASE AUTH 2FA CLAIMS SYNC WARNING]", fbClaimsErr);
+      }
+
       await syncUserToFirestore(updatedUser).catch(() => {});
       await syncToRtdb("user", "UPDATE", updatedUser).catch(() => {});
       broadcastRealtimeEvent({
