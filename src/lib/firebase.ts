@@ -39,6 +39,7 @@ import {
   type Unsubscribe as RtdbUnsubscribe
 } from 'firebase/database';
 import { useEffect, useState, useRef } from 'react';
+import defaultFirebaseConfig from '../../firebase-applet-config.json';
 
 const getEnvVar = (key: string): string => {
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
@@ -51,31 +52,28 @@ const getEnvVar = (key: string): string => {
 };
 
 export const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_API_KEY) || '',
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) || '',
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_DATABASE_URL) || 'https://mts-lab-eb8d2-default-rtdb.firebaseio.com',
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_PROJECT_ID) || 'mts-lab-eb8d2',
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) || '',
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID) || '',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_APP_ID) || '',
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_API_KEY) || defaultFirebaseConfig.apiKey || '',
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) || defaultFirebaseConfig.authDomain || '',
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_DATABASE_URL) || defaultFirebaseConfig.databaseURL || 'https://mts-lab-eb8d2-default-rtdb.firebaseio.com',
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_PROJECT_ID) || defaultFirebaseConfig.projectId || 'mts-lab-eb8d2',
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) || defaultFirebaseConfig.storageBucket || '',
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID) || defaultFirebaseConfig.messagingSenderId || '',
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_APP_ID) || defaultFirebaseConfig.appId || '',
 };
 
-function validateFirebaseConfig() {
-  const missingKeys: string[] = [];
-  if (!firebaseConfig.apiKey) missingKeys.push('NEXT_PUBLIC_FIREBASE_API_KEY');
-  if (!firebaseConfig.projectId) missingKeys.push('NEXT_PUBLIC_FIREBASE_PROJECT_ID');
-  if (!firebaseConfig.appId) missingKeys.push('NEXT_PUBLIC_FIREBASE_APP_ID');
-
-  if (missingKeys.length > 0) {
-    console.error(
-      `[MTS Lab] Firebase configuration is incomplete. Please configure the required NEXT_PUBLIC_FIREBASE_* environment variables: ${missingKeys.join(', ')}`
-    );
+function initFirebaseApp() {
+  if (getApps().length > 0) {
+    return getApp();
+  }
+  try {
+    return initializeApp(firebaseConfig);
+  } catch (err) {
+    console.warn('[FIREBASE] initializeApp with config failed, attempting default config fallback:', err);
+    return initializeApp(defaultFirebaseConfig);
   }
 }
 
-validateFirebaseConfig();
-
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+const app = initFirebaseApp();
 
 export const db = getFirestore(app);
 export const rtdb = getDatabase(app, firebaseConfig.databaseURL);

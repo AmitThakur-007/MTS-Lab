@@ -70,24 +70,25 @@ function validateAndSetupEnvironment() {
 validateAndSetupEnvironment();
 
 // Load Firebase Config
-let firebaseConfig: any = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN,
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || process.env.FIREBASE_DATABASE_URL || "https://mts-lab-eb8d2-default-rtdb.firebaseio.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "mts-lab-eb8d2",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID,
-};
+let firebaseConfig: any = {};
 try {
   const configPath = path.join(process.cwd(), "firebase-applet-config.json");
   if (fs.existsSync(configPath)) {
-    const fileConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    firebaseConfig = { ...fileConfig, ...firebaseConfig };
+    firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
   }
 } catch (err) {
   console.warn("[FIREBASE] Could not load firebase-applet-config.json", err);
 }
+
+firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || firebaseConfig.apiKey || "AIzaSyDw4d4eSahPP6KL-0qZzzIr8V5BJaHtpNs",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain || "mts-lab-eb8d2.firebaseapp.com",
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || process.env.FIREBASE_DATABASE_URL || firebaseConfig.databaseURL || "https://mts-lab-eb8d2-default-rtdb.firebaseio.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId || "mts-lab-eb8d2",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket || "mts-lab-eb8d2.firebasestorage.app",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId || "473440131766",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID || firebaseConfig.appId || "1:473440131766:web:ebf94beed416c789b3e417",
+};
 
 const __filename = typeof import.meta !== "undefined" && import.meta && import.meta.url
   ? fileURLToPath(import.meta.url)
