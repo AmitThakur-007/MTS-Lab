@@ -41,6 +41,7 @@ import { normalizeRole } from '@/lib/rbac';
 import { formatNPR } from '@/lib/format';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { Link } from 'react-router-dom';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 export interface ShopProductRecord {
   id: string;
@@ -75,7 +76,7 @@ const CATEGORIES = [
   'Others'
 ];
 
-export default function ShopManagement() {
+export function ShopManagementContent() {
   const { user } = useAuthStore();
   const normRole = normalizeRole(user?.role);
   const isSuperAdmin = normRole === 'SUPERADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
@@ -85,6 +86,7 @@ export default function ShopManagement() {
   const [products, setProducts] = useState<ShopProductRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
@@ -118,13 +120,19 @@ export default function ShopManagement() {
 
   const fetchProducts = async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const data = await api.get('/admin/products');
       if (Array.isArray(data)) {
         setProducts(data);
+      } else {
+        setProducts([]);
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to load shop products');
+      console.error('[SHOP MANAGEMENT FETCH ERROR]', err);
+      const msg = err?.message || 'Failed to load shop products';
+      setFetchError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -283,12 +291,20 @@ export default function ShopManagement() {
 
   // Filtered Products
   const filteredProducts = useMemo(() => {
-    return products.filter(product => {
-      const matchesSearch = 
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (product.category && product.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (product.brand && product.brand.toLowerCase().includes(searchTerm.toLowerCase()));
+    const safeProducts = Array.isArray(products) ? products : [];
+    return safeProducts.filter(product => {
+      if (!product) return false;
+      const term = (searchTerm || '').toLowerCase().trim();
+      const name = String(product.name || '').toLowerCase();
+      const sku = String(product.sku || '').toLowerCase();
+      const category = String(product.category || '').toLowerCase();
+      const brand = String(product.brand || '').toLowerCase();
+
+      const matchesSearch = !term ||
+        name.includes(term) ||
+        sku.includes(term) ||
+        category.includes(term) ||
+        brand.includes(term);
 
       const matchesCategory = selectedCategory === 'ALL' || product.category === selectedCategory;
       const matchesStatus = selectedStatus === 'ALL' || product.status === selectedStatus;
@@ -416,7 +432,34 @@ export default function ShopManagement() {
       </div>
 
       {/* Main Content Area */}
-      {loading ? (
+      {fetchError && !loading ? (
+        <div className="bg-white p-8 sm:p-12 rounded-3xl border border-rose-200 text-center space-y-4 shadow-sm">
+          <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-100">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold text-slate-900">Unable to load Shop Management</h3>
+            <p className="text-slate-500 text-xs max-w-md mx-auto">
+              {fetchError}
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <Button
+              onClick={fetchProducts}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold h-10 px-5 rounded-xl text-xs gap-1.5 cursor-pointer shadow-md shadow-indigo-600/20"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry Request
+            </Button>
+            <Link
+              to="/dashboard"
+              className="h-10 px-5 inline-flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all"
+            >
+              Return to Dashboard
+            </Link>
+          </div>
+        </div>
+      ) : loading ? (
         <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center space-y-4 shadow-sm">
           <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mx-auto" />
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading Shop Products Catalog...</p>
@@ -532,7 +575,7 @@ export default function ShopManagement() {
                           {product.status}
                         </Badge>
                         <span className="text-[11px] text-slate-500 font-semibold">
-                          Stock: {product.stockQuantity} ({product.availability.replace('_', ' ')})
+                          Stock: {product.stockQuantity ?? 0} ({(product.availability || 'IN_STOCK').replace(/_/g, ' ')})
                         </span>
                       </div>
                     </td>
@@ -947,5 +990,17 @@ export default function ShopManagement() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function ShopManagement() {
+  return (
+    <ErrorBoundary
+      fallbackTitle="Something went wrong in Shop Management. Please try again."
+      fallbackMessage="An unexpected rendering issue occurred in Shop Management. Click below to reload your shop catalog safely."
+      showBackHome={true}
+    >
+      <ShopManagementContent />
+    </ErrorBoundary>
   );
 }
