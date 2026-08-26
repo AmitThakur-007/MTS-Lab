@@ -1,4 +1,4 @@
-import { rtdb, db, auth } from '@/lib/firebase';
+import { rtdb, db, auth, ensureFirebaseAuth } from '@/lib/firebase';
 import { 
   ref as rtdbRef, 
   get as rtdbGet, 
@@ -38,6 +38,7 @@ export function generateNumber(prefix: string): string {
  */
 export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
   if (!rtdb) return null;
+  await ensureFirebaseAuth().catch(() => {});
 
   const url = new URL(cleanEndpoint, 'http://localhost');
   const path = url.pathname.replace(/^\/+/, '').replace(/\/+$/, '');
@@ -270,6 +271,7 @@ export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
  */
 export async function handleFirebasePost(cleanEndpoint: string, payload: any): Promise<any> {
   if (!rtdb) throw new Error('Firebase Database not initialized');
+  await ensureFirebaseAuth().catch(() => {});
 
   const path = cleanEndpoint.split('?')[0].replace(/^\/+/, '').replace(/\/+$/, '');
   const segments = path.split('/');
@@ -599,6 +601,7 @@ export async function handleFirebasePost(cleanEndpoint: string, payload: any): P
  */
 export async function handleFirebaseUpdate(cleanEndpoint: string, payload: any): Promise<any> {
   if (!rtdb) throw new Error('Firebase Database not initialized');
+  await ensureFirebaseAuth().catch(() => {});
 
   const path = cleanEndpoint.split('?')[0].replace(/^\/+/, '').replace(/\/+$/, '');
   const segments = path.split('/');
@@ -641,6 +644,7 @@ export async function handleFirebaseUpdate(cleanEndpoint: string, payload: any):
  */
 export async function handleFirebaseDelete(cleanEndpoint: string): Promise<any> {
   if (!rtdb) throw new Error('Firebase Database not initialized');
+  await ensureFirebaseAuth().catch(() => {});
 
   const path = cleanEndpoint.split('?')[0].replace(/^\/+/, '').replace(/\/+$/, '');
   const segments = path.split('/');

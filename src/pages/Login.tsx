@@ -24,7 +24,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { getDeviceDetails } from '@/lib/device';
 import mtsLogo from '@/assets/images/mts-logo.jpg';
 import { auth } from '@/lib/firebase';
-import { signInWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 
 export default function Login() {
   const [stage, setStage] = useState<'CREDENTIALS' | '2FA'>('CREDENTIALS');
@@ -189,14 +189,24 @@ export default function Login() {
             const signInRes = await signInWithEmailAndPassword(auth, trimmedEmail, password);
             userCred = signInRes.user;
           } catch (fbErr: any) {
-            // Client sign-in fallback notice
-            userCred = null;
+            // If user doesn't exist in Firebase Auth yet, auto-provision their Firebase Auth account
+            if (fbErr?.code === 'auth/user-not-found' || fbErr?.code === 'auth/invalid-credential' || fbErr?.code === 'auth/invalid-login-credentials') {
+              try {
+                const createRes = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+                userCred = createRes.user;
+              } catch (createErr) {
+                userCred = null;
+              }
+            } else {
+              userCred = null;
+            }
           }
         }
 
         if (userCred) {
-          // Force reload to get the latest emailVerified status directly from Firebase
-          await userCred.reload();
+          try {
+            await userCred.reload();
+          } catch {}
           firebaseIdToken = await userCred.getIdToken(true);
         }
       } catch (clientAuthErr) {

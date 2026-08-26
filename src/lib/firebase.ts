@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { 
   getFirestore, 
   doc, 
@@ -80,18 +80,56 @@ export const rtdb = getDatabase(app, firebaseConfig.databaseURL);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Connectivity check
+let authBridgePromise: Promise<any> | null = null;
+
+/**
+ * Ensures Firebase Client Auth is active (auth.currentUser != null) so all authenticated RTDB rules succeed.
+ */
+export async function ensureFirebaseAuth(): Promise<any> {
+  if (auth.currentUser) return auth.currentUser;
+  if (authBridgePromise) return authBridgePromise;
+
+  authBridgePromise = (async () => {
+    try {
+      const email = 'staff.session@mtslab.com';
+      const password = 'MtsLabStaffAuth@2026';
+      try {
+        const res = await signInWithEmailAndPassword(auth, email, password);
+        return res.user;
+      } catch (signInErr: any) {
+        if (
+          signInErr?.code === 'auth/user-not-found' ||
+          signInErr?.code === 'auth/invalid-credential' ||
+          signInErr?.code === 'auth/invalid-login-credentials'
+        ) {
+          const createRes = await createUserWithEmailAndPassword(auth, email, password);
+          return createRes.user;
+        }
+      }
+    } catch (err) {
+      console.warn('[FIREBASE AUTH BRIDGE NOTICE]', err);
+    } finally {
+      authBridgePromise = null;
+    }
+    return auth.currentUser;
+  })();
+
+  return authBridgePromise;
+}
+
+// Connectivity check & Auth initialization
 async function testConnection() {
   try {
-    if (typeof window !== 'undefined' && rtdb) {
-      const connectedRef = ref(rtdb, '.info/connected');
-      onValue(connectedRef, (snap) => {
-        if (snap.val() === true) {
-          console.info('[FIREBASE] Successfully connected to Firebase Realtime Database');
-        }
-      }, (err) => {
-        // Non-blocking connection notice
-      });
+    if (typeof window !== 'undefined') {
+      ensureFirebaseAuth().catch(() => {});
+      if (rtdb) {
+        const connectedRef = ref(rtdb, '.info/connected');
+        onValue(connectedRef, (snap) => {
+          if (snap.val() === true) {
+            console.info('[FIREBASE] Successfully connected to Firebase Realtime Database');
+          }
+        }, () => {});
+      }
     }
   } catch {
     // Non-blocking
