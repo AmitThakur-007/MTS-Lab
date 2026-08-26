@@ -307,6 +307,74 @@ export async function handleFirebasePost(cleanEndpoint: string, payload: any): P
 
   // 2. POST /repairs
   if (primaryResource === 'repairs') {
+    // Handle /repairs/batch
+    if (subAction === 'batch' && Array.isArray(payload.repairs)) {
+      const createdRepairs = [];
+      for (const item of payload.repairs) {
+        const id = item.id || generateId('rep');
+        const repairNumber = item.repairNumber || generateNumber('MTS');
+        const newRepair = {
+          ...item,
+          id,
+          repairNumber,
+          status: item.status || 'RECEIVED',
+          priority: item.priority || 'NORMAL',
+          advancePaid: Number(item.advancePaid || 0),
+          totalPaid: Number(item.totalPaid || item.advancePaid || 0),
+          paymentStatus: item.paymentStatus || 'UNPAID',
+          createdById: currentUser?.id || 'usr_staff',
+          createdAt: item.createdAt || now,
+          updatedAt: now
+        };
+        await rtdbSet(rtdbRef(rtdb, `repairs/${id}`), newRepair);
+        createdRepairs.push(newRepair);
+      }
+      await touchSync();
+      return { success: true, count: createdRepairs.length, repairs: createdRepairs };
+    }
+
+    // Handle /repairs/:id/notes
+    if (subAction && segments[2] === 'notes') {
+      const noteId = generateId('note');
+      const note = {
+        ...payload,
+        id: noteId,
+        repairId: subAction,
+        createdAt: now
+      };
+      await rtdbSet(rtdbRef(rtdb, `technicianNotes/${subAction}/${noteId}`), note);
+      await touchSync();
+      return note;
+    }
+
+    // Handle /repairs/:id/logs
+    if (subAction && segments[2] === 'logs') {
+      const logId = generateId('log');
+      const log = {
+        ...payload,
+        id: logId,
+        repairId: subAction,
+        createdAt: now
+      };
+      await rtdbSet(rtdbRef(rtdb, `repairLogs/${subAction}/${logId}`), log);
+      await touchSync();
+      return log;
+    }
+
+    // Handle /repairs/:id/payments
+    if (subAction && segments[2] === 'payments') {
+      const paymentId = generateId('pay');
+      const payment = {
+        ...payload,
+        id: paymentId,
+        repairId: subAction,
+        createdAt: now
+      };
+      await rtdbSet(rtdbRef(rtdb, `payments/${paymentId}`), payment);
+      await touchSync();
+      return payment;
+    }
+
     const id = payload.id || generateId('rep');
     const repairNumber = payload.repairNumber || generateNumber('MTS');
     const newRepair = {
