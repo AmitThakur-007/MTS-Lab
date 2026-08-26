@@ -61,9 +61,12 @@ import { useRealtimeSync } from '@/services/realtime';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 
 const ASSIGNABLE_ROLES = [
-  { value: 'RECEPTIONIST', label: 'Receptionist' },
+  { value: 'SUPERADMIN', label: 'Super Admin (Restricted)' },
+  { value: 'ADMIN', label: 'Administrator' },
+  { value: 'MANAGER', label: 'Repair Operations Manager' },
+  { value: 'HEAD_TECHNICIAN', label: 'Head Technician' },
   { value: 'TECHNICIAN', label: 'Technician' },
-  { value: 'SUPER_ADMIN', label: 'Super Admin (Restricted)' },
+  { value: 'RECEPTIONIST', label: 'Receptionist' },
 ];
 
 export default function AccessRequests() {

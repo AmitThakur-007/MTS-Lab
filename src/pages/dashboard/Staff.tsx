@@ -118,19 +118,18 @@ const is2FAActive = (u: any): boolean => {
 };
 
 const ROLES = [
-  { value: 'SUPER_ADMIN', label: 'Super Admin', description: 'Full system ownership, security logs & administrative controls', color: 'purple' },
+  { value: 'SUPERADMIN', label: 'Super Admin', description: 'Full system ownership, security logs & administrative controls', color: 'purple' },
   { value: 'ADMIN', label: 'Administrator', description: 'Store operations, staff supervision, and customer tracking', color: 'indigo' },
   { value: 'MANAGER', label: 'Repair Manager', description: 'Repair orchestration, technician workload & assignment management', color: 'blue' },
-  { value: 'LEAD_TECHNICIAN', label: 'Lead Technician', description: 'Master hardware diagnostics, repair approvals & assignment', color: 'cyan' },
+  { value: 'HEAD_TECHNICIAN', label: 'Head Technician', description: 'Master hardware diagnostics, repair approvals & assignment', color: 'cyan' },
   { value: 'TECHNICIAN', label: 'Technician', description: 'Device repairs, ticket updates, parts usage & testing', color: 'emerald' },
-  { value: 'TECHNICAL_ASSISTANT', label: 'Technical Assistant', description: 'Intake triage, parts preparation & device cleanup', color: 'teal' },
   { value: 'RECEPTIONIST', label: 'Receptionist', description: 'Front desk ticketing, customer intake, and billing', color: 'amber' },
-  { value: 'CUSTOMER', label: 'Customer', description: 'Self-service status portal and repair history tracker', color: 'slate' },
 ];
 
 const getRoleConfig = (role: string | null | undefined) => {
   const cleanRole = (role || '').toUpperCase().trim();
   switch (cleanRole) {
+    case 'SUPERADMIN':
     case 'SUPER_ADMIN':
       return {
         label: 'Super Admin',
@@ -139,6 +138,7 @@ const getRoleConfig = (role: string | null | undefined) => {
         icon: ShieldAlert
       };
     case 'ADMIN':
+    case 'ADMINISTRATOR':
       return {
         label: 'Admin',
         badge: 'bg-indigo-100 text-indigo-800 border-indigo-200',
@@ -152,46 +152,28 @@ const getRoleConfig = (role: string | null | undefined) => {
         dot: 'bg-blue-500',
         icon: Briefcase
       };
+    case 'HEAD_TECHNICIAN':
     case 'LEAD_TECHNICIAN':
       return {
-        label: 'Lead Tech',
+        label: 'Head Tech',
         badge: 'bg-cyan-100 text-cyan-800 border-cyan-200',
         dot: 'bg-cyan-500',
         icon: Wrench
       };
     case 'TECHNICIAN':
+    case 'TECHNICAL_ASSISTANT':
       return {
         label: 'Technician',
         badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
         dot: 'bg-emerald-500',
         icon: Wrench
       };
-    case 'TECHNICAL_ASSISTANT':
-      return {
-        label: 'Tech Assistant',
-        badge: 'bg-teal-100 text-teal-800 border-teal-200',
-        dot: 'bg-teal-500',
-        icon: Wrench
-      };
     case 'RECEPTIONIST':
+    default:
       return {
         label: 'Receptionist',
         badge: 'bg-amber-100 text-amber-800 border-amber-200',
         dot: 'bg-amber-500',
-        icon: Users
-      };
-    case 'CUSTOMER':
-      return {
-        label: 'Customer',
-        badge: 'bg-slate-100 text-slate-700 border-slate-200',
-        dot: 'bg-slate-500',
-        icon: Users
-      };
-    default:
-      return {
-        label: role ? String(role).replace(/_/g, ' ') : 'Staff',
-        badge: 'bg-slate-100 text-slate-800 border-slate-200',
-        dot: 'bg-slate-500',
         icon: Users
       };
   }

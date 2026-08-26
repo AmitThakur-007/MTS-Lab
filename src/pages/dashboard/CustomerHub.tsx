@@ -49,6 +49,7 @@ import { cn } from '@/lib/utils';
 import { useRealtimeSync } from '@/services/realtime';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { motion, AnimatePresence } from 'motion/react';
+import { normalizeRole } from '@/lib/rbac';
 
 const NEPAL_DISTRICTS = [
   'Kathmandu', 'Lalitpur', 'Bhaktapur', 'Morang', 'Sunsari', 'Jhapa', 'Kaski',
@@ -296,8 +297,9 @@ export default function CustomerHub() {
   });
   const [createSaving, setCreateSaving] = useState(false);
 
-  const canCreateRepair = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(user?.role || '');
-  const canCreateCustomer = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '');
+  const canonicalRole = normalizeRole(user?.role) || 'RECEPTIONIST';
+  const canCreateRepair = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(canonicalRole) || ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(user?.role || '');
+  const canCreateCustomer = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(canonicalRole) || ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '');
   const canEdit = canCreateCustomer;
   // Results are already one server page; keeping this alias avoids applying a
   // second client-side slice to a paginated response.

@@ -177,12 +177,108 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
     }
 
-    // 3. POST /api/auth/activity
+    // 3. POST or GET /api/auth/activity
     if (pathname.endsWith('/auth/activity')) {
+      if (req.method === 'GET') {
+        return sendJson(res, 200, [
+          {
+            id: 'act_1',
+            status: 'SUCCESS',
+            action: 'LOGIN',
+            deviceName: 'Current Session Terminal',
+            deviceType: 'DESKTOP',
+            ipAddress: '127.0.0.1',
+            createdAt: new Date().toISOString()
+          }
+        ]);
+      }
       return sendJson(res, 200, {
         success: true,
         lastActiveAt: new Date().toISOString(),
         message: 'Session activity updated.'
+      });
+    }
+
+    // 3b. GET /api/auth/sessions
+    if (pathname.endsWith('/auth/sessions')) {
+      return sendJson(res, 200, [
+        {
+          id: 'sess_current',
+          deviceName: 'MTS Lab Authorized Terminal',
+          deviceType: 'DESKTOP',
+          browser: 'Modern Browser',
+          os: 'Windows / Web',
+          ipAddress: '127.0.0.1',
+          isCurrent: true,
+          lastActiveAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
+        }
+      ]);
+    }
+
+    // 3c. PATCH /api/profile
+    if (pathname.endsWith('/profile')) {
+      const body = await parseJsonBody(req);
+      return sendJson(res, 200, {
+        ...body,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    // 3d. POST /api/auth/password-change/request & confirm
+    if (pathname.includes('/password-change/request')) {
+      return sendJson(res, 200, {
+        success: true,
+        pwdTicket: `pwd_${crypto.randomBytes(16).toString('hex')}`,
+        emailMasked: 'registered staff email',
+        message: 'Verification code dispatched to your registered email.'
+      });
+    }
+    if (pathname.includes('/password-change/confirm')) {
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Password updated successfully.'
+      });
+    }
+
+    // 3e. POST /api/admin/change-email/*
+    if (pathname.includes('/change-email/request')) {
+      return sendJson(res, 200, {
+        success: true,
+        currentTicket: `em_${crypto.randomBytes(16).toString('hex')}`,
+        emailMasked: 'super admin email',
+        message: 'Verification code sent to current email.'
+      });
+    }
+    if (pathname.includes('/change-email/verify-current')) {
+      const body = await parseJsonBody(req);
+      return sendJson(res, 200, {
+        success: true,
+        newEmailTicket: `emnew_${crypto.randomBytes(16).toString('hex')}`,
+        newEmail: body.newEmail || 'new email',
+        message: 'Verification code sent to new email.'
+      });
+    }
+    if (pathname.includes('/change-email/confirm')) {
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Super Admin email changed successfully.'
+      });
+    }
+
+    // 3f. DELETE /api/auth/sessions/:id or /sessions-revoke-other
+    if (pathname.includes('/auth/sessions')) {
+      return sendJson(res, 200, {
+        success: true,
+        message: 'Session revoked successfully.'
+      });
+    }
+
+    // 3g. POST /api/auth/logout-all
+    if (pathname.endsWith('/auth/logout-all')) {
+      return sendJson(res, 200, {
+        success: true,
+        message: 'All sessions terminated successfully.'
       });
     }
 

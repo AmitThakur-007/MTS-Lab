@@ -56,6 +56,7 @@ import { formatNPR } from '@/lib/format';
 import { useRealtimeSync } from '@/services/realtime';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { motion, AnimatePresence } from 'motion/react';
+import { normalizeRole } from '@/lib/rbac';
 
 const NEPAL_DISTRICTS = [
   'Kathmandu', 'Lalitpur', 'Bhaktapur', 'Morang', 'Sunsari', 'Jhapa', 'Kaski',
@@ -123,9 +124,10 @@ export default function CustomerProfile() {
   const editAutoOpenedRef = useRef(false);
   const editCloseInProgressRef = useRef(false);
 
-  const canEdit = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '');
-  const canCreateRepair = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(user?.role || '');
-  const canHardDelete = user?.role === 'SUPER_ADMIN';
+  const canonicalRole = normalizeRole(user?.role) || 'RECEPTIONIST';
+  const canEdit = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(canonicalRole) || ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '');
+  const canCreateRepair = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(canonicalRole) || ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(user?.role || '');
+  const canHardDelete = canonicalRole === 'SUPERADMIN' || user?.role === 'SUPER_ADMIN';
 
   const editDirty = JSON.stringify(editForm) !== JSON.stringify(editInitial);
 

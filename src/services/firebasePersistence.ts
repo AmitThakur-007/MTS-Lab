@@ -530,6 +530,60 @@ export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
     return Object.values(map).filter(Boolean);
   }
 
+  // 14. Auth Sessions & Activities
+  if (primaryResource === 'auth') {
+    const currentUser = useAuthStore.getState().user;
+    if (resourceId === 'activity') {
+      const snap = await rtdbGet(rtdbRef(rtdb, `authActivities/${currentUser?.id || 'default'}`));
+      if (snap.exists()) {
+        const list = Object.values(snap.val());
+        list.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        return list;
+      }
+      return [
+        {
+          id: 'act_1',
+          status: 'SUCCESS',
+          action: 'LOGIN',
+          deviceName: 'Current Session Terminal',
+          deviceType: 'DESKTOP',
+          ipAddress: '127.0.0.1',
+          createdAt: new Date().toISOString()
+        }
+      ];
+    }
+    if (resourceId === 'sessions') {
+      const snap = await rtdbGet(rtdbRef(rtdb, `userSessions/${currentUser?.id || 'default'}`));
+      if (snap.exists()) {
+        const list = Object.values(snap.val());
+        return list;
+      }
+      return [
+        {
+          id: 'sess_current',
+          deviceName: 'MTS Lab Authorized Terminal',
+          deviceType: 'DESKTOP',
+          browser: 'Modern Browser',
+          os: 'Windows / Web',
+          ipAddress: '127.0.0.1',
+          isCurrent: true,
+          lastActiveAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
+        }
+      ];
+    }
+  }
+
+  // 15. Profile
+  if (primaryResource === 'profile') {
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser?.id) {
+      const snap = await rtdbGet(rtdbRef(rtdb, `users/${currentUser.id}`));
+      if (snap.exists()) return snap.val();
+    }
+    return currentUser || null;
+  }
+
   return null;
 }
 
