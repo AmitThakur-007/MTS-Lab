@@ -6499,6 +6499,7 @@ export async function createServerApp() {
   // Public Endpoints for Shop Products
   const fetchPublicProducts = async (req: any, res: any) => {
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       const products = await prisma.shopProduct.findMany({
         where: {
           isArchived: false,
@@ -6523,6 +6524,7 @@ export async function createServerApp() {
   // Admin Endpoint: Get all shop products (including DRAFT, HIDDEN) for Shop Management
   app.get("/api/admin/products", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       const products = await prisma.shopProduct.findMany({
         where: {
           isArchived: false

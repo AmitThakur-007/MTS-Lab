@@ -124,7 +124,7 @@ export function ShopManagementContent() {
     setLoading(true);
     setFetchError(null);
     try {
-      const data = await api.get('/admin/products');
+      const data = await api.get(`/admin/products?_t=${Date.now()}`);
       if (Array.isArray(data)) {
         setProducts(data);
       } else {

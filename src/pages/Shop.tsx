@@ -172,7 +172,7 @@ function ShopContent() {
     setLoading(true);
     setFetchError(null);
     try {
-      const data = await api.get('/public/products');
+      const data = await api.get(`/public/products?_t=${Date.now()}`);
       if (Array.isArray(data)) {
         setProducts(data);
       } else {
