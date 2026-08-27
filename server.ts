@@ -2440,7 +2440,8 @@ const upload = multer({
 
 async function ensureDefaultShopProducts() {
   try {
-    // Only seed on completely fresh initial installation when zero products exist and no product operations have taken place
+    const markerFile = path.join(process.cwd(), 'scratch', '.shop_initial_seeded');
+    const hasMarker = fs.existsSync(markerFile);
     const totalEverCreated = await prisma.shopProduct.count();
     const hasAuditLog = await prisma.auditLog.findFirst({
       where: {
@@ -2450,7 +2451,7 @@ async function ensureDefaultShopProducts() {
       }
     });
 
-    if (totalEverCreated === 0 && !hasAuditLog) {
+    if (totalEverCreated === 0 && !hasAuditLog && !hasMarker) {
       const defaultProducts = [
         {
           name: 'Anker PowerPort 20W PD USB-C Fast Charger',
@@ -2525,6 +2526,17 @@ async function ensureDefaultShopProducts() {
       for (const prod of defaultProducts) {
         await prisma.shopProduct.create({ data: prod });
       }
+
+      try {
+        const scratchDir = path.join(process.cwd(), 'scratch');
+        if (!fs.existsSync(scratchDir)) {
+          fs.mkdirSync(scratchDir, { recursive: true });
+        }
+        fs.writeFileSync(markerFile, 'true');
+      } catch (fErr) {
+        console.warn("[DB SEED NOTICE] Could not write seed marker file:", fErr);
+      }
+
       console.log("[DB SEED] Successfully initialized initial Shop accessories catalog on fresh installation.");
     }
   } catch (err) {
