@@ -176,32 +176,14 @@ function SettingsContent() {
   const [emailChangeNewTicket, setEmailChangeNewTicket] = useState('');
   const [emailChangeLoading, setEmailChangeLoading] = useState(false);
 
-  // Super Admin 2FA Configuration State
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState<boolean>(user?.twoFactorEnabled === true);
-  const [twoFactorLoading, setTwoFactorLoading] = useState<boolean>(false);
-  const [showDisable2faModal, setShowDisable2faModal] = useState<boolean>(false);
-  const [showEnable2faModal, setShowEnable2faModal] = useState<boolean>(false);
-  const [enableOtpCode, setEnableOtpCode] = useState<string>('');
-
-  useEffect(() => {
-    if (user) {
-      setTwoFactorEnabled(user.twoFactorEnabled === true);
-    }
-  }, [user?.twoFactorEnabled]);
-
   const fetchData = async () => {
     try {
-      const [actData, sessData, twoFaData] = await Promise.all([
+      const [actData, sessData] = await Promise.all([
         api.get('/auth/activity').catch(() => []),
-        api.get('/auth/sessions').catch(() => []),
-        isSuperAdmin ? api.get('/admin/security/2fa').catch(() => null) : Promise.resolve(null)
+        api.get('/auth/sessions').catch(() => [])
       ]);
       setActivities(Array.isArray(actData) ? actData : []);
       setSessions(Array.isArray(sessData) ? sessData : []);
-      if (twoFaData && typeof twoFaData.twoFactorEnabled === 'boolean') {
-        setTwoFactorEnabled(twoFaData.twoFactorEnabled);
-        updateUser({ twoFactorEnabled: twoFaData.twoFactorEnabled });
-      }
     } catch (err) {
       console.warn('[SETTINGS LOAD NOTICE]', err);
       setActivities([]);
@@ -215,66 +197,9 @@ function SettingsContent() {
     fetchData();
   }, []);
 
-  // Multi-device real-time sync for sessions and security activity
   useRealtimeSync(['session', 'user', 'sync'], () => {
     fetchData();
   });
-
-  const handleToggle2FA = async (targetState: boolean) => {
-    if (!targetState) {
-      setShowDisable2faModal(true);
-      return;
-    }
-    // When enabling 2FA: Dispatch verification OTP first
-    setTwoFactorLoading(true);
-    try {
-      const res: any = await api.post('/admin/security/2fa/request-otp', {});
-      setEnableOtpCode('');
-      setShowEnable2faModal(true);
-      toast.success(res?.message || 'A 6-digit verification code has been dispatched to your email.');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to dispatch verification code. Please try again.');
-    } finally {
-      setTwoFactorLoading(false);
-    }
-  };
-
-  const handleConfirmEnable2FA = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!enableOtpCode || enableOtpCode.trim().length !== 6) {
-      toast.error('Please enter the 6-digit verification code');
-      return;
-    }
-    setTwoFactorLoading(true);
-    try {
-      const res: any = await api.post('/admin/security/2fa/verify-and-enable', { code: enableOtpCode.trim() });
-      setTwoFactorEnabled(true);
-      updateUser({ twoFactorEnabled: true, securitySetupCompleted: true });
-      setShowEnable2faModal(false);
-      setEnableOtpCode('');
-      toast.success('Two-factor authentication is now enabled for Super Admin. 2FA will be required on your next login.');
-    } catch (err: any) {
-      toast.error(err.message || 'Incorrect or expired verification code. Please try again.');
-    } finally {
-      setTwoFactorLoading(false);
-    }
-  };
-
-  const execute2faDisable = async () => {
-    setTwoFactorLoading(true);
-    setShowDisable2faModal(false);
-    try {
-      const res: any = await api.patch('/admin/security/2fa', { enabled: false });
-      setTwoFactorEnabled(false);
-      updateUser({ twoFactorEnabled: false, securitySetupCompleted: true });
-      toast.success('Two-factor authentication is now disabled for Super Admin. You can now log in directly without OTP.');
-    } catch (err: any) {
-      setTwoFactorEnabled(user?.twoFactorEnabled === true);
-      toast.error(err.message || 'Unable to update 2FA setting. Please try again.');
-    } finally {
-      setTwoFactorLoading(false);
-    }
-  };
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -291,8 +216,7 @@ function SettingsContent() {
     }
   };
 
-  // Step 1: Request Password Change OTP
-  const handleRequestPasswordOtp = async (e: React.FormEvent) => {
+  const handleDirectPasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passForm.newPassword !== passForm.confirmPassword) {
       return toast.error('New passwords do not match');
@@ -303,40 +227,14 @@ function SettingsContent() {
 
     setPwdLoading(true);
     try {
-      const res: any = await api.post('/auth/password-change/request', {
+      await api.post('/auth/password-change/request', {
         currentPassword: passForm.currentPassword,
         newPassword: passForm.newPassword
       });
-      setPwdTicket(res.pwdTicket || 'ticket_issued');
-      setPwdEmailMasked(res.emailMasked || user?.email || 'registered email');
-      setPwdStep('OTP');
-      toast.success('Verification code dispatched to your registered email.');
+      toast.success('Password updated successfully!');
+      setPassForm({ currentPassword: '', newPassword: '', confirmPassword: '', code: '' });
     } catch (err: any) {
-      toast.error(err.message || 'Failed to initiate password change');
-    } finally {
-      setPwdLoading(false);
-    }
-  };
-
-  // Step 2: Confirm Password Change OTP
-  const handleConfirmPasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!passForm.code || passForm.code.trim().length !== 6) {
-      return toast.error('Please enter the 6-digit verification code');
-    }
-
-    setPwdLoading(true);
-    try {
-      await api.post('/auth/password-change/confirm', {
-        pwdTicket,
-        code: passForm.code.trim()
-      });
-      toast.success('Password updated successfully! Logging out for security...');
-      setTimeout(() => {
-        logout();
-      }, 1500);
-    } catch (err: any) {
-      toast.error(err.message || 'Invalid or expired verification code');
+      toast.error(err.message || 'Failed to update password');
     } finally {
       setPwdLoading(false);
     }
@@ -675,82 +573,6 @@ function SettingsContent() {
 
         {/* 2. SECURITY TAB */}
         <TabsContent value="security" className="space-y-6">
-          {/* Super Admin 2FA Security Control (Exclusive to SUPERADMIN) */}
-          {isSuperAdmin && (
-            <Card className="rounded-[32px] sm:rounded-[40px] border border-slate-200/80 shadow-sm overflow-hidden bg-white">
-              <CardHeader className="p-6 sm:p-10 pb-4">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div className="flex items-center gap-4">
-                    <div className={`h-12 w-12 rounded-2xl flex items-center justify-center text-white shadow-xs ${twoFactorEnabled ? 'bg-emerald-600' : 'bg-slate-900'}`}>
-                      <Shield className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <CardTitle className="text-xl sm:text-2xl font-bold">SUPERADMIN Two-Factor Authentication</CardTitle>
-                        <Badge variant="outline" className={`font-black text-[11px] px-2.5 py-0.5 rounded-full ${twoFactorEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-                          {twoFactorEnabled ? 'Status: Enabled' : 'Status: Disabled'}
-                        </Badge>
-                      </div>
-                      <CardDescription className="text-xs text-slate-500 font-medium mt-1">
-                        Protect your Super Admin account with an additional verification code during login.
-                      </CardDescription>
-                    </div>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6 sm:p-10 pt-2 space-y-4">
-                <div className={`p-5 rounded-2xl border transition-all ${twoFactorEnabled ? 'bg-emerald-50/60 border-emerald-200/80 text-emerald-950' : 'bg-slate-50 border-slate-200/80 text-slate-800'}`}>
-                  <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div className="space-y-1 max-w-xl">
-                      <p className="font-bold text-xs sm:text-sm flex items-center gap-2">
-                        {twoFactorEnabled ? (
-                          <>
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                            Two-factor authentication is currently enabled.
-                          </>
-                        ) : (
-                          <>
-                            <Lock className="h-4 w-4 text-slate-500" />
-                            Two-factor authentication is currently disabled.
-                          </>
-                        )}
-                      </p>
-                      <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                        {twoFactorEnabled 
-                          ? 'Every new Super Admin login attempt will require an email OTP verification code sent via MTS Lab security transport.'
-                          : 'Super Administrator can log in directly after entering credentials without an additional 2FA OTP code.'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 pt-1 sm:pt-0">
-                      {twoFactorEnabled ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={twoFactorLoading}
-                          onClick={() => handleToggle2FA(false)}
-                          className="h-10 px-4 rounded-xl border-red-200 bg-white hover:bg-red-50 text-red-700 font-bold text-xs gap-2 shadow-xs"
-                        >
-                          {twoFactorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4 text-red-600" />}
-                          Disable 2FA
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          disabled={twoFactorLoading}
-                          onClick={() => handleToggle2FA(true)}
-                          className="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 shadow-xs"
-                        >
-                          {twoFactorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
-                          Enable 2FA
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           <Card className="rounded-[32px] sm:rounded-[40px] border border-slate-200/80 shadow-sm overflow-hidden bg-white">
             <CardHeader className="p-6 sm:p-10 pb-4">
               <div className="flex items-center gap-4">
@@ -758,96 +580,55 @@ function SettingsContent() {
                   <Key className="h-6 w-6 text-indigo-400" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl sm:text-2xl font-bold">Password & 2FA Re-Encryption</CardTitle>
-                  <CardDescription className="text-xs text-slate-500 font-medium">Password changes require your current password and 2FA email confirmation.</CardDescription>
+                  <CardTitle className="text-xl sm:text-2xl font-bold">Password Management</CardTitle>
+                  <CardDescription className="text-xs text-slate-500 font-medium">Update your account password securely using Firebase Authentication.</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="p-6 sm:p-10 pt-2">
-              {pwdStep === 'INPUT' ? (
-                <form onSubmit={handleRequestPasswordOtp} className="max-w-md space-y-4">
-                  <div className="space-y-1.5">
-                    <Label className="font-bold text-xs text-slate-700">Current Password</Label>
-                    <Input 
-                      type="password" 
-                      placeholder="Existing password"
-                      className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                      value={passForm.currentPassword}
-                      onChange={e => setPassForm({...passForm, currentPassword: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="font-bold text-xs text-slate-700">New Password</Label>
-                    <Input 
-                      type="password" 
-                      placeholder="Minimum 8 characters"
-                      className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                      value={passForm.newPassword}
-                      onChange={e => setPassForm({...passForm, newPassword: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="font-bold text-xs text-slate-700">Confirm New Password</Label>
-                    <Input 
-                      type="password" 
-                      placeholder="Re-enter new password"
-                      className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                      value={passForm.confirmPassword}
-                      onChange={e => setPassForm({...passForm, confirmPassword: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <Button 
-                    type="submit" 
-                    disabled={pwdLoading}
-                    className="h-11 w-full sm:w-auto px-6 rounded-xl bg-slate-900 text-white font-bold text-xs shadow-sm gap-2"
-                  >
-                    {pwdLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
-                    Send Verification Code
-                  </Button>
-                </form>
-              ) : (
-                <form onSubmit={handleConfirmPasswordChange} className="max-w-md space-y-4">
-                  <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs font-medium">
-                    A 6-digit verification code was dispatched to: <b>{pwdEmailMasked}</b>. Enter it below to confirm your password change.
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="font-bold text-xs text-slate-700">6-Digit Email Code</Label>
-                    <Input 
-                      type="text" 
-                      maxLength={6}
-                      placeholder="000000"
-                      className="h-12 rounded-xl bg-slate-50 border-slate-200 font-bold text-center text-lg tracking-widest"
-                      value={passForm.code}
-                      onChange={e => setPassForm({...passForm, code: e.target.value.replace(/\D/g, '')})}
-                      required
-                      autoFocus
-                    />
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button 
-                      type="submit" 
-                      disabled={pwdLoading || passForm.code.length !== 6}
-                      className="h-11 flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm"
-                    >
-                      {pwdLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                      Confirm Password Change
-                    </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline"
-                      onClick={() => setPwdStep('INPUT')}
-                      className="h-11 rounded-xl font-bold px-4 text-xs"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              )}
+              <form onSubmit={handleDirectPasswordChange} className="max-w-md space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="font-bold text-xs text-slate-700">Current Password</Label>
+                  <Input 
+                    type="password" 
+                    placeholder="Existing password"
+                    className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
+                    value={passForm.currentPassword}
+                    onChange={e => setPassForm({...passForm, currentPassword: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="font-bold text-xs text-slate-700">New Password</Label>
+                  <Input 
+                    type="password" 
+                    placeholder="Minimum 8 characters"
+                    className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
+                    value={passForm.newPassword}
+                    onChange={e => setPassForm({...passForm, newPassword: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="font-bold text-xs text-slate-700">Confirm New Password</Label>
+                  <Input 
+                    type="password" 
+                    placeholder="Re-enter new password"
+                    className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
+                    value={passForm.confirmPassword}
+                    onChange={e => setPassForm({...passForm, confirmPassword: e.target.value})}
+                    required
+                  />
+                </div>
+                <Button 
+                  type="submit" 
+                  disabled={pwdLoading}
+                  className="h-11 w-full sm:w-auto px-6 rounded-xl bg-slate-900 text-white font-bold text-xs shadow-sm gap-2 cursor-pointer"
+                >
+                  {pwdLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+                  Update Password
+                </Button>
+              </form>
             </CardContent>
           </Card>
 
@@ -1154,104 +935,7 @@ function SettingsContent() {
       </Tabs>
 
       {/* Confirmation Modal for Disabling Super Admin 2FA */}
-      {showDisable2faModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ scale: 0.95, opacity: 0 }} 
-            animate={{ scale: 1, opacity: 1 }} 
-            className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-6"
-          >
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shrink-0">
-                <ShieldAlert className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-900">Disable Two-Factor Authentication?</h3>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">Super Administrator Security</p>
-              </div>
-            </div>
-            <p className="text-xs text-slate-600 leading-relaxed font-medium">
-              Disabling 2FA reduces the security protection of the Super Admin account. Are you sure you want to continue?
-            </p>
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowDisable2faModal(false)}
-                className="h-10 px-4 rounded-xl text-xs font-bold border-slate-200"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                disabled={twoFactorLoading}
-                onClick={execute2faDisable}
-                className="h-10 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs gap-2 shadow-xs"
-              >
-                {twoFactorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Disable 2FA
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      )}
 
-      {/* OTP Verification Modal for Enabling Super Admin 2FA */}
-      {showEnable2faModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ scale: 0.95, opacity: 0 }} 
-            animate={{ scale: 1, opacity: 1 }} 
-            className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-6"
-          >
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0">
-                <ShieldCheck className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-900">Verify & Enable 2FA</h3>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">Super Administrator Security</p>
-              </div>
-            </div>
-            <form onSubmit={handleConfirmEnable2FA} className="space-y-4">
-              <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                Enter the 6-digit verification code sent to <b>{user?.email || 'your email'}</b> to verify delivery and activate Two-Factor Authentication.
-              </p>
-              <div>
-                <input
-                  type="text"
-                  maxLength={6}
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={enableOtpCode}
-                  onChange={(e) => setEnableOtpCode(e.target.value.replace(/\D/g, ''))}
-                  placeholder="Enter 6-digit code"
-                  className="w-full h-12 text-center text-xl font-mono font-bold tracking-widest rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/10 transition-all outline-none"
-                  autoFocus
-                />
-              </div>
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowEnable2faModal(false)}
-                  className="h-10 px-4 rounded-xl text-xs font-bold border-slate-200"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={twoFactorLoading || enableOtpCode.trim().length !== 6}
-                  className="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-2 shadow-xs"
-                >
-                  {twoFactorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Verify & Enable
-                </Button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 }

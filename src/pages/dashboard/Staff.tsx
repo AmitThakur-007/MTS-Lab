@@ -108,17 +108,6 @@ const getSafeInitials = (name: any): string => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-// Authoritative Helper to determine if 2FA is active
-const is2FAActive = (u: any): boolean => {
-  if (!u) return false;
-  const isSuperAdmin = u.role === 'SUPER_ADMIN' || u.role === 'SUPERADMIN' || u.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
-  if (isSuperAdmin && !u.securitySetupCompleted) return false;
-  const val = u.twoFactorEnabled;
-  if (val === false || val === 'false' || val === 0 || val === '0') return false;
-  if (val === true || val === 'true' || val === 1 || val === '1') return true;
-  if (isSuperAdmin) return false;
-  return true;
-};
 
 const ROLES = [
   { value: 'SUPERADMIN', label: 'Super Admin', description: 'Full system ownership, security logs & administrative controls', color: 'purple' },
@@ -544,42 +533,7 @@ export function StaffManagementContent() {
     }
   };
 
-  const handleOpenToggle2FA = (user: any) => {
-    if (!user) return;
-    setTarget2FAUser(user);
-    setIsToggle2FAOpen(true);
-  };
 
-  const handleToggle2FAConfirm = async () => {
-    if (!target2FAUser) return;
-    setSubmitting(true);
-    const currentlyOn = is2FAActive(target2FAUser);
-    const new2FAState = !currentlyOn;
-    try {
-      const res: any = await api.patch(`/users/${target2FAUser.id}/2fa`, {
-        twoFactorEnabled: new2FAState,
-        enabled: new2FAState
-      });
-      if (res?.user || res?.success) {
-        const updatedUserData = res.user || { ...target2FAUser, twoFactorEnabled: new2FAState };
-        await syncEntityToRtdb('users', target2FAUser.id, updatedUserData).catch(() => {});
-        setUsers(prev => prev.map(u => u.id === target2FAUser.id ? { ...u, twoFactorEnabled: new2FAState } : u));
-        if (selectedUser?.id === target2FAUser.id) {
-          setSelectedUser({ ...selectedUser, twoFactorEnabled: new2FAState });
-        }
-      }
-      const roleLabel = target2FAUser.role ? target2FAUser.role.replace(/_/g, ' ') : 'User';
-      toast.success(res?.message || `2FA ${new2FAState ? 'enabled' : 'disabled'} successfully for ${target2FAUser.name || 'User'} (${roleLabel}).`);
-      setIsToggle2FAOpen(false);
-      setIsOperationsModalOpen(false);
-      fetchUsers();
-    } catch (err: any) {
-      console.error('[TOGGLE 2FA ERROR]', err);
-      toast.error(err.message || 'Unable to update 2FA settings. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleDeleteUser = async () => {
     if (!selectedUser) return;
@@ -1082,17 +1036,7 @@ export function StaffManagementContent() {
                       >
                         {isUserActive ? "Active" : "Locked"}
                       </Badge>
-                      {is2FAActive(u) ? (
-                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 shadow-2xs shrink-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                          <span>2FA On</span>
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-slate-100 text-slate-600 border-slate-300 flex items-center gap-1 shrink-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                          <span>2FA Off</span>
-                        </Badge>
-                      )}
+
                       {Boolean(u?.emailVerified) ? (
                         <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 shadow-2xs shrink-0">
                           <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
@@ -1188,9 +1132,7 @@ export function StaffManagementContent() {
                     <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4 text-center">
                       Account Status
                     </TableHead>
-                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4 text-center">
-                      2FA Security
-                    </TableHead>
+
                     <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4 text-right">
                       Operations
                     </TableHead>
@@ -1307,26 +1249,7 @@ export function StaffManagementContent() {
                           </Badge>
                         </TableCell>
 
-                        {/* 2FA Status */}
-                        <TableCell className="px-4 lg:px-6 py-3.5 text-center">
-                          {is2FAActive(u) ? (
-                            <Badge 
-                              variant="outline" 
-                              className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              Enabled
-                            </Badge>
-                          ) : (
-                            <Badge 
-                              variant="outline" 
-                              className="bg-slate-100 text-slate-600 border-slate-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 whitespace-nowrap"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                              Disabled
-                            </Badge>
-                          )}
-                        </TableCell>
+
 
                         {/* Operations Action Buttons */}
                         <TableCell className="px-4 lg:px-6 py-3.5 text-right">
@@ -1524,44 +1447,6 @@ export function StaffManagementContent() {
                 </div>
               </button>
 
-              {/* 5. Two-Factor Authentication (2FA) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOperationsModalOpen(false);
-                  handleOpenToggle2FA(selectedUser);
-                }}
-                className={cn(
-                  "w-full p-3.5 rounded-2xl border hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer",
-                  is2FAActive(selectedUser) 
-                    ? "bg-slate-50/80 hover:bg-slate-100/90 border-slate-200/80" 
-                    : "bg-emerald-50/40 hover:bg-emerald-50/80 border-emerald-200/80"
-                )}
-              >
-                <div className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-2xs",
-                  is2FAActive(selectedUser) 
-                    ? "bg-slate-200 text-slate-700 group-hover:bg-slate-700 group-hover:text-white" 
-                    : "bg-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white"
-                )}>
-                  <Fingerprint className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
-                    <span>Two-Factor Auth (2FA)</span>
-                    {is2FAActive(selectedUser) ? (
-                      <span className="text-[9px] font-extrabold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-md">● Enabled</span>
-                    ) : (
-                      <span className="text-[9px] font-extrabold bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-md">○ Disabled</span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
-                    {is2FAActive(selectedUser) 
-                      ? 'OTP verification required on login — Click to Disable' 
-                      : 'Direct login enabled — Click to require 6-digit OTP'}
-                  </div>
-                </div>
-              </button>
 
               {/* 6. Email Verification Status & Live Check */}
               <button
@@ -1765,67 +1650,12 @@ export function StaffManagementContent() {
                   >
                     {selectedUser.isActive ? 'Online / Active' : 'Deactivated / Locked'}
                   </Badge>
-                  {is2FAActive(selectedUser) ? (
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-bold px-3 py-1 rounded-xl">
-                      <Fingerprint className="h-3.5 w-3.5 mr-1" /> ● 2FA Enabled
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300 text-xs font-bold px-3 py-1 rounded-xl">
-                      <Fingerprint className="h-3.5 w-3.5 mr-1" /> ○ 2FA Disabled
-                    </Badge>
-                  )}
                 </>
               )}
             </div>
 
             {/* Information Cards */}
             <div className="space-y-3 pt-2">
-              {/* Security & 2FA Control Section */}
-              <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <Fingerprint className="h-3.5 w-3.5 text-indigo-600" />
-                    Two-Factor Authentication (2FA)
-                  </div>
-                  {is2FAActive(selectedUser) ? (
-                    <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[11px] px-2.5 py-0.5 rounded-full">
-                      ● Enabled (Email OTP)
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="bg-slate-200 text-slate-700 border-slate-300 font-bold text-[11px] px-2.5 py-0.5 rounded-full">
-                      ○ Disabled (Direct Login)
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                  {is2FAActive(selectedUser)
-                    ? `This staff member is required to enter a 6-digit verification code sent to ${selectedUser?.email || 'their email'} upon every login attempt.`
-                    : `Two-Factor Authentication is currently turned OFF. This user logs in with their password directly without receiving an email OTP.`}
-                </p>
-                <div className="pt-1 flex items-center justify-end">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={submitting}
-                    onClick={() => {
-                      setIsViewDialogOpen(false);
-                      handleOpenToggle2FA(selectedUser);
-                    }}
-                    className={cn(
-                      "rounded-xl text-xs font-bold h-9 px-4 border shadow-xs transition-all cursor-pointer",
-                      is2FAActive(selectedUser)
-                        ? "border-slate-300 text-slate-700 hover:bg-slate-100"
-                        : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                    )}
-                  >
-                    <Fingerprint className="mr-1.5 h-3.5 w-3.5" />
-                    {is2FAActive(selectedUser) ? "Disable 2FA for this user" : "Enable 2FA for this user"}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Email Verification Section */}
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -2431,75 +2261,7 @@ export function StaffManagementContent() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ========================================================================= */}
-      {/* 9. TWO-FACTOR AUTHENTICATION (2FA) TOGGLE CONFIRMATION DIALOG */}
-      {/* ========================================================================= */}
-      <AlertDialog open={isToggle2FAOpen} onOpenChange={setIsToggle2FAOpen}>
-        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-sm sm:max-w-md rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
-          <AlertDialogHeader>
-            <div className="flex items-start gap-3 min-w-0 overflow-hidden">
-              <div className={cn(
-                "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border shadow-xs mt-0.5",
-                is2FAActive(target2FAUser) 
-                  ? "bg-slate-100 text-slate-700 border-slate-200" 
-                  : "bg-emerald-50 text-emerald-600 border-emerald-100"
-              )}>
-                <Fingerprint className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1 overflow-hidden">
-                <AlertDialogTitle className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
-                  {is2FAActive(target2FAUser) ? 'Disable Two-Factor Auth' : 'Enable Two-Factor Auth'}
-                </AlertDialogTitle>
-                <div className="text-xs text-slate-500 mt-0.5 min-w-0 overflow-hidden">
-                  User: <span className="font-semibold text-slate-800 truncate">{target2FAUser?.name || 'User'}</span>
-                  <span className="block truncate text-slate-400">{target2FAUser?.email || ''}</span>
-                </div>
-              </div>
-            </div>
-          </AlertDialogHeader>
 
-          <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
-            {is2FAActive(target2FAUser) ? (
-              <>
-                <p>
-                  Are you sure you want to <b>disable 2FA</b> for <span className="font-bold text-slate-900">{target2FAUser?.name || 'this user'}</span>?
-                </p>
-                <p className="text-slate-500">
-                  The staff member will be able to log into the MTS Lab system using only their password, and <b>no email OTP code</b> will be dispatched.
-                </p>
-              </>
-            ) : (
-              <>
-                <p>
-                  Enable <b>Two-Factor Authentication</b> for <span className="font-bold text-slate-900">{target2FAUser?.name || 'this user'}</span>?
-                </p>
-                <p className="text-slate-500">
-                  Upon logging in with their password, a secure 6-digit verification code will be sent to <span className="font-bold text-slate-900">{target2FAUser?.email || 'their email'}</span> before dashboard access is granted.
-                </p>
-              </>
-            )}
-          </div>
-
-          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 pt-2">
-            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-600 border-slate-200 cursor-pointer w-full sm:w-auto">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={submitting}
-              onClick={handleToggle2FAConfirm}
-              className={cn(
-                "rounded-xl text-xs font-bold h-10 px-5 text-white shadow-md transition-all cursor-pointer w-full sm:w-auto",
-                is2FAActive(target2FAUser) 
-                  ? "bg-slate-900 hover:bg-slate-800 shadow-slate-900/10" 
-                  : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20"
-              )}
-            >
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
-              {is2FAActive(target2FAUser) ? 'Confirm Disable 2FA' : 'Confirm Enable 2FA'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* ========================================================================= */}
       {/* 10. SUPER ADMIN DIRECT EMAIL VERIFICATION CONFIRMATION DIALOG */}

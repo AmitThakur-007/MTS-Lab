@@ -583,23 +583,19 @@ async function ensureAdminUser() {
           name: "MTS Super Admin",
           role: "SUPER_ADMIN",
           accountStatus: "ACTIVE",
-          isActive: true,
-          twoFactorEnabled: true,
-          twoFactorType: "EMAIL"
+          isActive: true
         }
       });
       console.log("[STARTUP] Primary Super Admin provisioned successfully.");
     } else {
-      // Ensure primary super admin has SUPER_ADMIN role, ACTIVE status, and 2FA enabled
-      if (primaryAdmin.role !== "SUPER_ADMIN" || primaryAdmin.accountStatus !== "ACTIVE" || !primaryAdmin.isActive || !primaryAdmin.twoFactorEnabled) {
+      // Ensure primary super admin has SUPER_ADMIN role and ACTIVE status
+      if (primaryAdmin.role !== "SUPER_ADMIN" || primaryAdmin.accountStatus !== "ACTIVE" || !primaryAdmin.isActive) {
         primaryAdmin = await prisma.user.update({
           where: { id: primaryAdmin.id },
           data: {
             role: "SUPER_ADMIN",
             accountStatus: "ACTIVE",
-            isActive: true,
-            twoFactorEnabled: true,
-            twoFactorType: "EMAIL"
+            isActive: true
           }
         });
       }
@@ -5217,335 +5213,10 @@ export async function createServerApp() {
         }
       }
 
-      // 5. Password Validated! Check authoritative per-user Two-Factor Authentication (2FA) setting
+      // Direct Firebase Authenticated Login (No 2FA Challenge)
       const freshUser = await prisma.user.findUnique({ where: { id: user.id } }) || user;
-      const is2faActive = isUser2FAEnabled(freshUser);
       user = freshUser;
 
-      // If 2FA is DISABLED for this user by Super Admin, log in directly without OTP
-      if (!is2faActive) {
-        const updatedUser = await prisma.user.update({
-          where: { id: user.id },
-          data: { 
-            failedLoginAttempts: 0, 
-            lockoutUntil: null, 
-            lastLoginAt: new Date() 
-          }
-        });
-
-        // Seamless Multi-Device Registration
-        await prisma.approvedDevice.upsert({
-          where: {
-            userId_deviceIdentifier: {
-              userId: user.id,
-              deviceIdentifier
-            }
-          },
-          update: {
-            deviceName,
-            deviceType,
-            browser,
-            os,
-            ipAddress: String(clientIp),
-            userAgent: clientUserAgent,
-            status: "APPROVED",
-            lastUsedAt: new Date()
-          },
-          create: {
-            userId: user.id,
-            deviceIdentifier,
-            deviceName,
-            deviceType,
-            browser,
-            os,
-            ipAddress: String(clientIp),
-            userAgent: clientUserAgent,
-            status: "APPROVED",
-            approvedBy: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "DIRECT_LOGIN",
-            approvedAt: new Date(),
-            lastUsedAt: new Date()
-          }
-        });
-
-        // Generate Authenticated Tokens
-        const { accessToken, refreshToken } = await generateTokens(
-          updatedUser, 
-          clientUserAgent, 
-          String(clientIp),
-          { deviceIdentifier, deviceName, deviceType, browser, os }
-        );
-
-        await recordAuditLog({
-          req,
-          userId: user.id,
-          userEmail: user.email,
-          userName: user.name,
-          userRole: user.role,
-          action: "LOGIN_SUCCESS",
-          resource: "AUTH",
-          status: "SUCCESS",
-          details: `Direct password login (2FA disabled) from ${deviceType} (${deviceName})`
-        });
-
-        res.cookie("refreshToken", refreshToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          maxAge: 7 * 24 * 60 * 60 * 1000
-        });
-
-        const isSuperAdminAccount = user.role === "SUPER_ADMIN" || user.role === "SUPERADMIN" || user.email?.toLowerCase() === "mtsmobilelab@gmail.com";
-        const needsInitialSecuritySetup = isSuperAdminAccount && !updatedUser.securitySetupCompleted;
-
-        return res.json({
-          success: true,
-          token: accessToken,
-          refreshToken,
-          user: {
-            id: updatedUser.id,
-            name: updatedUser.name,
-            email: updatedUser.email,
-            role: updatedUser.role,
-            username: updatedUser.username,
-            branchId: updatedUser.branchId,
-            profileImage: updatedUser.profileImage,
-            twoFactorEnabled: updatedUser.twoFactorEnabled,
-            securitySetupCompleted: updatedUser.securitySetupCompleted,
-            requiresSecuritySetup: needsInitialSecuritySetup
-          },
-          mfaRequired: false,
-          requiresSecuritySetup: needsInitialSecuritySetup
-        });
-      }
-
-      // 2FA IS ENABLED: Initiate Mandatory Email 2FA (Two-Factor Authentication)
-      // Invalidate any active previous unused OTP for this user & purpose
-      await prisma.oTPVerification.updateMany({
-        where: {
-          userId: user.id,
-          purpose: "LOGIN_2FA",
-          isUsed: false
-        },
-        data: { isUsed: true }
-      });
-
-      // Generate cryptographically secure 6-digit OTP
-      const otpCode = generate6DigitOtp();
-      const otpHash = hashOtp(otpCode);
-      const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
-
-      const createdOtp = await prisma.oTPVerification.create({
-        data: {
-          userId: user.id,
-          email: user.email,
-          codeHash: otpHash,
-          purpose: "LOGIN_2FA",
-          attempts: 0,
-          maxAttempts: 5,
-          expiresAt: otpExpiresAt,
-          isUsed: false
-        }
-      });
-
-      // Dispatch 6-digit Email Verification Code (OTP) to registered email address (NO links)
-      const emailSubject = "MTS Lab — Your Login Verification Code";
-      const emailText = `Hello ${user.name || 'Staff Member'},\n\nYour MTS Lab verification code is:\n\n   ${otpCode}\n\nThis code will expire in 5 minutes.\n\nIf you did not attempt to log in to MTS Lab, please ignore this email and secure your account.`;
-      const emailHtml = generate2faEmailHtml(user.name, otpCode);
-
-      const emailResult = await sendEmail({
-        to: user.email,
-        subject: emailSubject,
-        text: emailText,
-        html: emailHtml
-      });
-
-      if (!emailResult.success) {
-        await prisma.oTPVerification.delete({ where: { id: createdOtp.id } }).catch(() => {});
-        return res.status(503).json({
-          success: false,
-          message: "Unable to send verification code to your email. Please check your email configuration or try again later."
-        });
-      }
-
-      // Create short-lived 2FA Challenge Ticket (JWT)
-      const mfaTicket = jwt.sign(
-        {
-          userId: user.id,
-          email: user.email,
-          role: user.role,
-          purpose: "LOGIN_2FA",
-          type: "MFA_CHALLENGE",
-          deviceIdentifier,
-          deviceName,
-          deviceType,
-          browser,
-          os
-        },
-        JWT_SECRET,
-        { expiresIn: "5m" }
-      );
-
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
-        action: "OTP_REQUESTED",
-        resource: "AUTH",
-        status: "SUCCESS",
-        details: `2FA login verification code dispatched to email (${maskEmail(user.email)})`
-      });
-
-      return res.json({
-        success: true,
-        mfaRequired: true,
-        mfaTicket,
-        emailMasked: maskEmail(user.email),
-        message: "Verification code sent to your registered email."
-      });
-
-    } catch (err: any) {
-      console.error("[LOGIN API UNCAUGHT ERROR]", err);
-      res.status(500).json({ 
-        success: false, 
-        message: "Authentication service temporarily unavailable. Please try again.",
-        error: err.message || String(err)
-      });
-    }
-  });
-
-  // 2FA Verification Endpoint
-  app.post("/api/auth/2fa/verify", authLimiter, async (req: any, res) => {
-    const { mfaTicket, code, device } = req.body;
-
-    try {
-      if (!mfaTicket || !code) {
-        return res.status(400).json({ success: false, message: "Verification code and security ticket are required." });
-      }
-
-      let decoded: any = null;
-      try {
-        decoded = jwt.verify(mfaTicket, JWT_SECRET);
-      } catch (jwtErr) {
-        return res.status(401).json({ success: false, message: "Verification session has expired. Please log in again." });
-      }
-
-      if (!decoded || decoded.type !== "MFA_CHALLENGE" || decoded.purpose !== "LOGIN_2FA" || !decoded.userId) {
-        return res.status(401).json({ success: false, message: "Invalid verification security ticket." });
-      }
-
-      const clientIp = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
-      const clientUserAgent = req.headers["user-agent"] || "";
-
-      // Device info extraction
-      const deviceIdentifier = device?.deviceIdentifier || decoded.deviceIdentifier || req.headers["x-device-id"] || `dev_${uuidv4().substring(0, 8)}`;
-      const deviceName = device?.deviceName || decoded.deviceName || `${device?.browser || 'Browser'} on ${device?.os || 'Device'}`;
-      const deviceType = device?.deviceType || decoded.deviceType || "DESKTOP";
-      const browser = device?.browser || decoded.browser || "Browser";
-      const os = device?.os || decoded.os || "OS";
-
-      // Query User
-      const user = await prisma.user.findFirst({
-        where: { id: decoded.userId, deletedAt: null }
-      });
-
-      if (!user) {
-        return res.status(401).json({ success: false, message: "User account not found." });
-      }
-
-      // Check account status
-      const accountStatus = (user.accountStatus || "ACTIVE").toUpperCase().trim();
-      if (!user.isActive || accountStatus === "DISABLED" || accountStatus === "SUSPENDED" || accountStatus === "REJECTED") {
-        return res.status(403).json({ success: false, message: "Account is not active." });
-      }
-
-      // Find active OTP record
-      const otpRecord = await prisma.oTPVerification.findFirst({
-        where: {
-          userId: user.id,
-          purpose: "LOGIN_2FA",
-          isUsed: false
-        },
-        orderBy: { createdAt: "desc" }
-      });
-
-      if (!otpRecord) {
-        return res.status(400).json({ success: false, message: "No active verification code found. Please request a new code." });
-      }
-
-      // Check expiration
-      if (otpRecord.expiresAt < new Date()) {
-        await recordAuditLog({
-          req,
-          userId: user.id,
-          userEmail: user.email,
-          userName: user.name,
-          userRole: user.role,
-          action: "OTP_VERIFICATION_FAILED",
-          resource: "AUTH",
-          status: "FAILED",
-          details: "2FA OTP code expired"
-        });
-        return res.status(400).json({ success: false, message: "Verification code has expired. Please request a new code." });
-      }
-
-      // Check attempt limit
-      if (otpRecord.attempts >= otpRecord.maxAttempts) {
-        await prisma.oTPVerification.update({
-          where: { id: otpRecord.id },
-          data: { isUsed: true }
-        });
-        await recordAuditLog({
-          req,
-          userId: user.id,
-          userEmail: user.email,
-          userName: user.name,
-          userRole: user.role,
-          action: "OTP_VERIFICATION_FAILED",
-          resource: "AUTH",
-          status: "FAILED",
-          details: "Maximum failed 2FA OTP attempts reached"
-        });
-        return res.status(429).json({ success: false, message: "Too many failed attempts. Please request a new verification code." });
-      }
-
-      // Validate OTP Code Hash
-      const isValid = verifyOtp(String(code).trim(), otpRecord.codeHash);
-      if (!isValid) {
-        const nextAttempts = otpRecord.attempts + 1;
-        const isMaxReached = nextAttempts >= otpRecord.maxAttempts;
-        await prisma.oTPVerification.update({
-          where: { id: otpRecord.id },
-          data: {
-            attempts: nextAttempts,
-            isUsed: isMaxReached
-          }
-        });
-        await recordAuditLog({
-          req,
-          userId: user.id,
-          userEmail: user.email,
-          userName: user.name,
-          userRole: user.role,
-          action: "OTP_VERIFICATION_FAILED",
-          resource: "AUTH",
-          status: "FAILED",
-          details: `Invalid 2FA OTP code entered (${otpRecord.maxAttempts - nextAttempts} attempts remaining)`
-        });
-        return res.status(400).json({ 
-          success: false, 
-          message: `Invalid verification code. ${Math.max(0, otpRecord.maxAttempts - nextAttempts)} attempt(s) remaining.` 
-        });
-      }
-
-      // 6. OTP Validated Successfully! Mark OTP as used
-      await prisma.oTPVerification.update({
-        where: { id: otpRecord.id },
-        data: { isUsed: true }
-      });
-
-      // Reset failed attempts & update last login timestamp
       const updatedUser = await prisma.user.update({
         where: { id: user.id },
         data: { 
@@ -5583,7 +5254,7 @@ export async function createServerApp() {
           ipAddress: String(clientIp),
           userAgent: clientUserAgent,
           status: "APPROVED",
-          approvedBy: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "STAFF_2FA",
+          approvedBy: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "DIRECT_LOGIN",
           approvedAt: new Date(),
           lastUsedAt: new Date()
         }
@@ -5603,173 +5274,47 @@ export async function createServerApp() {
         userEmail: user.email,
         userName: user.name,
         userRole: user.role,
-        action: "OTP_VERIFICATION_SUCCESS",
-        resource: "AUTH",
-        status: "SUCCESS",
-        details: "2FA OTP code verified successfully"
-      });
-
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
         action: "LOGIN_SUCCESS",
         resource: "AUTH",
         status: "SUCCESS",
-        details: `Successful authenticated login via email 2FA from ${deviceType} (${deviceName})`
+        details: `Firebase authenticated login from ${deviceType} (${deviceName})`
       });
 
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
-        secure: true,
-        sameSite: "none",
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000
       });
 
-      return res.json({ 
-        success: true, 
-        token: accessToken, 
-        refreshToken: refreshToken, 
-        user: { 
-          id: updatedUser.id, 
-          email: updatedUser.email, 
-          name: updatedUser.name, 
-          role: updatedUser.role, 
-          username: updatedUser.username, 
-          profileImage: updatedUser.profileImage || updatedUser.profilePhoto, 
-          phoneNumber: updatedUser.phoneNumber, 
-          department: updatedUser.department, 
-          address: updatedUser.address, 
+      return res.json({
+        success: true,
+        token: accessToken,
+        refreshToken,
+        user: {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          role: updatedUser.role,
+          username: updatedUser.username,
           branchId: updatedUser.branchId,
-          accountStatus: updatedUser.accountStatus,
-          isActive: updatedUser.isActive
-        } 
+          profileImage: updatedUser.profileImage,
+          emailVerified: true
+        },
+        mfaRequired: false
       });
 
     } catch (err: any) {
-      console.error("[2FA VERIFY ERROR]", err);
-      res.status(500).json({ success: false, message: "Verification failed. Please try again." });
+      console.error("[LOGIN API UNCAUGHT ERROR]", err);
+      res.status(500).json({ 
+        success: false, 
+        message: "Authentication service temporarily unavailable. Please try again.",
+        error: err.message || String(err)
+      });
     }
   });
 
-  // 2FA Resend Endpoint
-  app.post("/api/auth/2fa/resend", authLimiter, async (req: any, res) => {
-    const { mfaTicket } = req.body;
-
-    try {
-      if (!mfaTicket) {
-        return res.status(400).json({ success: false, message: "Security ticket is required." });
-      }
-
-      let decoded: any = null;
-      try {
-        decoded = jwt.verify(mfaTicket, JWT_SECRET);
-      } catch (jwtErr) {
-        return res.status(401).json({ success: false, message: "Verification session has expired. Please sign in again." });
-      }
-
-      if (!decoded || decoded.purpose !== "LOGIN_2FA" || !decoded.userId) {
-        return res.status(401).json({ success: false, message: "Invalid verification ticket." });
-      }
-
-      const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
-      if (!user || user.deletedAt || !user.isActive) {
-        return res.status(401).json({ success: false, message: "User account not active." });
-      }
-
-      // Check Rate Limit (minimum 60 seconds between resends)
-      const lastOtp = await prisma.oTPVerification.findFirst({
-        where: {
-          userId: user.id,
-          purpose: "LOGIN_2FA"
-        },
-        orderBy: { createdAt: "desc" }
-      });
-
-      if (lastOtp) {
-        const timeSinceLast = Date.now() - new Date(lastOtp.createdAt).getTime();
-        if (timeSinceLast < 60 * 1000) {
-          const waitSecs = Math.ceil((60 * 1000 - timeSinceLast) / 1000);
-          return res.status(429).json({ 
-            success: false, 
-            message: `Please wait ${waitSecs} second(s) before requesting a new code.` 
-          });
-        }
-      }
-
-      // Invalidate existing unused OTPs
-      await prisma.oTPVerification.updateMany({
-        where: {
-          userId: user.id,
-          purpose: "LOGIN_2FA",
-          isUsed: false
-        },
-        data: { isUsed: true }
-      });
-
-      // Generate new OTP with 5 minute expiration
-      const otpCode = generate6DigitOtp();
-      const otpHash = hashOtp(otpCode);
-
-      const createdResendOtp = await prisma.oTPVerification.create({
-        data: {
-          userId: user.id,
-          email: user.email,
-          codeHash: otpHash,
-          purpose: "LOGIN_2FA",
-          attempts: 0,
-          maxAttempts: 5,
-          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-          isUsed: false
-        }
-      });
-
-      // Dispatch new 6-digit OTP code to registered email address (NO links)
-      const resendSubject = "MTS Lab — Your Login Verification Code";
-      const resendText = `Hello ${user.name || 'Staff Member'},\n\nYour new MTS Lab verification code is:\n\n   ${otpCode}\n\nThis code will expire in 5 minutes.\n\nIf you did not attempt to log in to MTS Lab, please ignore this email and secure your account.`;
-      const resendHtml = generate2faEmailHtml(user.name, otpCode);
-
-      const emailResult = await sendEmail({
-        to: user.email,
-        subject: resendSubject,
-        text: resendText,
-        html: resendHtml
-      });
-
-      if (!emailResult.success) {
-        await prisma.oTPVerification.delete({ where: { id: createdResendOtp.id } }).catch(() => {});
-        return res.status(503).json({
-          success: false,
-          message: "Unable to send verification code to your email. Please try again later."
-        });
-      }
-
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
-        action: "OTP_REQUESTED",
-        resource: "AUTH",
-        status: "SUCCESS",
-        details: "New 2FA login verification code requested & sent"
-      });
-
-      return res.json({ 
-        success: true, 
-        message: "A new verification code has been sent to your registered email." 
-      });
-
-    } catch (err: any) {
-      console.error("[2FA RESEND ERROR]", err);
-      res.status(500).json({ success: false, message: "Failed to resend verification code. Please try again." });
-    }
-  });
-
-  // Password Change with Mandatory Email OTP
+  // Password Change Endpoint (Authenticated Direct Update via Firebase / bcrypt)
   app.post("/api/auth/password-change/request", authenticate, authLimiter, async (req: any, res) => {
     const { currentPassword, newPassword } = req.body;
 
@@ -5778,204 +5323,38 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, message: "Current password and new password are required." });
       }
 
-      // Password Complexity Validation
       if (newPassword.length < 8) {
         return res.status(400).json({ success: false, message: "Password must be at least 8 characters long." });
       }
-      if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-        return res.status(400).json({ success: false, message: "Password must include uppercase, lowercase, and numeric characters." });
-      }
 
       const user = await prisma.user.findUnique({ where: { id: req.user.id } });
       if (!user || user.deletedAt) {
         return res.status(404).json({ success: false, message: "User account not found." });
       }
 
-      // Verify current password
       const isValidPassword = await bcrypt.compare(currentPassword, user.password);
       if (!isValidPassword) {
-        await recordAuditLog({
-          req,
-          userId: user.id,
-          userEmail: user.email,
-          userName: user.name,
-          userRole: user.role,
-          action: "PASSWORD_CHANGED",
-          resource: "AUTH",
-          status: "FAILED",
-          details: "Password change rejected: Incorrect current password"
-        });
         return res.status(400).json({ success: false, message: "Invalid current password." });
       }
 
-      // Invalidate existing password change OTPs
-      await prisma.oTPVerification.updateMany({
-        where: {
-          userId: user.id,
-          purpose: "PASSWORD_CHANGE",
-          isUsed: false
-        },
-        data: { isUsed: true }
-      });
-
-      // Generate OTP with 5 minute expiration
-      const otpCode = generate6DigitOtp();
-      const otpHash = hashOtp(otpCode);
-
-      const createdPwdOtp = await prisma.oTPVerification.create({
-        data: {
-          userId: user.id,
-          email: user.email,
-          codeHash: otpHash,
-          purpose: "PASSWORD_CHANGE",
-          attempts: 0,
-          maxAttempts: 5,
-          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-          isUsed: false
-        }
-      });
-
-      // Dispatch Email
-      const emailResult = await sendEmail(
-        user.email,
-        "MTS Lab Security — Password Change Verification Code",
-        `Hello ${user.name},\n\nYou requested to change your MTS Lab password.\n\nYour 6-digit verification code is:\n\n   ${otpCode}\n\nThis code will expire in 5 minutes.\nIf you did not request a password change, please contact the Super Administrator immediately.`
-      );
-
-      if (!emailResult.success) {
-        await prisma.oTPVerification.delete({ where: { id: createdPwdOtp.id } }).catch(() => {});
-        return res.status(503).json({
-          success: false,
-          message: "Unable to send verification code to your email. Please try again later."
-        });
-      }
-
-      // Sign temporary pwdTicket containing hashed new password
       const newPasswordHash = await bcrypt.hash(newPassword, 10);
-      const pwdTicket = jwt.sign(
-        {
-          userId: user.id,
-          newPasswordHash,
-          purpose: "PASSWORD_CHANGE"
-        },
-        JWT_SECRET,
-        { expiresIn: "5m" }
-      );
-
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
-        action: "OTP_REQUESTED",
-        resource: "AUTH",
-        status: "SUCCESS",
-        details: "Password change verification OTP sent to email"
-      });
-
-      return res.json({
-        success: true,
-        pwdTicket,
-        emailMasked: maskEmail(user.email),
-        message: "Verification code sent to your registered email."
-      });
-
-    } catch (err: any) {
-      console.error("[PASSWORD CHANGE REQUEST ERROR]", err);
-      res.status(500).json({ success: false, message: "Failed to initiate password change. Please try again." });
-    }
-  });
-
-  // Password Change Confirmation Endpoint
-  app.post("/api/auth/password-change/confirm", authenticate, authLimiter, async (req: any, res) => {
-    const { pwdTicket, code } = req.body;
-
-    try {
-      if (!pwdTicket || !code) {
-        return res.status(400).json({ success: false, message: "Verification code and security ticket are required." });
-      }
-
-      let decoded: any = null;
-      try {
-        decoded = jwt.verify(pwdTicket, JWT_SECRET);
-      } catch (jwtErr) {
-        return res.status(401).json({ success: false, message: "Password change session expired. Please try again." });
-      }
-
-      if (!decoded || decoded.purpose !== "PASSWORD_CHANGE" || decoded.userId !== req.user.id || !decoded.newPasswordHash) {
-        return res.status(401).json({ success: false, message: "Invalid password change session." });
-      }
-
-      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-      if (!user || user.deletedAt) {
-        return res.status(404).json({ success: false, message: "User account not found." });
-      }
-
-      // Check OTP
-      const otpRecord = await prisma.oTPVerification.findFirst({
-        where: {
-          userId: user.id,
-          purpose: "PASSWORD_CHANGE",
-          isUsed: false
-        },
-        orderBy: { createdAt: "desc" }
-      });
-
-      if (!otpRecord || otpRecord.expiresAt < new Date()) {
-        return res.status(400).json({ success: false, message: "Verification code expired or invalid. Please request a new code." });
-      }
-
-      if (otpRecord.attempts >= otpRecord.maxAttempts) {
-        await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
-        return res.status(429).json({ success: false, message: "Too many failed verification attempts." });
-      }
-
-      const isValid = verifyOtp(String(code).trim(), otpRecord.codeHash);
-      if (!isValid) {
-        const nextAttempts = otpRecord.attempts + 1;
-        await prisma.oTPVerification.update({
-          where: { id: otpRecord.id },
-          data: {
-            attempts: nextAttempts,
-            isUsed: nextAttempts >= otpRecord.maxAttempts
-          }
-        });
-        return res.status(400).json({ 
-          success: false, 
-          message: `Invalid verification code. ${Math.max(0, otpRecord.maxAttempts - nextAttempts)} attempt(s) remaining.` 
-        });
-      }
-
-      // Mark OTP as used
-      await prisma.oTPVerification.update({
-        where: { id: otpRecord.id },
-        data: { isUsed: true }
-      });
-
-      // Update password
       await prisma.user.update({
         where: { id: user.id },
         data: {
-          password: decoded.newPasswordHash,
+          password: newPasswordHash,
           failedLoginAttempts: 0,
           lockoutUntil: null
         }
       });
 
-      // Invalidate all sessions
-      await prisma.session.deleteMany({ where: { userId: user.id } });
-      res.clearCookie("refreshToken");
-
-      // Update Firebase Auth if linked
       if (user.firebaseUid) {
         try {
           const auth = getAdminAuth();
           if (auth) {
-            await auth.updateUser(user.firebaseUid, { password: uuidv4() });
+            await auth.updateUser(user.firebaseUid, { password: newPassword });
           }
         } catch (fbErr) {
-          // non-blocking
+          console.warn("[FIREBASE AUTH PASSWORD UPDATE WARNING]", fbErr);
         }
       }
 
@@ -5989,101 +5368,46 @@ export async function createServerApp() {
         resource: "USER",
         resourceId: user.id,
         status: "SUCCESS",
-        details: `Password updated successfully via email OTP verification. All active sessions revoked.`
+        details: "Password updated successfully."
       });
 
-      return res.json({ 
-        success: true, 
-        message: "Password updated successfully. Please log in with your new password." 
+      return res.json({
+        success: true,
+        message: "Password updated successfully."
       });
 
     } catch (err: any) {
-      console.error("[PASSWORD CHANGE CONFIRM ERROR]", err);
+      console.error("[PASSWORD CHANGE ERROR]", err);
       res.status(500).json({ success: false, message: "Failed to update password. Please try again." });
     }
   });
 
-  // Legacy Change Password route adapter for existing dashboard forms
   app.post("/api/auth/change-password", authenticate, async (req: any, res) => {
-    const { currentPassword, newPassword, code, pwdTicket } = req.body;
-    
-    // If client supplied confirmation code and ticket, confirm directly
-    if (pwdTicket && code) {
-      req.body = { pwdTicket, code };
-      // Forward to confirmation handler
-      try {
-        let decoded: any = jwt.verify(pwdTicket, JWT_SECRET);
-        if (decoded && decoded.userId === req.user.id) {
-          const otpRecord = await prisma.oTPVerification.findFirst({
-            where: { userId: req.user.id, purpose: "PASSWORD_CHANGE", isUsed: false },
-            orderBy: { createdAt: "desc" }
-          });
-          if (otpRecord && verifyOtp(String(code).trim(), otpRecord.codeHash)) {
-            await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
-            await prisma.user.update({ where: { id: req.user.id }, data: { password: decoded.newPasswordHash } });
-            await prisma.session.deleteMany({ where: { userId: req.user.id } });
-            res.clearCookie("refreshToken");
-            await recordAuditLog({
-              req,
-              userId: req.user.id,
-              action: "PASSWORD_CHANGED",
-              resource: "USER",
-              resourceId: req.user.id,
-              status: "SUCCESS",
-              details: "Password updated successfully"
-            });
-            return res.json({ success: true, message: "Password updated successfully. Please login again." });
-          }
-        }
-      } catch (err) {}
-      return res.status(400).json({ error: "Invalid verification code or session expired" });
-    }
-
-    // Otherwise, validate current password and initiate OTP flow
+    const { currentPassword, newPassword } = req.body;
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
       return res.status(400).json({ error: "Invalid current password" });
     }
-
     if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters long" });
     }
 
-    const otpCode = generate6DigitOtp();
-    const otpHash = hashOtp(otpCode);
-
-    await prisma.oTPVerification.create({
-      data: {
-        userId: user.id,
-        email: user.email,
-        codeHash: otpHash,
-        purpose: "PASSWORD_CHANGE",
-        attempts: 0,
-        maxAttempts: 5,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-        isUsed: false
-      }
-    });
-
-    await sendEmail(
-      user.email,
-      "MTS Lab Security — Password Change Code",
-      `Your password change verification code is: ${otpCode}`
-    );
-
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
-    const newPwdTicket = jwt.sign(
-      { userId: user.id, newPasswordHash, purpose: "PASSWORD_CHANGE" },
-      JWT_SECRET,
-      { expiresIn: "10m" }
-    );
-
-    res.json({ 
-      success: true, 
-      requiresOtp: true, 
-      pwdTicket: newPwdTicket, 
-      message: "Verification code sent to your registered email." 
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: newPasswordHash }
     });
+
+    if (user.firebaseUid) {
+      try {
+        const auth = getAdminAuth();
+        if (auth) {
+          await auth.updateUser(user.firebaseUid, { password: newPassword });
+        }
+      } catch (fbErr) {}
+    }
+
+    res.json({ success: true, message: "Password updated successfully." });
   });
 
   // Super Admin Email Change Endpoints (Step 1: Request from Current Email)
@@ -6545,101 +5869,10 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, error: "Target user ID is required." });
       }
 
-      let { twoFactorEnabled, enabled } = req.body;
-
-      if (twoFactorEnabled === undefined && enabled !== undefined) {
-        twoFactorEnabled = enabled;
-      }
-
-      if (twoFactorEnabled === undefined) {
-        return res.status(400).json({ success: false, error: "A boolean 'twoFactorEnabled' or 'enabled' field is required." });
-      }
-
-      const isEnabled = twoFactorEnabled === true || twoFactorEnabled === 'true' || twoFactorEnabled === 1 || twoFactorEnabled === '1';
-
-      // 1. Fetch target staff user
-      const targetUser = await prisma.user.findUnique({
-        where: { id }
-      });
-
-      if (!targetUser || targetUser.deletedAt) {
-        return res.status(404).json({ success: false, error: "Staff member account not found." });
-      }
-
-      const prev2FA = isUser2FAEnabled(targetUser);
-
-      // 2. Authoritative database update
-      const updatedUser = await prisma.user.update({
-        where: { id },
-        data: {
-          twoFactorEnabled: isEnabled,
-          updatedAt: new Date()
-        }
-      });
-
-      // 3. Synchronize with Firestore, RTDB, Firebase Custom Claims & Real-time hub
-      try {
-        const auth = getAdminAuth();
-        if (auth && (updatedUser.firebaseUid || updatedUser.email)) {
-          let fbUid = updatedUser.firebaseUid;
-          if (!fbUid) {
-            try {
-              const fbUser = await auth.getUserByEmail(updatedUser.email);
-              fbUid = fbUser?.uid;
-            } catch {}
-          }
-          if (fbUid) {
-            await auth.setCustomUserClaims(fbUid, { twoFactorEnabled: isEnabled, role: updatedUser.role }).catch(() => {});
-          }
-        }
-      } catch (fbClaimsErr) {
-        console.warn("[FIREBASE AUTH 2FA CLAIMS SYNC WARNING]", fbClaimsErr);
-      }
-
-      await syncUserToFirestore(updatedUser).catch(() => {});
-      await syncToRtdb("user", "UPDATE", updatedUser).catch(() => {});
-      broadcastRealtimeEvent({
-        entity: "user",
-        action: "UPDATE",
-        id: updatedUser.id,
-        data: {
-          id: updatedUser.id,
-          email: updatedUser.email,
-          name: updatedUser.name,
-          role: updatedUser.role,
-          twoFactorEnabled: isEnabled
-        }
-      });
-
-      // 4. Create Audit Record
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userEmail: req.user.email,
-        userName: req.user.name,
-        userRole: req.user.role,
-        action: isEnabled ? "STAFF_2FA_ENABLED" : "STAFF_2FA_DISABLED",
-        resource: "SECURITY",
-        resourceId: targetUser.id,
-        status: "SUCCESS",
-        details: `2FA for staff member ${updatedUser.name} (${updatedUser.email}) set by ${req.user.name}: ${prev2FA ? 'ENABLED' : 'DISABLED'} -> ${isEnabled ? 'ENABLED' : 'DISABLED'}`,
-        previousValue: JSON.stringify({ twoFactorEnabled: prev2FA }),
-        newValue: JSON.stringify({ twoFactorEnabled: isEnabled })
-      });
-
       return res.json({
         success: true,
-        twoFactorEnabled: isEnabled,
-        message: isEnabled
-          ? `Two-Factor Authentication has been enabled for ${updatedUser.name}.`
-          : `Two-Factor Authentication has been disabled for ${updatedUser.name}.`,
-        user: {
-          id: updatedUser.id,
-          email: updatedUser.email,
-          name: updatedUser.name,
-          role: updatedUser.role,
-          twoFactorEnabled: isEnabled
-        }
+        twoFactorEnabled: false,
+        message: "2FA system has been permanently migrated to Firebase Authentication. Staff 2FA toggles are no longer required."
       });
 
     } catch (err: any) {
@@ -8304,8 +7537,7 @@ export async function createServerApp() {
           department: true,
           address: true,
           accountStatus: true,
-          isActive: true,
-          twoFactorEnabled: true
+          isActive: true
         }
       });
       if (!user || !user.isActive || (user.accountStatus !== "ACTIVE" && user.accountStatus !== "APPROVED")) {
@@ -9616,122 +8848,15 @@ export async function createServerApp() {
   // SUPER ADMIN BATTERY WARRANTY HUB 2FA PERMANENT DELETION CONTROLS (SUPER_ADMIN ONLY + 2FA REQUIRED)
   // =========================================================================
   
-  // 1. Request 2FA Verification Code for Battery Warranty Deletion
-  app.post("/api/battery-warranties/delete-2fa/request", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
-    try {
-      const user = req.user;
-      
-      // Invalidate previous unused OTPs for this purpose
-      await prisma.oTPVerification.updateMany({
-        where: {
-          userId: user.id,
-          purpose: "WARRANTY_DELETION_2FA",
-          isUsed: false
-        },
-        data: { isUsed: true }
-      });
-
-      const otpCode = generate6DigitOtp();
-      const otpHash = hashOtp(otpCode);
-      const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
-
-      await prisma.oTPVerification.create({
-        data: {
-          userId: user.id,
-          email: user.email,
-          codeHash: otpHash,
-          purpose: "WARRANTY_DELETION_2FA",
-          attempts: 0,
-          maxAttempts: 5,
-          expiresAt: otpExpiresAt,
-          isUsed: false
-        }
-      });
-
-      const emailResult = await sendEmail(
-        user.email,
-        "MTS Lab Security — 2FA Code for Permanent Battery Warranty Deletion",
-        `Hello ${user.name},\n\nYou have requested to permanently delete Battery Warranty Hub records in the MTS Lab Super Admin Console.\n\nYour 6-digit 2FA verification code is:\n\n   ${otpCode}\n\nThis verification code will expire in 5 minutes.\nIf you did not initiate this deletion request, please secure your account immediately.`
-      );
-
-      if (!emailResult.success) {
-        return res.status(503).json({
-          success: false,
-          message: "Failed to deliver 2FA verification code to your email. Please check your email configuration."
-        });
-      }
-
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
-        action: "OTP_REQUESTED",
-        resource: "WARRANTY",
-        status: "SUCCESS",
-        details: `2FA verification code dispatched to Super Admin email (${maskEmail(user.email)}) for permanent warranty deletion`
-      });
-
-      return res.json({
-        success: true,
-        message: `Verification code sent to your registered email (${maskEmail(user.email)}).`,
-        emailMasked: maskEmail(user.email)
-      });
-    } catch (err: any) {
-      console.error("[REQUEST WARRANTY DELETION 2FA ERROR]", err);
-      res.status(500).json({ error: "Failed to request 2FA verification code: " + (err.message || err) });
-    }
-  });
-
-  // 2. Permanent Bulk Delete Battery Warranties (SUPER_ADMIN ONLY + 2FA REQUIRED)
+  // 1. Permanent Bulk Delete Battery Warranties (SUPER_ADMIN ONLY)
   app.post("/api/battery-warranties/bulk-delete", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
     try {
-      const { ids, warrantyIds, code, twoFactorCode } = req.body;
+      const { ids, warrantyIds } = req.body;
       const targetIds: string[] = Array.isArray(ids) ? ids : (Array.isArray(warrantyIds) ? warrantyIds : []);
-      const inputCode = String(code || twoFactorCode || '').trim();
 
       if (!targetIds || targetIds.length === 0) {
         return res.status(400).json({ error: "Please select at least one battery warranty record to delete." });
       }
-
-      if (!inputCode) {
-        return res.status(400).json({ error: "Two-Factor Authentication (2FA) verification code is required to permanently delete warranty records." });
-      }
-
-      // Verify 2FA OTP for SUPER_ADMIN
-      const activeOtp = await prisma.oTPVerification.findFirst({
-        where: {
-          userId: req.user.id,
-          purpose: "WARRANTY_DELETION_2FA",
-          isUsed: false,
-          expiresAt: { gt: new Date() }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
-
-      if (!activeOtp) {
-        return res.status(400).json({ error: "2FA verification code has expired or was not requested. Please request a new verification code." });
-      }
-
-      if (activeOtp.attempts >= activeOtp.maxAttempts) {
-        return res.status(400).json({ error: "Too many failed attempts. Please request a new 2FA verification code." });
-      }
-
-      const inputHash = hashOtp(inputCode);
-      if (activeOtp.codeHash !== inputHash) {
-        await prisma.oTPVerification.update({
-          where: { id: activeOtp.id },
-          data: { attempts: { increment: 1 } }
-        });
-        return res.status(400).json({ error: "Invalid 2FA verification code. Please check your email and try again." });
-      }
-
-      // 2FA Code Verified! Invalidate the OTP
-      await prisma.oTPVerification.update({
-        where: { id: activeOtp.id },
-        data: { isUsed: true }
-      });
 
       const cleanIds = targetIds.filter(id => typeof id === "string" && id.trim().length > 0);
       const existingWarranties = await prisma.batteryWarranty.findMany({
@@ -9764,12 +8889,16 @@ export async function createServerApp() {
         if (!firestoreSyncDisabled) {
           try {
             const firestore = getDb();
-            await firestore.collection('batteryWarranties').doc(w.id).delete();
-          } catch (fErr) {}
+            await firestore.collection("batteryWarranties").doc(w.id).delete();
+          } catch (fsErr: any) {
+            if (fsErr?.code === 7 || fsErr?.message?.includes("PERMISSION_DENIED")) {
+              firestoreSyncDisabled = true;
+            }
+          }
         }
       }
 
-      // Record Audit Log (DO NOT store raw 2FA code in audit log)
+      // Record Audit Log
       await prisma.auditLog.create({
         data: {
           userId: req.user.id,
@@ -9779,11 +8908,10 @@ export async function createServerApp() {
           action: "PERMANENT_DELETE_WARRANTIES",
           resource: "WARRANTY",
           resourceId: existingIds[0],
-          details: `Permanently deleted ${existingWarranties.length} battery warranty record(s) (${warrantyNumbers}) with 2FA verification.`,
+          details: `Permanently deleted ${existingWarranties.length} battery warranty record(s) (${warrantyNumbers}).`,
           metadata: JSON.stringify({
             count: existingWarranties.length,
-            warrantyNumbers: existingWarranties.map(w => w.warrantyNumber),
-            twoFactorVerified: true
+            warrantyNumbers: existingWarranties.map(w => w.warrantyNumber)
           })
         }
       });
@@ -15032,8 +14160,6 @@ export async function createServerApp() {
           profileImage: true,
           profilePhoto: true,
           lastLoginAt: true,
-          twoFactorEnabled: true,
-          twoFactorType: true,
           createdAt: true,
           updatedAt: true
         },
@@ -15046,7 +14172,7 @@ export async function createServerApp() {
   });
 
   app.post("/api/users", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
-    let { email, username, password, name, role, phoneNumber, department, address, profileImage, branchId, twoFactorEnabled } = req.body;
+    let { email, username, password, name, role, phoneNumber, department, address, profileImage, branchId } = req.body;
     try {
       if (!email || !password || !name) {
         return res.status(400).json({ error: "Email, password, and full name are required." });
@@ -15137,7 +14263,6 @@ export async function createServerApp() {
           firebaseUid,
           accountStatus: "ACTIVE",
           emailVerified: firebaseAlreadyVerified,
-          twoFactorEnabled: twoFactorEnabled !== undefined ? Boolean(twoFactorEnabled) : true,
           isActive: true
         }
       });

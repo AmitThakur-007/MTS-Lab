@@ -268,32 +268,9 @@ function setVerificationCooldown(email: string): void {
   }
 }
 
-// Serverless in-memory Super Admin 2FA Configuration (Default: false / OFF)
-let serverlessSuperAdmin2faEnabled: boolean = false;
-
-export function isServerlessSuperAdmin2faActive(): boolean {
-  return serverlessSuperAdmin2faEnabled;
-}
-
-export function setServerlessSuperAdmin2faActive(enabled: boolean): void {
-  serverlessSuperAdmin2faEnabled = Boolean(enabled);
-}
-
-// Centralized 2FA Enforcement Policy Function
-export function requiresTwoFactorAuthentication(user: {
-  role?: string;
-  email?: string;
-  twoFactorEnabled?: boolean;
-}): boolean {
-  if (!user) return false;
-  const isSuperAdmin = user.role === 'SUPERADMIN' || user.role === 'SUPER_ADMIN' || user.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
-  if (user.twoFactorEnabled === false) return false;
-  if (user.twoFactorEnabled === true) return true;
-  // Default for Super Admin is OFF (false), while other staff roles default to ON (true)
-  if (isSuperAdmin) {
-    return serverlessSuperAdmin2faEnabled;
-  }
-  return true;
+// Serverless Authentication Helper Policy
+export function requiresTwoFactorAuthentication(): boolean {
+  return false;
 }
 
 // Dispatch Official Firebase Email Verification via Identity Toolkit REST API
@@ -446,174 +423,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const userName = isSuperAdmin ? 'MTS Lab Super Admin' : (identity.split('@')[0] || 'Staff Member');
       const userId = `usr_${crypto.createHash('md5').update(identity || 'anonymous').digest('hex').slice(0, 12)}`;
 
-      const needs2fa = requiresTwoFactorAuthentication({ role, email: identity, twoFactorEnabled: body.twoFactorEnabled });
-
-      // Direct Login when 2FA is not required (Super Admin with 2FA disabled)
-      if (!needs2fa) {
-        const accessToken = `mts_${crypto.randomBytes(32).toString('hex')}`;
-        const refreshToken = `mts_ref_${crypto.randomBytes(32).toString('hex')}`;
-        return sendJson(res, 200, {
-          success: true,
-          token: accessToken,
-          refreshToken,
-          user: {
-            id: userId,
-            email: identity || 'mtsmobilelab@gmail.com',
-            name: userName,
-            role,
-            emailVerified: true,
-            twoFactorEnabled: false
-          },
-          mfaRequired: false,
-          message: isSuperAdmin ? 'Welcome back, MTS Lab Super Admin!' : 'Authenticated successfully.'
-        });
-      }
-
-      // Generate Cryptographically Secure 6-Digit OTP Code
-      const otpCode = generate6DigitOtp();
-      const otpHash = hashOtp(otpCode);
-
-      // Issue Signed 2FA Ticket containing the OTP hash and 5-minute expiration
-      const ticketPayload = {
-        userId,
-        email: identity || 'mtsmobilelab@gmail.com',
-        name: userName,
-        role,
-        otpHash,
-        exp: Date.now() + 5 * 60 * 1000, // 5 minutes expiration
-        attempts: 0
-      };
-
-      const mfaTicket = `mfa_${Buffer.from(JSON.stringify(ticketPayload)).toString('base64url')}`;
-      const emailMasked = maskEmail(identity);
-
-      // Dispatch 2FA Security Email to registered Gmail account
-      const emailHtml = render2faEmailTemplate(userName, otpCode);
-      const emailText = `Hello ${userName},\n\nYour MTS Lab 2FA login verification code is: ${otpCode}\n\nThis code will expire in 5 minutes.`;
-
-      // Dispatch email in background / await delivery
-      sendSecurityEmail({
-        to: identity,
-        subject: 'MTS Lab Security — 2FA Login Verification Code',
-        text: emailText,
-        html: emailHtml
-      }).catch((emailErr) => {
-        console.warn('[2FA EMAIL DISPATCH NOTICE]', emailErr);
-      });
-
+      const accessToken = `mts_${crypto.randomBytes(32).toString('hex')}`;
+      const refreshToken = `mts_ref_${crypto.randomBytes(32).toString('hex')}`;
       return sendJson(res, 200, {
         success: true,
-        mfaRequired: true,
-        mfaTicket,
-        emailMasked,
-        message: 'Two-Factor Authentication code dispatched to your registered email.'
-      });
-    }
-
-    // 1b. POST /api/auth/2fa/verify or /api/auth/verify-2fa (Stage 2: 2FA Verification)
-    if (pathname.includes('/2fa/verify') || pathname.includes('/verify-2fa')) {
-      if (req.method !== 'POST') {
-        return sendJson(res, 405, { error: 'Method Not Allowed' });
-      }
-
-      const body = await parseJsonBody(req);
-      const { mfaTicket, code } = body;
-
-      if (!mfaTicket || !code) {
-        return sendJson(res, 400, { success: false, message: 'MFA ticket and verification code are required.' });
-      }
-
-      let ticketPayload: any = null;
-      try {
-        const jsonStr = Buffer.from(mfaTicket.replace(/^mfa_/, ''), 'base64url').toString('utf-8');
-        ticketPayload = JSON.parse(jsonStr);
-      } catch {
-        return sendJson(res, 400, { success: false, message: 'Invalid or corrupted MFA ticket.' });
-      }
-
-      if (!ticketPayload || ticketPayload.exp < Date.now()) {
-        return sendJson(res, 400, { success: false, message: 'Verification code has expired. Please sign in again.' });
-      }
-
-      const cleanCode = String(code).trim();
-      if (cleanCode.length !== 6) {
-        return sendJson(res, 400, { success: false, message: 'Invalid verification code. Please enter the 6-digit code.' });
-      }
-
-      // Verify OTP hash
-      if (ticketPayload.otpHash && !verifyOtp(cleanCode, ticketPayload.otpHash)) {
-        return sendJson(res, 400, { success: false, message: 'Incorrect verification code. Please check your email and try again.' });
-      }
-
-      const user: UserPayload = {
-        id: ticketPayload.userId,
-        email: ticketPayload.email,
-        name: ticketPayload.name,
-        role: ticketPayload.role || 'SUPERADMIN',
-        emailVerified: true
-      };
-
-      const sessionToken = `mts_${crypto.randomBytes(32).toString('hex')}`;
-      const refreshToken = `ref_${crypto.randomBytes(32).toString('hex')}`;
-
-      return sendJson(res, 200, {
-        success: true,
-        token: sessionToken,
+        token: accessToken,
         refreshToken,
-        user
-      });
-    }
-
-    // 1c. POST /api/auth/2fa/resend (Resend 2FA code)
-    if (pathname.includes('/2fa/resend')) {
-      if (req.method !== 'POST') {
-        return sendJson(res, 405, { error: 'Method Not Allowed' });
-      }
-
-      const body = await parseJsonBody(req);
-      const { mfaTicket: prevTicket } = body;
-
-      let prevPayload: any = {};
-      if (prevTicket) {
-        try {
-          const jsonStr = Buffer.from(prevTicket.replace(/^mfa_/, ''), 'base64url').toString('utf-8');
-          prevPayload = JSON.parse(jsonStr);
-        } catch {}
-      }
-
-      const email = prevPayload.email || body.email || 'mtsmobilelab@gmail.com';
-      const userName = prevPayload.name || 'Staff Member';
-      const role = prevPayload.role || 'RECEPTIONIST';
-      const userId = prevPayload.userId || `usr_${Date.now()}`;
-
-      const newOtpCode = generate6DigitOtp();
-      const newOtpHash = hashOtp(newOtpCode);
-
-      const newTicketPayload = {
-        userId,
-        email,
-        name: userName,
-        role,
-        otpHash: newOtpHash,
-        exp: Date.now() + 5 * 60 * 1000,
-        attempts: 0
-      };
-
-      const newMfaTicket = `mfa_${Buffer.from(JSON.stringify(newTicketPayload)).toString('base64url')}`;
-
-      // Dispatch Email
-      sendSecurityEmail({
-        to: email,
-        subject: 'MTS Lab Security — New 2FA Login Verification Code',
-        text: `Hello ${userName},\n\nYour new 2FA login verification code is: ${newOtpCode}\n\nExpires in 5 minutes.`,
-        html: render2faEmailTemplate(userName, newOtpCode)
-      }).catch(() => {});
-
-      return sendJson(res, 200, {
-        success: true,
-        mfaTicket: newMfaTicket,
-        emailMasked: maskEmail(email),
-        message: 'A fresh verification code has been dispatched to your email.'
+        user: {
+          id: userId,
+          email: identity || 'mtsmobilelab@gmail.com',
+          name: userName,
+          role,
+          emailVerified: true
+        },
+        mfaRequired: false,
+        message: isSuperAdmin ? 'Welcome back, MTS Lab Super Admin!' : 'Authenticated successfully.'
       });
     }
 
@@ -852,76 +676,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // 3e-2. GET & PATCH /api/admin/security/2fa or /api/settings/security/2fa
+    // 3e-2. GET & PATCH /api/admin/security/2fa
     if (pathname.includes('/security/2fa') || pathname.endsWith('/admin/security/2fa')) {
-      if (req.method === 'GET') {
-        return sendJson(res, 200, {
-          success: true,
-          twoFactorEnabled: serverlessSuperAdmin2faEnabled,
-          message: `Super Admin 2FA is currently ${serverlessSuperAdmin2faEnabled ? 'ENABLED' : 'DISABLED'}.`
-        });
-      }
-      if (req.method === 'PATCH' || req.method === 'POST') {
-        const body = await parseJsonBody(req);
-        const { enabled } = body;
-        if (enabled !== undefined) {
-          serverlessSuperAdmin2faEnabled = enabled === true || enabled === 'true';
-        }
-        return sendJson(res, 200, {
-          success: true,
-          twoFactorEnabled: serverlessSuperAdmin2faEnabled,
-          securitySetupCompleted: true,
-          message: serverlessSuperAdmin2faEnabled
-            ? 'Two-factor authentication is now enabled for Super Admin. 2FA will be required on your next login.'
-            : 'Two-factor authentication is now disabled for Super Admin. You can now log in directly without OTP.'
-        });
-      }
-    }
-
-    // 3e-3. POST /api/admin/security/2fa/request-otp or /first-login-setup/request-otp
-    if (pathname.includes('/2fa/request-otp') || pathname.includes('/first-login-setup/request-otp')) {
-      const otpCode = generate6DigitOtp();
-      const otpHash = hashOtp(otpCode);
-      const emailHtml = render2faEmailTemplate('MTS Lab Super Admin', otpCode);
-      sendSecurityEmail({
-        to: 'mtsmobilelab@gmail.com',
-        subject: 'MTS Lab Security — Two-Factor Authentication Setup Code',
-        text: `Your MTS Lab 2FA verification code is: ${otpCode}`,
-        html: emailHtml
-      }).catch(() => {});
-
-      return sendJson(res, 200, {
-        success: true,
-        emailMasked: 'm***b@gmail.com',
-        otpTicket: `setuptick_${crypto.randomBytes(16).toString('hex')}`,
-        message: 'Verification code dispatched to your registered email.'
-      });
-    }
-
-    // 3e-4. POST /api/admin/security/2fa/verify-and-enable or /first-login-setup/verify-and-enable
-    if (pathname.includes('/2fa/verify-and-enable') || pathname.includes('/first-login-setup/verify-and-enable')) {
-      const body = await parseJsonBody(req);
-      const { code } = body;
-      if (!code || String(code).trim().length !== 6) {
-        return sendJson(res, 400, { success: false, message: 'A valid 6-digit verification code is required.' });
-      }
-      serverlessSuperAdmin2faEnabled = true;
-      return sendJson(res, 200, {
-        success: true,
-        twoFactorEnabled: true,
-        securitySetupCompleted: true,
-        message: 'Two-factor authentication is now enabled for Super Admin. 2FA will be required on your next login.'
-      });
-    }
-
-    // 3e-5. POST /api/admin/security/first-login-setup/disable
-    if (pathname.includes('/first-login-setup/disable')) {
-      serverlessSuperAdmin2faEnabled = false;
       return sendJson(res, 200, {
         success: true,
         twoFactorEnabled: false,
-        securitySetupCompleted: true,
-        message: 'Initial security setup complete with 2FA disabled. You can now log in directly without OTP.'
+        message: 'Two-factor authentication is disabled. Firebase Authentication is authoritative.'
       });
     }
 

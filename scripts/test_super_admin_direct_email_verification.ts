@@ -43,8 +43,7 @@ async function runSuperAdminDirectEmailVerificationTests() {
           role: 'SUPER_ADMIN',
           isActive: true,
           emailVerified: true,
-          accountStatus: 'ACTIVE',
-          twoFactorEnabled: false
+          accountStatus: 'ACTIVE'
         }
       });
     }
@@ -67,8 +66,7 @@ async function runSuperAdminDirectEmailVerificationTests() {
           role: 'ADMIN',
           isActive: true,
           emailVerified: true,
-          accountStatus: 'ACTIVE',
-          twoFactorEnabled: false
+          accountStatus: 'ACTIVE'
         }
       });
     }
@@ -90,8 +88,7 @@ async function runSuperAdminDirectEmailVerificationTests() {
           role: 'RECEPTIONIST',
           isActive: true,
           emailVerified: true,
-          accountStatus: 'ACTIVE',
-          twoFactorEnabled: false
+          accountStatus: 'ACTIVE'
         }
       });
     }
@@ -113,8 +110,7 @@ async function runSuperAdminDirectEmailVerificationTests() {
           role: 'TECHNICIAN',
           isActive: true,
           emailVerified: true,
-          accountStatus: 'ACTIVE',
-          twoFactorEnabled: false
+          accountStatus: 'ACTIVE'
         }
       });
     }
@@ -146,7 +142,6 @@ async function runSuperAdminDirectEmailVerificationTests() {
             password: passwordHash,
             role: r.role,
             emailVerified: false,
-            twoFactorEnabled: true,
             isActive: true,
             accountStatus: 'ACTIVE'
           }
@@ -160,7 +155,6 @@ async function runSuperAdminDirectEmailVerificationTests() {
             password: passwordHash,
             role: r.role,
             emailVerified: false,
-            twoFactorEnabled: true,
             isActive: true,
             accountStatus: 'ACTIVE'
           }

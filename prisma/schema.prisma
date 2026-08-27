@@ -34,9 +34,6 @@ model User {
   failedLoginAttempts Int                  @default(0)
   lockoutUntil        DateTime?
   lastLoginAt         DateTime?
-  twoFactorEnabled    Boolean              @default(true)
-  twoFactorType       String?              @default("EMAIL")
-  securitySetupCompleted Boolean           @default(false)
   emailChangePending  String?
   emailChangeCodeHash String?
   emailChangeExpiresAt DateTime?
@@ -44,7 +41,6 @@ model User {
   updatedAt           DateTime             @updatedAt
   auditLogs           AuditLog[]
   loginActivity       LoginActivity[]
-  otps                OTPVerification[]
   resetTokens         PasswordResetToken[]
   createdRepairs      Repair[]             @relation("CreatorRepairs")
   assignedRepairs     Repair[]             @relation("TechnicianRepairs")
@@ -124,25 +120,6 @@ model PasswordResetToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
-}
-
-model OTPVerification {
-  id          String   @id @default(uuid())
-  code        String?
-  codeHash    String?
-  userId      String
-  email       String?
-  purpose     String   @default("LOGIN_2FA")
-  attempts    Int      @default(0)
-  maxAttempts Int      @default(5)
-  expiresAt   DateTime
-  isUsed      Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([purpose])
-  @@index([expiresAt])
 }
 
 model LoginActivity {

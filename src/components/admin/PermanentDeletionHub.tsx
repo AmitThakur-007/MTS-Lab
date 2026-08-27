@@ -253,41 +253,15 @@ export default function PermanentDeletionHub() {
     setTwoFactorCode('');
     setOtpSent(false);
     setIsWarrantyDeleteDialogOpen(true);
-    handleRequestWarranty2FACode();
-  };
-
-  const handleRequestWarranty2FACode = async () => {
-    setSendingOtp(true);
-    try {
-      const res: any = await api.post('/battery-warranties/delete-2fa/request', {});
-      if (res?.success) {
-        setOtpSent(true);
-        setMaskedEmail(res.emailMasked || user?.email || '');
-        toast.success(res.message || "2FA verification code sent to your registered email.");
-      } else {
-        toast.error(res?.message || "Failed to dispatch 2FA verification code.");
-      }
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "Failed to request 2FA verification code.");
-    } finally {
-      setSendingOtp(false);
-    }
   };
 
   const handleExecuteWarrantyDelete = async () => {
-    if (!twoFactorCode.trim() || twoFactorCode.trim().length < 6) {
-      toast.error("Please enter the complete 6-digit verification code.");
-      return;
-    }
-
     setWarrantyDeleting(true);
     const idsToDelete = targetDeleteWarranties.map(w => w.id);
 
     try {
       const res: any = await api.post('/battery-warranties/bulk-delete', {
-        ids: idsToDelete,
-        code: twoFactorCode.trim()
+        ids: idsToDelete
       });
 
       if (res?.success) {
@@ -295,14 +269,13 @@ export default function PermanentDeletionHub() {
         setIsWarrantyDeleteDialogOpen(false);
         setSelectedWarrantyIds(prev => prev.filter(id => !idsToDelete.includes(id)));
         setTargetDeleteWarranties([]);
-        setTwoFactorCode('');
         fetchWarranties();
       } else {
         toast.error(res?.error || res?.message || "Failed to delete battery warranties.");
       }
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "2FA verification failed or expired. Please try again.");
+      toast.error(err.message || "Deletion failed.");
     } finally {
       setWarrantyDeleting(false);
     }
@@ -912,10 +885,10 @@ export default function PermanentDeletionHub() {
               </div>
               <div>
                 <DialogTitle className="text-lg font-black text-rose-950">
-                  Permanent Deletion (2FA Protected)
+                  Permanent Deletion
                 </DialogTitle>
                 <DialogDescription className="text-xs text-rose-700 font-semibold">
-                  Battery Warranty Hub • Email 2FA Code Required
+                  Battery Warranty Hub • Super Admin Authorization
                 </DialogDescription>
               </div>
             </div>
@@ -939,50 +912,6 @@ export default function PermanentDeletionHub() {
                 ))}
               </div>
             </div>
-
-            {/* 2FA Input Section */}
-            <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-3 shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <KeyRound className="w-4 h-4 text-amber-400" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-200">Email 2FA Verification</span>
-                </div>
-                {otpSent && (
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full">
-                    CODE SENT
-                  </span>
-                )}
-              </div>
-
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                {maskedEmail 
-                  ? `Enter the 6-digit verification code sent to your registered email (${maskedEmail}):` 
-                  : "A 6-digit security code has been dispatched to your Super Admin email address."}
-              </p>
-
-              <div className="space-y-2">
-                <Input
-                  type="text"
-                  maxLength={6}
-                  placeholder="0 0 0 0 0 0"
-                  value={twoFactorCode}
-                  onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="text-center font-mono text-xl tracking-[0.4em] font-black h-12 bg-slate-800 border-slate-700 text-white rounded-xl focus:border-rose-500"
-                />
-                
-                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-                  <span>Code expires in 5 minutes</span>
-                  <button
-                    type="button"
-                    onClick={handleRequestWarranty2FACode}
-                    disabled={sendingOtp}
-                    className="text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer disabled:opacity-50"
-                  >
-                    {sendingOtp ? "Sending Code..." : "Resend 2FA Code"}
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
 
           <DialogFooter className="border-t border-slate-100 pt-4 flex sm:justify-between items-center gap-2">
@@ -991,11 +920,10 @@ export default function PermanentDeletionHub() {
               size="sm"
               onClick={() => {
                 setIsWarrantyDeleteDialogOpen(false);
-                setTwoFactorCode('');
                 setTargetDeleteWarranties([]);
               }}
               disabled={warrantyDeleting}
-              className="rounded-xl text-xs font-semibold"
+              className="rounded-xl text-xs font-semibold cursor-pointer"
             >
               Cancel
             </Button>
@@ -1003,8 +931,8 @@ export default function PermanentDeletionHub() {
             <Button
               size="sm"
               onClick={handleExecuteWarrantyDelete}
-              disabled={warrantyDeleting || twoFactorCode.trim().length < 6}
-              className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm"
+              disabled={warrantyDeleting}
+              className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
               {warrantyDeleting ? (
                 <>

@@ -13,9 +13,6 @@ export interface User {
   phoneNumber?: string;
   department?: string;
   address?: string;
-  twoFactorEnabled?: boolean;
-  securitySetupCompleted?: boolean;
-  requiresSecuritySetup?: boolean;
   emailVerified?: boolean;
 }
 
