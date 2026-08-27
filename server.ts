@@ -14615,6 +14615,176 @@ export async function createServerApp() {
     }
   });
 
+  // ==========================================
+  // SERVICE SLIP PERMANENT DELETION ENGINE
+  // ==========================================
+  async function deleteServiceSlipForRepair(repairId: string, repairNumber?: string, reqUser?: any) {
+    if (!repairId) return { success: false, error: "No repair ID provided" };
+    try {
+      console.log(`[SERVICE SLIP CLEANUP START] Initiating permanent deletion for Repair ID: ${repairId} (Number: ${repairNumber || 'N/A'})`);
+
+      // 1. Fetch matching MediaAttachments in database
+      const attachments = await prisma.mediaAttachment.findMany({
+        where: {
+          OR: [
+            { entityType: 'SERVICE_SLIP', entityId: repairId },
+            ...(repairNumber ? [{ entityType: 'SERVICE_SLIP', entityId: repairNumber }] : []),
+            { entityType: 'REPAIR_SERVICE_SLIP', entityId: repairId },
+            ...(repairNumber ? [{ entityType: 'REPAIR_SERVICE_SLIP', entityId: repairNumber }] : []),
+            {
+              entityType: 'REPAIR',
+              entityId: repairId,
+              OR: [
+                { resourceType: 'pdf' },
+                { mimeType: 'application/pdf' },
+                { originalName: { contains: 'slip', mode: 'insensitive' } },
+                { originalName: { contains: 'service', mode: 'insensitive' } }
+              ]
+            }
+          ]
+        }
+      });
+
+      let cloudinaryDeletedCount = 0;
+      let dbRecordsDeletedCount = 0;
+
+      for (const attachment of attachments) {
+        if (attachment.publicId && process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+          try {
+            // Attempt destruction with 'raw', 'image', and original resourceType for robust cleanup
+            await cloudinary.uploader.destroy(attachment.publicId, { resource_type: 'raw' }).catch(() => {});
+            await cloudinary.uploader.destroy(attachment.publicId, { resource_type: 'image' }).catch(() => {});
+            if (attachment.resourceType && attachment.resourceType !== 'raw' && attachment.resourceType !== 'image') {
+              await cloudinary.uploader.destroy(attachment.publicId, { resource_type: attachment.resourceType }).catch(() => {});
+            }
+            cloudinaryDeletedCount++;
+          } catch (cloudErr) {
+            console.warn(`[CLOUDINARY SERVICE SLIP CLEANUP NOTICE] PublicId ${attachment.publicId}:`, cloudErr);
+          }
+        }
+
+        // Permanently delete MediaAttachment record
+        await prisma.mediaAttachment.delete({
+          where: { id: attachment.id }
+        }).catch(() => {});
+        dbRecordsDeletedCount++;
+      }
+
+      // 2. Clean temporary local PDF files from disk if present
+      const tmpDirs = [
+        path.join(process.cwd(), 'tmp', 'service_slips'),
+        path.join(process.cwd(), 'public', 'uploads', 'service_slips'),
+        path.join(process.cwd(), 'scratch')
+      ];
+
+      for (const tmpDir of tmpDirs) {
+        if (fs.existsSync(tmpDir)) {
+          try {
+            const files = fs.readdirSync(tmpDir);
+            for (const file of files) {
+              if ((file.includes(repairId) || (repairNumber && file.includes(repairNumber))) && file.toLowerCase().includes('slip')) {
+                try {
+                  fs.unlinkSync(path.join(tmpDir, file));
+                } catch (_) {}
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (reqUser) {
+        await recordAuditLog({
+          req: null,
+          userId: reqUser.id,
+          userRole: reqUser.role,
+          userName: reqUser.name || reqUser.email,
+          action: 'PERMANENTLY_DELETE_SERVICE_SLIP',
+          resource: 'Repair',
+          resourceId: repairId,
+          details: `Permanently deleted Service Slip artifact & references for delivered repair ${repairNumber || repairId}`
+        }).catch(() => {});
+      }
+
+      console.log(`[SERVICE SLIP CLEANUP SUCCESS] Permanently deleted ${dbRecordsDeletedCount} DB records and ${cloudinaryDeletedCount} Cloudinary assets for repair ${repairId}`);
+      return { success: true, dbRecordsDeletedCount, cloudinaryDeletedCount };
+    } catch (err: any) {
+      console.error(`[SERVICE SLIP CLEANUP ERROR] Failed for Repair ${repairId}:`, err);
+      return { success: false, error: err?.message || 'Failed to cleanup service slip' };
+    }
+  }
+
+  // Get Service Slip Metadata Endpoint (Protected - Rejects if Delivered)
+  app.get("/api/repairs/:id/service-slip", authenticate, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const repair = await prisma.repair.findUnique({ where: { id } });
+      if (!repair) {
+        return res.status(404).json({ error: "Repair record not found" });
+      }
+
+      if (repair.status === 'DELIVERED') {
+        return res.status(400).json({
+          error: "Service Slip is no longer available because this repair has been delivered.",
+          isDelivered: true,
+          code: "SERVICE_SLIP_DELIVERED_CLEANED"
+        });
+      }
+
+      const attachments = await prisma.mediaAttachment.findMany({
+        where: { entityType: 'SERVICE_SLIP', entityId: id }
+      });
+
+      return res.json({
+        repairId: id,
+        repairNumber: repair.repairNumber,
+        status: repair.status,
+        attachments
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: "Failed to fetch Service Slip information" });
+    }
+  });
+
+  // Batch Admin Endpoint to clean up Service Slips from past delivered repairs
+  app.post("/api/admin/repairs/cleanup-delivered-service-slips", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res) => {
+    try {
+      const { dryRun } = req.body;
+      const deliveredRepairs = await prisma.repair.findMany({
+        where: { status: 'DELIVERED' },
+        select: { id: true, repairNumber: true }
+      });
+
+      if (dryRun) {
+        return res.json({
+          dryRun: true,
+          deliveredRepairsCount: deliveredRepairs.length,
+          deliveredRepairs
+        });
+      }
+
+      let totalDbRecords = 0;
+      let totalCloudinaryAssets = 0;
+
+      for (const repair of deliveredRepairs) {
+        const result = await deleteServiceSlipForRepair(repair.id, repair.repairNumber, req.user);
+        if (result.success) {
+          totalDbRecords += result.dbRecordsDeletedCount || 0;
+          totalCloudinaryAssets += result.cloudinaryDeletedCount || 0;
+        }
+      }
+
+      return res.json({
+        success: true,
+        deliveredRepairsCount: deliveredRepairs.length,
+        totalDbRecordsCleaned: totalDbRecords,
+        totalCloudinaryAssetsCleaned: totalCloudinaryAssets,
+        message: `Successfully cleaned Service Slips for ${deliveredRepairs.length} delivered repairs.`
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || "Failed to execute delivered service slip cleanup" });
+    }
+  });
+
   app.patch("/api/repairs/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
     try {
       const { id } = req.params;
@@ -14961,6 +15131,11 @@ export async function createServerApp() {
         }
       });
 
+      // Permanent Service Slip cleanup when repair becomes DELIVERED
+      if (normalizedStatus === 'DELIVERED') {
+        await deleteServiceSlipForRepair(repair.id, repair.repairNumber, req.user);
+      }
+
       res.json(finalRepair || { ...repair, batteryWarranty: updatedWarranty });
     } catch (err: any) {
       console.error("[REPAIR UPDATE ERROR]", err);
@@ -15080,6 +15255,11 @@ export async function createServerApp() {
       // Sync to Firestore asynchronously
       syncToFirestore('repair', repair).catch((e) => console.warn("[FIRESTORE ASYNC SYNC]", e?.message));
 
+      // Permanent Service Slip cleanup when repair becomes DELIVERED
+      if (normalizedStatus === 'DELIVERED') {
+        await deleteServiceSlipForRepair(repair.id, repair.repairNumber, req.user);
+      }
+
       res.json(repair);
     } catch (err: any) {
       console.error("[TECHNICIAN UPDATE ERROR]", err);
@@ -15159,6 +15339,11 @@ export async function createServerApp() {
       broadcastRealtimeEvent({ entity: "repair", action: "UPDATE", id: repair.id, data: repair });
       broadcastRealtimeEvent({ entity: "repairLog", action: "CREATE", id: newLog.id, data: newLog });
       syncToFirestore('repair', repair).catch(() => {});
+
+      // Permanent Service Slip cleanup when repair becomes DELIVERED
+      if (normalizedStatus === 'DELIVERED') {
+        await deleteServiceSlipForRepair(repair.id, repair.repairNumber, req.user);
+      }
 
       res.json(repair);
     } catch (err: any) {
