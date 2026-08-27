@@ -312,14 +312,24 @@ function ShopContent() {
                         setIsDetailOpen(true);
                       }}
                     >
-                      <img 
-                        src={product.imageUrl || '/assets/images/phone_repair_lab_1786719222650.jpg'} 
-                        className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105" 
-                        alt={product.name}
-                        onError={(e: any) => {
-                          e.target.src = '/assets/images/phone_repair_lab_1786719222650.jpg';
-                        }}
-                      />
+                      {product.imageUrl ? (
+                        <img 
+                          src={product.imageUrl} 
+                          className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105" 
+                          alt={product.name}
+                          onError={(e: any) => {
+                            e.target.style.display = 'none';
+                            if (e.target.nextSibling) {
+                              e.target.nextSibling.style.display = 'flex';
+                            }
+                          }}
+                        />
+                      ) : null}
+                      <div 
+                        className={`w-full h-full items-center justify-center bg-slate-100/80 rounded-xl text-slate-300 ${product.imageUrl ? 'hidden' : 'flex'}`}
+                      >
+                        <Package className="w-12 h-12" />
+                      </div>
 
                       {/* Floating Badges */}
                       <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
@@ -469,14 +479,22 @@ function ShopContent() {
             <div className="flex flex-col md:flex-row h-full max-h-[90vh]">
               {/* Image Container (1:1 Ratio) */}
               <div className="md:w-1/2 bg-slate-50 relative p-6 flex items-center justify-center min-h-[260px] md:min-h-full">
-                <img 
-                  src={selectedProduct.imageUrl || '/assets/images/phone_repair_lab_1786719222650.jpg'} 
-                  className="max-h-[280px] md:max-h-[340px] w-full object-contain"
-                  alt={selectedProduct.name}
-                  onError={(e: any) => {
-                    e.target.src = '/assets/images/phone_repair_lab_1786719222650.jpg';
-                  }}
-                />
+                {selectedProduct.imageUrl ? (
+                  <img 
+                    src={selectedProduct.imageUrl} 
+                    className="max-h-[280px] md:max-h-[340px] w-full object-contain"
+                    alt={selectedProduct.name}
+                    onError={(e: any) => {
+                      e.target.style.display = 'none';
+                      if (e.target.nextSibling) {
+                        e.target.nextSibling.style.display = 'flex';
+                      }
+                    }}
+                  />
+                ) : null}
+                <div className={`flex flex-col items-center justify-center p-6 text-slate-300 ${selectedProduct.imageUrl ? 'hidden' : 'flex'}`}>
+                  <Package className="w-16 h-16" />
+                </div>
                 <div className="absolute top-4 left-4 flex flex-col gap-1.5">
                   {selectedProduct.isFeatured && (
                     <Badge className="bg-indigo-600 text-white border-none font-black text-[9px] px-3 py-1 rounded-full shadow-md">
