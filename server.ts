@@ -2440,36 +2440,45 @@ const upload = multer({
 
 async function ensureDefaultShopProducts() {
   try {
-    const count = await prisma.shopProduct.count({ where: { isArchived: false } });
-    if (count === 0) {
+    // Only seed on completely fresh initial installation when zero products exist and no product operations have taken place
+    const totalEverCreated = await prisma.shopProduct.count();
+    const hasAuditLog = await prisma.auditLog.findFirst({
+      where: {
+        action: {
+          in: ['CREATE_SHOP_PRODUCT', 'PERMANENTLY_DELETE_SHOP_PRODUCT', 'UPDATE_SHOP_PRODUCT', 'ARCHIVE_SHOP_PRODUCT']
+        }
+      }
+    });
+
+    if (totalEverCreated === 0 && !hasAuditLog) {
       const defaultProducts = [
         {
-          name: 'Genuine 120Hz AMOLED Screen Assembly (iPhone 13 / 14 Series)',
-          category: 'Displays & Screens',
-          brand: 'Apple',
-          model: 'iPhone 13 / 14',
-          sku: 'MTS-SCR-IP1314',
-          description: 'Factory calibrated OLED panel with True Tone, 120Hz ProMotion response, and oleophobic coating. Precision tested in our Kathmandu lab.',
-          price: 18500,
-          discountPrice: 16500,
-          stockQuantity: 12,
+          name: 'Anker PowerPort 20W PD USB-C Fast Charger',
+          category: 'Chargers & Power',
+          brand: 'Anker',
+          model: 'PowerPort 20W',
+          sku: 'MTS-CHG-ANK20W',
+          description: 'High-speed 20W Power Delivery wall charger for iPhone, iPad, and Android flagship smartphones. Compact design with MultiProtect safety system.',
+          price: 2490,
+          discountPrice: 1990,
+          stockQuantity: 25,
           availability: 'IN_STOCK',
-          imageUrl: '/assets/images/display_replace_1786719191504.jpg',
+          imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
           status: 'PUBLISHED',
           isFeatured: true,
           isBestSeller: true,
           displayOrder: 1
         },
         {
-          name: 'High-Capacity Certified Replacement Battery (5000mAh Class)',
-          category: 'Batteries',
-          brand: 'Universal / OEM',
-          model: 'Multi-Brand',
-          sku: 'MTS-BAT-5000',
-          description: 'Grade-A lithium polymer battery with intelligent protection IC, zero cycle count, and guaranteed 100% health calibration support.',
-          price: 3800,
-          discountPrice: 3200,
-          stockQuantity: 25,
+          name: 'MTS Premium Wireless ANC Earbuds (Active Noise Cancelling)',
+          category: 'Audio & Headphones',
+          brand: 'MTS Lab Pro',
+          model: 'Pro ANC',
+          sku: 'MTS-AUD-ANCPRO',
+          description: 'High-definition spatial audio with 30dB Active Noise Cancellation, Bluetooth 5.3 low latency connection, and 30-hour total playback.',
+          price: 4990,
+          discountPrice: 3990,
+          stockQuantity: 18,
           availability: 'IN_STOCK',
           imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
           status: 'PUBLISHED',
@@ -2478,36 +2487,36 @@ async function ensureDefaultShopProducts() {
           displayOrder: 2
         },
         {
-          name: 'OEM Dynamic Island AMOLED Assembly (iPhone 15 Pro Max)',
-          category: 'Displays & Screens',
-          brand: 'Apple',
-          model: 'iPhone 15 Pro Max',
-          sku: 'MTS-SCR-IP15PM',
-          description: 'Ultra-bright 2000-nit original display module with ceramic shield glass and pre-installed sensor proximity bracket.',
-          price: 34000,
-          discountPrice: 31500,
-          stockQuantity: 8,
+          name: 'Shockproof Crystal Clear Armor Case (iPhone & Samsung Galaxy)',
+          category: 'Mobile Covers & Cases',
+          brand: 'Armor Shield',
+          model: 'Universal Flagship',
+          sku: 'MTS-COV-ARMOR',
+          description: 'Military-grade drop protected transparent phone case with anti-yellowing German TPU and raised camera protection bezels.',
+          price: 1200,
+          discountPrice: 850,
+          stockQuantity: 50,
           availability: 'IN_STOCK',
-          imageUrl: '/assets/images/display_replace_1786719191504.jpg',
+          imageUrl: '/assets/images/back_glass_fix_1786719207185.jpg',
           status: 'PUBLISHED',
-          isFeatured: true,
-          isBestSeller: false,
+          isFeatured: false,
+          isBestSeller: true,
           displayOrder: 3
         },
         {
-          name: 'MTS Lab Master IC Micro-Soldering Flux & Solder Wire Pack',
-          category: 'Tools & Essentials',
-          brand: 'MTS Lab Pro',
-          model: 'Universal',
-          sku: 'MTS-TOOL-FLUX',
-          description: 'High-purity Japanese halogen-free no-clean soldering paste and lead-free micro-wire for precision logic board repairs.',
-          price: 2900,
-          discountPrice: 2450,
-          stockQuantity: 15,
+          name: '9H Hardness Edge-to-Edge Tempered Glass Protector',
+          category: 'Tempered Glass & Protection',
+          brand: 'GlassGuard',
+          model: 'Multi-Model',
+          sku: 'MTS-GLS-9H',
+          description: 'Shatter-proof 9H tempered glass with oleophobic fingerprint coating and automatic dust-removal alignment tray.',
+          price: 890,
+          discountPrice: 650,
+          stockQuantity: 100,
           availability: 'IN_STOCK',
-          imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
+          imageUrl: '/assets/images/front_glass_repair_1786719176945.jpg',
           status: 'PUBLISHED',
-          isFeatured: false,
+          isFeatured: true,
           isBestSeller: true,
           displayOrder: 4
         }
@@ -2516,7 +2525,7 @@ async function ensureDefaultShopProducts() {
       for (const prod of defaultProducts) {
         await prisma.shopProduct.create({ data: prod });
       }
-      console.log("[DB SEED] Successfully initialized default Shop products.");
+      console.log("[DB SEED] Successfully initialized initial Shop accessories catalog on fresh installation.");
     }
   } catch (err) {
     console.error("[DB ERROR] Failed to seed default shop products:", err);

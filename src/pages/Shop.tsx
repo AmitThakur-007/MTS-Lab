@@ -136,13 +136,14 @@ function ShopContent() {
     setFetchError(null);
     try {
       const data = await api.get('/public/products');
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setProducts(data);
       } else {
-        setProducts(DEFAULT_PRODUCTS);
+        setProducts([]);
       }
     } catch (err: any) {
       console.warn('[SHOP NOTICE] Using offline / cached default catalog:', err?.message || err);
+      // Fallback only when offline network error occurs
       setProducts(DEFAULT_PRODUCTS);
     } finally {
       setLoading(false);

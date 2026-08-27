@@ -281,11 +281,14 @@ export function ShopManagementContent() {
     setDeleting(true);
     try {
       await api.delete(`/admin/products/${activeProduct.id}`);
-      toast.success(`Product "${activeProduct.name}" archived successfully.`);
+      toast.success(`Product "${activeProduct.name}" permanently deleted.`);
       setProducts(prev => prev.filter(p => p.id !== activeProduct.id));
       setIsDeleteModalOpen(false);
+      setActiveProduct(null);
+      // Re-fetch authoritative list from server DB to verify state
+      fetchProducts();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to archive product');
+      toast.error(err?.message || 'Failed to delete product');
     } finally {
       setDeleting(false);
     }
