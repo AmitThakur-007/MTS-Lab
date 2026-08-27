@@ -1861,19 +1861,13 @@ async function checkFirebaseUserEmailVerified(
           firebaseUid: data.localId,
           email: data.email?.toLowerCase().trim() || normalizedEmail
         };
-      } else {
-        const errJson: any = await res.json().catch(() => ({}));
-        const errCode = errJson?.error?.message;
-        if (errCode === 'INVALID_PASSWORD' || errCode === 'INVALID_LOGIN_CREDENTIALS' || errCode === 'EMAIL_NOT_FOUND') {
-          return { checked: true, isVerified: false, authFailed: true };
-        }
       }
     } catch (signInErr) {
       console.warn("[FIREBASE AUTH] signInWithPassword error:", signInErr);
     }
   }
 
-  // 3. Admin SDK lookup by firebaseUid or email
+  // 3. Admin SDK lookup by firebaseUid or email & password sync
   const auth = getAdminAuth();
   if (auth) {
     try {
@@ -1889,6 +1883,14 @@ async function checkFirebaseUserEmailVerified(
         } catch (emailErr) {}
       }
       if (fbUser) {
+        // If password is provided and local bcrypt passed, sync password to Firebase Auth
+        if (password) {
+          try {
+            await auth.updateUser(fbUser.uid, { password });
+          } catch (updateErr) {
+            console.warn("[FIREBASE AUTH] Admin SDK password sync notice:", updateErr);
+          }
+        }
         return {
           checked: true,
           isVerified: Boolean(fbUser.emailVerified),
@@ -13896,7 +13898,6 @@ export async function createServerApp() {
         username: user.username,
         accountStatus: user.accountStatus,
         isActive: user.isActive,
-        twoFactorEnabled: user.twoFactorEnabled,
         emailVerified: user.emailVerified,
         verificationEmailSent,
         message: user.emailVerified

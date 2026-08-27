@@ -134,6 +134,7 @@ export default function Login() {
         const signInRes = await signInWithEmailAndPassword(auth, trimmedEmail, password);
         userCred = signInRes.user;
       } catch (fbErr: any) {
+        userCred = null;
         if (fbErr?.code === 'auth/user-disabled') {
           toast.error('Your account has been disabled. Please contact MTS Lab administration.');
           setLoading(false);
@@ -142,21 +143,10 @@ export default function Login() {
           toast.error('Too many failed login attempts. Please try again later.');
           setLoading(false);
           return;
-        } else if (
-          fbErr?.code === 'auth/invalid-credential' ||
-          fbErr?.code === 'auth/wrong-password' ||
-          fbErr?.code === 'auth/invalid-login-credentials'
-        ) {
-          toast.error('Incorrect email or password.');
-          setLoading(false);
-          return;
-        } else if (fbErr?.code === 'auth/user-not-found') {
-          // Firebase user not yet created; proceed to backend login so backend can validate
-          // bcrypt password FIRST before provisioning the account in Firebase Auth.
-          userCred = null;
-        } else {
-          console.warn('[FIREBASE AUTH] Client sign-in notice:', fbErr);
         }
+        // For other auth errors (e.g. auth/invalid-credential, user not yet in Firebase Auth,
+        // or password not yet synced), fall back to backend login handler so bcrypt password
+        // is validated FIRST and account synced/provisioned in Firebase Auth.
       }
 
       if (userCred) {
