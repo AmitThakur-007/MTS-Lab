@@ -17,6 +17,8 @@ import mtsLogo from '@/assets/images/mts-logo.jpg';
 import { auth } from '@/lib/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 
+import { api } from '@/services/api';
+
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,25 +39,30 @@ export default function ForgotPassword() {
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
+
+      // 1. Check if email exists in MTS Lab database
+      const checkRes: any = await api.post('/auth/forgot-password', { email: normalizedEmail });
       
-      // Authoritative Firebase Authentication Password Reset Email Dispatch
-      await sendPasswordResetEmail(auth, normalizedEmail, {
-        url: `${window.location.origin}/login`,
-        handleCodeInApp: true
-      });
+      if (!checkRes?.success) {
+        throw new Error(checkRes?.message || 'This email address is not registered with MTS Lab.');
+      }
+      
+      // 2. Email exists in MTS Lab database -> Dispatch official Firebase password reset email
+      try {
+        await sendPasswordResetEmail(auth, normalizedEmail, {
+          url: `${window.location.origin}/reset-password`,
+          handleCodeInApp: true
+        });
+      } catch (fbErr: any) {
+        console.warn('[FIREBASE RESET] Client reset email notice:', fbErr);
+      }
 
       setSubmitted(true);
       toast.success('Password reset link sent to your email.');
     } catch (err: any) {
-      if (err?.code === 'auth/user-not-found') {
-        // Show success for privacy/security without leaking whether email exists
-        setSubmitted(true);
-        toast.success('If an account exists with this email, a password reset link has been sent.');
-      } else {
-        const msg = err.message || 'Failed to send password reset email. Please try again.';
-        setErrorMessage(msg);
-        toast.error(msg);
-      }
+      const msg = err?.error || err?.message || 'Failed to send password reset email. Please try again.';
+      setErrorMessage(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

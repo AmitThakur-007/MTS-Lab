@@ -2964,11 +2964,15 @@ export async function createServerApp() {
       if (userIdToLookup) {
         const liveUser = await prisma.user.findUnique({
           where: { id: userIdToLookup },
-          select: { id: true, email: true, name: true, role: true, isActive: true, accountStatus: true, deletedAt: true, branchId: true }
+          select: { id: true, email: true, name: true, role: true, isActive: true, accountStatus: true, emailVerified: true, deletedAt: true, branchId: true }
         });
 
         if (!liveUser || liveUser.deletedAt || !liveUser.isActive || (liveUser.accountStatus !== "ACTIVE" && liveUser.accountStatus !== "APPROVED")) {
           return res.status(401).json({ error: "AccountInactive", message: "Your account is no longer active or has been disabled." });
+        }
+
+        if (!liveUser.emailVerified && req.path !== '/auth/resend-verification' && req.path !== '/auth/check-verification') {
+          return res.status(403).json({ error: "EmailNotVerified", emailNotVerified: true, message: "Please verify your email address before continuing." });
         }
 
         req.user = {
@@ -2979,6 +2983,7 @@ export async function createServerApp() {
           name: liveUser.name,
           role: liveUser.role,
           accountStatus: liveUser.accountStatus,
+          emailVerified: liveUser.emailVerified,
           branchId: liveUser.branchId
         };
       } else {
@@ -5266,18 +5271,8 @@ export async function createServerApp() {
         });
       }
 
-      // Authoritative verification: Either PostgreSQL emailVerified or Firebase Cloud isVerified
-      const isEmailConfirmed = Boolean(user.emailVerified) || Boolean(fbCheck.isVerified);
-
-      if (user.emailVerified && !fbCheck.isVerified && (user.firebaseUid || fbCheck.firebaseUid)) {
-        const targetFbUid = user.firebaseUid || fbCheck.firebaseUid;
-        try {
-          const auth = getAdminAuth();
-          if (auth && targetFbUid) {
-            auth.updateUser(targetFbUid, { emailVerified: true }).catch(() => {});
-          }
-        } catch {}
-      }
+      // Authoritative verification: Firebase Cloud isVerified is the single source of truth
+      const isEmailConfirmed = Boolean(fbCheck.isVerified);
 
       if (!isEmailConfirmed) {
         return res.status(403).json({
