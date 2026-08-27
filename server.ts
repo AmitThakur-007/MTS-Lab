@@ -6487,8 +6487,8 @@ export async function createServerApp() {
   // SHOP MANAGEMENT & PUBLIC SHOP ENDPOINTS
   // ==========================================
 
-  // Public Endpoint: Get all active, published shop products
-  app.get("/api/public/products", async (req: any, res: any) => {
+  // Public Endpoints for Shop Products
+  const fetchPublicProducts = async (req: any, res: any) => {
     try {
       const products = await prisma.shopProduct.findMany({
         where: {
@@ -6505,7 +6505,11 @@ export async function createServerApp() {
       console.error("[PUBLIC PRODUCTS ERROR]", err);
       return res.status(500).json({ error: "Failed to fetch public products" });
     }
-  });
+  };
+
+  app.get("/api/public/products", fetchPublicProducts);
+  app.get("/api/shop/products", fetchPublicProducts);
+  app.get("/api/products", fetchPublicProducts);
 
   // Admin Endpoint: Get all shop products (including DRAFT, HIDDEN) for Shop Management
   app.get("/api/admin/products", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
@@ -6575,7 +6579,7 @@ export async function createServerApp() {
         data: {
           name: name.trim(),
           description: description ? String(description).trim() : null,
-          category: category ? String(category).trim() : 'Hardware & Accessories',
+          category: category ? String(category).trim() : 'Gadgets & Accessories',
           brand: brand ? String(brand).trim() : null,
           model: model ? String(model).trim() : null,
           sku: sku ? String(sku).trim() : null,
@@ -6727,22 +6731,33 @@ export async function createServerApp() {
     }
   });
 
-  // Admin Endpoint: Delete / Archive Product
-  app.delete("/api/admin/products/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
+  // Admin Endpoint: Permanent Delete Product (with Cloudinary Cleanup)
+  const handlePermanentDeleteProduct = async (req: any, res: any) => {
     try {
       const { id } = req.params;
       const existing = await prisma.shopProduct.findUnique({ where: { id } });
-      if (!existing || existing.isArchived) {
+      if (!existing) {
         return res.status(404).json({ error: "Product not found" });
       }
 
-      const archived = await prisma.shopProduct.update({
-        where: { id },
-        data: {
-          isArchived: true,
-          status: 'ARCHIVED',
-          deletedAt: new Date()
+      // Cloudinary image cleanup if applicable
+      if (existing.imageUrl && process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+        try {
+          const mediaRecord = await prisma.mediaAttachment.findFirst({
+            where: { secureUrl: existing.imageUrl }
+          });
+          if (mediaRecord?.publicId) {
+            await cloudinary.uploader.destroy(mediaRecord.publicId).catch(() => {});
+            await prisma.mediaAttachment.delete({ where: { id: mediaRecord.id } }).catch(() => {});
+          }
+        } catch (cloudErr) {
+          console.warn("[CLOUDINARY CLEANUP NOTICE]", cloudErr);
         }
+      }
+
+      // Permanently delete from PostgreSQL database
+      await prisma.shopProduct.delete({
+        where: { id }
       });
 
       await recordAuditLog({
@@ -6750,18 +6765,21 @@ export async function createServerApp() {
         userId: req.user.id,
         userRole: req.user.role,
         userName: req.user.name || req.user.email,
-        action: 'ARCHIVE_SHOP_PRODUCT',
+        action: 'PERMANENTLY_DELETE_SHOP_PRODUCT',
         resource: 'ShopProduct',
-        resourceId: archived.id,
-        details: `Archived shop product: ${archived.name}`
+        resourceId: id,
+        details: `Permanently deleted shop product: ${existing.name}`
       });
 
-      return res.json({ success: true, message: "Product archived successfully", id });
+      return res.json({ success: true, message: "Product permanently deleted", id });
     } catch (err: any) {
-      console.error("[ADMIN PRODUCT ARCHIVE ERROR]", err);
-      return res.status(500).json({ error: "Failed to archive product" });
+      console.error("[ADMIN PRODUCT PERMANENT DELETE ERROR]", err);
+      return res.status(500).json({ error: "Failed to permanently delete product" });
     }
-  });
+  };
+
+  app.delete("/api/admin/products/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), handlePermanentDeleteProduct);
+  app.delete("/api/products/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), handlePermanentDeleteProduct);
 
   // ==========================================
   // SUPERADMIN DIRECT STAFF EMAIL VERIFICATION

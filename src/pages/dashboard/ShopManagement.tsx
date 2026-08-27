@@ -66,13 +66,15 @@ export interface ShopProductRecord {
 }
 
 const CATEGORIES = [
+  'Chargers & Power',
+  'Audio & Headphones',
+  'Mobile Covers & Cases',
+  'Tempered Glass & Protection',
+  'Cables & Adapters',
+  'Gadgets & Electronics',
   'Displays & Screens',
   'Batteries',
-  'Housing & Glass',
   'Tools & Essentials',
-  'Charging Ports',
-  'Cameras & Optics',
-  'Hardware & Accessories',
   'Others'
 ];
 
@@ -958,16 +960,16 @@ export function ShopManagementContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete / Archive Confirmation Dialog */}
+      {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
         <DialogContent className="max-w-md rounded-3xl p-6 text-center space-y-4">
           <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
             <Trash2 className="w-7 h-7" />
           </div>
-          <div className="space-y-1">
-            <DialogTitle className="text-lg font-black text-slate-900">Archive Shop Product?</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 max-w-sm mx-auto">
-              Are you sure you want to remove <strong className="text-slate-900">"{activeProduct?.name}"</strong> from the public shop catalog? It will be archived safely.
+          <div className="space-y-2">
+            <DialogTitle className="text-lg font-black text-slate-900">Delete Product?</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+              This product <strong className="text-slate-900">"{activeProduct?.name}"</strong> and its associated Shop data will be permanently deleted. This action cannot be undone.
             </DialogDescription>
           </div>
           <div className="flex items-center gap-3 justify-center pt-2">
@@ -984,7 +986,7 @@ export function ShopManagementContent() {
               className="bg-rose-600 hover:bg-rose-500 text-white font-bold h-10 px-5 rounded-xl text-xs"
             >
               {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Confirm Archive
+              Delete Permanently
             </Button>
           </div>
         </DialogContent>

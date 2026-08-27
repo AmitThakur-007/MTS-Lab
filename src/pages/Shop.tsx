@@ -46,103 +46,79 @@ export interface ProductItem {
   isBestSeller?: boolean;
 }
 
-// Curated Genuine MTS Lab Hardware & Accessory Catalog
+// Curated Genuine MTS Lab Accessories & Gadget Catalog
 const DEFAULT_PRODUCTS: ProductItem[] = [
   {
     id: 'prod-1',
-    name: 'Genuine 120Hz AMOLED Screen Assembly (iPhone 13 / 14 Series)',
-    category: 'Displays & Screens',
-    description: 'Factory calibrated OLED panel with True Tone, 120Hz ProMotion response, and oleophobic coating. Precision tested in our Kathmandu lab.',
-    price: 18500,
-    discountPrice: 16500,
-    stockQuantity: 12,
-    imageUrl: '/assets/images/display_replace_1786719191504.jpg',
-    isFeatured: true,
-    isBestSeller: true
-  },
-  {
-    id: 'prod-2',
-    name: 'High-Capacity Certified Replacement Battery (5000mAh Class)',
-    category: 'Batteries',
-    description: 'Grade-A lithium polymer battery with intelligent protection IC, zero cycle count, and guaranteed 100% health calibration support.',
-    price: 3800,
-    discountPrice: 3200,
+    name: 'Anker PowerPort 20W PD USB-C Fast Charger',
+    category: 'Chargers & Power',
+    description: 'High-speed 20W Power Delivery wall charger for iPhone, iPad, and Android flagship smartphones. Compact design with MultiProtect safety system.',
+    price: 2490,
+    discountPrice: 1990,
     stockQuantity: 25,
     imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
     isFeatured: true,
     isBestSeller: true
   },
   {
-    id: 'prod-3',
-    name: 'OEM Dynamic Island AMOLED Assembly (iPhone 15 Pro Max)',
-    category: 'Displays & Screens',
-    description: 'Ultra-bright 2000-nit original display module with ceramic shield glass and pre-installed sensor proximity bracket.',
-    price: 34000,
-    discountPrice: 31500,
-    stockQuantity: 6,
-    imageUrl: '/assets/images/display_replace_1786719191504.jpg',
+    id: 'prod-2',
+    name: 'MTS Premium Wireless ANC Earbuds (Active Noise Cancelling)',
+    category: 'Audio & Headphones',
+    description: 'High-definition spatial audio with 30dB Active Noise Cancellation, Bluetooth 5.3 low latency connection, and 30-hour total playback.',
+    price: 4990,
+    discountPrice: 3990,
+    stockQuantity: 18,
+    imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
     isFeatured: true,
-    isBestSeller: false
+    isBestSeller: true
   },
   {
-    id: 'prod-4',
-    name: 'Laser-Cut Rear Glass Housing (Flagship Matte Finish)',
-    category: 'Housing & Glass',
-    description: 'Precision molded back glass panel designed for seamless laser bonding without internal component disassembly.',
-    price: 4500,
-    discountPrice: 3800,
-    stockQuantity: 18,
+    id: 'prod-3',
+    name: 'Shockproof Crystal Clear Armor Case (iPhone & Samsung Galaxy)',
+    category: 'Mobile Covers & Cases',
+    description: 'Military-grade drop protected transparent phone case with anti-yellowing German TPU and raised camera protection bezels.',
+    price: 1200,
+    discountPrice: 850,
+    stockQuantity: 50,
     imageUrl: '/assets/images/back_glass_fix_1786719207185.jpg',
     isFeatured: false,
     isBestSeller: true
   },
   {
+    id: 'prod-4',
+    name: '9H Hardness Edge-to-Edge Tempered Glass Protector',
+    category: 'Tempered Glass & Protection',
+    description: 'Shatter-proof 9H tempered glass with oleophobic fingerprint coating and automatic dust-removal alignment tray.',
+    price: 890,
+    discountPrice: 650,
+    stockQuantity: 100,
+    imageUrl: '/assets/images/front_glass_repair_1786719176945.jpg',
+    isFeatured: true,
+    isBestSeller: true
+  },
+  {
     id: 'prod-5',
-    name: 'Type-C SuperFast Charging Sub-Board Flex with Microphone',
-    category: 'Charging & Flex Cables',
-    description: 'Original charging dock FPC flex with moisture detection sensor, OTG line support, and gold-plated contacts.',
-    price: 2400,
-    discountPrice: 1950,
-    stockQuantity: 30,
+    name: 'Braided Nylon 65W Fast Charging USB-C Cable (2m)',
+    category: 'Cables & Adapters',
+    description: 'Heavy-duty 10,000+ bend tested braided cable supporting 65W Power Delivery and high-speed data transmission.',
+    price: 1450,
+    discountPrice: 1100,
+    stockQuantity: 40,
     imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
     isFeatured: false,
     isBestSeller: false
   },
   {
     id: 'prod-6',
-    name: 'Optical Grade Sapphire Camera Lens Protector & Visor',
-    category: 'Camera Modules',
-    description: '9H hardness sapphire glass replacement protecting multi-camera OIS gyro modules from scratches and lens flare.',
-    price: 1800,
-    discountPrice: 1400,
-    stockQuantity: 40,
-    imageUrl: '/assets/images/front_glass_repair_1786719176945.jpg',
-    isFeatured: true,
-    isBestSeller: false
-  },
-  {
-    id: 'prod-7',
-    name: 'MTS Lab Master IC Micro-Soldering Flux & Solder Wire Pack',
-    category: 'Tools & Essentials',
-    description: 'High-purity Japanese halogen-free no-clean soldering paste and lead-free micro-wire for precision logic board repairs.',
-    price: 2900,
-    discountPrice: 2450,
+    name: '20000mAh Ultra-Slim Fast Charge Power Bank (22.5W PD)',
+    category: 'Gadgets & Electronics',
+    description: 'Dual USB-A and USB-C bi-directional fast charging battery pack with LED digital battery percentage display.',
+    price: 3890,
+    discountPrice: 3290,
     stockQuantity: 15,
     imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
-    isFeatured: false,
+    isFeatured: true,
     isBestSeller: true
-  },
-  {
-    id: 'prod-8',
-    name: 'Precision OCA Front Glass Lens with Polarizer Film',
-    category: 'Housing & Glass',
-    description: 'Factory molded replacement outer glass for vacuum lamination machines. Retains original display touch & color gamut.',
-    price: 3200,
-    discountPrice: 2800,
-    stockQuantity: 22,
-    imageUrl: '/assets/images/front_glass_repair_1786719176945.jpg',
-    isFeatured: false,
-    isBestSeller: false
   }
 ];
 
@@ -163,7 +139,6 @@ function ShopContent() {
       if (Array.isArray(data) && data.length > 0) {
         setProducts(data);
       } else {
-        // Use curated genuine defaults
         setProducts(DEFAULT_PRODUCTS);
       }
     } catch (err: any) {
@@ -184,7 +159,7 @@ function ShopContent() {
     const extracted = safeList
       .map(p => p && typeof p.category === 'string' ? p.category.trim() : null)
       .filter((c): c is string => Boolean(c));
-    return ['All', ...Array.from(new Set(extracted))];
+    return ['All', ...Array.from(new Set(['Chargers & Power', 'Audio & Headphones', 'Mobile Covers & Cases', 'Tempered Glass & Protection', 'Cables & Adapters', 'Gadgets & Electronics', ...extracted]))];
   }, [products]);
 
   // Safely filter products
@@ -209,44 +184,44 @@ function ShopContent() {
       <Navbar />
 
       {/* Hero Banner */}
-      <section className="relative py-16 md:py-24 flex items-center justify-center overflow-hidden bg-slate-900 text-white pt-28">
+      <section className="relative py-14 md:py-20 flex items-center justify-center overflow-hidden bg-slate-900 text-white pt-24 md:pt-28">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.18),transparent_50%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.08),transparent_50%)]" />
         
-        <div className="relative z-10 text-center space-y-4 px-4 max-w-4xl">
+        <div className="relative z-10 text-center space-y-3 px-4 max-w-4xl">
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="space-y-4"
+            className="space-y-3"
           >
-            <Badge className="bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 px-3.5 py-1 rounded-full font-bold text-xs tracking-wider uppercase inline-flex items-center gap-1.5 shadow-sm">
-              <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> Genuine Hardware & Accessories
+            <Badge className="bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full font-bold text-xs tracking-wider uppercase inline-flex items-center gap-1.5 shadow-xs">
+              <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> Genuine Accessories & Gadgets
             </Badge>
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-white">
-              MTS Lab Store
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-white">
+              MTS Lab Accessories Store
             </h1>
-            <p className="text-slate-350 text-base sm:text-lg md:text-xl font-medium max-w-2xl mx-auto leading-relaxed">
-              Explore lab-tested smartphone replacement parts, genuine display assemblies, batteries, and repair components in Kathmandu.
+            <p className="text-slate-350 text-sm sm:text-base md:text-lg font-medium max-w-2xl mx-auto leading-relaxed">
+              Explore authentic fast chargers, ANC earbuds, armor covers, 9H tempered glass, cables, and premium smartphone gadgets in Kathmandu.
             </p>
           </motion.div>
         </div>
       </section>
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 flex-1 w-full">
-        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-8 md:py-14 flex-1 w-full">
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-10">
           
           {/* Sidebar Search & Categories */}
-          <aside className="lg:w-72 space-y-8 shrink-0">
+          <aside className="lg:w-64 space-y-6 shrink-0">
             {/* Search Box */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Search Store</h3>
               <div className="relative">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input 
-                  placeholder="Find parts, screens, batteries..." 
-                  className="pl-10 h-12 rounded-2xl bg-white border border-slate-200 shadow-xs focus-visible:ring-slate-950 text-sm font-medium"
+                  placeholder="Chargers, earbuds, covers..." 
+                  className="pl-10 h-11 rounded-2xl bg-white border border-slate-200 shadow-xs focus-visible:ring-indigo-600 text-xs sm:text-sm font-medium"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -263,7 +238,7 @@ function ShopContent() {
             </div>
 
             {/* Category Filter */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Categories</h3>
                 {activeCategory !== 'All' && (
@@ -275,38 +250,38 @@ function ShopContent() {
                   </button>
                 )}
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex lg:flex-col gap-1.5 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
                 {categories.map((cat) => (
                   <button
                     key={cat}
                     onClick={() => setActiveCategory(cat)}
-                    className={`flex items-center justify-between px-4 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all shrink-0 lg:shrink cursor-pointer whitespace-nowrap lg:whitespace-normal ${
                       activeCategory === cat 
-                        ? 'bg-slate-950 text-white shadow-md shadow-slate-950/10 translate-x-1.5' 
+                        ? 'bg-slate-950 text-white shadow-md shadow-slate-950/10' 
                         : 'bg-white text-slate-600 hover:bg-slate-100/80 border border-slate-100'
                     }`}
                   >
                     <span className="truncate">{cat}</span>
-                    <ChevronRight className={`h-4 w-4 shrink-0 transition-opacity ${activeCategory === cat ? 'opacity-100 text-indigo-400' : 'opacity-0'}`} />
+                    <ChevronRight className={`h-3.5 w-3.5 shrink-0 hidden lg:block transition-opacity ${activeCategory === cat ? 'opacity-100 text-indigo-400' : 'opacity-0'}`} />
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Lab Installation Support Promo Card */}
-            <div className="p-6 bg-slate-900 rounded-3xl text-white space-y-4 shadow-xl border border-slate-800">
-              <div className="p-3 bg-white/10 w-fit rounded-2xl">
-                 <Wrench className="h-6 w-6 text-indigo-400" />
+            {/* Lab Support Card */}
+            <div className="p-5 bg-slate-900 rounded-2xl text-white space-y-3 shadow-lg border border-slate-800 hidden lg:block">
+              <div className="p-2.5 bg-white/10 w-fit rounded-xl">
+                 <Wrench className="h-5 w-5 text-indigo-400" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-base font-black">Expert Installation</h4>
+                <h4 className="text-sm font-black">Genuine Quality Assured</h4>
                 <p className="text-xs text-slate-350 leading-relaxed font-medium">
-                  Buy genuine components and get high-precision calibrated installation at our Kathmandu laboratory.
+                  Tested and verified smartphone accessories with warranty support at our Kathmandu lab.
                 </p>
               </div>
               <Button 
                 onClick={() => window.location.href = '/contact'}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl h-11 border-none shadow-sm cursor-pointer text-xs"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl h-9 border-none shadow-xs cursor-pointer text-xs"
               >
                 Contact Lab
               </Button>
@@ -314,14 +289,14 @@ function ShopContent() {
           </aside>
 
           {/* Product Catalog Grid */}
-          <div className="flex-1 space-y-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/80">
+          <div className="flex-1 space-y-6">
+            <div className="flex items-center justify-between gap-4 pb-2 border-b border-slate-200/80">
               <div>
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950">
-                  {activeCategory === 'All' ? 'Available Hardware & Accessories' : activeCategory}
+                <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-950">
+                  {activeCategory === 'All' ? 'All Accessories & Gadgets' : activeCategory}
                 </h2>
-                <p className="text-slate-500 font-medium text-xs sm:text-sm mt-0.5">
-                  Showing {filteredProducts.length} verified item{filteredProducts.length === 1 ? '' : 's'} in inventory.
+                <p className="text-slate-500 font-medium text-xs mt-0.5">
+                  Showing {filteredProducts.length} item{filteredProducts.length === 1 ? '' : 's'} available in stock.
                 </p>
               </div>
 
@@ -329,50 +304,47 @@ function ShopContent() {
                 <Button 
                   variant="outline" 
                   onClick={() => { setActiveCategory('All'); setSearchTerm(''); }}
-                  className="rounded-xl border-slate-200 text-slate-700 font-bold text-xs h-9 px-3 gap-1.5 self-start sm:self-auto cursor-pointer"
+                  className="rounded-xl border-slate-200 text-slate-700 font-bold text-xs h-8 px-2.5 gap-1 cursor-pointer"
                 >
-                  <X className="h-3.5 w-3.5" /> Clear Filters
+                  <X className="h-3 w-3" /> Clear
                 </Button>
               )}
             </div>
 
             {/* Loading Skeleton */}
             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="rounded-3xl border border-slate-200/80 bg-white p-4 space-y-4 shadow-sm">
-                    <div className="h-48 bg-slate-100 rounded-2xl" />
-                    <div className="space-y-2">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6 animate-pulse">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div key={i} className="rounded-2xl border border-slate-200/80 bg-white p-3 space-y-3 shadow-xs">
+                    <div className="w-full aspect-square bg-slate-100 rounded-xl" />
+                    <div className="space-y-1.5">
                       <div className="h-3 bg-slate-100 rounded-full w-1/3" />
-                      <div className="h-5 bg-slate-100 rounded-full w-4/5" />
-                    </div>
-                    <div className="flex justify-between items-center pt-2">
-                      <div className="h-6 bg-slate-100 rounded-full w-1/2" />
-                      <div className="h-6 bg-slate-100 rounded-full w-1/4" />
+                      <div className="h-4 bg-slate-100 rounded-full w-4/5" />
                     </div>
                   </div>
                 ))}
               </div>
             ) : filteredProducts.length === 0 ? (
-              <div className="py-24 sm:py-32 flex flex-col items-center justify-center text-center gap-5 bg-white rounded-3xl border border-slate-200/80 shadow-xs px-4">
-                <div className="p-6 bg-slate-100 rounded-full">
-                  <Package className="h-12 w-12 text-slate-300" />
+              <div className="py-16 sm:py-24 flex flex-col items-center justify-center text-center gap-4 bg-white rounded-3xl border border-slate-200/80 shadow-xs px-4">
+                <div className="p-5 bg-slate-100 rounded-full">
+                  <Package className="h-10 w-10 text-slate-300" />
                 </div>
-                <div className="space-y-1.5 max-w-sm">
-                  <h3 className="text-xl font-black text-slate-900">No Matching Products</h3>
-                  <p className="text-slate-500 text-xs sm:text-sm font-medium">
-                    We could not find any products matching &ldquo;{searchTerm || activeCategory}&rdquo;. Try another search or reset your filters.
+                <div className="space-y-1 max-w-sm">
+                  <h3 className="text-lg font-black text-slate-900">No Products Found</h3>
+                  <p className="text-slate-500 text-xs font-medium">
+                    We could not find any accessories matching &ldquo;{searchTerm || activeCategory}&rdquo;. Try another search or reset your filters.
                   </p>
                 </div>
                 <Button 
                   onClick={() => { setActiveCategory('All'); setSearchTerm(''); }} 
-                  className="bg-slate-950 hover:bg-slate-800 text-white font-bold rounded-xl text-xs h-10 px-5 cursor-pointer shadow-sm"
+                  className="bg-slate-950 hover:bg-slate-800 text-white font-bold rounded-xl text-xs h-9 px-4 cursor-pointer shadow-xs"
                 >
                   View All Products
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              /* SQUARE PRODUCT CARDS GRID */
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-5">
                 {filteredProducts.map((product) => {
                   const effectivePrice = product.discountPrice || product.price || 0;
                   const originalPrice = product.price || 0;
@@ -383,12 +355,12 @@ function ShopContent() {
                   return (
                     <Card 
                       key={product.id}
-                      className="rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:scale-[1.01] transition-all duration-300 flex flex-col justify-between"
+                      className="rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-2xs hover:shadow-lg shadow-slate-200/50 bg-white overflow-hidden group hover:scale-[1.02] transition-all duration-300 flex flex-col justify-between"
                     >
                       <div>
-                        {/* Product Image */}
+                        {/* Square Image Box (1:1 Ratio) */}
                         <div 
-                          className="relative h-52 overflow-hidden bg-slate-100 cursor-pointer"
+                          className="relative w-full aspect-square bg-slate-50 p-2.5 sm:p-3 overflow-hidden flex items-center justify-center cursor-pointer group-hover:bg-slate-100/60 transition-colors"
                           onClick={() => {
                             setSelectedProduct(product);
                             setIsDetailOpen(true);
@@ -396,80 +368,74 @@ function ShopContent() {
                         >
                           <img 
                             src={product.imageUrl || '/assets/images/phone_repair_lab_1786719222650.jpg'} 
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                            className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105" 
                             alt={product.name}
                             onError={(e: any) => {
                               e.target.src = '/assets/images/phone_repair_lab_1786719222650.jpg';
                             }}
                           />
-                          <div className="absolute top-3.5 left-3.5 flex flex-col gap-1.5">
+
+                          {/* Floating Badges */}
+                          <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
                             {product.isFeatured && (
-                              <Badge className="bg-white/95 backdrop-blur-md text-indigo-600 border-none font-black text-[9px] px-2.5 py-0.5 rounded-full shadow-sm">
+                              <Badge className="bg-indigo-600 text-white border-none font-black text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full shadow-2xs">
                                 FEATURED
                               </Badge>
                             )}
                             {product.isBestSeller && (
-                              <Badge className="bg-amber-500 text-white border-none font-black text-[9px] px-2.5 py-0.5 rounded-full shadow-sm">
+                              <Badge className="bg-amber-500 text-white border-none font-black text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full shadow-2xs">
                                 BEST SELLER
                               </Badge>
                             )}
                           </div>
 
                           {discountPercent > 0 && (
-                            <div className="absolute top-3.5 right-3.5">
-                              <Badge className="bg-rose-600 text-white border-none font-black text-[9px] px-2 py-0.5 rounded-full shadow-sm">
+                            <div className="absolute top-2 right-2 z-10">
+                              <Badge className="bg-rose-600 text-white border-none font-black text-[8px] sm:text-[9px] px-2 py-0.5 rounded-full shadow-2xs">
                                 {discountPercent}% OFF
                               </Badge>
                             </div>
                           )}
                         </div>
 
-                        {/* Content */}
+                        {/* Product Info */}
                         <CardContent 
-                          className="p-5 space-y-3 cursor-pointer" 
+                          className="p-3 sm:p-4 space-y-2 cursor-pointer" 
                           onClick={() => {
                             setSelectedProduct(product);
                             setIsDetailOpen(true);
                           }}
                         >
-                          <div className="space-y-1">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
-                              {product.category || 'Components'}
+                          <div className="space-y-0.5">
+                            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-indigo-600 truncate">
+                              {product.category || 'Accessories'}
                             </p>
-                            <h3 className="text-base font-black text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2 leading-snug">
+                            <h3 className="text-xs sm:text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2 leading-snug">
                               {product.name}
                             </h3>
                           </div>
                           
-                          <div className="flex items-center justify-between pt-1">
-                            <div className="flex flex-col">
-                              <span className="text-xl font-black text-slate-950">
-                                {formatNPR(effectivePrice)}
+                          <div className="flex flex-col pt-0.5">
+                            <span className="text-sm sm:text-base font-black text-slate-950">
+                              {formatNPR(effectivePrice)}
+                            </span>
+                            {discountPercent > 0 && (
+                              <span className="text-[10px] sm:text-xs text-slate-400 line-through font-bold">
+                                {formatNPR(originalPrice)}
                               </span>
-                              {discountPercent > 0 && (
-                                <span className="text-xs text-slate-400 line-through font-bold">
-                                  {formatNPR(originalPrice)}
-                                </span>
-                              )}
-                            </div>
-                            <Badge 
-                              variant={product.stockQuantity < 5 ? "destructive" : "secondary"} 
-                              className="rounded-full px-2.5 font-bold text-[9px]"
-                            >
-                              {product.stockQuantity > 0 ? `${product.stockQuantity} IN STOCK` : 'OUT OF STOCK'}
-                            </Badge>
+                            )}
                           </div>
                         </CardContent>
                       </div>
 
-                      {/* Footer Actions */}
-                      <div className="p-5 pt-0 flex gap-2">
+                      {/* Card Footer Actions */}
+                      <div className="p-3 sm:p-4 pt-0 flex items-center gap-1.5">
                         <Button 
                           onClick={() => {
                             setSelectedProduct(product);
                             setIsDetailOpen(true);
                           }}
-                          className="flex-1 bg-slate-950 hover:bg-slate-850 text-white rounded-xl h-10 text-xs font-bold shadow-xs cursor-pointer"
+                          className="flex-1 bg-slate-950 hover:bg-slate-850 text-white rounded-xl h-8 sm:h-9 text-[11px] font-bold shadow-2xs cursor-pointer"
                         >
                           View Details
                         </Button>
@@ -479,10 +445,10 @@ function ShopContent() {
                             window.open(`https://wa.me/9779869276668?text=${encodeURIComponent(msg)}`, '_blank');
                           }}
                           variant="outline"
-                          className="h-10 w-10 p-0 rounded-xl border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 cursor-pointer shrink-0"
+                          className="h-8 w-8 sm:h-9 sm:w-9 p-0 rounded-xl border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 cursor-pointer shrink-0"
                           aria-label="Order on WhatsApp"
                         >
-                          <ShoppingCart className="h-4 w-4" />
+                          <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </Button>
                       </div>
                     </Card>
