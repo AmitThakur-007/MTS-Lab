@@ -68,12 +68,12 @@ export interface ShopProductRecord {
 const CATEGORIES = [
   'Chargers & Power',
   'Audio & Headphones',
+  'AirPods & Earbuds',
   'Mobile Covers & Cases',
   'Tempered Glass & Protection',
   'Cables & Adapters',
+  'Power Banks & Wireless',
   'Gadgets & Electronics',
-  'Displays & Screens',
-  'Batteries',
   'Tools & Essentials',
   'Others'
 ];
