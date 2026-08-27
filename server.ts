@@ -8659,37 +8659,404 @@ export async function createServerApp() {
     }
   });
 
-  // Consolidated Upload Endpoint
+  // ==========================================
+  // CLOUDINARY MEDIA STORAGE & SECURITY ENGINE
+  // ==========================================
+
+  const FORBIDDEN_EXTENSIONS = [
+    '.exe', '.bat', '.cmd', '.sh', '.js', '.php', '.py', '.html', '.htm',
+    '.svg', '.vbs', '.ps1', '.jar', '.msi', '.com', '.scr', '.pif', '.cgi'
+  ];
+
+  const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  const ALLOWED_DOCUMENT_MIMES = ['application/pdf'];
+
+  const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+  const MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+
+  // Validate File Magic Bytes (Signatures)
+  function validateFileMagicBytes(buffer: Buffer, mimetype: string): boolean {
+    if (!buffer || buffer.length < 4) return false;
+    const hex = buffer.toString('hex', 0, 8).toUpperCase();
+
+    if (mimetype === 'image/jpeg' || mimetype === 'image/jpg') {
+      return hex.startsWith('FFD8FF');
+    }
+    if (mimetype === 'image/png') {
+      return hex.startsWith('89504E47');
+    }
+    if (mimetype === 'image/webp') {
+      return hex.startsWith('52494646') && buffer.toString('utf8', 8, 12) === 'WEBP';
+    }
+    if (mimetype === 'application/pdf') {
+      return buffer.toString('utf8', 0, 4) === '%PDF';
+    }
+    return false;
+  }
+
+  // Upload helper to Cloudinary stream
+  const uploadToCloudinaryStream = (
+    buffer: Buffer,
+    folder: string,
+    resourceType: 'image' | 'raw' | 'auto' = 'auto',
+    originalFilename?: string
+  ): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const publicIdSuffix = uuidv4().substring(0, 8);
+      const cleanName = originalFilename
+        ? originalFilename.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase()
+        : 'asset';
+
+      cloudinary.uploader.upload_stream(
+        {
+          folder,
+          public_id: `${cleanName}_${publicIdSuffix}`,
+          resource_type: resourceType,
+          overwrite: true,
+          use_filename: false,
+          unique_filename: true
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      ).end(buffer);
+    });
+  };
+
+  // Dedicated Media Upload Endpoint
+  app.post("/api/media/upload", authenticate, upload.single("file"), async (req: any, res) => {
+    try {
+      const file = req.file;
+      if (!file) return res.status(400).json({ success: false, error: "No file provided for upload" });
+
+      const entityType = (req.body.entityType || 'GENERAL').toUpperCase().trim();
+      const entityId = req.body.entityId ? String(req.body.entityId).trim() : null;
+
+      // 1. Extension Blocklist Validation
+      const originalName = String(file.originalname || '').trim();
+      const fileExtMatch = originalName.match(/\.([a-zA-Z0-9]+)$/);
+      const fileExt = fileExtMatch ? `.${fileExtMatch[1].toLowerCase()}` : '';
+
+      if (FORBIDDEN_EXTENSIONS.includes(fileExt)) {
+        return res.status(400).json({
+          success: false,
+          error: `File type '${fileExt}' is prohibited for security reasons.`
+        });
+      }
+
+      // 2. MIME Type & Size Validation
+      const mimetype = String(file.mimetype || '').toLowerCase().trim();
+      const isImage = ALLOWED_IMAGE_MIMES.includes(mimetype);
+      const isPdf = ALLOWED_DOCUMENT_MIMES.includes(mimetype);
+
+      if (!isImage && !isPdf) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid file format. Allowed formats: JPG, PNG, WEBP (Max 10MB) or PDF (Max 20MB)."
+        });
+      }
+
+      if (isImage && file.size > MAX_IMAGE_SIZE_BYTES) {
+        return res.status(400).json({ success: false, error: "Image file exceeds maximum limit of 10 MB." });
+      }
+      if (isPdf && file.size > MAX_DOCUMENT_SIZE_BYTES) {
+        return res.status(400).json({ success: false, error: "PDF document exceeds maximum limit of 20 MB." });
+      }
+
+      // 3. Magic Bytes Signature Validation
+      if (!validateFileMagicBytes(file.buffer, mimetype)) {
+        return res.status(400).json({
+          success: false,
+          error: "Security validation failed: File content does not match reported extension signature."
+        });
+      }
+
+      // 4. Construct Cloudinary Folder Hierarchy
+      let folderPath = "mts-lab/general";
+      if (entityType === "REPAIR" && entityId) {
+        folderPath = `mts-lab/repairs/${entityId}`;
+      } else if (entityType === "PRODUCT" || entityType === "SHOP") {
+        folderPath = "mts-lab/shop/products";
+      } else if (entityType === "INVENTORY") {
+        folderPath = "mts-lab/inventory";
+      } else if (entityType === "SLIDE") {
+        folderPath = "mts-lab/slides";
+      } else if (entityType === "USER" && entityId) {
+        folderPath = `mts-lab/users/${entityId}`;
+      } else if (entityType === "WARRANTY") {
+        folderPath = "mts-lab/warranties";
+      } else if (entityType === "COURIER") {
+        folderPath = "mts-lab/courier";
+      }
+
+      const resourceType = isPdf ? "raw" : "image";
+      let secureUrl = "";
+      let publicId = "";
+      let format = fileExt.replace('.', '') || (isPdf ? 'pdf' : 'png');
+
+      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+        const cloudResult = await uploadToCloudinaryStream(file.buffer, folderPath, resourceType, originalName);
+        secureUrl = cloudResult.secure_url;
+        publicId = cloudResult.public_id;
+        format = cloudResult.format || format;
+      } else {
+        console.warn("[CLOUDINARY NOTICE] Cloudinary credentials not configured; generating inline data URI fallback.");
+        publicId = `local_fallback_${uuidv4()}`;
+        secureUrl = `data:${mimetype};base64,${file.buffer.toString("base64")}`;
+      }
+
+      // 5. Persist Normalized Media Attachment Record in Prisma DB
+      const mediaRecord = await prisma.mediaAttachment.create({
+        data: {
+          publicId,
+          resourceType: isPdf ? 'pdf' : 'image',
+          format,
+          mimeType: mimetype,
+          originalName,
+          size: file.size,
+          secureUrl,
+          folder: folderPath,
+          entityType,
+          entityId,
+          uploadedById: req.user.id,
+          uploadedByName: req.user.name || req.user.email
+        }
+      });
+
+      // 6. Automatically bind to target entity if entityId provided
+      if (entityType === "PRODUCT" && entityId) {
+        await prisma.shopProduct.update({
+          where: { id: entityId },
+          data: { imageUrl: secureUrl }
+        }).catch(() => {});
+      } else if (entityType === "INVENTORY" && entityId) {
+        await prisma.inventoryItem.update({
+          where: { id: entityId },
+          data: { imageUrl: secureUrl }
+        }).catch(() => {});
+      } else if (entityType === "USER" && entityId) {
+        await prisma.user.update({
+          where: { id: entityId },
+          data: { profileImage: secureUrl, profilePhoto: secureUrl }
+        }).catch(() => {});
+      } else if (entityType === "SLIDE" && entityId) {
+        await prisma.homeSlide.update({
+          where: { id: entityId },
+          data: { imageUrl: secureUrl }
+        }).catch(() => {});
+      }
+
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: "MEDIA_UPLOADED",
+        resource: "MEDIA",
+        resourceId: mediaRecord.id,
+        status: "SUCCESS",
+        details: `Uploaded ${mimetype} file (${(file.size / 1024).toFixed(1)} KB) to ${folderPath}`
+      });
+
+      return res.json({
+        success: true,
+        url: secureUrl,
+        secureUrl,
+        publicId,
+        media: mediaRecord
+      });
+
+    } catch (err: any) {
+      console.error("[MEDIA UPLOAD ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Failed to upload media file" });
+    }
+  });
+
+  // Backward Compatible Single File Upload Endpoint
   app.post("/api/upload", authenticate, upload.single("file"), async (req: any, res) => {
     if (!req.file) return res.status(400).json({ error: "No file provided" });
+    try {
+      const mimetype = String(req.file.mimetype || 'image/png').toLowerCase();
+      const isPdf = mimetype === 'application/pdf';
+      const resourceType = isPdf ? 'raw' : 'image';
 
-    // Stream to Cloudinary if credentials are configured
-    if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-      try {
-        const stream = cloudinary.uploader.upload_stream(
-          { 
-            folder: "mts_lab_assets",
-            resource_type: "auto"
-          },
-          (error, result) => {
-            if (error) {
-              console.warn("[CLOUDINARY WARNING] Upload to Cloudinary failed, converting to data URI:", error);
-              const base64Data = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
-              return res.json({ url: base64Data });
-            }
-            res.json({ url: result?.secure_url });
+      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+        const cloudResult = await uploadToCloudinaryStream(req.file.buffer, "mts-lab/assets", resourceType, req.file.originalname);
+        
+        await prisma.mediaAttachment.create({
+          data: {
+            publicId: cloudResult.public_id,
+            resourceType: isPdf ? 'pdf' : 'image',
+            format: cloudResult.format || 'png',
+            mimeType: mimetype,
+            originalName: req.file.originalname,
+            size: req.file.size,
+            secureUrl: cloudResult.secure_url,
+            folder: "mts-lab/assets",
+            entityType: "GENERAL",
+            uploadedById: req.user?.id || null,
+            uploadedByName: req.user?.name || null
           }
-        );
-        stream.end(req.file.buffer);
-        return;
-      } catch (err) {
-        console.warn("[UPLOAD WARNING] Cloudinary stream error, falling back to data URI:", err);
-      }
-    }
+        }).catch(() => {});
 
-    // Default zero-dependency fallback: Return inline Base64 Data URL
-    const base64Data = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
-    res.json({ url: base64Data });
+        return res.json({ url: cloudResult.secure_url, secureUrl: cloudResult.secure_url, publicId: cloudResult.public_id });
+      }
+
+      const base64Data = `data:${mimetype};base64,${req.file.buffer.toString('base64')}`;
+      return res.json({ url: base64Data, secureUrl: base64Data, publicId: `local_${uuidv4()}` });
+    } catch (err: any) {
+      console.warn("[UPLOAD ERROR]", err);
+      const base64Data = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
+      return res.json({ url: base64Data, secureUrl: base64Data });
+    }
+  });
+
+  // Secure Media Asset Deletion Endpoint
+  app.delete("/api/media/delete", authenticate, async (req: any, res) => {
+    try {
+      const { publicId, id } = req.body;
+      const targetPublicId = publicId || id;
+
+      if (!targetPublicId) {
+        return res.status(400).json({ success: false, error: "publicId is required for deletion" });
+      }
+
+      const mediaRecord = await prisma.mediaAttachment.findFirst({
+        where: { OR: [{ publicId: targetPublicId }, { id: targetPublicId }] }
+      });
+
+      const isSuperAdmin = req.user.role === 'SUPER_ADMIN' || req.user.role === 'SUPERADMIN';
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'MANAGER';
+      const isOwner = mediaRecord?.uploadedById === req.user.id;
+
+      if (mediaRecord && !isSuperAdmin && !isAdmin && !isOwner) {
+        return res.status(403).json({ success: false, error: "You are not authorized to delete this media file." });
+      }
+
+      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+        const resourceType = mediaRecord?.resourceType === 'pdf' ? 'raw' : 'image';
+        await cloudinary.uploader.destroy(targetPublicId, { resource_type: resourceType }).catch((err) => {
+          console.warn("[CLOUDINARY DELETE NOTICE]", err);
+        });
+      }
+
+      if (mediaRecord) {
+        await prisma.mediaAttachment.delete({ where: { id: mediaRecord.id } });
+      }
+
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: "MEDIA_DELETED",
+        resource: "MEDIA",
+        resourceId: targetPublicId,
+        status: "SUCCESS",
+        details: `Deleted media asset (public_id: ${targetPublicId})`
+      });
+
+      return res.json({ success: true, message: "Media asset deleted successfully" });
+    } catch (err: any) {
+      console.error("[MEDIA DELETE ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Failed to delete media asset" });
+    }
+  });
+
+  // Secure Media Replacement Endpoint
+  app.put("/api/media/replace", authenticate, upload.single("file"), async (req: any, res) => {
+    try {
+      const file = req.file;
+      const { oldPublicId } = req.body;
+      if (!file) return res.status(400).json({ success: false, error: "New file is required for replacement" });
+      if (!oldPublicId) return res.status(400).json({ success: false, error: "oldPublicId is required" });
+
+      const existingMedia = await prisma.mediaAttachment.findFirst({
+        where: { OR: [{ publicId: oldPublicId }, { id: oldPublicId }] }
+      });
+
+      const isSuperAdmin = req.user.role === 'SUPER_ADMIN' || req.user.role === 'SUPERADMIN';
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'MANAGER';
+      const isOwner = existingMedia?.uploadedById === req.user.id;
+
+      if (existingMedia && !isSuperAdmin && !isAdmin && !isOwner) {
+        return res.status(403).json({ success: false, error: "You are not authorized to replace this media file." });
+      }
+
+      const mimetype = String(file.mimetype || '').toLowerCase();
+      const isPdf = mimetype === 'application/pdf';
+      const folderPath = existingMedia?.folder || "mts-lab/general";
+
+      let secureUrl = "";
+      let newPublicId = "";
+
+      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+        const cloudResult = await uploadToCloudinaryStream(file.buffer, folderPath, isPdf ? 'raw' : 'image', file.originalname);
+        secureUrl = cloudResult.secure_url;
+        newPublicId = cloudResult.public_id;
+      } else {
+        newPublicId = `local_replace_${uuidv4()}`;
+        secureUrl = `data:${mimetype};base64,${file.buffer.toString("base64")}`;
+      }
+
+      let updatedMedia: any = null;
+      if (existingMedia) {
+        updatedMedia = await prisma.mediaAttachment.update({
+          where: { id: existingMedia.id },
+          data: {
+            publicId: newPublicId,
+            resourceType: isPdf ? 'pdf' : 'image',
+            mimeType: mimetype,
+            originalName: file.originalname,
+            size: file.size,
+            secureUrl,
+            updatedAt: new Date()
+          }
+        });
+      }
+
+      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET && oldPublicId) {
+        const oldResourceType = existingMedia?.resourceType === 'pdf' ? 'raw' : 'image';
+        await cloudinary.uploader.destroy(oldPublicId, { resource_type: oldResourceType }).catch(() => {});
+      }
+
+      return res.json({
+        success: true,
+        secureUrl,
+        publicId: newPublicId,
+        media: updatedMedia
+      });
+
+    } catch (err: any) {
+      console.error("[MEDIA REPLACE ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Failed to replace media asset" });
+    }
+  });
+
+  // Query Entity Media Endpoint
+  app.get("/api/media/:entityType/:entityId", authenticate, async (req: any, res) => {
+    try {
+      const { entityType, entityId } = req.params;
+      const mediaRecords = await prisma.mediaAttachment.findMany({
+        where: {
+          entityType: String(entityType).toUpperCase().trim(),
+          entityId: String(entityId).trim()
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      return res.json({
+        success: true,
+        entityType,
+        entityId,
+        media: mediaRecords
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: "Failed to fetch entity media" });
+    }
   });
 
   const VALID_REPAIR_STATUSES = [

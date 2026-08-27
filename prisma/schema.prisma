@@ -764,3 +764,26 @@ model ShopProduct {
   @@index([createdAt])
 }
 
+model MediaAttachment {
+  id           String   @id @default(uuid())
+  publicId     String   @unique
+  resourceType String   @default("image") // image, raw, pdf
+  format       String?
+  mimeType     String?
+  originalName String?
+  size         Int?
+  secureUrl    String
+  folder       String?  @default("mts-lab")
+  entityType   String?  // REPAIR, PRODUCT, INVENTORY, USER, SLIDE, WARRANTY, COURIER
+  entityId     String?
+  uploadedById String?
+  uploadedByName String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([uploadedById])
+  @@index([publicId])
+}
+
+

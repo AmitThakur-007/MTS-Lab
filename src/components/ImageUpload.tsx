@@ -9,10 +9,12 @@ interface ImageUploadProps {
   value: string;
   onChange: (url: string) => void;
   onRemove: () => void;
+  entityType?: string;
+  entityId?: string;
   className?: string;
 }
 
-export function ImageUpload({ value, onChange, onRemove, className }: ImageUploadProps) {
+export function ImageUpload({ value, onChange, onRemove, entityType = 'GENERAL', entityId, className }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -20,19 +22,22 @@ export function ImageUpload({ value, onChange, onRemove, className }: ImageUploa
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size too large. Max 5MB.');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size too large. Maximum size is 10MB.');
       return;
     }
 
     const formData = new FormData();
     formData.append('file', file);
+    if (entityType) formData.append('entityType', entityType);
+    if (entityId) formData.append('entityId', entityId);
 
     setUploading(true);
     try {
-      const response = await api.post('/upload', formData);
-      onChange(response.url);
-      toast.success('Image uploaded successfully');
+      const response = await api.post('/media/upload', formData);
+      const url = response.secureUrl || response.url;
+      onChange(url);
+      toast.success('Image uploaded successfully to Cloudinary');
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || 'Upload failed');
