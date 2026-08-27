@@ -9,7 +9,6 @@ import RouteErrorBoundary from './components/common/RouteErrorBoundary';
 import Home from './pages/Home';
 import About from './pages/About';
 import Tracking from './pages/Tracking';
-import Shop from './pages/Shop';
 import Services from './pages/Services';
 import Contact from './pages/Contact';
 import Login from './pages/Login';
@@ -55,7 +54,6 @@ export default function App() {
             <Route path="/track" element={<RouteErrorBoundary fallbackTitle="Repair Tracker Error"><Tracking /></RouteErrorBoundary>} />
             <Route path="/track-repair" element={<RouteErrorBoundary fallbackTitle="Repair Tracker Error"><Tracking /></RouteErrorBoundary>} />
             <Route path="/tracking" element={<RouteErrorBoundary fallbackTitle="Repair Tracker Error"><Tracking /></RouteErrorBoundary>} />
-            <Route path="/shop" element={<RouteErrorBoundary fallbackTitle="Shop Store Error"><Shop /></RouteErrorBoundary>} />
             <Route path="/contact" element={<RouteErrorBoundary fallbackTitle="Contact Page Error"><Contact /></RouteErrorBoundary>} />
             <Route path="/terms" element={<RouteErrorBoundary fallbackTitle="Terms of Service Error"><Terms /></RouteErrorBoundary>} />
             <Route path="/privacy" element={<RouteErrorBoundary fallbackTitle="Privacy Policy Error"><Privacy /></RouteErrorBoundary>} />

@@ -2438,11 +2438,6 @@ const upload = multer({
   }
 });
 
-async function ensureDefaultShopProducts() {
-  // Automatic product seeding is permanently disabled. Zero products is a valid database state.
-  return;
-}
-
 export async function createServerApp() {
   const app = express();
 
@@ -2455,7 +2450,6 @@ export async function createServerApp() {
     await ensureDefaultRepairPrices();
     await ensureDefaultHomeSlides();
     await ensureDefaultInventoryData();
-    await ensureDefaultShopProducts();
     await syncFromFirestore();
     await fixInvalidStatuses();
     await syncAndMigrateCustomers();
@@ -6404,306 +6398,6 @@ export async function createServerApp() {
   });
 
   // ==========================================
-  // SHOP MANAGEMENT & PUBLIC SHOP ENDPOINTS
-  // ==========================================
-
-  // Public Endpoints for Shop Products
-  const fetchPublicProducts = async (req: any, res: any) => {
-    try {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-      const products = await prisma.shopProduct.findMany({
-        where: {
-          isArchived: false,
-          status: "PUBLISHED"
-        },
-        orderBy: [
-          { displayOrder: "asc" },
-          { createdAt: "desc" }
-        ]
-      });
-      return res.json(products);
-    } catch (err: any) {
-      console.error("[PUBLIC PRODUCTS ERROR]", err);
-      return res.status(500).json({ error: "Failed to fetch public products" });
-    }
-  };
-
-  app.get("/api/public/products", fetchPublicProducts);
-  app.get("/api/shop/products", fetchPublicProducts);
-  app.get("/api/products", fetchPublicProducts);
-
-  // Admin Endpoint: Get all shop products (including DRAFT, HIDDEN) for Shop Management
-  app.get("/api/admin/products", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
-    try {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-      const products = await prisma.shopProduct.findMany({
-        where: {
-          isArchived: false
-        },
-        orderBy: [
-          { displayOrder: "asc" },
-          { createdAt: "desc" }
-        ]
-      });
-      return res.json(products);
-    } catch (err: any) {
-      console.error("[ADMIN PRODUCTS LOAD ERROR]", err);
-      return res.status(500).json({ error: "Failed to load shop management products" });
-    }
-  });
-
-  // Admin Endpoint: Create Product
-  app.post("/api/admin/products", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
-    try {
-      const { 
-        name, 
-        description, 
-        category, 
-        brand, 
-        model, 
-        sku, 
-        price, 
-        discountPrice, 
-        stockQuantity, 
-        availability, 
-        imageUrl, 
-        additionalImages,
-        status, 
-        isFeatured, 
-        isBestSeller, 
-        displayOrder 
-      } = req.body;
-
-      if (!name || typeof name !== 'string' || !name.trim()) {
-        return res.status(400).json({ error: "Product name is required" });
-      }
-
-      const numPrice = Number(price);
-      if (isNaN(numPrice) || numPrice < 0) {
-        return res.status(400).json({ error: "Price must be a valid non-negative number" });
-      }
-
-      const numStock = Number(stockQuantity ?? 0);
-      if (isNaN(numStock) || numStock < 0) {
-        return res.status(400).json({ error: "Stock quantity must be a non-negative number" });
-      }
-
-      if (sku && typeof sku === 'string' && sku.trim()) {
-        const existingSku = await prisma.shopProduct.findFirst({
-          where: { sku: sku.trim(), isArchived: false }
-        });
-        if (existingSku) {
-          return res.status(400).json({ error: `Product with SKU '${sku.trim()}' already exists` });
-        }
-      }
-
-      const newProduct = await prisma.shopProduct.create({
-        data: {
-          name: name.trim(),
-          description: description ? String(description).trim() : null,
-          category: category ? String(category).trim() : 'Gadgets & Accessories',
-          brand: brand ? String(brand).trim() : null,
-          model: model ? String(model).trim() : null,
-          sku: sku ? String(sku).trim() : null,
-          price: numPrice,
-          discountPrice: discountPrice !== undefined && discountPrice !== null && discountPrice !== '' ? Number(discountPrice) : null,
-          stockQuantity: numStock,
-          availability: availability || (numStock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK'),
-          imageUrl: imageUrl || null,
-          additionalImages: Array.isArray(additionalImages) ? JSON.stringify(additionalImages) : (typeof additionalImages === 'string' ? additionalImages : null),
-          status: status || 'PUBLISHED',
-          isFeatured: Boolean(isFeatured),
-          isBestSeller: Boolean(isBestSeller),
-          displayOrder: Number(displayOrder || 0)
-        }
-      });
-
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userRole: req.user.role,
-        userName: req.user.name || req.user.email,
-        action: 'CREATE_SHOP_PRODUCT',
-        resource: 'ShopProduct',
-        resourceId: newProduct.id,
-        details: `Created shop product: ${newProduct.name} (SKU: ${newProduct.sku || 'N/A'}, Price: NPR ${newProduct.price})`
-      });
-
-      return res.status(201).json(newProduct);
-    } catch (err: any) {
-      console.error("[ADMIN PRODUCT CREATE ERROR]", err);
-      return res.status(500).json({ error: err.message || "Failed to create shop product" });
-    }
-  });
-
-  // Admin Endpoint: Update Product
-  app.put("/api/admin/products/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
-    try {
-      const { id } = req.params;
-      const existing = await prisma.shopProduct.findUnique({ where: { id } });
-      if (!existing || existing.isArchived) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-
-      const { 
-        name, 
-        description, 
-        category, 
-        brand, 
-        model, 
-        sku, 
-        price, 
-        discountPrice, 
-        stockQuantity, 
-        availability, 
-        imageUrl, 
-        additionalImages,
-        status, 
-        isFeatured, 
-        isBestSeller, 
-        displayOrder 
-      } = req.body;
-
-      if (name !== undefined && (!name || typeof name !== 'string' || !name.trim())) {
-        return res.status(400).json({ error: "Product name cannot be empty" });
-      }
-
-      if (price !== undefined) {
-        const numPrice = Number(price);
-        if (isNaN(numPrice) || numPrice < 0) {
-          return res.status(400).json({ error: "Price must be a valid non-negative number" });
-        }
-      }
-
-      if (stockQuantity !== undefined) {
-        const numStock = Number(stockQuantity);
-        if (isNaN(numStock) || numStock < 0) {
-          return res.status(400).json({ error: "Stock quantity must be a non-negative number" });
-        }
-      }
-
-      if (sku && typeof sku === 'string' && sku.trim() && sku.trim() !== existing.sku) {
-        const existingSku = await prisma.shopProduct.findFirst({
-          where: { sku: sku.trim(), isArchived: false, NOT: { id } }
-        });
-        if (existingSku) {
-          return res.status(400).json({ error: `Product with SKU '${sku.trim()}' already exists` });
-        }
-      }
-
-      const updated = await prisma.shopProduct.update({
-        where: { id },
-        data: {
-          name: name !== undefined ? String(name).trim() : existing.name,
-          description: description !== undefined ? (description ? String(description).trim() : null) : existing.description,
-          category: category !== undefined ? String(category).trim() : existing.category,
-          brand: brand !== undefined ? (brand ? String(brand).trim() : null) : existing.brand,
-          model: model !== undefined ? (model ? String(model).trim() : null) : existing.model,
-          sku: sku !== undefined ? (sku ? String(sku).trim() : null) : existing.sku,
-          price: price !== undefined ? Number(price) : existing.price,
-          discountPrice: discountPrice !== undefined ? (discountPrice !== null && discountPrice !== '' ? Number(discountPrice) : null) : existing.discountPrice,
-          stockQuantity: stockQuantity !== undefined ? Number(stockQuantity) : existing.stockQuantity,
-          availability: availability !== undefined ? String(availability) : existing.availability,
-          imageUrl: imageUrl !== undefined ? (imageUrl ? String(imageUrl).trim() : null) : existing.imageUrl,
-          additionalImages: additionalImages !== undefined ? (Array.isArray(additionalImages) ? JSON.stringify(additionalImages) : (typeof additionalImages === 'string' ? additionalImages : null)) : existing.additionalImages,
-          status: status !== undefined ? String(status) : existing.status,
-          isFeatured: isFeatured !== undefined ? Boolean(isFeatured) : existing.isFeatured,
-          isBestSeller: isBestSeller !== undefined ? Boolean(isBestSeller) : existing.isBestSeller,
-          displayOrder: displayOrder !== undefined ? Number(displayOrder) : existing.displayOrder
-        }
-      });
-
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userRole: req.user.role,
-        userName: req.user.name || req.user.email,
-        action: 'UPDATE_SHOP_PRODUCT',
-        resource: 'ShopProduct',
-        resourceId: updated.id,
-        details: `Updated shop product: ${updated.name}`
-      });
-
-      return res.json(updated);
-    } catch (err: any) {
-      console.error("[ADMIN PRODUCT UPDATE ERROR]", err);
-      return res.status(500).json({ error: err.message || "Failed to update shop product" });
-    }
-  });
-
-  // Admin Endpoint: Toggle Publish / Status
-  app.patch("/api/admin/products/:id/toggle-publish", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
-    try {
-      const { id } = req.params;
-      const existing = await prisma.shopProduct.findUnique({ where: { id } });
-      if (!existing || existing.isArchived) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-
-      const nextStatus = existing.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
-      const updated = await prisma.shopProduct.update({
-        where: { id },
-        data: { status: nextStatus }
-      });
-
-      return res.json(updated);
-    } catch (err: any) {
-      console.error("[ADMIN PRODUCT TOGGLE ERROR]", err);
-      return res.status(500).json({ error: "Failed to toggle product status" });
-    }
-  });
-
-  // Admin Endpoint: Permanent Delete Product (with Cloudinary Cleanup)
-  const handlePermanentDeleteProduct = async (req: any, res: any) => {
-    try {
-      const { id } = req.params;
-      const existing = await prisma.shopProduct.findUnique({ where: { id } });
-      if (!existing) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-
-      // Cloudinary image cleanup if applicable
-      if (existing.imageUrl && process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-        try {
-          const mediaRecord = await prisma.mediaAttachment.findFirst({
-            where: { secureUrl: existing.imageUrl }
-          });
-          if (mediaRecord?.publicId) {
-            await cloudinary.uploader.destroy(mediaRecord.publicId).catch(() => {});
-            await prisma.mediaAttachment.delete({ where: { id: mediaRecord.id } }).catch(() => {});
-          }
-        } catch (cloudErr) {
-          console.warn("[CLOUDINARY CLEANUP NOTICE]", cloudErr);
-        }
-      }
-
-      // Permanently delete from PostgreSQL database
-      await prisma.shopProduct.delete({
-        where: { id }
-      });
-
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userRole: req.user.role,
-        userName: req.user.name || req.user.email,
-        action: 'PERMANENTLY_DELETE_SHOP_PRODUCT',
-        resource: 'ShopProduct',
-        resourceId: id,
-        details: `Permanently deleted shop product: ${existing.name}`
-      });
-
-      return res.json({ success: true, message: "Product permanently deleted", id });
-    } catch (err: any) {
-      console.error("[ADMIN PRODUCT PERMANENT DELETE ERROR]", err);
-      return res.status(500).json({ error: "Failed to permanently delete product" });
-    }
-  };
-
-  app.delete("/api/admin/products/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), handlePermanentDeleteProduct);
-  app.delete("/api/products/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), handlePermanentDeleteProduct);
-
-  // ==========================================
   // SUPERADMIN DIRECT STAFF EMAIL VERIFICATION
   // ==========================================
   const verifyStaffEmailHandler = async (req: any, res: any) => {
@@ -8716,8 +8410,6 @@ export async function createServerApp() {
       let folderPath = "mts-lab/general";
       if (entityType === "REPAIR" && entityId) {
         folderPath = `mts-lab/repairs/${entityId}`;
-      } else if (entityType === "PRODUCT" || entityType === "SHOP") {
-        folderPath = "mts-lab/shop/products";
       } else if (entityType === "INVENTORY") {
         folderPath = "mts-lab/inventory";
       } else if (entityType === "SLIDE") {
@@ -8765,12 +8457,7 @@ export async function createServerApp() {
       });
 
       // 6. Automatically bind to target entity if entityId provided
-      if (entityType === "PRODUCT" && entityId) {
-        await prisma.shopProduct.update({
-          where: { id: entityId },
-          data: { imageUrl: secureUrl }
-        }).catch(() => {});
-      } else if (entityType === "INVENTORY" && entityId) {
+      if (entityType === "INVENTORY" && entityId) {
         await prisma.inventoryItem.update({
           where: { id: entityId },
           data: { imageUrl: secureUrl }
@@ -17628,55 +17315,6 @@ export async function createServerApp() {
       res.json(locations);
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch storage locations" });
-    }
-  });
-
-  // Product Endpoints
-  // Public product list (no auth required for website)
-  app.get("/api/public/products", syncRouteMiddleware(['product']), async (req, res) => {
-    try {
-      const { category, featured, bestSeller } = req.query;
-      const where: any = {};
-      if (category) where.category = category as string;
-      if (featured === 'true') where.isFeatured = true;
-      if (bestSeller === 'true') where.isBestSeller = true;
-
-      const products = await prisma.product.findMany({
-        where,
-        orderBy: { createdAt: "desc" }
-      });
-      res.json(products);
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch products" });
-    }
-  });
-
-  // Admin product management
-  app.get("/api/products", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'INVENTORY_MANAGER']), syncRouteMiddleware(['product']), async (req: any, res) => {
-    const products = await prisma.product.findMany({
-      orderBy: { createdAt: "desc" }
-    });
-    res.json(products);
-  });
-
-  app.post("/api/products", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'INVENTORY_MANAGER']), async (req: any, res) => {
-    try {
-      const product = await prisma.product.create({ data: req.body });
-      res.json(product);
-    } catch (err) {
-      res.status(500).json({ error: "Failed to create product" });
-    }
-  });
-
-  app.put("/api/products/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'INVENTORY_MANAGER']), async (req: any, res) => {
-    try {
-      const product = await prisma.product.update({ 
-        where: { id: req.params.id },
-        data: req.body 
-      });
-      res.json(product);
-    } catch (err) {
-      res.status(500).json({ error: "Failed to update product" });
     }
   });
 

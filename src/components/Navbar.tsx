@@ -6,7 +6,6 @@ import {
   Search, 
   User, 
   Smartphone, 
-  ShoppingBag, 
   History,
   Phone,
   Info,
@@ -42,7 +41,6 @@ export default function Navbar() {
   const navLinks = [
     { name: 'Home', path: '/', icon: HomeIcon },
     { name: 'Services', path: '/services', icon: Smartphone },
-    { name: 'Shop', path: '/shop', icon: ShoppingBag },
     { name: 'Track Repair', path: '/track', icon: History },
     { name: 'About', path: '/about', icon: Info },
     { name: 'Contact', path: '/contact', icon: Phone },

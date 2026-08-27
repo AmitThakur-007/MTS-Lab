@@ -30,8 +30,7 @@ async function main() {
     auditLogs: await prisma.auditLog.count(),
     accessRequests: await prisma.accessRequest.count(),
     approvedDevices: await prisma.approvedDevice.count(),
-    sessions: await prisma.session.count(),
-    products: await prisma.product.count()
+    sessions: await prisma.session.count()
   };
 
   console.table(tables);
@@ -64,8 +63,7 @@ async function main() {
     auditLogs: await prisma.auditLog.findMany(),
     accessRequests: await prisma.accessRequest.findMany(),
     approvedDevices: await prisma.approvedDevice.findMany(),
-    sessions: await prisma.session.findMany(),
-    products: await prisma.product.findMany()
+    sessions: await prisma.session.findMany()
   };
 
   const backupPath = path.join(process.cwd(), 'prisma/sqlite_full_export.json');

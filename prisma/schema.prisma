@@ -188,22 +188,6 @@ model Branch {
   users     User[]
 }
 
-model Product {
-  id            String   @id @default(uuid())
-  name          String
-  description   String?
-  price         Float
-  discountPrice Float?
-  stockQuantity Int      @default(0)
-  category      String
-  imageUrl      String?
-  rating        Float    @default(4.5)
-  isFeatured    Boolean  @default(false)
-  isBestSeller  Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
-
 model InventoryCategory {
   id           String   @id @default(uuid())
   name         String   @unique
@@ -731,36 +715,6 @@ model RepairRelatedDamageAudit {
 
   @@index([damageRecordId])
   @@index([performedById])
-  @@index([createdAt])
-}
-
-model ShopProduct {
-  id               String    @id @default(uuid())
-  name             String
-  description      String?
-  category         String    @default("Hardware & Accessories")
-  brand            String?
-  model            String?
-  sku              String?   @unique
-  price            Float
-  discountPrice    Float?
-  stockQuantity    Int       @default(0)
-  availability     String    @default("IN_STOCK") // IN_STOCK, LOW_STOCK, OUT_OF_STOCK, PRE_ORDER
-  imageUrl         String?
-  additionalImages String?   // JSON array string
-  status           String    @default("PUBLISHED") // PUBLISHED, DRAFT, HIDDEN, ARCHIVED
-  isFeatured       Boolean   @default(false)
-  isBestSeller     Boolean   @default(false)
-  displayOrder     Int       @default(0)
-  isArchived       Boolean   @default(false)
-  deletedAt        DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  @@index([category])
-  @@index([status])
-  @@index([isArchived])
-  @@index([displayOrder])
   @@index([createdAt])
 }
 

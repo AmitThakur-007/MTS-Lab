@@ -516,15 +516,7 @@ export async function handleFirebaseGet(cleanEndpoint: string): Promise<any> {
     return Object.values(map).filter(Boolean);
   }
 
-  // 12. Products
-  if (primaryResource === 'products' || (primaryResource === 'public' && segments[1] === 'products')) {
-    const snap = await rtdbGet(rtdbRef(rtdb, 'products'));
-    const map = snap.exists() ? snap.val() : {};
-    const items = Object.values(map).filter(Boolean);
-    return items;
-  }
-
-  // 13. Home Slides
+  // 12. Home Slides
   if (primaryResource === 'home-slides' || primaryResource === 'slides' || (primaryResource === 'public' && segments[1] === 'slides')) {
     const snap = await rtdbGet(rtdbRef(rtdb, 'homeSlides'));
     const map = snap.exists() ? snap.val() : {};

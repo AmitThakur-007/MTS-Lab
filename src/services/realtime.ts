@@ -133,7 +133,6 @@ class RealtimeService {
       registerEntityListener('users', 'user');
       registerEntityListener('accessRequests', 'accessRequest');
       registerEntityListener('repairPrices', 'repairPrice');
-      registerEntityListener('products', 'product');
       registerEntityListener('notifications', 'notification');
       registerEntityListener('batteryWarranties', 'batteryWarranty');
       registerEntityListener('batteryWarrantyClaims', 'batteryWarrantyClaim');
