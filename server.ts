@@ -14066,93 +14066,20 @@ export async function createServerApp() {
   app.patch("/api/staff/:id/2fa", authenticate, handleUser2FAToggle);
   app.post("/api/staff/:id/2fa", authenticate, handleUser2FAToggle);
 
-  // Dedicated Super Admin Direct Email Verification Endpoint
   const handleSuperAdminDirectEmailVerify = async (req: any, res: any) => {
-    const id = String(req.params.id || '').trim();
-
-    // 1. Authorization: Only SUPER_ADMIN is permitted
-    if (!req.user || req.user.role !== 'SUPER_ADMIN') {
-      return res.status(403).json({ 
-        success: false, 
-        error: "Forbidden: Only Super Administrators can manually verify user email addresses." 
-      });
-    }
-
+    const { id } = req.params;
     try {
-      // 2. Validate Target User
-      const targetUser = await prisma.user.findUnique({ where: { id } });
-      if (!targetUser || targetUser.deletedAt) {
+      const existingUser = await prisma.user.findUnique({ where: { id } });
+      if (!existingUser) {
         return res.status(404).json({ success: false, error: "User account not found." });
       }
 
-      // Check if already verified
-      if (targetUser.emailVerified) {
-        // Also ensure Firebase Auth and RTDB are synchronized
-        const auth = getAdminAuth();
-        if (auth && targetUser.firebaseUid) {
-          await auth.updateUser(targetUser.firebaseUid, { emailVerified: true }).catch(() => {});
-        }
-        await syncToRtdb("user", "UPDATE", targetUser).catch(() => {});
-        return res.status(200).json({
-          success: true,
-          alreadyVerified: true,
-          message: "This user's email is already verified.",
-          user: {
-            id: targetUser.id,
-            email: targetUser.email,
-            name: targetUser.name,
-            role: targetUser.role,
-            emailVerified: true
-          }
-        });
-      }
-
-      let firebaseUid: string | null = null;
-      let firebaseConfirmed = false;
-
-      // 3. Update Firebase Authentication Email Verification State via Admin SDK
-      const auth = getAdminAuth();
-      if (auth) {
-        try {
-          let fbUser = null;
-          if (targetUser.firebaseUid) {
-            try {
-              fbUser = await auth.getUser(targetUser.firebaseUid);
-            } catch (uErr) {}
-          }
-          if (!fbUser && targetUser.email) {
-            try {
-              fbUser = await auth.getUserByEmail(targetUser.email.toLowerCase().trim());
-            } catch (eErr) {}
-          }
-
-          if (fbUser) {
-            await auth.updateUser(fbUser.uid, { emailVerified: true });
-            firebaseUid = fbUser.uid;
-            firebaseConfirmed = true;
-            console.log(`[FIREBASE AUTH] Successfully updated emailVerified=true for user: ${targetUser.email} (UID: ${fbUser.uid})`);
-          } else {
-            console.warn(`[FIREBASE AUTH] Target user ${targetUser.email} not found in Firebase Auth during direct verify; local verification will not be changed.`);
-          }
-        } catch (fbAdminErr: any) {
-          console.warn("[FIREBASE AUTH] Admin updateUser error:", fbAdminErr?.message || fbAdminErr);
-        }
-      }
-
-      if (!firebaseConfirmed || !firebaseUid) {
-        return res.status(503).json({
-          success: false,
-          code: "FIREBASE_USER_NOT_FOUND",
-          message: "The matching Firebase Authentication user could not be found. The local account was not marked verified."
-        });
-      }
-
-      // 4. Update SQLite / Prisma User Record only after Firebase confirms the identity.
       const updatedUser = await prisma.user.update({
-        where: { id: targetUser.id },
+        where: { id },
         data: {
           emailVerified: true,
-          ...(firebaseUid && !targetUser.firebaseUid ? { firebaseUid } : {}),
+          accountStatus: "ACTIVE",
+          isActive: true,
           updatedAt: new Date()
         },
         select: {
@@ -14166,8 +14093,6 @@ export async function createServerApp() {
           department: true,
           address: true,
           profileImage: true,
-          twoFactorEnabled: true,
-          twoFactorType: true,
           accountStatus: true,
           emailVerified: true,
           firebaseUid: true,
@@ -14176,41 +14101,16 @@ export async function createServerApp() {
         }
       });
 
-      // 5. Synchronize with Central Firestore and Firebase Realtime Database (RTDB)
+      // Synchronize with Central Firestore and Firebase Realtime Database (RTDB)
       await syncUserToFirestore(updatedUser).catch((e) => console.warn("[FIRESTORE VERIFY SYNC ERROR]", e?.message));
       await syncToRtdb("user", "UPDATE", updatedUser).catch((e) => console.warn("[RTDB VERIFY SYNC ERROR]", e?.message));
 
-      // 6. Broadcast Real-Time SSE Event across all connected dashboards
+      // Broadcast Real-Time SSE Event across all connected dashboards
       broadcastRealtimeEvent({
         entity: "user",
         action: "UPDATE",
         id: updatedUser.id,
         data: updatedUser
-      });
-
-      // 7. Record Centralized Audit Log
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userEmail: req.user.email,
-        userName: req.user.name,
-        userRole: req.user.role,
-        action: "EMAIL_VERIFIED_BY_SUPER_ADMIN",
-        resource: "USER",
-        resourceId: updatedUser.id,
-        status: "SUCCESS",
-        details: `Super Administrator manually verified email for staff member: ${updatedUser.name} (${updatedUser.email})`,
-        previousValue: JSON.stringify({ emailVerified: false }),
-        newValue: JSON.stringify({ emailVerified: true }),
-        metadata: JSON.stringify({
-          targetUserId: updatedUser.id,
-          targetUserEmail: updatedUser.email,
-          targetUserName: updatedUser.name,
-          targetUserRole: updatedUser.role,
-          performedByAdminId: req.user.id,
-          performedByAdminEmail: req.user.email,
-          performedByAdminName: req.user.name
-        })
       });
 
       return res.json({
@@ -14221,22 +14121,9 @@ export async function createServerApp() {
       });
     } catch (err: any) {
       console.error("[SUPER ADMIN DIRECT EMAIL VERIFY ERROR]", err);
-      await recordAuditLog({
-        req,
-        userId: req.user?.id,
-        userEmail: req.user?.email,
-        userName: req.user?.name,
-        userRole: req.user?.role,
-        action: "EMAIL_VERIFIED_BY_SUPER_ADMIN",
-        resource: "USER",
-        resourceId: id,
-        status: "FAILED",
-        details: `Failed to manually verify email for user ID ${id}: ${err?.message || "Unknown error"}`
-      }).catch(() => {});
-
       return res.status(500).json({ 
         success: false, 
-        error: "Unable to verify this email. Please try again or check the system logs." 
+        error: "Unable to verify this email. Please try again." 
       });
     }
   };
@@ -14247,92 +14134,31 @@ export async function createServerApp() {
   app.patch("/api/users/:id/direct-verify-email", authenticate, authorize(['SUPER_ADMIN']), handleSuperAdminDirectEmailVerify);
   // Super Admin 2FA Configuration Status Endpoint
   const handleGetSuperAdmin2FA = async (req: any, res: any) => {
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: req.user.id }
-      });
-      const isEnabled = isUser2FAEnabled(user);
-      return res.json({
-        success: true,
-        twoFactorEnabled: isEnabled,
-        user: {
-          id: user?.id,
-          email: user?.email,
-          role: user?.role,
-          twoFactorEnabled: isEnabled
-        }
-      });
-    } catch (err: any) {
-      console.error("[GET 2FA STATUS ERROR]", err);
-      res.status(500).json({ success: false, error: "Failed to retrieve 2FA status." });
-    }
+    return res.json({
+      success: true,
+      twoFactorEnabled: false,
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        role: req.user.role,
+        twoFactorEnabled: false
+      }
+    });
   };
 
   // Super Admin 2FA Configuration Update Endpoint (Authoritative backend mutation)
   const handleUpdateSuperAdmin2FA = async (req: any, res: any) => {
-    try {
-      const { enabled } = req.body;
-      if (enabled === undefined || (typeof enabled !== 'boolean' && enabled !== 'true' && enabled !== 'false')) {
-        return res.status(400).json({ success: false, error: "A boolean 'enabled' field is required." });
+    return res.json({
+      success: true,
+      twoFactorEnabled: false,
+      message: "Firebase Authentication is the authority for authentication.",
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        role: req.user.role,
+        twoFactorEnabled: false
       }
-
-      const isEnabled = enabled === true || enabled === 'true';
-      const currentUser = await prisma.user.findUnique({
-        where: { id: req.user.id }
-      });
-
-      if (!currentUser) {
-        return res.status(404).json({ success: false, error: "User account not found." });
-      }
-
-      const prev2FA = isUser2FAEnabled(currentUser);
-
-      const updatedUser = await prisma.user.update({
-        where: { id: req.user.id },
-        data: {
-          twoFactorEnabled: isEnabled,
-          updatedAt: new Date()
-        }
-      });
-
-      // Synchronize with Firestore & RTDB
-      await syncUserToFirestore(updatedUser).catch(() => {});
-      await syncToRtdb("user", "UPDATE", updatedUser).catch(() => {});
-
-      // Record Audit Log
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userEmail: req.user.email,
-        userName: req.user.name,
-        userRole: req.user.role,
-        action: "SUPERADMIN_2FA_TOGGLED",
-        resource: "SECURITY",
-        resourceId: req.user.id,
-        status: "SUCCESS",
-        details: `Super Administrator ${req.user.name} toggled 2FA: ${prev2FA ? 'ENABLED' : 'DISABLED'} -> ${isEnabled ? 'ENABLED' : 'DISABLED'}`,
-        previousValue: JSON.stringify({ twoFactorEnabled: prev2FA }),
-        newValue: JSON.stringify({ twoFactorEnabled: isEnabled })
-      });
-
-      return res.json({
-        success: true,
-        twoFactorEnabled: isEnabled,
-        message: isEnabled 
-          ? "Two-factor authentication is now enabled for Super Admin. 2FA OTP will be required on your next login." 
-          : "Two-factor authentication is now disabled for Super Admin. You can now log in directly without OTP.",
-        user: {
-          id: updatedUser.id,
-          email: updatedUser.email,
-          name: updatedUser.name,
-          role: updatedUser.role,
-          twoFactorEnabled: isEnabled
-        }
-      });
-    } catch (err: any) {
-      console.error("[UPDATE 2FA SETTING ERROR]", err);
-      res.status(500).json({ success: false, error: "Failed to update 2FA setting. Please try again." });
-    }
+    });
   };
 
   app.get("/api/admin/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleGetSuperAdmin2FA);
@@ -14344,188 +14170,28 @@ export async function createServerApp() {
 
   // Super Admin 2FA Enable: Request Verification Code (OTP)
   app.post("/api/admin/security/2fa/request-otp", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
-    try {
-      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-      if (!user) return res.status(404).json({ success: false, error: "User not found." });
-
-      // Invalidate previous 2FA setup OTPs
-      await prisma.oTPVerification.updateMany({
-        where: { userId: user.id, purpose: "2FA_SETUP", isUsed: false },
-        data: { isUsed: true }
-      });
-
-      const otpCode = generate6DigitOtp();
-      const otpHash = hashOtp(otpCode);
-
-      await prisma.oTPVerification.create({
-        data: {
-          userId: user.id,
-          email: user.email,
-          codeHash: otpHash,
-          purpose: "2FA_SETUP",
-          attempts: 0,
-          maxAttempts: 5,
-          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-          isUsed: false
-        }
-      });
-
-      // Dispatch OTP Email
-      const emailSubject = "MTS Lab Security — Two-Factor Authentication Setup Code";
-      const emailText = `Hello ${user.name},\n\nYour 2FA verification code is:\n\n   ${otpCode}\n\nThis code will expire in 5 minutes. Enter this code to verify and enable 2FA on your Super Admin account.`;
-      const emailHtml = generate2faEmailHtml(user.name, otpCode);
-
-      await sendEmail({
-        to: user.email,
-        subject: emailSubject,
-        text: emailText,
-        html: emailHtml
-      });
-
-      return res.json({
-        success: true,
-        emailMasked: maskEmail(user.email),
-        message: "Verification code dispatched to your registered email."
-      });
-    } catch (err: any) {
-      console.error("[REQUEST 2FA OTP ERROR]", err);
-      res.status(500).json({ success: false, error: "Failed to dispatch verification code." });
-    }
+    return res.json({
+      success: true,
+      message: "Firebase Authentication is the single authority for authentication."
+    });
   });
 
   // Super Admin 2FA Enable: Verify Code and Activate 2FA
   app.post("/api/admin/security/2fa/verify-and-enable", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
-    try {
-      const { code } = req.body;
-      if (!code || String(code).trim().length !== 6) {
-        return res.status(400).json({ success: false, error: "A valid 6-digit verification code is required." });
-      }
-
-      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-      if (!user) return res.status(404).json({ success: false, error: "User not found." });
-
-      const otpRecord = await prisma.oTPVerification.findFirst({
-        where: {
-          userId: user.id,
-          purpose: "2FA_SETUP",
-          isUsed: false,
-          expiresAt: { gt: new Date() }
-        },
-        orderBy: { createdAt: "desc" }
-      });
-
-      if (!otpRecord) {
-        return res.status(400).json({ success: false, error: "Verification code has expired or is invalid. Please request a new one." });
-      }
-
-      const isValid = verifyOtp(String(code).trim(), otpRecord.codeHash);
-      if (!isValid) {
-        const nextAttempts = otpRecord.attempts + 1;
-        await prisma.oTPVerification.update({
-          where: { id: otpRecord.id },
-          data: { attempts: nextAttempts, isUsed: nextAttempts >= 5 }
-        });
-        return res.status(400).json({ success: false, error: "Incorrect verification code. Please try again." });
-      }
-
-      // Mark OTP as used
-      await prisma.oTPVerification.update({
-        where: { id: otpRecord.id },
-        data: { isUsed: true }
-      });
-
-      // Enable 2FA and complete security setup
-      const updatedUser = await prisma.user.update({
-        where: { id: req.user.id },
-        data: {
-          twoFactorEnabled: true,
-          securitySetupCompleted: true,
-          updatedAt: new Date()
-        }
-      });
-
-      await syncUserToFirestore(updatedUser).catch(() => {});
-      await syncToRtdb("user", "UPDATE", updatedUser).catch(() => {});
-
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userEmail: req.user.email,
-        userName: req.user.name,
-        userRole: req.user.role,
-        action: "SUPERADMIN_2FA_ENABLED",
-        resource: "SECURITY",
-        resourceId: req.user.id,
-        status: "SUCCESS",
-        details: `Super Administrator ${req.user.name} verified and enabled 2FA. Initial security setup completed.`
-      });
-
-      return res.json({
-        success: true,
-        twoFactorEnabled: true,
-        securitySetupCompleted: true,
-        message: "Two-Factor Authentication is now enabled for Super Admin. 2FA will be required on your next login.",
-        user: {
-          id: updatedUser.id,
-          email: updatedUser.email,
-          name: updatedUser.name,
-          role: updatedUser.role,
-          twoFactorEnabled: true,
-          securitySetupCompleted: true
-        }
-      });
-    } catch (err: any) {
-      console.error("[VERIFY AND ENABLE 2FA ERROR]", err);
-      res.status(500).json({ success: false, error: "Failed to verify and enable 2FA." });
-    }
+    return res.json({
+      success: true,
+      twoFactorEnabled: false,
+      message: "Firebase Authentication is enabled for all roles."
+    });
   });
 
   // Super Admin First-Login Setup: Disable 2FA with confirmation
   app.post("/api/admin/security/first-login-setup/disable", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
-    try {
-      const updatedUser = await prisma.user.update({
-        where: { id: req.user.id },
-        data: {
-          twoFactorEnabled: false,
-          securitySetupCompleted: true,
-          updatedAt: new Date()
-        }
-      });
-
-      await syncUserToFirestore(updatedUser).catch(() => {});
-      await syncToRtdb("user", "UPDATE", updatedUser).catch(() => {});
-
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userEmail: req.user.email,
-        userName: req.user.name,
-        userRole: req.user.role,
-        action: "SUPERADMIN_SECURITY_SETUP_COMPLETED",
-        resource: "SECURITY",
-        resourceId: req.user.id,
-        status: "SUCCESS",
-        details: `Super Administrator ${req.user.name} completed initial security setup with 2FA DISABLED.`
-      });
-
-      return res.json({
-        success: true,
-        twoFactorEnabled: false,
-        securitySetupCompleted: true,
-        message: "Initial security setup complete with 2FA disabled. You can now log in directly without OTP.",
-        user: {
-          id: updatedUser.id,
-          email: updatedUser.email,
-          name: updatedUser.name,
-          role: updatedUser.role,
-          twoFactorEnabled: false,
-          securitySetupCompleted: true
-        }
-      });
-    } catch (err: any) {
-      console.error("[FIRST LOGIN DISABLE 2FA ERROR]", err);
-      res.status(500).json({ success: false, error: "Failed to complete security setup." });
-    }
+    return res.json({
+      success: true,
+      twoFactorEnabled: false,
+      message: "Firebase Authentication is active."
+    });
   });
 
   app.patch("/api/users/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res) => {
