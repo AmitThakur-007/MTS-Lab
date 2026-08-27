@@ -57,94 +57,6 @@ export interface ProductItem {
   createdAt?: string | Date;
 }
 
-// Curated Genuine MTS Lab Accessories & Gadget Catalog (Offline Fallback)
-const DEFAULT_PRODUCTS: ProductItem[] = [
-  {
-    id: 'prod-1',
-    name: 'Anker PowerPort 20W PD USB-C Fast Charger',
-    category: 'Chargers & Power',
-    brand: 'Anker',
-    sku: 'MTS-CHG-ANK20W',
-    description: 'High-speed 20W Power Delivery wall charger for iPhone, iPad, and Android flagship smartphones. Compact design with MultiProtect safety system.',
-    price: 2490,
-    discountPrice: 1990,
-    stockQuantity: 25,
-    imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
-    isFeatured: true,
-    isBestSeller: true
-  },
-  {
-    id: 'prod-2',
-    name: 'MTS Premium Wireless ANC Earbuds (Active Noise Cancelling)',
-    category: 'AirPods & Earbuds',
-    brand: 'MTS Pro',
-    sku: 'MTS-AUD-ANCPRO',
-    description: 'High-definition spatial audio with 30dB Active Noise Cancellation, Bluetooth 5.3 low latency connection, and 30-hour total playback.',
-    price: 4990,
-    discountPrice: 3990,
-    stockQuantity: 18,
-    imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
-    isFeatured: true,
-    isBestSeller: true
-  },
-  {
-    id: 'prod-3',
-    name: 'Shockproof Crystal Clear Armor Case (iPhone & Samsung Galaxy)',
-    category: 'Mobile Covers & Cases',
-    brand: 'ArmorShield',
-    sku: 'MTS-COV-ARMOR',
-    description: 'Military-grade drop protected transparent phone case with anti-yellowing German TPU and raised camera protection bezels.',
-    price: 1200,
-    discountPrice: 850,
-    stockQuantity: 50,
-    imageUrl: '/assets/images/back_glass_fix_1786719207185.jpg',
-    isFeatured: false,
-    isBestSeller: true
-  },
-  {
-    id: 'prod-4',
-    name: '9H Hardness Edge-to-Edge Tempered Glass Protector',
-    category: 'Tempered Glass & Protection',
-    brand: 'GlassGuard',
-    sku: 'MTS-GLS-9H',
-    description: 'Shatter-proof 9H tempered glass with oleophobic fingerprint coating and automatic dust-removal alignment tray.',
-    price: 890,
-    discountPrice: 650,
-    stockQuantity: 100,
-    imageUrl: '/assets/images/front_glass_repair_1786719176945.jpg',
-    isFeatured: true,
-    isBestSeller: true
-  },
-  {
-    id: 'prod-5',
-    name: 'Braided Nylon 65W Fast Charging USB-C Cable (2m)',
-    category: 'Cables & Adapters',
-    brand: 'Baseus',
-    sku: 'MTS-CBL-65W',
-    description: 'Heavy-duty 10,000+ bend tested braided cable supporting 65W Power Delivery and high-speed data transmission.',
-    price: 1450,
-    discountPrice: 1100,
-    stockQuantity: 40,
-    imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
-    isFeatured: false,
-    isBestSeller: false
-  },
-  {
-    id: 'prod-6',
-    name: '20000mAh Ultra-Slim Fast Charge Power Bank (22.5W PD)',
-    category: 'Power Banks & Wireless',
-    brand: 'Mi / RedMi',
-    sku: 'MTS-PBK-20K',
-    description: 'Dual USB-A and USB-C bi-directional fast charging battery pack with LED digital battery percentage display.',
-    price: 3890,
-    discountPrice: 3290,
-    stockQuantity: 15,
-    imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
-    isFeatured: true,
-    isBestSeller: true
-  }
-];
-
 const CATEGORIES = [
   'All',
   'Chargers & Power',
@@ -179,10 +91,9 @@ function ShopContent() {
         setProducts([]);
       }
     } catch (err: any) {
-      console.warn('[SHOP NOTICE] Using offline default catalog:', err?.message || err);
-      // Fallback only when offline network error occurs
-      setProducts(DEFAULT_PRODUCTS);
-      setFetchError('Offline mode — displaying cached gadget catalog.');
+      console.warn('[SHOP NOTICE] Failed to fetch shop products:', err?.message || err);
+      setProducts([]);
+      setFetchError('Unable to connect to store server. Please click retry below.');
     } finally {
       setLoading(false);
     }
