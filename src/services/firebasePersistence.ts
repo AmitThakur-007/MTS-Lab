@@ -1460,6 +1460,44 @@ export async function handleFirebasePost(cleanEndpoint: string, payload: any): P
     }
   }
 
+  // Admin & Staff Actions (Direct Email Verify & 2FA Toggle Fallback)
+  if (primaryResource === 'admin' || primaryResource === 'users') {
+    const targetUserId = segments[segments.length - 2] || segments[1];
+    const action = segments[segments.length - 1];
+
+    if (action === 'verify-email') {
+      if (targetUserId && targetUserId !== 'admin' && targetUserId !== 'users') {
+        await rtdbUpdate(rtdbRef(rtdb, `users/${targetUserId}`), {
+          emailVerified: true,
+          updatedAt: now
+        }).catch(() => {});
+      }
+      return {
+        success: true,
+        message: 'Email marked as verified by SuperAdmin.',
+        emailVerified: true
+      };
+    }
+
+    if (action === '2fa') {
+      let isEnabled = payload?.twoFactorEnabled;
+      if (isEnabled === undefined) isEnabled = payload?.enabled;
+      isEnabled = isEnabled === true || isEnabled === 'true' || isEnabled === 1 || isEnabled === '1';
+
+      if (targetUserId && targetUserId !== 'admin' && targetUserId !== 'users') {
+        await rtdbUpdate(rtdbRef(rtdb, `users/${targetUserId}`), {
+          twoFactorEnabled: isEnabled,
+          updatedAt: now
+        }).catch(() => {});
+      }
+      return {
+        success: true,
+        twoFactorEnabled: isEnabled,
+        message: isEnabled ? 'Two-Factor Authentication enabled.' : 'Two-Factor Authentication disabled.'
+      };
+    }
+  }
+
   return { success: true, message: 'Saved successfully' };
 }
 

@@ -5193,7 +5193,21 @@ export async function createServerApp() {
           });
         }
 
-        if (!fbCheck.isVerified) {
+        // Authoritative verification: Either PostgreSQL emailVerified (SuperAdmin verified) or Firebase Cloud isVerified
+        const isEmailConfirmed = Boolean(user.emailVerified) || Boolean(fbCheck.isVerified);
+
+        // If verified in local DB by SuperAdmin, asynchronously sync status to Firebase Cloud Auth
+        if (user.emailVerified && !fbCheck.isVerified && (user.firebaseUid || fbCheck.firebaseUid)) {
+          const targetFbUid = user.firebaseUid || fbCheck.firebaseUid;
+          try {
+            const auth = getAdminAuth();
+            if (auth && targetFbUid) {
+              auth.updateUser(targetFbUid, { emailVerified: true }).catch(() => {});
+            }
+          } catch {}
+        }
+
+        if (!isEmailConfirmed) {
           return res.status(403).json({
             success: false,
             emailNotVerified: true,
@@ -6526,7 +6540,11 @@ export async function createServerApp() {
   // ==========================================
   const handleToggleStaff2FA = async (req: any, res: any) => {
     try {
-      const id = req.params.id || req.params.userId;
+      const id = req.params.id || req.params.userId || req.user?.id;
+      if (!id) {
+        return res.status(400).json({ success: false, error: "Target user ID is required." });
+      }
+
       let { twoFactorEnabled, enabled } = req.body;
 
       if (twoFactorEnabled === undefined && enabled !== undefined) {
@@ -6604,7 +6622,7 @@ export async function createServerApp() {
         resource: "SECURITY",
         resourceId: targetUser.id,
         status: "SUCCESS",
-        details: `SUPERADMIN ${req.user.name} set 2FA for staff member ${updatedUser.name} (${updatedUser.email}): ${prev2FA ? 'ENABLED' : 'DISABLED'} -> ${isEnabled ? 'ENABLED' : 'DISABLED'}`,
+        details: `2FA for staff member ${updatedUser.name} (${updatedUser.email}) set by ${req.user.name}: ${prev2FA ? 'ENABLED' : 'DISABLED'} -> ${isEnabled ? 'ENABLED' : 'DISABLED'}`,
         previousValue: JSON.stringify({ twoFactorEnabled: prev2FA }),
         newValue: JSON.stringify({ twoFactorEnabled: isEnabled })
       });
@@ -6630,9 +6648,15 @@ export async function createServerApp() {
     }
   };
 
-  // Register 2FA management routes for SUPERADMIN
+  // Register 2FA management routes for SUPERADMIN & Self-Settings
+  app.patch("/api/admin/security/2fa", authenticate, handleToggleStaff2FA);
+  app.post("/api/admin/security/2fa", authenticate, handleToggleStaff2FA);
+  app.patch("/api/auth/2fa", authenticate, handleToggleStaff2FA);
+  app.post("/api/auth/2fa", authenticate, handleToggleStaff2FA);
   app.patch("/api/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
   app.post("/api/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
+  app.patch("/api/admin/staff/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
+  app.post("/api/admin/staff/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
   app.patch("/api/admin/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
   app.post("/api/admin/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
   app.patch("/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);

@@ -111,10 +111,13 @@ const getSafeInitials = (name: any): string => {
 // Authoritative Helper to determine if 2FA is active
 const is2FAActive = (u: any): boolean => {
   if (!u) return false;
+  const isSuperAdmin = u.role === 'SUPER_ADMIN' || u.role === 'SUPERADMIN' || u.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
+  if (isSuperAdmin && !u.securitySetupCompleted) return false;
   const val = u.twoFactorEnabled;
   if (val === false || val === 'false' || val === 0 || val === '0') return false;
   if (val === true || val === 'true' || val === 1 || val === '1') return true;
-  return u.twoFactorEnabled !== false;
+  if (isSuperAdmin) return false;
+  return true;
 };
 
 const ROLES = [
