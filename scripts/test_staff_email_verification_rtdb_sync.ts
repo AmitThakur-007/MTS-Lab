@@ -180,27 +180,8 @@ async function runEmailVerificationRtdbSyncTests() {
       })
     });
     const postVerifJson = await postVerifLoginRes.json();
-    assert(postVerifLoginRes.status === 200, "Verified staff login returns HTTP 200 OK (no email verification roadblock)");
-    assert(postVerifJson.mfaRequired === true && Boolean(postVerifJson.mfaTicket), "Login transitions seamlessly to existing 2FA step");
-
-    // Set known test OTP code for deterministic verification
-    const testOtpCode = '654321';
-    const testOtpHash = crypto.createHmac('sha256', OTP_SALT).update(testOtpCode).digest('hex');
-    await prisma.oTPVerification.updateMany({
-      where: { userId: createdUser.id, isUsed: false, purpose: 'LOGIN_2FA' },
-      data: { codeHash: testOtpHash }
-    });
-
-    const verify2FARes = await fetch(`${BASE_URL}/api/auth/2fa/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mfaTicket: postVerifJson.mfaTicket,
-        code: testOtpCode
-      })
-    });
-    const verify2FAJson = await verify2FARes.json();
-    assert(verify2FARes.status === 200 && Boolean(verify2FAJson.token), "2FA verification succeeds and issues active JWT session token", `status: ${verify2FARes.status}, body: ${JSON.stringify(verify2FAJson)}`);
+    assert(postVerifLoginRes.status === 200, "Verified staff login returns HTTP 200 OK");
+    assert(Boolean(postVerifJson.token), "Login succeeds and issues active JWT session token");
 
     console.log("\n--- GROUP 6: Security Protection & Anti-Tampering ---");
 

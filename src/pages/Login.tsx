@@ -124,61 +124,53 @@ export default function Login() {
     setUnverifiedEmail(null);
     setEmailVerificationError(null);
 
-    let userCred: any = null;
     try {
       const trimmedEmail = identity.trim().toLowerCase();
       let firebaseIdToken: string | undefined;
+      let userCred: any = null;
 
       // 1. Authoritative Firebase Authentication Client Sign-In
       try {
-        userCred = auth.currentUser;
-        if (!userCred || userCred.email?.toLowerCase() !== trimmedEmail) {
+        const signInRes = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+        userCred = signInRes.user;
+      } catch (fbErr: any) {
+        if (fbErr?.code === 'auth/user-disabled') {
+          toast.error('Your account has been disabled. Please contact MTS Lab administration.');
+          setLoading(false);
+          return;
+        } else if (fbErr?.code === 'auth/too-many-requests') {
+          toast.error('Too many failed login attempts. Please try again later.');
+          setLoading(false);
+          return;
+        } else if (
+          fbErr?.code === 'auth/invalid-credential' ||
+          fbErr?.code === 'auth/wrong-password' ||
+          fbErr?.code === 'auth/invalid-login-credentials'
+        ) {
+          toast.error('Incorrect email or password.');
+          setLoading(false);
+          return;
+        } else if (fbErr?.code === 'auth/user-not-found') {
+          // Firebase user not yet created; proceed to backend login so backend can validate
+          // bcrypt password FIRST before provisioning the account in Firebase Auth.
           userCred = null;
-          try {
-            const signInRes = await signInWithEmailAndPassword(auth, trimmedEmail, password);
-            userCred = signInRes.user;
-          } catch (fbErr: any) {
-            if (
-              fbErr?.code === 'auth/user-not-found' ||
-              fbErr?.code === 'auth/invalid-credential' ||
-              fbErr?.code === 'auth/invalid-login-credentials'
-            ) {
-              try {
-                const createRes = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
-                userCred = createRes.user;
-                if (userCred) {
-                  await sendEmailVerification(userCred).catch(() => {});
-                }
-              } catch {
-                userCred = null;
-              }
-            } else if (fbErr?.code === 'auth/user-disabled') {
-              toast.error('Your Firebase account has been disabled. Please contact MTS Lab administration.');
-              setLoading(false);
-              return;
-            } else if (fbErr?.code === 'auth/too-many-requests') {
-              toast.error('Too many failed login attempts. Please try again later.');
-              setLoading(false);
-              return;
-            }
-          }
+        } else {
+          console.warn('[FIREBASE AUTH] Client sign-in notice:', fbErr);
         }
+      }
 
-        if (userCred) {
-          try {
-            await userCred.reload();
-          } catch {}
-          firebaseIdToken = await userCred.getIdToken(true);
+      if (userCred) {
+        try {
+          await userCred.reload();
+        } catch {}
+        firebaseIdToken = await userCred.getIdToken(true);
 
-          if (!userCred.emailVerified) {
-            setUnverifiedEmail(trimmedEmail);
-            toast.error('Please verify your email address before continuing.');
-            setLoading(false);
-            return;
-          }
+        if (!userCred.emailVerified) {
+          setUnverifiedEmail(trimmedEmail);
+          toast.error('Please verify your email address before continuing.');
+          setLoading(false);
+          return;
         }
-      } catch (clientAuthErr) {
-        console.warn('[FIREBASE AUTH] Client sign-in notice:', clientAuthErr);
       }
 
       // 2. Authenticate session with MTS Lab Backend
@@ -201,14 +193,14 @@ export default function Login() {
         toast.success(`Welcome back, ${validatedUser.name}!`);
         navigate('/dashboard');
       } else {
-        throw new Error(res?.message || 'Authentication failed');
+        throw new Error(res?.message || 'Unable to sign in with these credentials.');
       }
     } catch (err: any) {
       if (err?.emailNotVerified || err?.message?.toLowerCase().includes('verify your email')) {
         setUnverifiedEmail(identity.trim());
         toast.error('Please verify your email address before continuing.');
       } else {
-        toast.error(err.message || 'Unable to sign in with these credentials. Please check your email and password.');
+        toast.error(err.message || 'Unable to sign in with these credentials.');
       }
     } finally {
       setLoading(false);

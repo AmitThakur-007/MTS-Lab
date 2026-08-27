@@ -33,6 +33,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { validateStrongPassword } from '@/lib/passwordPolicy';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
@@ -221,8 +222,9 @@ function SettingsContent() {
     if (passForm.newPassword !== passForm.confirmPassword) {
       return toast.error('New passwords do not match');
     }
-    if (passForm.newPassword.length < 8) {
-      return toast.error('Password must be at least 8 characters long');
+    const val = validateStrongPassword(passForm.newPassword);
+    if (!val.valid) {
+      return toast.error(val.message || 'Password does not meet security requirements.');
     }
 
     setPwdLoading(true);

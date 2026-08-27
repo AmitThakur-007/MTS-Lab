@@ -35,7 +35,6 @@ async function runFirebaseSyncTests() {
       role: "RECEPTIONIST",
       password: passwordHash,
       emailVerified: false,
-      twoFactorEnabled: true,
       twoFactorType: "EMAIL",
       isActive: true,
       accountStatus: "ACTIVE"
@@ -124,12 +123,8 @@ async function runFirebaseSyncTests() {
   const deviceBJson: any = await deviceBLoginRes.json();
   assert(deviceBJson.mfaRequired === true, "Device B proceeds to 2FA OTP seamlessly");
 
-  // --- GROUP 5: User With 2FA Disabled ---
-  console.log("\n--- GROUP 5: Verified User with 2FA Disabled ---");
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { twoFactorEnabled: false }
-  });
+  // --- GROUP 5: Verified User Login ---
+  console.log("\n--- GROUP 5: Verified User Login ---");
 
   const no2faLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
     method: "POST",

@@ -40,9 +40,7 @@ async function main() {
         password: 'QAUserSecurePassword123!',
         name: 'QA Admin Specialist',
         role: 'ADMIN',
-        accountStatus: 'ACTIVE',
-        isActive: true,
-        twoFactorEnabled: false
+        isActive: true
       }
     });
   }
@@ -57,9 +55,7 @@ async function main() {
         password: 'QAUserSecurePassword123!',
         name: 'QA Operations Manager',
         role: 'MANAGER',
-        accountStatus: 'ACTIVE',
-        isActive: true,
-        twoFactorEnabled: false
+        isActive: true
       }
     });
   }
@@ -74,9 +70,7 @@ async function main() {
         password: 'QAUserSecurePassword123!',
         name: 'QA Front Receptionist',
         role: 'RECEPTIONIST',
-        accountStatus: 'ACTIVE',
-        isActive: true,
-        twoFactorEnabled: false
+        isActive: true
       }
     });
   }
@@ -97,9 +91,7 @@ async function main() {
         password: 'QAUserSecurePassword123!',
         name: 'QA Senior Technician Alpha',
         role: 'TECHNICIAN',
-        accountStatus: 'ACTIVE',
-        isActive: true,
-        twoFactorEnabled: false
+        isActive: true
       }
     });
   }
@@ -111,9 +103,7 @@ async function main() {
         password: 'QAUserSecurePassword123!',
         name: 'QA Diagnostic Specialist Beta',
         role: 'TECHNICIAN',
-        accountStatus: 'ACTIVE',
-        isActive: true,
-        twoFactorEnabled: false
+        isActive: true
       }
     });
   }
@@ -377,36 +367,7 @@ async function main() {
   const warrantyData: any = await warrantyRes.json();
   assert(warrantyRes.ok && !!warrantyData.warranty?.id, 'Battery warranty registered with 6-month coverage');
 
-  // 8. 2FA TOGGLE BACKEND PROPAGATION
-  console.log('\n📋 SECTION 8: 2FA SETTINGS PROPAGATION & PERSISTENCE');
-
-  const toggle2FARes = await fetch(`${API_URL}/users/${techA.id}/2fa`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${superAdminToken}`
-    },
-    body: JSON.stringify({
-      twoFactorEnabled: false
-    })
-  });
-  const toggle2FAData: any = await toggle2FARes.json();
-  assert(toggle2FARes.ok && toggle2FAData.success, 'Super Admin can disable 2FA for a user without prompt');
-
-  const checkUser = await prisma.user.findUnique({ where: { id: techA.id } });
-  assert(checkUser?.twoFactorEnabled === false, 'User record in database reflects twoFactorEnabled: false');
-
-  // Re-enable 2FA
-  await fetch(`${API_URL}/users/${techA.id}/2fa`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${superAdminToken}`
-    },
-    body: JSON.stringify({
-      twoFactorEnabled: true
-    })
-  });
+  console.log('\n--- Completed User Management Checks ---');
 
   // SUMMARY
   console.log('\n================================================================');

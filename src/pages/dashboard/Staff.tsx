@@ -38,6 +38,7 @@ import {
   ArrowLeft,
   Briefcase
 } from 'lucide-react';
+import { validateStrongPassword } from '@/lib/passwordPolicy';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -443,6 +444,10 @@ export function StaffManagementContent() {
     e.preventDefault();
     if (!formData.name.trim() || !formData.email.trim() || !formData.password) {
       return toast.error('Please fill in all required fields (Name, Email, Password)');
+    }
+    const val = validateStrongPassword(formData.password);
+    if (!val.valid) {
+      return toast.error(val.message || 'Password does not meet security requirements.');
     }
     setSubmitting(true);
     try {

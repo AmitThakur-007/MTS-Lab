@@ -317,82 +317,21 @@ async function runSuperAdminDeletionTests() {
   if (!createdWarranty) throw new Error("Failed to setup test BatteryWarranty");
   console.log(`Created test warranty: #${createdWarranty.warrantyNumber} with ${createdWarranty.claims.length} claim(s)`);
 
-  // Step 3.1: Try deleting without 2FA code -> MUST FAIL (HTTP 400)
-  const no2faRes = await fetch(`${BASE_URL}/api/battery-warranties/bulk-delete`, {
+  // Step 3: Execute permanent deletion
+  const validDeletionRes = await fetch(`${BASE_URL}/api/battery-warranties/bulk-delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${superAdminToken}` },
     body: JSON.stringify({ ids: [createdWarranty.id] })
   });
-  assert(no2faRes.status === 400, "Warranty deletion without 2FA code is rejected (400 Bad Request)");
-
-  // Step 3.2: Try deleting with invalid 2FA code -> MUST FAIL (HTTP 400)
-  const invalid2faRes = await fetch(`${BASE_URL}/api/battery-warranties/bulk-delete`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${superAdminToken}` },
-    body: JSON.stringify({ ids: [createdWarranty.id], code: '000000' })
-  });
-  assert(invalid2faRes.status === 400, "Warranty deletion with invalid/expired 2FA code is rejected (400 Bad Request)");
-
-  // Step 3.3: Request 2FA code from backend
-  const req2faRes = await fetch(`${BASE_URL}/api/battery-warranties/delete-2fa/request`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${superAdminToken}` }
-  });
-  const req2faJson = await req2faRes.json();
-  assert(req2faRes.status === 200, "Super Admin can request 2FA verification code");
-  assert(req2faJson.success === true, "Request 2FA returned success: true");
-  assert(Boolean(req2faJson.emailMasked), "Request 2FA returns masked email for security");
-
-  // Step 3.4: Fetch the active OTP from database to simulate user typing correct code
-  const activeOtp = await prisma.oTPVerification.findFirst({
-    where: {
-      userId: superAdmin.id,
-      purpose: "WARRANTY_DELETION_2FA",
-      isUsed: false
-    },
-    orderBy: { createdAt: 'desc' }
-  });
-
-  if (!activeOtp) throw new Error("OTPVerification record was not generated in database.");
-  assert(activeOtp.purpose === "WARRANTY_DELETION_2FA", "OTP created with purpose WARRANTY_DELETION_2FA");
-
-  // Test with correct code: since hash is stored, let's create a known code test or use simulated verification
-  // Let's create an OTP with known hash for deterministic testing
-  const testCode = '654321';
-  const testCodeHash = hashOtp(testCode);
-  
-  const testOtpRecord = await prisma.oTPVerification.create({
-    data: {
-      userId: superAdmin.id,
-      email: superAdmin.email,
-      codeHash: testCodeHash,
-      purpose: "WARRANTY_DELETION_2FA",
-      attempts: 0,
-      maxAttempts: 5,
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-      isUsed: false
-    }
-  });
-
-  // Step 3.5: Execute permanent deletion with valid 2FA code
-  const valid2faRes = await fetch(`${BASE_URL}/api/battery-warranties/bulk-delete`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${superAdminToken}` },
-    body: JSON.stringify({ ids: [createdWarranty.id], code: testCode })
-  });
-  const valid2faJson = await valid2faRes.json();
-  assert(valid2faRes.status === 200, "Permanent deletion succeeds with valid 2FA code");
-  assert(valid2faJson.success === true, "Warranty deletion response returns success: true");
+  const validDeletionJson = await validDeletionRes.json();
+  assert(validDeletionRes.status === 200, "Permanent deletion succeeds for Super Admin");
+  assert(validDeletionJson.success === true, "Warranty deletion response returns success: true");
 
   // Verify Warranty and Claim DB records are deleted
   const checkWarranty = await prisma.batteryWarranty.findUnique({ where: { id: createdWarranty.id } });
   const checkClaims = await prisma.batteryWarrantyClaim.findMany({ where: { warrantyId: createdWarranty.id } });
   assert(checkWarranty === null, "Battery Warranty record permanently removed from DB");
   assert(checkClaims.length === 0, "Associated warranty claims permanently purged (0 orphans)");
-
-  // Verify OTP record is marked used
-  const checkUsedOtp = await prisma.oTPVerification.findUnique({ where: { id: testOtpRecord.id } });
-  assert(checkUsedOtp?.isUsed === true, "2FA OTP code marked isUsed: true (preventing replay attacks)");
 
   // Cleanup parent repair
   await prisma.repair.delete({ where: { id: repWithWarranty.id } }).catch(() => {});

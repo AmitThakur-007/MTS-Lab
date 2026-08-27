@@ -1768,17 +1768,112 @@ function getAdminAuth() {
   return null;
 }
 
-// Resilient helper to verify live Firebase Auth email verification state
+function validateStrongPasswordServer(password: string): { valid: boolean; message?: string } {
+  if (!password || password.length < 8) {
+    return { valid: false, message: "Password must be at least 8 characters long." };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: "Password must contain at least 1 uppercase letter (A-Z)." };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: "Password must contain at least 1 lowercase letter (a-z)." };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: "Password must contain at least 1 numeric digit (0-9)." };
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)) {
+    return { valid: false, message: "Password must contain at least 1 special character (e.g. @, #, $, !)." };
+  }
+  return { valid: true };
+}
+
+// Resilient helper to verify live Firebase Auth email verification state and ID token
 async function checkFirebaseUserEmailVerified(
   email?: string | null,
   password?: string,
   idToken?: string,
   firebaseUid?: string | null
-): Promise<{ checked: boolean; isVerified: boolean; firebaseUid?: string; email?: string }> {
+): Promise<{ checked: boolean; isVerified: boolean; firebaseUid?: string; email?: string; authFailed?: boolean }> {
   const normalizedEmail = email ? email.toLowerCase().trim() : '';
   const apiKey = firebaseConfig.apiKey || process.env.FIREBASE_API_KEY;
 
-  // 1. Try Firebase Admin SDK if active
+  // 1. If idToken is provided, verify using Admin SDK or Google Identity Toolkit REST API
+  if (idToken) {
+    const auth = getAdminAuth();
+    if (auth) {
+      try {
+        const decoded = await auth.verifyIdToken(idToken);
+        if (decoded && decoded.uid) {
+          return {
+            checked: true,
+            isVerified: Boolean(decoded.email_verified),
+            firebaseUid: decoded.uid,
+            email: decoded.email ? decoded.email.toLowerCase().trim() : normalizedEmail
+          };
+        }
+      } catch (tokenErr) {
+        console.warn("[FIREBASE AUTH] verifyIdToken notice:", tokenErr);
+      }
+    }
+
+    if (apiKey) {
+      try {
+        const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken })
+        });
+        if (res.ok) {
+          const data: any = await res.json();
+          const fbUser = data?.users?.[0];
+          if (fbUser) {
+            return {
+              checked: true,
+              isVerified: Boolean(fbUser.emailVerified),
+              firebaseUid: fbUser.localId,
+              email: fbUser.email?.toLowerCase().trim()
+            };
+          }
+        }
+      } catch (lookupErr) {
+        console.warn("[FIREBASE AUTH] accounts:lookup error:", lookupErr);
+      }
+    }
+  }
+
+  // 2. If password is provided, query Google Identity Toolkit signInWithPassword
+  if (password && normalizedEmail && apiKey) {
+    try {
+      const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          password,
+          returnSecureToken: true
+        })
+      });
+      if (res.ok) {
+        const data: any = await res.json();
+        return {
+          checked: true,
+          isVerified: Boolean(data.emailVerified),
+          firebaseUid: data.localId,
+          email: data.email?.toLowerCase().trim() || normalizedEmail
+        };
+      } else {
+        const errJson: any = await res.json().catch(() => ({}));
+        const errCode = errJson?.error?.message;
+        if (errCode === 'INVALID_PASSWORD' || errCode === 'INVALID_LOGIN_CREDENTIALS' || errCode === 'EMAIL_NOT_FOUND') {
+          return { checked: true, isVerified: false, authFailed: true };
+        }
+      }
+    } catch (signInErr) {
+      console.warn("[FIREBASE AUTH] signInWithPassword error:", signInErr);
+    }
+  }
+
+  // 3. Admin SDK lookup by firebaseUid or email
   const auth = getAdminAuth();
   if (auth) {
     try {
@@ -1801,60 +1896,7 @@ async function checkFirebaseUserEmailVerified(
           email: fbUser.email?.toLowerCase().trim()
         };
       }
-    } catch (adminErr: any) {
-      // Admin SDK may lack service account credentials in local mode; proceed to REST check
-    }
-  }
-
-  // 2. If idToken is provided, lookup via Google Identity Toolkit REST API
-  if (idToken && apiKey) {
-    try {
-      const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken })
-      });
-      if (res.ok) {
-        const data: any = await res.json();
-        const fbUser = data?.users?.[0];
-        if (fbUser) {
-          return {
-            checked: true,
-            isVerified: Boolean(fbUser.emailVerified),
-            firebaseUid: fbUser.localId,
-            email: fbUser.email?.toLowerCase().trim()
-          };
-        }
-      }
-    } catch (lookupErr) {
-      console.warn("[FIREBASE AUTH] accounts:lookup error:", lookupErr);
-    }
-  }
-
-  // 3. If password is provided, query Google Identity Toolkit signInWithPassword to fetch live verification state
-  if (password && normalizedEmail && apiKey) {
-    try {
-      const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: normalizedEmail,
-          password,
-          returnSecureToken: true
-        })
-      });
-      if (res.ok) {
-        const data: any = await res.json();
-        return {
-          checked: true,
-          isVerified: Boolean(data.emailVerified),
-          firebaseUid: data.localId,
-          email: data.email?.toLowerCase().trim() || normalizedEmail
-        };
-      }
-    } catch (signInErr) {
-      console.warn("[FIREBASE AUTH] signInWithPassword error:", signInErr);
-    }
+    } catch (adminErr: any) {}
   }
 
   return { checked: false, isVerified: false };
@@ -5115,102 +5157,105 @@ export async function createServerApp() {
         return res.status(401).json({ success: false, message: "Unable to sign in with these credentials." });
       }
 
-      // Firebase is the required first factor for all non-superadmin users.
-      // The local MTS password is validated first so a failed login cannot
-      // provision or mutate any Firebase identity.
-      if (user.role !== "SUPER_ADMIN") {
-        const fbCheck = await checkFirebaseUserEmailVerified(user.email, rawPassword, firebaseIdToken, user.firebaseUid);
-        const firebaseIdentityMatches = Boolean(
-          fbCheck.checked &&
-          fbCheck.firebaseUid &&
-          fbCheck.email &&
-          fbCheck.email.toLowerCase().trim() === user.email.toLowerCase().trim() &&
-          (!user.firebaseUid || fbCheck.firebaseUid === user.firebaseUid)
-        );
+      // Firebase Authentication is the single authority for ALL user roles (including SUPER_ADMIN)
+      const fbCheck = await checkFirebaseUserEmailVerified(user.email, rawPassword, firebaseIdToken, user.firebaseUid);
 
-        if (!firebaseIdentityMatches) {
-          // Legacy local accounts are migrated only after the local password
-          // has already passed lockout and bcrypt validation above. The new
-          // Firebase account remains unverified, so access stays blocked until
-          // Firebase confirms ownership of the email address.
-          const provisioned = await ensureFirebaseUserAndSendVerification(user.email, rawPassword, user.name);
-          if (provisioned.sent || provisioned.errorCode === 'TOO_MANY_ATTEMPTS_TRY_LATER') {
-            markFirebaseVerificationAttempt(user.email);
-          }
-          if (provisioned.firebaseUid) {
-            user = await prisma.user.update({
-              where: { id: user.id },
-              data: { firebaseUid: provisioned.firebaseUid, emailVerified: false }
-            });
-            await syncUserToFirestore(user).catch(() => {});
-            await syncToRtdb("user", "UPDATE", user).catch(() => {});
-            return res.status(403).json({
-              success: false,
-              emailNotVerified: true,
-              firebaseProvisioned: true,
-              email: user.email,
-              message: provisioned.sent
-                ? "A Firebase verification email has been sent. Please verify your email address before continuing."
-                : "Your account has been linked to Firebase. Please request a new verification email before continuing."
-            });
-          }
+      if (fbCheck.authFailed) {
+        return res.status(401).json({
+          success: false,
+          message: "Unable to sign in with these credentials."
+        });
+      }
 
-          return res.status(401).json({
-            success: false,
-            message: "Unable to authenticate with Firebase credentials. Please contact the administrator if your staff account has not been provisioned in Firebase."
-          });
+      const firebaseIdentityMatches = Boolean(
+        fbCheck.checked &&
+        fbCheck.firebaseUid &&
+        fbCheck.email &&
+        fbCheck.email.toLowerCase().trim() === user.email.toLowerCase().trim() &&
+        (!user.firebaseUid || fbCheck.firebaseUid === user.firebaseUid)
+      );
+
+      if (!firebaseIdentityMatches) {
+        // Legacy local accounts are migrated only after the local password
+        // has already passed lockout and bcrypt validation above. The new
+        // Firebase account remains unverified, so access stays blocked until
+        // Firebase confirms ownership of the email address.
+        const provisioned = await ensureFirebaseUserAndSendVerification(user.email, rawPassword, user.name);
+        if (provisioned.sent || provisioned.errorCode === 'TOO_MANY_ATTEMPTS_TRY_LATER') {
+          markFirebaseVerificationAttempt(user.email);
         }
-
-        if (fbCheck.firebaseUid && !user.firebaseUid) {
+        if (provisioned.firebaseUid) {
           user = await prisma.user.update({
             where: { id: user.id },
-            data: { firebaseUid: fbCheck.firebaseUid }
-          });
-        }
-
-        if (fbCheck.isVerified && !user.emailVerified) {
-          user = await prisma.user.update({
-            where: { id: user.id },
-            data: { emailVerified: true }
+            data: { firebaseUid: provisioned.firebaseUid, emailVerified: false }
           });
           await syncUserToFirestore(user).catch(() => {});
           await syncToRtdb("user", "UPDATE", user).catch(() => {});
-          broadcastRealtimeEvent({
-            entity: "user",
-            action: "UPDATE",
-            id: user.id,
-            data: {
-              id: user.id,
-              email: user.email,
-              name: user.name,
-              role: user.role,
-              emailVerified: true
-            }
-          });
-        }
-
-        // Authoritative verification: Either PostgreSQL emailVerified (SuperAdmin verified) or Firebase Cloud isVerified
-        const isEmailConfirmed = Boolean(user.emailVerified) || Boolean(fbCheck.isVerified);
-
-        // If verified in local DB by SuperAdmin, asynchronously sync status to Firebase Cloud Auth
-        if (user.emailVerified && !fbCheck.isVerified && (user.firebaseUid || fbCheck.firebaseUid)) {
-          const targetFbUid = user.firebaseUid || fbCheck.firebaseUid;
-          try {
-            const auth = getAdminAuth();
-            if (auth && targetFbUid) {
-              auth.updateUser(targetFbUid, { emailVerified: true }).catch(() => {});
-            }
-          } catch {}
-        }
-
-        if (!isEmailConfirmed) {
           return res.status(403).json({
             success: false,
             emailNotVerified: true,
+            firebaseProvisioned: true,
             email: user.email,
-            message: "Please verify your email address before continuing."
+            message: provisioned.sent
+              ? "A Firebase verification email has been sent. Please verify your email address before continuing."
+              : "Your account has been linked to Firebase. Please request a new verification email before continuing."
           });
         }
+
+        return res.status(401).json({
+          success: false,
+          message: "Unable to authenticate with Firebase credentials. Please contact the administrator if your staff account has not been provisioned in Firebase."
+        });
+      }
+
+      if (fbCheck.firebaseUid && !user.firebaseUid) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { firebaseUid: fbCheck.firebaseUid }
+        });
+      }
+
+      if (fbCheck.isVerified && !user.emailVerified) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { emailVerified: true }
+        });
+        await syncUserToFirestore(user).catch(() => {});
+        await syncToRtdb("user", "UPDATE", user).catch(() => {});
+        broadcastRealtimeEvent({
+          entity: "user",
+          action: "UPDATE",
+          id: user.id,
+          data: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            emailVerified: true
+          }
+        });
+      }
+
+      // Authoritative verification: Either PostgreSQL emailVerified or Firebase Cloud isVerified
+      const isEmailConfirmed = Boolean(user.emailVerified) || Boolean(fbCheck.isVerified);
+
+      if (user.emailVerified && !fbCheck.isVerified && (user.firebaseUid || fbCheck.firebaseUid)) {
+        const targetFbUid = user.firebaseUid || fbCheck.firebaseUid;
+        try {
+          const auth = getAdminAuth();
+          if (auth && targetFbUid) {
+            auth.updateUser(targetFbUid, { emailVerified: true }).catch(() => {});
+          }
+        } catch {}
+      }
+
+      if (!isEmailConfirmed) {
+        return res.status(403).json({
+          success: false,
+          emailNotVerified: true,
+          email: user.email,
+          message: "Please verify your email address before continuing."
+        });
       }
 
       // Direct Firebase Authenticated Login (No 2FA Challenge)
@@ -5323,8 +5368,9 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, message: "Current password and new password are required." });
       }
 
-      if (newPassword.length < 8) {
-        return res.status(400).json({ success: false, message: "Password must be at least 8 characters long." });
+      const pwdVal = validateStrongPasswordServer(newPassword);
+      if (!pwdVal.valid) {
+        return res.status(400).json({ success: false, message: pwdVal.message || "New password does not meet security requirements." });
       }
 
       const user = await prisma.user.findUnique({ where: { id: req.user.id } });
@@ -5439,105 +5485,12 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, message: "Invalid current password." });
       }
 
-      // Invalidate existing email change OTPs
-      await prisma.oTPVerification.updateMany({
-        where: {
-          userId: user.id,
-          purpose: { in: ["EMAIL_CHANGE_CURRENT", "EMAIL_CHANGE_NEW"] },
-          isUsed: false
-        },
-        data: { isUsed: true }
-      });
-
-      // Generate OTP for current email
-      const otpCode = generate6DigitOtp();
-      const otpHash = hashOtp(otpCode);
-
-      await prisma.oTPVerification.create({
-        data: {
-          userId: user.id,
-          email: user.email,
-          codeHash: otpHash,
-          purpose: "EMAIL_CHANGE_CURRENT",
-          attempts: 0,
-          maxAttempts: 5,
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-          isUsed: false
-        }
-      });
-
-      await sendEmail(
-        user.email,
-        "MTS Lab Security — Super Admin Email Change Verification",
-        `Hello ${user.name},\n\nYou requested to change the Super Admin email address.\n\nStep 1 Verification Code (Current Email):\n\n   ${otpCode}\n\nThis code will expire in 10 minutes.\nIf you did not initiate this request, contact the system administrator immediately.`
-      );
-
-      const currentTicket = jwt.sign(
-        { userId: user.id, email: user.email, purpose: "EMAIL_CHANGE_CURRENT" },
-        JWT_SECRET,
-        { expiresIn: "10m" }
-      );
-
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
-        action: "OTP_REQUESTED",
-        resource: "USER",
-        resourceId: user.id,
-        status: "SUCCESS",
-        details: `Super Admin email change Step 1 OTP sent to current email (${maskEmail(user.email)})`
-      });
-
-      return res.json({
-        success: true,
-        currentTicket,
-        emailMasked: maskEmail(user.email),
-        message: "Verification code sent to your current registered email."
-      });
-
-    } catch (err: any) {
-      console.error("[CHANGE EMAIL REQUEST ERROR]", err);
-      res.status(500).json({ success: false, message: "Failed to initiate email change." });
-    }
-  });
-
-  // Super Admin Email Change (Step 2: Verify Current OTP & Send Code to New Email)
-  app.post("/api/admin/change-email/verify-current", authenticate, authorize(['SUPER_ADMIN']), authLimiter, async (req: any, res) => {
-    const { currentTicket, code, newEmail } = req.body;
-
-    try {
-      if (!currentTicket || !code || !newEmail) {
-        return res.status(400).json({ success: false, message: "Current security ticket, code, and new email are required." });
-      }
-
-      const normalizedNewEmail = String(newEmail).toLowerCase().trim();
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(normalizedNewEmail)) {
+      const oldEmail = user.email;
+      const normalizedNewEmail = String(req.body.newEmail || req.body.email || '').toLowerCase().trim();
+      if (!normalizedNewEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedNewEmail)) {
         return res.status(400).json({ success: false, message: "Please provide a valid new email address." });
       }
 
-      let decoded: any = null;
-      try {
-        decoded = jwt.verify(currentTicket, JWT_SECRET);
-      } catch (jwtErr) {
-        return res.status(401).json({ success: false, message: "Verification session expired. Please start again." });
-      }
-
-      if (!decoded || decoded.purpose !== "EMAIL_CHANGE_CURRENT" || decoded.userId !== req.user.id) {
-        return res.status(401).json({ success: false, message: "Invalid verification session." });
-      }
-
-      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-      if (!user) return res.status(404).json({ success: false, message: "User not found." });
-
-      if (user.email.toLowerCase() === normalizedNewEmail) {
-        return res.status(400).json({ success: false, message: "New email cannot be identical to current email." });
-      }
-
-      // Check if new email is already taken
       const existingUser = await prisma.user.findFirst({
         where: { email: normalizedNewEmail, id: { not: user.id }, deletedAt: null }
       });
@@ -5545,173 +5498,28 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, message: "This email address is already in use by another account." });
       }
 
-      // Verify OTP on current email
-      const otpRecord = await prisma.oTPVerification.findFirst({
-        where: {
-          userId: user.id,
-          purpose: "EMAIL_CHANGE_CURRENT",
-          isUsed: false
-        },
-        orderBy: { createdAt: "desc" }
-      });
-
-      if (!otpRecord || otpRecord.expiresAt < new Date()) {
-        return res.status(400).json({ success: false, message: "Current email verification code has expired." });
-      }
-
-      const isValid = verifyOtp(String(code).trim(), otpRecord.codeHash);
-      if (!isValid) {
-        return res.status(400).json({ success: false, message: "Invalid verification code for current email." });
-      }
-
-      // Mark current OTP as used
-      await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
-
-      // Generate OTP for NEW email
-      const newOtpCode = generate6DigitOtp();
-      const newOtpHash = hashOtp(newOtpCode);
-
-      await prisma.oTPVerification.create({
-        data: {
-          userId: user.id,
-          email: normalizedNewEmail,
-          codeHash: newOtpHash,
-          purpose: "EMAIL_CHANGE_NEW",
-          attempts: 0,
-          maxAttempts: 5,
-          expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-          isUsed: false
-        }
-      });
-
-      // Dispatch verification code to NEW email address
-      await sendEmail(
-        normalizedNewEmail,
-        "MTS Lab Security — Confirm Your New Super Admin Email",
-        `Hello ${user.name},\n\nYou are confirming this address as the new primary Super Admin email for MTS Lab.\n\nStep 2 Confirmation Code:\n\n   ${newOtpCode}\n\nThis code will expire in 15 minutes.\nIf you did not authorize this, please disregard.`
-      );
-
-      const newEmailTicket = jwt.sign(
-        { userId: user.id, oldEmail: user.email, newEmail: normalizedNewEmail, purpose: "EMAIL_CHANGE_NEW" },
-        JWT_SECRET,
-        { expiresIn: "15m" }
-      );
-
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
-        action: "EMAIL_CHANGE_REQUESTED",
-        resource: "USER",
-        resourceId: user.id,
-        status: "SUCCESS",
-        details: `Step 1 verified. Confirmation OTP sent to new email: ${normalizedNewEmail}`
-      });
-
-      return res.json({
-        success: true,
-        newEmailTicket,
-        newEmail: normalizedNewEmail,
-        message: `Verification code sent to ${normalizedNewEmail}. Please enter the code to confirm.`
-      });
-
-    } catch (err: any) {
-      console.error("[VERIFY CURRENT EMAIL ERROR]", err);
-      res.status(500).json({ success: false, message: "Failed to verify current email." });
-    }
-  });
-
-  // Super Admin Email Change (Step 3: Confirm NEW Email OTP & Update Authoritative Records)
-  app.post("/api/admin/change-email/confirm", authenticate, authorize(['SUPER_ADMIN']), authLimiter, async (req: any, res) => {
-    const { newEmailTicket, code } = req.body;
-
-    try {
-      if (!newEmailTicket || !code) {
-        return res.status(400).json({ success: false, message: "Confirmation code and security ticket are required." });
-      }
-
-      let decoded: any = null;
-      try {
-        decoded = jwt.verify(newEmailTicket, JWT_SECRET);
-      } catch (jwtErr) {
-        return res.status(401).json({ success: false, message: "Confirmation session expired. Please start again." });
-      }
-
-      if (!decoded || decoded.purpose !== "EMAIL_CHANGE_NEW" || decoded.userId !== req.user.id || !decoded.newEmail) {
-        return res.status(401).json({ success: false, message: "Invalid confirmation session." });
-      }
-
-      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-      if (!user) return res.status(404).json({ success: false, message: "User not found." });
-
-      const newEmail = decoded.newEmail;
-
-      // Verify OTP on NEW email
-      const otpRecord = await prisma.oTPVerification.findFirst({
-        where: {
-          userId: user.id,
-          email: newEmail,
-          purpose: "EMAIL_CHANGE_NEW",
-          isUsed: false
-        },
-        orderBy: { createdAt: "desc" }
-      });
-
-      if (!otpRecord || otpRecord.expiresAt < new Date()) {
-        return res.status(400).json({ success: false, message: "Verification code for new email has expired." });
-      }
-
-      const isValid = verifyOtp(String(code).trim(), otpRecord.codeHash);
-      if (!isValid) {
-        return res.status(400).json({ success: false, message: "Invalid verification code for new email." });
-      }
-
-      // Mark OTP as used
-      await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
-
-      const oldEmail = user.email;
-
-      // Update SQLite user record
       const updatedUser = await prisma.user.update({
         where: { id: user.id },
-        data: {
-          email: newEmail,
-          emailChangePending: null,
-          emailChangeCodeHash: null,
-          emailChangeExpiresAt: null
-        }
+        data: { email: normalizedNewEmail }
       });
 
-      // Update Firebase Auth if linked
-      try {
-        const auth = getAdminAuth();
-        if (auth) {
-          if (user.firebaseUid) {
-            await auth.updateUser(user.firebaseUid, { email: newEmail, emailVerified: true });
-          } else {
-            const fbUser = await auth.getUserByEmail(oldEmail).catch(() => null);
-            if (fbUser) {
-              await auth.updateUser(fbUser.uid, { email: newEmail, emailVerified: true });
-            }
+      if (user.firebaseUid) {
+        try {
+          const auth = getAdminAuth();
+          if (auth) {
+            await auth.updateUser(user.firebaseUid, { email: normalizedNewEmail, emailVerified: true });
           }
+        } catch (fbErr) {
+          console.warn("[CHANGE EMAIL WARNING]", fbErr);
         }
-      } catch (fbErr) {
-        console.warn("[CHANGE EMAIL] Firebase Auth update notice:", fbErr);
       }
 
-      // Sync updated user to Firestore
-      await syncUserToFirestore(updatedUser);
-
-      // Invalidate all active sessions to enforce fresh login with new email
-      await prisma.session.deleteMany({ where: { userId: user.id } });
-      res.clearCookie("refreshToken");
+      await syncUserToFirestore(updatedUser).catch(() => {});
 
       await recordAuditLog({
         req,
         userId: user.id,
-        userEmail: newEmail,
+        userEmail: normalizedNewEmail,
         userName: user.name,
         userRole: user.role,
         action: "EMAIL_CHANGED",
@@ -5719,14 +5527,14 @@ export async function createServerApp() {
         resourceId: user.id,
         status: "SUCCESS",
         previousValue: oldEmail,
-        newValue: newEmail,
-        details: `Primary Super Admin email successfully changed from ${oldEmail} to ${newEmail}. All sessions revoked.`
+        newValue: normalizedNewEmail,
+        details: `Super Admin email successfully changed from ${oldEmail} to ${normalizedNewEmail}.`
       });
 
       return res.json({
         success: true,
-        newEmail,
-        message: "Super Admin email successfully changed. All sessions revoked. Please log in with your new email."
+        newEmail: normalizedNewEmail,
+        message: "Email address updated successfully."
       });
 
     } catch (err: any) {
@@ -6995,8 +6803,7 @@ export async function createServerApp() {
                   role: fsData.role || "TECHNICIAN",
                   accountStatus: fsData.accountStatus || "ACTIVE",
                   isActive: fsData.isActive !== false,
-                  emailVerified: fsData.emailVerified !== false,
-                  twoFactorEnabled: fsData.twoFactorEnabled === true
+                  emailVerified: fsData.emailVerified !== false
                 },
                 update: {
                   name: fsData.name || undefined,
@@ -7046,190 +6853,15 @@ export async function createServerApp() {
         });
       }
 
-      // 5. Invalidate previous unused password reset OTPs for this user
-      await prisma.oTPVerification.updateMany({
-        where: { userId: user.id, purpose: "PASSWORD_RESET", isUsed: false },
-        data: { isUsed: true }
-      });
-
-      // 6. Generate cryptographically secure 6-digit OTP
-      const otpCode = generate6DigitOtp();
-      const otpHash = hashOtp(otpCode);
-
-      await prisma.oTPVerification.create({
-        data: {
-          userId: user.id,
-          email: user.email,
-          codeHash: otpHash,
-          purpose: "PASSWORD_RESET",
-          attempts: 0,
-          maxAttempts: 5,
-          expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes expiration
-          isUsed: false
-        }
-      });
-
-      // 7. Dispatch recovery email ONLY to the registered user's email on file
-      await sendEmail({
-        to: user.email,
-        subject: "MTS Lab Security — Password Reset Verification Code",
-        body: `Hello ${user.name},\n\nYou requested a password reset for your MTS Lab account.\n\nYour 6-digit verification code is:\n\n   ${otpCode}\n\nThis code will expire in 15 minutes.\nIf you did not request this password reset, please contact the Super Administrator immediately.`,
-        html: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; background-color: #f8fafc; border-radius: 16px;">
-            <div style="text-align: center; margin-bottom: 24px;">
-              <div style="display: inline-block; width: 48px; height: 48px; background-color: #0f172a; border-radius: 12px; line-height: 48px; color: #ffffff; font-size: 24px; font-weight: bold;">M</div>
-              <h2 style="color: #0f172a; margin: 12px 0 4px 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">MTS Lab Security</h2>
-              <p style="color: #64748b; margin: 0; font-size: 13px; font-weight: 500;">Password Recovery Request</p>
-            </div>
-            <div style="background-color: #ffffff; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-              <h3 style="color: #1e293b; margin-top: 0; font-size: 18px; font-weight: 700;">Account Password Reset</h3>
-              <p style="color: #334155; font-size: 14px; line-height: 1.6; margin: 16px 0;">
-                Hello <strong>${user.name}</strong>,<br/><br/>
-                We received a request to reset your password for your MTS Lab account. Enter the verification code below on the recovery screen:
-              </p>
-              <div style="text-align: center; margin: 28px 0;">
-                <div style="display: inline-block; padding: 16px 36px; background-color: #0f172a; color: #ffffff; font-size: 32px; font-weight: 800; letter-spacing: 8px; border-radius: 14px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2); font-family: monospace;">
-                  ${otpCode}
-                </div>
-              </div>
-              <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin: 20px 0 0 0; text-align: center;">
-                ⏱️ This code expires in <strong>15 minutes</strong> and is valid for a single use.
-              </p>
-              <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; text-align: center;">
-                If you did not request a password reset, please contact the Super Administrator immediately.
-              </div>
-            </div>
-          </div>
-        `
-      });
-
-      const resetTicket = jwt.sign(
-        { userId: user.id, email: user.email, purpose: "PASSWORD_RESET" },
-        JWT_SECRET,
-        { expiresIn: "15m" }
-      );
-
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
-        action: "PASSWORD_RESET_REQUESTED",
-        resource: "AUTH",
-        status: "SUCCESS",
-        details: `Password reset OTP dispatched to registered email (${maskEmail(user.email)})`
-      });
-
+      // Password reset is managed by Firebase Authentication (sendPasswordResetEmail)
       return res.json({
         success: true,
-        resetTicket,
-        emailMasked: maskEmail(user.email),
-        message: "Verification code sent to your registered email."
+        message: "If an account exists for this email, password reset instructions have been dispatched."
       });
 
     } catch (err: any) {
       console.error("[FORGOT PASSWORD ERROR]", err);
       res.status(500).json({ success: false, message: "Failed to process password reset request." });
-    }
-  });
-
-  // Verify Password Reset OTP
-  app.post("/api/auth/verify-otp", authLimiter, async (req: any, res) => {
-    const { resetTicket, email, code } = req.body;
-
-    try {
-      if (!code || typeof code !== "string" || !code.trim()) {
-        return res.status(400).json({ success: false, error: "Verification code is required." });
-      }
-
-      let userId: string | null = null;
-      let userEmail: string | null = null;
-
-      if (resetTicket) {
-        try {
-          const decoded: any = jwt.verify(resetTicket, JWT_SECRET);
-          if (decoded && decoded.purpose === "PASSWORD_RESET" && decoded.userId) {
-            userId = decoded.userId;
-            userEmail = decoded.email;
-          }
-        } catch (jwtErr) {
-          return res.status(400).json({ success: false, error: "Verification session has expired. Please request a new code." });
-        }
-      }
-
-      if (!userId && email) {
-        const u = await prisma.user.findFirst({
-          where: { email: String(email).toLowerCase().trim(), deletedAt: null }
-        });
-        if (u) {
-          userId = u.id;
-          userEmail = u.email;
-        }
-      }
-
-      if (!userId) {
-        return res.status(400).json({ success: false, error: "Invalid or expired recovery session. Please request a new code." });
-      }
-
-      const otpRecord = await prisma.oTPVerification.findFirst({
-        where: {
-          userId,
-          purpose: "PASSWORD_RESET",
-          isUsed: false
-        },
-        orderBy: { createdAt: "desc" }
-      });
-
-      if (!otpRecord || otpRecord.expiresAt < new Date()) {
-        return res.status(400).json({ success: false, error: "Verification code has expired. Please request a new code." });
-      }
-
-      if (otpRecord.attempts >= otpRecord.maxAttempts) {
-        await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
-        return res.status(429).json({ success: false, error: "Too many failed attempts. Please request a new code." });
-      }
-
-      const isValid = verifyOtp(String(code).trim(), otpRecord.codeHash);
-      if (!isValid) {
-        const nextAttempts = otpRecord.attempts + 1;
-        await prisma.oTPVerification.update({
-          where: { id: otpRecord.id },
-          data: { attempts: nextAttempts, isUsed: nextAttempts >= otpRecord.maxAttempts }
-        });
-        return res.status(400).json({ 
-          success: false, 
-          error: `Invalid verification code. ${Math.max(0, otpRecord.maxAttempts - nextAttempts)} attempt(s) remaining.` 
-        });
-      }
-
-      // Mark OTP as used (single-use)
-      await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
-
-      const resetToken = uuidv4();
-      await prisma.passwordResetToken.create({
-        data: {
-          userId,
-          token: resetToken,
-          expiresAt: new Date(Date.now() + 15 * 60 * 1000)
-        }
-      });
-
-      await recordAuditLog({
-        req,
-        userId,
-        userEmail,
-        action: "PASSWORD_RESET_OTP_VERIFIED",
-        resource: "AUTH",
-        status: "SUCCESS",
-        details: "Password reset OTP successfully verified."
-      });
-
-      res.json({ success: true, resetToken, message: "Code verified successfully." });
-
-    } catch (err: any) {
-      console.error("[VERIFY OTP ERROR]", err);
-      res.status(500).json({ success: false, error: "Verification failed. Please try again." });
     }
   });
 
@@ -7242,8 +6874,9 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, error: "Reset token and new password are required." });
       }
 
-      if (typeof newPassword !== "string" || newPassword.length < 8) {
-        return res.status(400).json({ success: false, error: "Password must be at least 8 characters long." });
+      const pwdVal = validateStrongPasswordServer(newPassword);
+      if (!pwdVal.valid) {
+        return res.status(400).json({ success: false, error: pwdVal.message || "Password does not meet security requirements." });
       }
 
       const rt = await prisma.passwordResetToken.findUnique({
@@ -8932,46 +8565,6 @@ export async function createServerApp() {
   app.delete("/api/battery-warranties/:id", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
     try {
       const { id } = req.params;
-      const { code, twoFactorCode } = req.body || {};
-      const inputCode = String(code || twoFactorCode || req.query.code || '').trim();
-
-      if (!inputCode) {
-        return res.status(400).json({ error: "Two-Factor Authentication (2FA) verification code is required to permanently delete warranty records." });
-      }
-
-      // Verify 2FA OTP for SUPER_ADMIN
-      const activeOtp = await prisma.oTPVerification.findFirst({
-        where: {
-          userId: req.user.id,
-          purpose: "WARRANTY_DELETION_2FA",
-          isUsed: false,
-          expiresAt: { gt: new Date() }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
-
-      if (!activeOtp) {
-        return res.status(400).json({ error: "2FA verification code has expired or was not requested. Please request a new verification code." });
-      }
-
-      if (activeOtp.attempts >= activeOtp.maxAttempts) {
-        return res.status(400).json({ error: "Too many failed attempts. Please request a new 2FA verification code." });
-      }
-
-      const inputHash = hashOtp(inputCode);
-      if (activeOtp.codeHash !== inputHash) {
-        await prisma.oTPVerification.update({
-          where: { id: activeOtp.id },
-          data: { attempts: { increment: 1 } }
-        });
-        return res.status(400).json({ error: "Invalid 2FA verification code. Please check your email and try again." });
-      }
-
-      // 2FA Code Verified!
-      await prisma.oTPVerification.update({
-        where: { id: activeOtp.id },
-        data: { isUsed: true }
-      });
 
       const warranty = await prisma.batteryWarranty.findUnique({
         where: { id },
@@ -14178,6 +13771,11 @@ export async function createServerApp() {
         return res.status(400).json({ error: "Email, password, and full name are required." });
       }
 
+      const pwdVal = validateStrongPasswordServer(password);
+      if (!pwdVal.valid) {
+        return res.status(400).json({ error: pwdVal.message || "Password does not meet security requirements." });
+      }
+
       const normalizedEmail = String(email).toLowerCase().trim();
       const normalizedUsername = username ? String(username).trim() : null;
 
@@ -14908,11 +14506,7 @@ export async function createServerApp() {
 
   app.patch("/api/users/:id", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
     const { id } = req.params;
-    let { isActive, role, name, email, username, phoneNumber, department, address, profileImage, password, accountStatus, twoFactorEnabled, enabled } = req.body;
-    
-    if (twoFactorEnabled === undefined && enabled !== undefined) {
-      twoFactorEnabled = enabled;
-    }
+    let { isActive, role, name, email, username, phoneNumber, department, address, profileImage, password, accountStatus } = req.body;
     
     try {
       const existingUser = await prisma.user.findUnique({ where: { id } });
@@ -14925,18 +14519,13 @@ export async function createServerApp() {
       if (username !== undefined) {
         updateData.username = username ? String(username).trim() : null;
       }
-      if (twoFactorEnabled !== undefined) {
-        if (typeof twoFactorEnabled === 'boolean') {
-          updateData.twoFactorEnabled = twoFactorEnabled;
-        } else if (twoFactorEnabled === 'true' || twoFactorEnabled === '1' || twoFactorEnabled === 1) {
-          updateData.twoFactorEnabled = true;
-        } else if (twoFactorEnabled === 'false' || twoFactorEnabled === '0' || twoFactorEnabled === 0) {
-          updateData.twoFactorEnabled = false;
-        }
-      }
       
-      // If password is provided, hash it
+      // If password is provided, validate strong password policy and hash it
       if (password) {
+        const pwdVal = validateStrongPasswordServer(password);
+        if (!pwdVal.valid) {
+          return res.status(400).json({ error: pwdVal.message || "Password does not meet security requirements." });
+        }
         updateData.password = await bcrypt.hash(password, 10);
         updateData.failedLoginAttempts = 0;
         updateData.lockoutUntil = null;
@@ -14991,9 +14580,7 @@ export async function createServerApp() {
       const changedFields = Object.keys(updateData).filter(k => k !== 'password' && updateData[k] !== existingUser[k as keyof typeof existingUser]);
       if (changedFields.length > 0 || password) {
         let actionType = "USER_UPDATED";
-        if (twoFactorEnabled !== undefined && twoFactorEnabled !== existingUser.twoFactorEnabled) {
-          actionType = twoFactorEnabled ? "2FA_ENABLED" : "2FA_DISABLED";
-        } else if (role && role !== existingUser.role) actionType = "ROLE_CHANGED";
+        if (role && role !== existingUser.role) actionType = "ROLE_CHANGED";
         else if (isActive === false) actionType = "USER_DISABLED";
         else if (isActive === true && existingUser.isActive === false) actionType = "USER_ENABLED";
 
@@ -15007,7 +14594,7 @@ export async function createServerApp() {
           resource: "USER",
           resourceId: id,
           status: "SUCCESS",
-          previousValue: JSON.stringify({ role: existingUser.role, isActive: existingUser.isActive, accountStatus: existingUser.accountStatus, twoFactorEnabled: existingUser.twoFactorEnabled }),
+          previousValue: JSON.stringify({ role: existingUser.role, isActive: existingUser.isActive, accountStatus: existingUser.accountStatus }),
           newValue: JSON.stringify(updateData),
           details: `Updated staff profile: ${name || existingUser.name}. Changed fields: ${changedFields.join(', ')} ${password ? '(password reset)' : ''}`
         });

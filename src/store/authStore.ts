@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { StaffRole, normalizeRole } from '@/lib/rbac';
+import { auth } from '@/lib/firebase';
 
 export interface User {
   id: string;
@@ -49,7 +50,12 @@ export const useAuthStore = create<AuthState>()(
       }),
       setToken: (token) => set({ token }),
       setRefreshToken: (refreshToken) => set({ refreshToken }),
-      logout: () => set({ user: null, token: null, refreshToken: null }),
+      logout: () => {
+        try {
+          auth.signOut().catch(() => {});
+        } catch {}
+        set({ user: null, token: null, refreshToken: null });
+      },
     }),
     {
       name: 'mts-auth-storage',
