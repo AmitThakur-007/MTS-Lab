@@ -106,13 +106,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     fetchPendingAttendance();
   }, [user?.role]);
 
-  // Real-time synchronization across devices for notifications, access requests and attendance
+  // Real-time synchronization across devices for notifications, access requests, user roles and attendance
   useRealtimeSync(
     ['notification', 'accessRequest', 'repair', 'user', 'attendance'],
     (event) => {
       fetchNotifications();
       fetchPendingAccessCount();
       fetchPendingAttendance();
+      if (event.entity === 'user' && event.data && (event.data.id === user?.id || event.data.email === user?.email)) {
+        if (event.data.role) {
+          useAuthStore.getState().updateUser({ role: event.data.role });
+        }
+      }
     }
   );
 

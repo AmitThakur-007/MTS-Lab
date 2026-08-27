@@ -39,8 +39,10 @@ export default function Dashboard() {
     ? <ManagerDashboard />
     : <Overview />;
 
-  const canAccessCustomers = ['SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(role);
+  const canAccessCustomers = ['SUPERADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST'].includes(role);
   const canAccessStaff = ['SUPERADMIN', 'ADMIN'].includes(role);
+  const canAccessRevenue = ['SUPERADMIN', 'ADMIN', 'MANAGER'].includes(role);
+  const canAccessSlides = ['SUPERADMIN', 'ADMIN'].includes(role);
   const canAccessSuperAdmin = isSuperAdmin;
 
   return (
@@ -51,7 +53,7 @@ export default function Dashboard() {
         <RouteErrorBoundary>
           <Routes>
             <Route index element={defaultElement} />
-            <Route path="manager" element={<ManagerDashboard />} />
+            <Route path="manager" element={isManager || isSuperAdmin || role === 'ADMIN' ? <ManagerDashboard /> : defaultElement} />
             <Route path="repairs" element={isTechnician ? <TechnicianDashboard /> : <Repairs />} />
             <Route path="repairs/new" element={<NewRepair />} />
             <Route path="repairs/:id" element={<RepairDetails />} />
@@ -72,11 +74,11 @@ export default function Dashboard() {
             />
             <Route path="staff" element={canAccessStaff ? <Staff /> : defaultElement} />
             <Route path="repair-prices" element={<RepairPrices />} />
-            <Route path="slides" element={<SlideshowManagement />} />
+            <Route path="slides" element={canAccessSlides ? <SlideshowManagement /> : defaultElement} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="products" element={<Inventory />} />
             <Route path="settings" element={<Settings />} />
-            <Route path="revenue" element={<Revenue />} />
+            <Route path="revenue" element={canAccessRevenue ? <Revenue /> : defaultElement} />
             <Route path="super-admin" element={canAccessSuperAdmin ? <SuperAdmin /> : defaultElement} />
             <Route path="access-requests" element={canAccessSuperAdmin ? <AccessRequests /> : defaultElement} />
             <Route path="*" element={defaultElement} />

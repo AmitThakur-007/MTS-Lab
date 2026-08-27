@@ -2958,7 +2958,35 @@ export async function createServerApp() {
       return res.status(401).json({ error: "Invalid token" });
     }
 
-    req.user = decoded;
+    // Database-Authoritative User Lookup to ensure real-time role changes and account status are enforced
+    try {
+      const userIdToLookup = decoded.id || decoded.userId;
+      if (userIdToLookup) {
+        const liveUser = await prisma.user.findUnique({
+          where: { id: userIdToLookup },
+          select: { id: true, email: true, name: true, role: true, isActive: true, accountStatus: true, deletedAt: true, branchId: true }
+        });
+
+        if (!liveUser || liveUser.deletedAt || !liveUser.isActive || (liveUser.accountStatus !== "ACTIVE" && liveUser.accountStatus !== "APPROVED")) {
+          return res.status(401).json({ error: "AccountInactive", message: "Your account is no longer active or has been disabled." });
+        }
+
+        req.user = {
+          ...decoded,
+          id: liveUser.id,
+          userId: liveUser.id,
+          email: liveUser.email,
+          name: liveUser.name,
+          role: liveUser.role,
+          accountStatus: liveUser.accountStatus,
+          branchId: liveUser.branchId
+        };
+      } else {
+        req.user = decoded;
+      }
+    } catch (dbErr) {
+      req.user = decoded;
+    }
 
     // --- 2-Hour Inactivity Check via Session table ---
     // Only check for routes that are NOT the activity ping or refresh endpoints
@@ -14505,13 +14533,52 @@ export async function createServerApp() {
     }
   });
 
-  app.patch("/api/users/:id", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
+  app.patch("/api/users/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res) => {
     const { id } = req.params;
     let { isActive, role, name, email, username, phoneNumber, department, address, profileImage, password, accountStatus } = req.body;
     
     try {
       const existingUser = await prisma.user.findUnique({ where: { id } });
       if (!existingUser) return res.status(404).json({ error: "User account not found." });
+
+      const callerRoleNorm = normalizeRole(req.user.role);
+
+      // Only SUPERADMIN can change user roles
+      if (role !== undefined && role !== existingUser.role) {
+        if (callerRoleNorm !== 'SUPERADMIN') {
+          return res.status(403).json({ error: "Forbidden: Only Super Administrators can change user roles." });
+        }
+
+        // Prevent SuperAdmin from downgrading their own role
+        if (id === req.user.id && normalizeRole(role) !== 'SUPERADMIN') {
+          return res.status(400).json({ error: "You cannot revoke your own Super Administrator role." });
+        }
+      }
+
+      // Check if target is SuperAdmin and status/active is changing
+      const targetRoleNorm = normalizeRole(existingUser.role);
+      if (targetRoleNorm === 'SUPERADMIN') {
+        const isDisabling = isActive === false || (accountStatus && accountStatus !== 'ACTIVE' && accountStatus !== 'APPROVED');
+        const isChangingRole = role !== undefined && normalizeRole(role) !== 'SUPERADMIN';
+
+        if (id === req.user.id && isDisabling) {
+          return res.status(400).json({ error: "You cannot disable your own Super Administrator account." });
+        }
+
+        if (isDisabling || isChangingRole) {
+          const superAdminCount = await prisma.user.count({
+            where: {
+              role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] },
+              isActive: true,
+              accountStatus: 'ACTIVE',
+              deletedAt: null
+            }
+          });
+          if (superAdminCount <= 1) {
+            return res.status(400).json({ error: "Cannot modify or disable the sole remaining Super Administrator." });
+          }
+        }
+      }
 
       const updateData: any = { isActive, role, name, phoneNumber, department, address, profileImage, accountStatus };
       if (email !== undefined) {
@@ -14572,41 +14639,28 @@ export async function createServerApp() {
         data: user
       });
 
-      // If password or active state was revoked, terminate active sessions
-      if (password || isActive === false || (accountStatus && accountStatus !== 'ACTIVE' && accountStatus !== 'APPROVED')) {
+      // If password, role, or active state was changed, terminate target user's active sessions to enforce update immediately
+      if (password || role !== undefined || isActive === false || (accountStatus && accountStatus !== 'ACTIVE' && accountStatus !== 'APPROVED')) {
         await prisma.session.deleteMany({ where: { userId: id } });
       }
 
       // Centralized Audit Log
       const changedFields = Object.keys(updateData).filter(k => k !== 'password' && updateData[k] !== existingUser[k as keyof typeof existingUser]);
       if (changedFields.length > 0 || password) {
-        let actionType = "USER_UPDATED";
-        if (role && role !== existingUser.role) actionType = "ROLE_CHANGED";
-        else if (isActive === false) actionType = "USER_DISABLED";
-        else if (isActive === true && existingUser.isActive === false) actionType = "USER_ENABLED";
-
         await recordAuditLog({
           req,
           userId: req.user.id,
-          userEmail: req.user.email,
-          userName: req.user.name,
-          userRole: req.user.role,
-          action: actionType,
+          action: "USER_UPDATED",
           resource: "USER",
-          resourceId: id,
+          resourceId: user.id,
           status: "SUCCESS",
-          previousValue: JSON.stringify({ role: existingUser.role, isActive: existingUser.isActive, accountStatus: existingUser.accountStatus }),
-          newValue: JSON.stringify(updateData),
-          details: `Updated staff profile: ${name || existingUser.name}. Changed fields: ${changedFields.join(', ')} ${password ? '(password reset)' : ''}`
+          details: `Updated fields [${changedFields.join(", ")}${password ? ", password" : ""}] for ${user.name} (${user.email})`
         });
       }
 
-      res.json(user);
+      res.json({ message: "User updated successfully", user });
     } catch (err: any) {
       console.error("[UPDATE USER ERROR]", err);
-      if (err.code === 'P2002') {
-        return res.status(400).json({ error: "Email or username already exists" });
-      }
       res.status(400).json({ error: err.message || "Failed to update user" });
     }
   });
@@ -14619,6 +14673,24 @@ export async function createServerApp() {
     }
 
     try {
+      const targetUser = await prisma.user.findUnique({ where: { id } });
+      if (!targetUser) return res.status(404).json({ error: "User account not found." });
+
+      const targetRoleNorm = normalizeRole(targetUser.role);
+      if (targetRoleNorm === 'SUPERADMIN') {
+        const superAdminCount = await prisma.user.count({
+          where: {
+            role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] },
+            isActive: true,
+            accountStatus: 'ACTIVE',
+            deletedAt: null
+          }
+        });
+        if (superAdminCount <= 1) {
+          return res.status(400).json({ error: "Cannot delete the sole remaining Super Administrator." });
+        }
+      }
+
       // Soft delete by setting deletedAt
       const user = await prisma.user.update({
         where: { id },
