@@ -35,8 +35,8 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       refreshToken: null,
       setAuth: (user, token, refreshToken) => {
-        const normalized = normalizeRole(user?.role) || 'RECEPTIONIST';
-        const cleanUser = user ? { ...user, role: normalized } : null;
+        const normalized = user?.role ? (normalizeRole(user.role) || user.role) : null;
+        const cleanUser = user ? { ...user, role: normalized || user.role } : null;
         set((state) => ({ 
           user: cleanUser, 
           token, 

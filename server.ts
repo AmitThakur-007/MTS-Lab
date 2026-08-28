@@ -2897,9 +2897,14 @@ async function syncModelFromFirestore(modelName: string, force = false) {
           // If local record is strictly newer than the Firestore record, do not overwrite with stale snapshot
           const isLocalNewer = existing.updatedAt && data.updatedAt && new Date(existing.updatedAt) > new Date(data.updatedAt);
           if (!isLocalNewer) {
+            const updatePayload = { ...data };
+            if (modelName === "user") {
+              // Local database is the authoritative owner of user.role. Do NOT overwrite persisted role during Firestore pull.
+              delete updatePayload.role;
+            }
             await prismaModel.update({
               where: { id: doc.id },
-              data
+              data: updatePayload
             });
           }
         }
@@ -5544,10 +5549,13 @@ export async function createServerApp() {
               if (data.accountStatus === undefined) data.accountStatus = "ACTIVE";
               if (data.isActive === undefined) data.isActive = true;
 
+              const loginUpsertUpdateData = { ...data };
+              delete loginUpsertUpdateData.role;
+
               user = await prisma.user.upsert({
                 where: { id: firestoreDoc.id },
                 create: { ...data, id: firestoreDoc.id },
-                update: data
+                update: loginUpsertUpdateData
               });
               console.log(`[LOGIN AUTH] Staff ${user.email} successfully fetched from Firestore to local storage.`);
             }
@@ -14840,7 +14848,7 @@ export async function createServerApp() {
 
       // Only SUPERADMIN can change user roles
       if (role !== undefined && normalizeRole(role) !== normalizeRole(existingUser.role)) {
-        if (callerRoleNorm !== 'SUPER_ADMIN') {
+        if (callerRoleNorm !== 'SUPER_ADMIN' && callerRoleNorm !== 'SUPERADMIN') {
           return res.status(403).json({ error: "Forbidden: Only Super Administrators can change user roles." });
         }
 
