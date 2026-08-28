@@ -152,14 +152,9 @@ export default function Login() {
         try {
           await userCred.reload();
         } catch {}
-        firebaseIdToken = await userCred.getIdToken(true);
-
-        if (!userCred.emailVerified) {
-          setUnverifiedEmail(trimmedEmail);
-          toast.error('Please verify your email address before continuing.');
-          setLoading(false);
-          return;
-        }
+        try {
+          firebaseIdToken = await userCred.getIdToken(true);
+        } catch {}
       }
 
       // 2. Authenticate session with MTS Lab Backend

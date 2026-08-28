@@ -28,10 +28,6 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode, roles?
     return <Navigate to="/login" replace />;
   }
 
-  if (user.emailVerified === false) {
-    return <Navigate to="/login" state={{ unverifiedEmail: user.email }} replace />;
-  }
-
   if (user.role === 'CUSTOMER') {
     return <Navigate to="/track" replace />;
   }
