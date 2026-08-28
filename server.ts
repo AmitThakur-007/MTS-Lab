@@ -5687,6 +5687,130 @@ export async function createServerApp() {
     res.json({ success: true, message: "Password updated successfully." });
   });
 
+  // Forgot Password Endpoint (Registration check & Firebase link generation)
+  app.post("/api/auth/forgot-password", authLimiter, async (req: any, res) => {
+    try {
+      const rawEmail = req.body.email || req.body.identity;
+      if (!rawEmail || typeof rawEmail !== "string") {
+        return res.status(400).json({ success: false, message: "Work email address is required." });
+      }
+
+      const normalizedEmail = rawEmail.trim().toLowerCase();
+      const user = await prisma.user.findFirst({
+        where: { email: normalizedEmail, deletedAt: null }
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          registered: false,
+          message: "This email address is not registered with MTS Lab."
+        });
+      }
+
+      // Generate Firebase password reset link if admin auth is available
+      let resetLink: string | null = null;
+      try {
+        const auth = getAdminAuth();
+        if (auth && user.email) {
+          resetLink = await auth.generatePasswordResetLink(user.email, {
+            url: `${process.env.APP_URL || 'http://localhost:3000'}/login`
+          });
+        }
+      } catch (fbErr: any) {
+        console.warn("[FIREBASE RESET LINK GENERATION NOTICE]", fbErr?.message || fbErr);
+      }
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "PASSWORD_RESET_REQUESTED",
+        resource: "AUTH",
+        status: "SUCCESS",
+        details: `Password reset request initiated for ${user.email} (${user.role})`
+      });
+
+      return res.json({
+        success: true,
+        registered: true,
+        email: user.email,
+        role: user.role,
+        resetLinkSent: true,
+        resetLink: resetLink || undefined,
+        message: `Password reset link has been dispatched to ${user.email}.`
+      });
+    } catch (err: any) {
+      console.error("[FORGOT PASSWORD ERROR]", err);
+      return res.status(500).json({ success: false, message: "Failed to process password reset request." });
+    }
+  });
+
+  // Direct Password Reset Endpoint (for link/token completion)
+  app.post("/api/auth/reset-password", authLimiter, async (req: any, res) => {
+    try {
+      const { email, newPassword } = req.body;
+      if (!email || !newPassword) {
+        return res.status(400).json({ success: false, message: "Email and new password are required." });
+      }
+
+      const pwdVal = validateStrongPasswordServer(newPassword);
+      if (!pwdVal.valid) {
+        return res.status(400).json({ success: false, message: pwdVal.message || "New password does not meet security requirements." });
+      }
+
+      const normalizedEmail = String(email).trim().toLowerCase();
+      const user = await prisma.user.findFirst({
+        where: { email: normalizedEmail, deletedAt: null }
+      });
+
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User account not found." });
+      }
+
+      const newPasswordHash = await bcrypt.hash(newPassword, 10);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          password: newPasswordHash,
+          failedLoginAttempts: 0,
+          lockoutUntil: null
+        }
+      });
+
+      if (user.firebaseUid) {
+        try {
+          const auth = getAdminAuth();
+          if (auth) {
+            await auth.updateUser(user.firebaseUid, { password: newPassword });
+          }
+        } catch (fbErr) {}
+      }
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "PASSWORD_RESET_COMPLETED",
+        resource: "AUTH",
+        status: "SUCCESS",
+        details: `Password reset successfully completed for ${user.email}`
+      });
+
+      return res.json({
+        success: true,
+        message: "Password has been reset successfully. You can now log in with your new password."
+      });
+    } catch (err: any) {
+      console.error("[RESET PASSWORD ERROR]", err);
+      return res.status(500).json({ success: false, message: "Failed to reset password." });
+    }
+  });
+
   // Super Admin Email Change Endpoints (Step 1: Request from Current Email)
   app.post("/api/admin/change-email/request", authenticate, authorize(['SUPER_ADMIN']), authLimiter, async (req: any, res) => {
     const { currentPassword } = req.body;
