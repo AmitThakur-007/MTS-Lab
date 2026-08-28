@@ -19090,6 +19090,6 @@ export async function startServer() {
 }
 
 // Auto-start only when executed directly as standalone Node server
-if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME && !process.env.SERVERLESS && process.env.NODE_ENV !== "test") {
+if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME && !process.env.SERVERLESS && process.env.NODE_ENV !== "test" && !process.env.NO_AUTO_START) {
   startServer().catch(console.error);
 }
