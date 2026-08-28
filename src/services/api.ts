@@ -26,6 +26,18 @@ export function normalizeEndpoint(endpoint: string): string {
   return clean;
 }
 
+function isServerAuthoritativeEndpoint(cleanEndpoint: string): boolean {
+  return (
+    cleanEndpoint.startsWith('/auth') ||
+    cleanEndpoint.startsWith('/users') ||
+    cleanEndpoint.startsWith('/admin') ||
+    cleanEndpoint.startsWith('/system') ||
+    cleanEndpoint.startsWith('/access-requests') ||
+    cleanEndpoint.startsWith('/wipe') ||
+    cleanEndpoint.startsWith('/backup')
+  );
+}
+
 // Global callback to trigger InactivityGuard logout flow from api.ts (set by InactivityGuard on mount)
 let _onInactivityExpired: (() => void) | null = null;
 export function registerInactivityExpiredHandler(handler: () => void) {
@@ -154,7 +166,7 @@ async function request(endpoint: string, options: any = {}) {
         }
       }
       // If server returned a dummy serverless fallback on a data route, trigger Firebase persistence
-      if (serverData && serverData.service === 'MTS Lab Serverless API' && !cleanEndpoint.startsWith('/auth/')) {
+      if (serverData && serverData.service === 'MTS Lab Serverless API' && !isServerAuthoritativeEndpoint(cleanEndpoint)) {
         serverHandled = false;
       } else {
         serverHandled = true;
@@ -165,8 +177,9 @@ async function request(endpoint: string, options: any = {}) {
     serverHandled = false;
   }
 
-  // Handle Firebase Direct Cloud Persistence Fallback (Never on auth endpoints)
-  if (!serverHandled && !cleanEndpoint.startsWith('/auth/')) {
+  // Handle Firebase Direct Cloud Persistence Fallback ONLY if network was unreachable (no server response)
+  // and NEVER on server-authoritative endpoints (users, admin, auth, system, access-requests, wipe)
+  if (!res && !serverHandled && !isServerAuthoritativeEndpoint(cleanEndpoint)) {
     try {
       if (method === 'GET') {
         const fbResult = await handleFirebaseGet(cleanEndpoint);

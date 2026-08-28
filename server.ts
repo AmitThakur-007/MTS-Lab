@@ -1811,59 +1811,88 @@ async function permanentlyDeleteUserRecord(userId: string): Promise<boolean> {
     console.warn("[PERMANENT DELETE] Firebase Auth deletion notice:", fbErr?.message || fbErr);
   }
 
-  // 2. Unlink / Reassign foreign keys to preserve repair and business history
-  if (fallbackAdminId !== userId) {
-    await prisma.repair.updateMany({
-      where: { createdById: userId },
-      data: { createdById: fallbackAdminId }
+  // 2. Unlink / Reassign foreign keys & delete user records atomically
+  await prisma.$transaction(async (tx) => {
+    if (fallbackAdminId !== userId) {
+      await tx.repair.updateMany({
+        where: { createdById: userId },
+        data: { createdById: fallbackAdminId }
+      }).catch(() => {});
+
+      await tx.batteryWarranty.updateMany({
+        where: { createdById: userId },
+        data: { createdById: fallbackAdminId }
+      }).catch(() => {});
+
+      await tx.attendance.updateMany({
+        where: { markedById: userId },
+        data: { markedById: fallbackAdminId }
+      }).catch(() => {});
+
+      await tx.repairRelatedDamage.updateMany({
+        where: { recordedById: userId },
+        data: { recordedById: fallbackAdminId }
+      }).catch(() => {});
+
+      await tx.inventoryItem.updateMany({
+        where: { createdById: userId },
+        data: { createdById: fallbackAdminId }
+      }).catch(() => {});
+
+      await tx.inventoryTransaction.updateMany({
+        where: { performedById: userId },
+        data: { performedById: fallbackAdminId }
+      }).catch(() => {});
+
+      await tx.attendanceAuditLog.updateMany({
+        where: { performedById: userId },
+        data: { performedById: fallbackAdminId }
+      }).catch(() => {});
+
+      await tx.repairRelatedDamageAudit.updateMany({
+        where: { performedById: userId },
+        data: { performedById: fallbackAdminId }
+      }).catch(() => {});
+
+      await tx.mediaAttachment.updateMany({
+        where: { uploadedById: userId },
+        data: { uploadedById: fallbackAdminId }
+      }).catch(() => {});
+
+      await tx.accessRequest.updateMany({
+        where: { approvedBy: userId },
+        data: { approvedBy: fallbackAdminId }
+      }).catch(() => {});
+    }
+
+    await tx.repair.updateMany({
+      where: { technicianId: userId },
+      data: { technicianId: null }
     }).catch(() => {});
-  }
 
-  await prisma.repair.updateMany({
-    where: { technicianId: userId },
-    data: { technicianId: null }
-  }).catch(() => {});
-
-  if (fallbackAdminId !== userId) {
-    await prisma.batteryWarranty.updateMany({
-      where: { createdById: userId },
-      data: { createdById: fallbackAdminId }
+    await tx.auditLog.updateMany({
+      where: { userId },
+      data: { userId: null }
     }).catch(() => {});
-  }
 
-  if (fallbackAdminId !== userId) {
-    await prisma.attendance.updateMany({
-      where: { markedById: userId },
-      data: { markedById: fallbackAdminId }
-    }).catch(() => {});
-  }
+    // Delete user-owned session & auxiliary records
+    await tx.attendance.deleteMany({ where: { userId } }).catch(() => {});
+    await tx.repairRelatedDamage.deleteMany({ where: { staffId: userId } }).catch(() => {});
+    await tx.technicianNote.deleteMany({ where: { technicianId: userId } }).catch(() => {});
+    await tx.session.deleteMany({ where: { userId } }).catch(() => {});
+    await tx.loginActivity.deleteMany({ where: { userId } }).catch(() => {});
+    await tx.approvedDevice.deleteMany({ where: { userId } }).catch(() => {});
+    await tx.accessRequest.deleteMany({ where: { userId } }).catch(() => {});
+    await tx.passwordResetToken.deleteMany({ where: { userId } }).catch(() => {});
 
-  if (fallbackAdminId !== userId) {
-    await prisma.repairRelatedDamage.updateMany({
-      where: { recordedById: userId },
-      data: { recordedById: fallbackAdminId }
-    }).catch(() => {});
-  }
-
-  await prisma.auditLog.updateMany({
-    where: { userId },
-    data: { userId: null }
-  }).catch(() => {});
-
-  await prisma.attendance.deleteMany({ where: { userId } }).catch(() => {});
-  await prisma.repairRelatedDamage.deleteMany({ where: { staffId: userId } }).catch(() => {});
-  await prisma.technicianNote.deleteMany({ where: { technicianId: userId } }).catch(() => {});
-  await prisma.session.deleteMany({ where: { userId } }).catch(() => {});
-  await prisma.loginActivity.deleteMany({ where: { userId } }).catch(() => {});
-  await prisma.approvedDevice.deleteMany({ where: { userId } }).catch(() => {});
-  await prisma.accessRequest.deleteMany({ where: { userId } }).catch(() => {});
-  await prisma.passwordResetToken.deleteMany({ where: { userId } }).catch(() => {});
-
-  // 3. Permanently delete User row from SQLite/PostgreSQL database
-  await prisma.user.delete({ where: { id: userId } });
+    // 3. Permanently delete User row from SQLite/PostgreSQL database
+    await tx.user.delete({ where: { id: userId } });
+  });
 
   // 4. Sync deletion to central Firestore and Realtime Database
-  await syncToRtdb("user", "DELETE", { id: userId }).catch(() => {});
+  if (user.id) await deleteFromFirestore("user", user.id).catch(() => {});
+  if (user.firebaseUid) await deleteFromFirestore("user", user.firebaseUid).catch(() => {});
+  await syncToRtdb("user", "DELETE", { id: userId, firebaseUid: user.firebaseUid }).catch(() => {});
 
   return true;
 }
@@ -2838,6 +2867,18 @@ async function syncToFirestore(modelName: string, record: any) {
     } else {
       console.log(`[SYNC-PUSH] ${modelName} sync skipped: ${err?.message || "Firestore unavailable"}`);
     }
+  }
+}
+
+async function deleteFromFirestore(modelName: string, id: string) {
+  if (firestoreSyncDisabled || !id) return;
+  try {
+    const db = getDb();
+    const collectionName = getCollectionName(modelName);
+    await db.collection(collectionName).doc(id).delete();
+    console.log(`[SYNC-DELETE] ${modelName} ${id} deleted from Firestore`);
+  } catch (err: any) {
+    // Non-blocking Firestore deletion notice
   }
 }
 
@@ -6577,7 +6618,7 @@ export async function createServerApp() {
     try {
       const { userIds } = req.body;
       if (!Array.isArray(userIds) || userIds.length === 0) {
-        return res.status(400).json({ error: "No user IDs provided for deletion" });
+        return res.status(400).json({ success: false, deleted: false, error: "No user IDs provided for deletion", message: "No user IDs provided for deletion" });
       }
 
       let deletedCount = 0;
@@ -6609,13 +6650,14 @@ export async function createServerApp() {
 
       return res.json({
         success: true,
+        deleted: true,
         message: `Successfully permanently deleted ${deletedCount} user record(s).`,
         deletedCount,
         deactivatedCount: deletedCount
       });
     } catch (err: any) {
       console.error("[BULK DELETE USERS ERROR]", err);
-      return res.status(500).json({ error: err.message || "Failed to bulk delete user records" });
+      return res.status(500).json({ success: false, deleted: false, error: err.message || "Failed to bulk delete user records", message: err.message || "Failed to bulk delete user records" });
     }
   });
 
@@ -14621,7 +14663,7 @@ export async function createServerApp() {
             branchId,
             firebaseUid,
             accountStatus: "ACTIVE",
-            emailVerified: firebaseEmailVerified,
+            emailVerified: req.body.emailVerified !== undefined ? Boolean(req.body.emailVerified) : true,
             isActive: true
           }
         });
@@ -15184,7 +15226,9 @@ export async function createServerApp() {
 
     try {
       const targetUser = await prisma.user.findUnique({ where: { id } });
-      if (!targetUser) return res.status(404).json({ error: "User account not found." });
+      if (!targetUser) {
+        return res.status(404).json({ success: false, deleted: false, error: "Staff member not found or already deleted.", message: "Staff member not found or already deleted." });
+      }
 
       const targetRoleNorm = normalizeRole(targetUser.role);
       if (targetRoleNorm === 'SUPER_ADMIN') {
@@ -15204,7 +15248,7 @@ export async function createServerApp() {
       // Execute permanent deletion from local DB & Firebase Auth while unlinking historical references
       const success = await permanentlyDeleteUserRecord(id);
       if (!success) {
-        return res.status(404).json({ error: "Staff member not found or already deleted." });
+        return res.status(404).json({ success: false, deleted: false, error: "Staff member not found or already deleted.", message: "Staff member not found or already deleted." });
       }
 
       // Centralized Audit Log
@@ -15218,42 +15262,15 @@ export async function createServerApp() {
         details: `Permanently deleted staff account and removed Firebase Auth user: ${targetUser.name} (${targetUser.email})`
       });
 
-      res.json({ message: "Staff member permanently deleted successfully", success: true });
+      res.json({
+        success: true,
+        deleted: true,
+        userId: id,
+        message: "Staff member permanently deleted successfully"
+      });
     } catch (err: any) {
       console.error("[DELETE USER ERROR]", err);
-      res.status(400).json({ error: err?.message || "Failed to delete staff member" });
-    }
-  });
-
-  // Dedicated Bulk Staff Permanent Deletion Endpoint (SUPER_ADMIN only)
-  app.post("/api/admin/users/bulk-delete", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
-    const { userIds } = req.body;
-    if (!Array.isArray(userIds) || userIds.length === 0) {
-      return res.status(400).json({ error: "No user IDs provided for bulk deletion." });
-    }
-
-    try {
-      let deletedCount = 0;
-      for (const targetId of userIds) {
-        if (targetId === req.user.id) continue; // Prevent self deletion
-        const targetUser = await prisma.user.findUnique({ where: { id: targetId } });
-        if (!targetUser) continue;
-
-        if (normalizeRole(targetUser.role) === 'SUPER_ADMIN') {
-          const count = await prisma.user.count({
-            where: { role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] }, deletedAt: null }
-          });
-          if (count <= 1) continue;
-        }
-
-        const deleted = await permanentlyDeleteUserRecord(targetId);
-        if (deleted) deletedCount++;
-      }
-
-      res.json({ message: `Permanently deleted ${deletedCount} staff member account(s).`, success: true });
-    } catch (err: any) {
-      console.error("[BULK DELETE USERS ERROR]", err);
-      res.status(400).json({ error: err?.message || "Failed to perform bulk staff deletion" });
+      res.status(400).json({ success: false, deleted: false, error: err?.message || "Failed to delete staff member", message: err?.message || "Failed to delete staff member" });
     }
   });
 

@@ -28,12 +28,12 @@ async function runStaffRolePersistenceE2ETests() {
   // 1. SuperAdmin Login
   const superAdminEmail = 'mtsmobilelab@gmail.com';
   const superAdminPassword = 'admin123';
+  const passwordHash = await bcrypt.hash(superAdminPassword, 10);
 
   let superAdmin = await prisma.user.findFirst({
     where: { email: superAdminEmail, deletedAt: null }
   });
   if (!superAdmin) {
-    const passwordHash = await bcrypt.hash(superAdminPassword, 10);
     superAdmin = await prisma.user.create({
       data: {
         email: superAdminEmail,
@@ -45,6 +45,11 @@ async function runStaffRolePersistenceE2ETests() {
         isActive: true,
         emailVerified: true
       }
+    });
+  } else {
+    await prisma.user.update({
+      where: { id: superAdmin.id },
+      data: { password: passwordHash, emailVerified: true, isActive: true }
     });
   }
 

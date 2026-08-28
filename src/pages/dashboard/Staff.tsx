@@ -321,16 +321,23 @@ export function StaffManagementContent() {
   };
 
   const handleExecuteBulkDelete = async () => {
-    if (selectedUserIds.length === 0) return;
+    if (selectedUserIds.length === 0 || bulkDeleting) return;
     setBulkDeleting(true);
     try {
       const res: any = await api.post('/admin/users/bulk-delete', { userIds: selectedUserIds });
-      toast.success(res?.message || `Deactivated ${selectedUserIds.length} user records.`);
+      if (res && res.error) {
+        throw new Error(res.error);
+      }
+      for (const uid of selectedUserIds) {
+        await deleteEntityFromRtdb('users', uid).catch(() => {});
+      }
+      toast.success(res?.message || `Permanently deleted ${selectedUserIds.length} staff member record(s).`);
       setSelectedUserIds([]);
       setIsBulkDeleteModalOpen(false);
-      fetchUsers(true);
+      await fetchUsers(true);
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to bulk delete user records');
+      console.error('[BULK DELETE ERROR]', err);
+      toast.error(err?.message || 'Failed to bulk delete staff records');
     } finally {
       setBulkDeleting(false);
     }
@@ -542,16 +549,19 @@ export function StaffManagementContent() {
 
 
   const handleDeleteUser = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser || submitting) return;
     setSubmitting(true);
     try {
       const res: any = await api.delete(`/users/${selectedUser.id}`);
+      if (res && res.error) {
+        throw new Error(res.error);
+      }
       await deleteEntityFromRtdb('users', selectedUser.id).catch(() => {});
-      toast.success(res?.message || 'Staff member deleted successfully');
+      toast.success(res?.message || 'Staff account permanently deleted successfully');
       setIsDeleteDialogOpen(false);
       setIsOperationsModalOpen(false);
       setSelectedUser(null);
-      fetchUsers();
+      await fetchUsers(true);
     } catch (err: any) {
       console.error('[DELETE USER ERROR]', err);
       toast.error(err.message || 'Failed to delete staff member. Please try again.');
@@ -2252,16 +2262,19 @@ export function StaffManagementContent() {
             </div>
           </AlertDialogHeader>
           <AlertDialogFooter className="pt-3 flex items-center justify-between gap-2">
-            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-500 border-slate-200 cursor-pointer">
+            <AlertDialogCancel disabled={submitting} className="rounded-xl text-xs font-bold text-slate-500 border-slate-200 cursor-pointer">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteUser}
-              className="rounded-xl text-xs font-bold px-5 bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/10 cursor-pointer"
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteUser();
+              }}
+              className="rounded-xl text-xs font-bold px-5 bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/10 cursor-pointer flex items-center gap-1.5"
               disabled={submitting}
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Delete Staff Member
+              <span>Permanently Delete Staff</span>
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2342,25 +2355,28 @@ export function StaffManagementContent() {
               <Trash2 className="h-6 w-6" />
             </div>
             <AlertDialogTitle className="text-xl font-extrabold text-slate-900 text-center">
-              Deactivate Selected Users?
+              Permanently Delete Selected Staff?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-slate-500 text-center font-medium leading-relaxed">
-              You are about to deactivate <strong className="text-slate-900">{selectedUserIds.length} user record(s)</strong>.
-              Accounts will be safely disabled while preserving historical repairs, attendance, and audit logs.
+              You are about to permanently delete <strong className="text-slate-900">{selectedUserIds.length} staff member account(s)</strong>.
+              Security credentials and authentication profiles will be completely removed while preserving historical repairs, attendance, and audit logs.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
           <AlertDialogFooter className="pt-2 flex items-center justify-center gap-3">
-            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-600 border-slate-200 h-10 px-5 cursor-pointer">
+            <AlertDialogCancel disabled={bulkDeleting} className="rounded-xl text-xs font-bold text-slate-600 border-slate-200 h-10 px-5 cursor-pointer">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleExecuteBulkDelete}
+              onClick={(e) => {
+                e.preventDefault();
+                handleExecuteBulkDelete();
+              }}
               disabled={bulkDeleting}
-              className="rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-10 px-5 shadow-md shadow-rose-600/30 cursor-pointer"
+              className="rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-10 px-5 shadow-md shadow-rose-600/30 cursor-pointer flex items-center gap-1.5"
             >
               {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
-              Confirm Deactivation
+              <span>Permanently Delete Staff</span>
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
