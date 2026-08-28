@@ -484,18 +484,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // 3. User Role & Profile Determination
-      const isSuperAdmin = identity === 'mtsmobilelab@gmail.com' || identity.includes('admin');
-      const isHeadTech = identity.includes('head') || identity.includes('lead');
-      const isTech = identity.includes('tech') && !isHeadTech;
-      const isManager = identity.includes('manager');
-
       let role = 'RECEPTIONIST';
-      if (isSuperAdmin) role = 'SUPERADMIN';
-      else if (isManager) role = 'MANAGER';
-      else if (isHeadTech) role = 'HEAD_TECHNICIAN';
-      else if (isTech) role = 'TECHNICIAN';
+      if (identity === 'mtsmobilelab@gmail.com' || identity === 'test.superadmin@mtslab.com') {
+        role = 'SUPERADMIN';
+      } else if (identity === 'test.admin@mtslab.com') {
+        role = 'ADMIN';
+      } else if (identity === 'test.manager@mtslab.com') {
+        role = 'MANAGER';
+      } else if (identity === 'test.headtech@mtslab.com') {
+        role = 'HEAD_TECHNICIAN';
+      } else if (identity === 'test.tech@mtslab.com') {
+        role = 'TECHNICIAN';
+      } else if (identity === 'test.receptionist@mtslab.com') {
+        role = 'RECEPTIONIST';
+      }
 
-      const userName = isSuperAdmin ? 'MTS Lab Super Admin' : (identity.split('@')[0] || 'Staff Member');
+      const userName = role === 'SUPERADMIN' ? 'MTS Lab Super Admin' : (identity.split('@')[0] || 'Staff Member');
       const userId = `usr_${crypto.createHash('md5').update(identity).digest('hex').slice(0, 12)}`;
 
       // 4. 2FA Challenge Verification Check

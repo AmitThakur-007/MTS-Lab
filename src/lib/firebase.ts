@@ -95,38 +95,10 @@ export const googleProvider = new GoogleAuthProvider();
 let authBridgePromise: Promise<any> | null = null;
 
 /**
- * Ensures Firebase Client Auth is active (auth.currentUser != null) so all authenticated RTDB rules succeed.
+ * Returns current authenticated Firebase user without hardcoded fallback credentials.
  */
 export async function ensureFirebaseAuth(): Promise<any> {
-  if (auth.currentUser) return auth.currentUser;
-  if (authBridgePromise) return authBridgePromise;
-
-  authBridgePromise = (async () => {
-    try {
-      const email = 'staff.session@mtslab.com';
-      const password = 'MtsLabStaffAuth@2026';
-      try {
-        const res = await signInWithEmailAndPassword(auth, email, password);
-        return res.user;
-      } catch (signInErr: any) {
-        if (
-          signInErr?.code === 'auth/user-not-found' ||
-          signInErr?.code === 'auth/invalid-credential' ||
-          signInErr?.code === 'auth/invalid-login-credentials'
-        ) {
-          const createRes = await createUserWithEmailAndPassword(auth, email, password);
-          return createRes.user;
-        }
-      }
-    } catch (err) {
-      console.warn('[FIREBASE AUTH BRIDGE NOTICE]', err);
-    } finally {
-      authBridgePromise = null;
-    }
-    return auth.currentUser;
-  })();
-
-  return authBridgePromise;
+  return auth.currentUser;
 }
 
 // Connectivity check & Auth initialization

@@ -231,11 +231,11 @@ async function fixInvalidStatuses() {
         targetStatus = "PENDING";
       } else {
         const uppercaseStatus = currentStatus.toUpperCase().trim();
-        const validStatuses = ["ACTIVE", "APPROVED", "PENDING", "REJECTED"];
+        const validStatuses = ["ACTIVE", "APPROVED", "PENDING", "REJECTED", "DISABLED", "INACTIVE", "SUSPENDED"];
         
         if (!validStatuses.includes(uppercaseStatus)) {
           console.log(`[STARTUP] Invalid user status found: "${currentStatus}" for user ${user.email}. Repairing...`);
-          if (user.role === "SUPER_ADMIN" || user.isActive) {
+          if (user.role === "SUPER_ADMIN" || user.role === "SUPERADMIN" || user.isActive) {
             targetStatus = "ACTIVE";
           } else {
             targetStatus = "PENDING";
@@ -5470,8 +5470,8 @@ export async function createServerApp() {
         });
       }
 
-      // Authoritative verification: Firebase Cloud or SuperAdmin DB emailVerified is authoritative
-      const isEmailConfirmed = Boolean(fbCheck.isVerified || user.emailVerified);
+      // Authoritative verification: Firebase Authentication is authoritative for email verification
+      const isEmailConfirmed = Boolean(fbCheck.isVerified);
 
       if (!isEmailConfirmed) {
         if (user.emailVerified) {
@@ -5487,7 +5487,7 @@ export async function createServerApp() {
           success: false,
           emailNotVerified: true,
           email: user.email,
-          message: "Please verify your email address before continuing."
+          message: "Your email address has not been verified. Please verify your email before accessing the MTS Lab dashboard."
         });
       }
 
