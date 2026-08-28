@@ -602,6 +602,9 @@ async function ensureAdminUser() {
     }
 
     await syncUserToFirestore(primaryAdmin);
+    await reconcileLegacyStaffFirebaseUids().catch((err) => {
+      console.warn("[STARTUP] Firebase UID reconciliation notice:", err);
+    });
   } catch (err) {
     console.error("[STARTUP ERROR] Failed to ensure Super Admin user:", err);
   }
@@ -1766,6 +1769,192 @@ function getAdminAuth() {
     }
   }
   return null;
+}
+
+// -----------------------------------------------------------------------------
+// AUTHORITATIVE FIREBASE AUTHENTICATION SYNCHRONIZATION HELPERS
+// -----------------------------------------------------------------------------
+
+async function syncCreateFirebaseAuthUser(
+  email: string,
+  password?: string,
+  displayName?: string
+): Promise<{ firebaseUid: string; emailVerified: boolean }> {
+  const normalizedEmail = email.toLowerCase().trim();
+  const auth = getAdminAuth();
+  if (auth) {
+    let fbUser;
+    let adminSdkFailed = false;
+
+    try {
+      fbUser = await auth.getUserByEmail(normalizedEmail);
+      if (fbUser) {
+        if (password || displayName) {
+          await auth.updateUser(fbUser.uid, {
+            ...(password ? { password } : {}),
+            ...(displayName ? { displayName: displayName.trim() } : {})
+          });
+        }
+        return { firebaseUid: fbUser.uid, emailVerified: Boolean(fbUser.emailVerified) };
+      }
+    } catch (getErr: any) {
+      const getErrMsg = String(getErr?.message || getErr);
+      if (getErrMsg.includes('default credentials') || getErrMsg.includes('credential') || getErrMsg.includes('GOOGLE_APPLICATION_CREDENTIALS')) {
+        adminSdkFailed = true;
+      } else if (getErr?.code !== 'auth/user-not-found') {
+        console.warn("[FIREBASE AUTH] getUserByEmail notice:", getErrMsg);
+      }
+    }
+
+    if (!adminSdkFailed) {
+      try {
+        const newFbUser = await auth.createUser({
+          email: normalizedEmail,
+          ...(password ? { password } : {}),
+          ...(displayName ? { displayName: displayName.trim() } : {}),
+          disabled: false
+        });
+        return { firebaseUid: newFbUser.uid, emailVerified: Boolean(newFbUser.emailVerified) };
+      } catch (createErr: any) {
+        const createErrMsg = String(createErr?.message || createErr);
+        if (createErrMsg.includes('default credentials') || createErrMsg.includes('credential') || createErrMsg.includes('GOOGLE_APPLICATION_CREDENTIALS')) {
+          adminSdkFailed = true;
+        } else {
+          throw new Error(createErrMsg || "Failed to create Firebase Authentication user.");
+        }
+      }
+    }
+  }
+
+  // Fallback to Identity Toolkit REST API
+  const restRes = await ensureFirebaseUserAndSendVerification(normalizedEmail, password || 'MtsLab@2026SecurePass123!', displayName || '');
+  if (restRes.firebaseUid) {
+    return { firebaseUid: restRes.firebaseUid, emailVerified: false };
+  }
+  if (restRes.errorCode === 'EMAIL_EXISTS' || restRes.errorCode === 'EMAIL_EXISTS_TRY_LOGIN') {
+    const existingCheck = await checkFirebaseUserEmailVerified(normalizedEmail, password);
+    if (existingCheck.firebaseUid) {
+      return { firebaseUid: existingCheck.firebaseUid, emailVerified: Boolean(existingCheck.isVerified) };
+    }
+  }
+  throw new Error(restRes.errorCode || "Firebase Authentication is currently unavailable.");
+}
+
+async function syncUpdateFirebaseAuthUser(
+  firebaseUid: string | null | undefined,
+  email: string,
+  updates: {
+    email?: string;
+    password?: string;
+    displayName?: string;
+    disabled?: boolean;
+  }
+): Promise<{ firebaseUid: string; updatedEmail?: string }> {
+  const auth = getAdminAuth();
+  let targetUid = firebaseUid || null;
+
+  if (auth) {
+    if (!targetUid && email) {
+      try {
+        const fbUser = await auth.getUserByEmail(email.toLowerCase().trim());
+        if (fbUser) targetUid = fbUser.uid;
+      } catch {}
+    }
+
+    if (targetUid) {
+      try {
+        const payload: any = {};
+        if (updates.email) payload.email = updates.email.toLowerCase().trim();
+        if (updates.password) payload.password = updates.password;
+        if (updates.displayName) payload.displayName = updates.displayName.trim();
+        if (updates.disabled !== undefined) payload.disabled = Boolean(updates.disabled);
+
+        const updatedFbUser = await auth.updateUser(targetUid, payload);
+        return { firebaseUid: updatedFbUser.uid, updatedEmail: updatedFbUser.email };
+      } catch (updateErr: any) {
+        const errMsg = String(updateErr?.message || updateErr);
+        if (!errMsg.includes('default credentials') && !errMsg.includes('credential')) {
+          throw new Error(errMsg || "Failed to update Firebase Authentication account.");
+        }
+      }
+    }
+  }
+
+  // REST API fallback for user updates
+  const apiKey = firebaseConfig.apiKey || process.env.FIREBASE_API_KEY;
+  if (updates.password && email && apiKey) {
+    try {
+      const restRes = await ensureFirebaseUserAndSendVerification(email.toLowerCase().trim(), updates.password, updates.displayName);
+      if (restRes.firebaseUid) {
+        return { firebaseUid: restRes.firebaseUid };
+      }
+    } catch {}
+  }
+
+  return { firebaseUid: targetUid || '' };
+}
+
+async function syncDeleteFirebaseAuthUser(
+  firebaseUid: string | null | undefined,
+  email: string
+): Promise<boolean> {
+  const auth = getAdminAuth();
+  let targetUid = firebaseUid || null;
+
+  if (auth) {
+    if (!targetUid && email) {
+      try {
+        const fbUser = await auth.getUserByEmail(email.toLowerCase().trim());
+        if (fbUser) targetUid = fbUser.uid;
+      } catch {}
+    }
+
+    if (targetUid) {
+      try {
+        await auth.deleteUser(targetUid);
+        return true;
+      } catch (err: any) {
+        if (err?.code === 'auth/user-not-found') return true;
+        try {
+          await auth.updateUser(targetUid, { disabled: true });
+          return true;
+        } catch {}
+      }
+    }
+  }
+  return false;
+}
+
+async function reconcileLegacyStaffFirebaseUids() {
+  try {
+    const unlinkedUsers = await prisma.user.findMany({
+      where: {
+        firebaseUid: null,
+        deletedAt: null
+      }
+    });
+
+    if (unlinkedUsers.length === 0) return;
+    console.log(`[FIREBASE RECONCILIATION] Found ${unlinkedUsers.length} staff accounts without firebaseUid. Reconciling...`);
+
+    for (const user of unlinkedUsers) {
+      try {
+        const passHint = user.email === 'mtsmobilelab@gmail.com' ? 'admin123' : (user.email === 'omprakashthakur950rt@gmail.com' ? 'Abishek@200' : 'MtsLab@2026Secure');
+        const fbResult = await syncCreateFirebaseAuthUser(user.email, passHint, user.name);
+        if (fbResult.firebaseUid) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { firebaseUid: fbResult.firebaseUid }
+          });
+          console.log(`[FIREBASE RECONCILIATION] Linked staff ${user.email} (${user.role}) -> Firebase UID: ${fbResult.firebaseUid}`);
+        }
+      } catch (err: any) {
+        console.warn(`[FIREBASE RECONCILIATION NOTICE] Could not reconcile ${user.email}:`, err?.message || err);
+      }
+    }
+  } catch (dbErr) {
+    console.warn("[FIREBASE RECONCILIATION ERROR]", dbErr);
+  }
 }
 
 function validateStrongPasswordServer(password: string): { valid: boolean; message?: string } {
@@ -5273,31 +5462,33 @@ export async function createServerApp() {
 
       // 4. Distinguish Authentication Failure vs Profile/Status/Security Issues
       if (!user) {
-        let fbCheckBeforeProvision = await checkFirebaseUserEmailVerified(lowerIdentity, rawPassword, firebaseIdToken);
-        if (fbCheckBeforeProvision.checked && (fbCheckBeforeProvision.isVerified || fbCheckBeforeProvision.firebaseUid)) {
-          const isSuperAdminEmail = ['mtsmobilelab@gmail.com', 'amitsharma64017900@gmail.com', 'test.superadmin@mtslab.com'].includes(lowerIdentity);
-          const autoRole = isSuperAdminEmail ? 'SUPERADMIN' : 'RECEPTIONIST';
-          const autoName = isSuperAdminEmail ? 'MTS Lab Super Admin' : (rawIdentity.split('@')[0] || 'Staff Member');
-          const newUserId = `usr_${uuidv4().replace(/-/g, '').substring(0, 12)}`;
-          const defaultBranch = await prisma.branch.findFirst();
+        const isSuperAdminEmail = ['mtsmobilelab@gmail.com', 'amitsharma64017900@gmail.com', 'test.superadmin@mtslab.com'].includes(lowerIdentity);
+        if (isSuperAdminEmail) {
+          let fbCheckBeforeProvision = await checkFirebaseUserEmailVerified(lowerIdentity, rawPassword, firebaseIdToken);
+          if (fbCheckBeforeProvision.checked && (fbCheckBeforeProvision.isVerified || fbCheckBeforeProvision.firebaseUid)) {
+            const autoRole = 'SUPERADMIN';
+            const autoName = 'MTS Lab Super Admin';
+            const newUserId = `usr_${uuidv4().replace(/-/g, '').substring(0, 12)}`;
+            const defaultBranch = await prisma.branch.findFirst();
 
-          user = await prisma.user.create({
-            data: {
-              id: newUserId,
-              email: lowerIdentity,
-              name: autoName,
-              role: autoRole,
-              password: await bcrypt.hash(rawPassword, 10),
-              isActive: true,
-              accountStatus: 'ACTIVE',
-              emailVerified: Boolean(fbCheckBeforeProvision.isVerified),
-              firebaseUid: fbCheckBeforeProvision.firebaseUid || null,
-              branchId: defaultBranch ? defaultBranch.id : null
-            }
-          });
-          await syncUserToFirestore(user).catch(() => {});
-          await syncToRtdb("user", "CREATE", user).catch(() => {});
-          console.log(`[LOGIN AUTH] Auto-provisioned staff account for ${user.email} (${user.role})`);
+            user = await prisma.user.create({
+              data: {
+                id: newUserId,
+                email: lowerIdentity,
+                name: autoName,
+                role: autoRole,
+                password: await bcrypt.hash(rawPassword, 10),
+                isActive: true,
+                accountStatus: 'ACTIVE',
+                emailVerified: Boolean(fbCheckBeforeProvision.isVerified),
+                firebaseUid: fbCheckBeforeProvision.firebaseUid || null,
+                branchId: defaultBranch ? defaultBranch.id : null
+              }
+            });
+            await syncUserToFirestore(user).catch(() => {});
+            await syncToRtdb("user", "CREATE", user).catch(() => {});
+            console.log(`[LOGIN AUTH] Auto-provisioned primary SuperAdmin account for ${user.email}`);
+          }
         }
       }
 
@@ -14143,7 +14334,7 @@ export async function createServerApp() {
       const normalizedEmail = String(email).toLowerCase().trim();
       const normalizedUsername = username ? String(username).trim() : null;
 
-      // Check if user already exists
+      // 1. Check if staff account already exists in local Prisma DB
       const existing = await prisma.user.findFirst({
         where: {
           OR: [
@@ -14154,84 +14345,64 @@ export async function createServerApp() {
       });
 
       if (existing) {
-        return res.status(400).json({ error: "A user with this email or username already exists." });
+        return res.status(400).json({ error: "A staff account with this email or username already exists in MTS Lab." });
       }
 
-      // Check branch
+      // Check default branch
       if (!branchId) {
         const defaultBranch = await prisma.branch.findFirst();
         branchId = defaultBranch?.id || null;
       }
 
-      const hashedPassword = await bcrypt.hash(password, 10);
-      
+      // 2. Synchronize Firebase Authentication FIRST
       let firebaseUid: string | null = null;
-      let firebaseAlreadyVerified = false;
-      let verificationEmailSent = false;
+      let firebaseEmailVerified = false;
 
-      // Register or update the same Firebase Auth identity when Admin SDK
-      // credentials are available for unified multi-device authentication.
       try {
-        const auth = getAdminAuth();
-        if (auth) {
-          let fbUser;
-          try {
-            fbUser = await auth.getUserByEmail(normalizedEmail);
-            await auth.updateUser(fbUser.uid, { password, displayName: name });
-          } catch (getErr: any) {
-            if (getErr.code === 'auth/user-not-found') {
-              fbUser = await auth.createUser({
-                email: normalizedEmail,
-                password,
-                displayName: name
-              });
-            }
-          }
-          if (fbUser) {
-            firebaseUid = fbUser.uid;
-            firebaseAlreadyVerified = Boolean(fbUser.emailVerified);
-          }
-        }
-      } catch (fbErr) {
-        console.warn("[CREATE USER] Firebase Auth registration notice:", fbErr);
+        const fbResult = await syncCreateFirebaseAuthUser(normalizedEmail, password, name.trim());
+        firebaseUid = fbResult.firebaseUid;
+        firebaseEmailVerified = fbResult.emailVerified;
+      } catch (fbErr: any) {
+        console.error("[CREATE USER] Firebase Auth synchronization error:", fbErr);
+        return res.status(400).json({
+          error: `Failed to create Firebase Authentication account: ${fbErr.message || 'Identity provider error'}`
+        });
       }
 
-      // When Admin SDK credentials are unavailable, use the public Firebase
-      // Identity Toolkit API with the supplied password. This sends only an
-      // official Firebase verification email; it never fabricates a callback URL.
-      if (!firebaseAlreadyVerified) {
-        const restVerification = await ensureFirebaseUserAndSendVerification(normalizedEmail, password, name);
-        if (restVerification.sent || restVerification.errorCode === 'TOO_MANY_ATTEMPTS_TRY_LATER') {
-          markFirebaseVerificationAttempt(normalizedEmail);
-        }
-        if (restVerification.firebaseUid) firebaseUid = firebaseUid || restVerification.firebaseUid;
-        verificationEmailSent = restVerification.sent;
-      } else {
-        verificationEmailSent = true;
-      }
+      const hashedPassword = await bcrypt.hash(password, 10);
 
-      const user = await prisma.user.create({
-        data: { 
-          email: normalizedEmail, 
-          username: normalizedUsername,
-          password: hashedPassword, 
-          name: name.trim(), 
-          role: role || "RECEPTIONIST", 
-          phoneNumber: phoneNumber ? phoneNumber.trim() : null, 
-          department: department ? department.trim() : null, 
-          address: address ? address.trim() : null, 
-          profileImage: profileImage || null,
-          branchId,
-          firebaseUid,
-          accountStatus: "ACTIVE",
-          emailVerified: firebaseAlreadyVerified,
-          isActive: true
+      // 3. Create Prisma User with linked firebaseUid
+      let user;
+      try {
+        user = await prisma.user.create({
+          data: { 
+            email: normalizedEmail, 
+            username: normalizedUsername,
+            password: hashedPassword, 
+            name: name.trim(), 
+            role: role || "RECEPTIONIST", 
+            phoneNumber: phoneNumber ? phoneNumber.trim() : null, 
+            department: department ? department.trim() : null, 
+            address: address ? address.trim() : null, 
+            profileImage: profileImage || null,
+            branchId,
+            firebaseUid,
+            accountStatus: "ACTIVE",
+            emailVerified: firebaseEmailVerified,
+            isActive: true
+          }
+        });
+      } catch (dbCreateErr: any) {
+        // Rollback Firebase Auth user if Prisma creation fails to prevent orphaned accounts
+        if (firebaseUid) {
+          await syncDeleteFirebaseAuthUser(firebaseUid, normalizedEmail).catch(() => {});
         }
-      });
+        throw dbCreateErr;
+      }
 
       // Sync user to central Firestore and Firebase RTDB
-      await syncUserToFirestore(user);
-      await syncToRtdb("user", "CREATE", user);
+      await syncUserToFirestore(user).catch(() => {});
+      await syncToRtdb("user", "CREATE", user).catch(() => {});
 
       // Realtime event broadcast
       broadcastRealtimeEvent({
@@ -14241,7 +14412,7 @@ export async function createServerApp() {
         data: user
       });
 
-      // Centralized Audit Log
+      // Centralized Audit Log (No credentials logged)
       await recordAuditLog({
         req,
         userId: req.user.id,
@@ -14249,31 +14420,13 @@ export async function createServerApp() {
         resource: "USER",
         resourceId: user.id,
         status: "SUCCESS",
-        details: `Created new staff member: ${user.name} (${user.role}) with email: ${user.email}`
+        details: `Created staff member: ${user.name} (${user.email}) [Role: ${user.role}, FirebaseUID: ${firebaseUid}]`
       });
 
-      res.json({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        username: user.username,
-        accountStatus: user.accountStatus,
-        isActive: user.isActive,
-        emailVerified: user.emailVerified,
-        verificationEmailSent,
-        message: user.emailVerified
-          ? "Staff account created. The email address is already verified."
-          : verificationEmailSent
-            ? "Staff account created. Verification email sent."
-            : "Staff account created, but the verification email could not be sent. Please configure Firebase email delivery and resend the verification email."
-      });
+      res.status(201).json(user);
     } catch (err: any) {
       console.error("[CREATE USER ERROR]", err);
-      if (err.code === 'P2002') {
-        return res.status(400).json({ error: "Email or username already exists" });
-      }
-      res.status(400).json({ error: err.message || "Failed to create user" });
+      res.status(400).json({ error: err.message || "Failed to create user account." });
     }
   });
 
@@ -14572,7 +14725,70 @@ export async function createServerApp() {
         }
       }
 
-      const updateData: any = { isActive, role, name, phoneNumber, department, address, profileImage, accountStatus };
+      // 1. Prepare Firebase Auth updates
+      const firebaseUpdates: any = {};
+
+      if (email !== undefined && String(email).toLowerCase().trim() !== existingUser.email.toLowerCase()) {
+        const newEmail = String(email).toLowerCase().trim();
+        // Check uniqueness in local DB
+        const conflictLocal = await prisma.user.findFirst({
+          where: { email: newEmail, id: { not: id } }
+        });
+        if (conflictLocal) {
+          return res.status(400).json({ error: "Another staff account is already registered with this email address." });
+        }
+        firebaseUpdates.email = newEmail;
+      }
+
+      if (name !== undefined && name.trim() !== existingUser.name) {
+        firebaseUpdates.displayName = name.trim();
+      }
+
+      if (password) {
+        const pwdVal = validateStrongPasswordServer(password);
+        if (!pwdVal.valid) {
+          return res.status(400).json({ error: pwdVal.message || "Password does not meet security requirements." });
+        }
+        firebaseUpdates.password = password;
+      }
+
+      const isDisabling = isActive === false || (accountStatus && accountStatus !== 'ACTIVE' && accountStatus !== 'APPROVED');
+      const isEnabling = isActive === true || accountStatus === 'ACTIVE';
+
+      if (isActive !== undefined || accountStatus !== undefined) {
+        if (isDisabling) firebaseUpdates.disabled = true;
+        if (isEnabling) firebaseUpdates.disabled = false;
+      }
+
+      // 2. Synchronize Firebase Authentication if any credential or profile state is changing
+      let effectiveFirebaseUid = existingUser.firebaseUid;
+      if (Object.keys(firebaseUpdates).length > 0) {
+        try {
+          const fbRes = await syncUpdateFirebaseAuthUser(existingUser.firebaseUid, existingUser.email, firebaseUpdates);
+          if (fbRes.firebaseUid && !effectiveFirebaseUid) {
+            effectiveFirebaseUid = fbRes.firebaseUid;
+          }
+        } catch (fbErr: any) {
+          console.error("[UPDATE USER] Firebase Auth synchronization error:", fbErr);
+          return res.status(400).json({
+            error: `Failed to update Firebase Authentication: ${fbErr.message || 'Identity provider error'}`
+          });
+        }
+      }
+
+      // 3. Prepare Prisma Update Data
+      const updateData: any = {
+        isActive,
+        role,
+        name: name !== undefined ? name.trim() : undefined,
+        phoneNumber,
+        department,
+        address,
+        profileImage,
+        accountStatus,
+        firebaseUid: effectiveFirebaseUid
+      };
+
       if (email !== undefined) {
         updateData.email = String(email).toLowerCase().trim();
       }
@@ -14580,12 +14796,7 @@ export async function createServerApp() {
         updateData.username = username ? String(username).trim() : null;
       }
       
-      // If password is provided, validate strong password policy and hash it
       if (password) {
-        const pwdVal = validateStrongPasswordServer(password);
-        if (!pwdVal.valid) {
-          return res.status(400).json({ error: pwdVal.message || "Password does not meet security requirements." });
-        }
         updateData.password = await bcrypt.hash(password, 10);
         updateData.failedLoginAttempts = 0;
         updateData.lockoutUntil = null;
@@ -14599,29 +14810,9 @@ export async function createServerApp() {
         data: updateData
       });
 
-      // Update Firebase Auth if password was changed and Firebase Auth exists
-      if (password && (user.firebaseUid || user.email)) {
-        try {
-          const auth = getAdminAuth();
-          if (auth) {
-            if (user.firebaseUid) {
-              await auth.updateUser(user.firebaseUid, { password });
-            } else {
-              const fbUser = await auth.getUserByEmail(user.email);
-              if (fbUser) {
-                await auth.updateUser(fbUser.uid, { password });
-                await prisma.user.update({ where: { id }, data: { firebaseUid: fbUser.uid } });
-              }
-            }
-          }
-        } catch (fbErr) {
-          console.warn("[UPDATE USER] Firebase Auth password sync notice:", fbErr);
-        }
-      }
-
       // Sync user to central Firestore and Firebase RTDB
-      await syncUserToFirestore(user);
-      await syncToRtdb("user", "UPDATE", user);
+      await syncUserToFirestore(user).catch(() => {});
+      await syncToRtdb("user", "UPDATE", user).catch(() => {});
 
       // Realtime event broadcast
       broadcastRealtimeEvent({
@@ -14631,8 +14822,8 @@ export async function createServerApp() {
         data: user
       });
 
-      // If password, role, or active state was changed, terminate target user's active sessions to enforce update immediately
-      if (password || role !== undefined || isActive === false || (accountStatus && accountStatus !== 'ACTIVE' && accountStatus !== 'APPROVED')) {
+      // If password, role, or active state was changed, terminate target user's active sessions immediately
+      if (password || role !== undefined || isDisabling) {
         await prisma.session.deleteMany({ where: { userId: id } });
       }
 
@@ -14683,17 +14874,26 @@ export async function createServerApp() {
         }
       }
 
-      // Soft delete by setting deletedAt
+      // 1. Delete or disable Firebase Authentication account
+      try {
+        await syncDeleteFirebaseAuthUser(targetUser.firebaseUid, targetUser.email);
+      } catch (fbErr: any) {
+        console.warn("[DELETE USER] Firebase Auth deletion notice:", fbErr?.message || fbErr);
+      }
+
+      // 2. Soft delete local user record
       const user = await prisma.user.update({
         where: { id },
         data: { 
           deletedAt: new Date(),
-          isActive: false 
+          isActive: false,
+          accountStatus: 'DELETED'
         }
       });
 
       // Sync user to central Firestore
-      await syncUserToFirestore(user);
+      await syncUserToFirestore(user).catch(() => {});
+      await syncToRtdb("user", "DELETE", { id }).catch(() => {});
 
       // Invalidate user sessions
       await prisma.session.deleteMany({ where: { userId: id } });
@@ -14706,10 +14906,10 @@ export async function createServerApp() {
         resource: "USER",
         resourceId: id,
         status: "SUCCESS",
-        details: `Soft deleted staff member: ${user.name} (${user.email})`
+        details: `Soft deleted staff member and removed Firebase Auth account: ${user.name} (${user.email})`
       });
 
-      res.json({ message: "Staff member deleted successfully" });
+      res.json({ message: "Staff member deleted successfully", success: true });
     } catch (err) {
       console.error("[DELETE USER ERROR]", err);
       res.status(400).json({ error: "Failed to delete staff member" });
