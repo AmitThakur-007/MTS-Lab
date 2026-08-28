@@ -4089,7 +4089,20 @@ export async function createServerApp() {
         return res.status(400).json({ error: "Request has already been approved." });
       }
 
-      const assignedRole = role || request.requestedRole || "RECEPTIONIST";
+      // Find user associated with this request
+      let user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: request.email },
+            { googleId: request.googleId }
+          ]
+        }
+      });
+
+      // Preserve existing user role if user exists, unless SuperAdmin explicitly specified a new role
+      const assignedRole = role 
+        ? normalizeRole(role) 
+        : (user?.role ? normalizeRole(user.role) : (request.requestedRole ? normalizeRole(request.requestedRole) : "RECEPTIONIST"));
 
       // Update AccessRequest
       const updatedRequest = await prisma.accessRequest.update({
@@ -4098,16 +4111,6 @@ export async function createServerApp() {
           status: "APPROVED",
           approvedBy: req.user.name || req.user.email,
           approvedAt: new Date()
-        }
-      });
-
-      // Find user associated with this request
-      let user = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { email: request.email },
-            { googleId: request.googleId }
-          ]
         }
       });
 
@@ -5939,6 +5942,14 @@ export async function createServerApp() {
             role: user.role,
             emailVerified: true
           }
+        });
+      }
+
+      if (!isEmailConfirmed) {
+        return res.status(403).json({
+          success: false,
+          emailNotVerified: true,
+          message: "Please verify your work email address before signing in."
         });
       }
 

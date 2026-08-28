@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAuthStore } from './store/authStore';
+import { normalizeRole } from '@/lib/rbac';
 import ScrollToTop from './components/common/ScrollToTop';
 import RouteErrorBoundary from './components/common/RouteErrorBoundary';
 
@@ -28,12 +29,16 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode, roles?
     return <Navigate to="/login" replace />;
   }
 
-  if (user.role === 'CUSTOMER') {
+  const normUserRole = normalizeRole(user.role);
+  if (user.role === 'CUSTOMER' || normUserRole === null) {
     return <Navigate to="/track" replace />;
   }
 
-  if (roles && !roles.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+  if (roles) {
+    const normRoles = roles.map(r => normalizeRole(r) || r);
+    if (!normRoles.includes(normUserRole) && !roles.includes(user.role)) {
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
   return <>{children}</>;
