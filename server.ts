@@ -2717,7 +2717,7 @@ export async function createServerApp() {
 
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100, // Increased limit for development
+    max: process.env.NODE_ENV === 'production' ? 100 : 5000,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many attempts, please try again later" },
