@@ -229,6 +229,8 @@ async function request(endpoint: string, options: any = {}) {
     const errObj = new Error(errorMessage) as any;
     errObj.status = res.status;
     errObj.code = errorData.code || res.status;
+    errObj.emailNotVerified = errorData.emailNotVerified;
+    errObj.data = errorData;
     if (retryAfter) {
       errObj.retryAfter = parseInt(retryAfter, 10) || 60;
     }

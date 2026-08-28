@@ -191,7 +191,7 @@ export default function Login() {
         throw new Error(res?.message || 'Unable to sign in with these credentials.');
       }
     } catch (err: any) {
-      if (err?.emailNotVerified || err?.message?.toLowerCase().includes('verify your email')) {
+      if (err?.emailNotVerified || err?.data?.emailNotVerified || err?.message?.toLowerCase().includes('verify your email')) {
         setUnverifiedEmail(identity.trim());
         toast.error('Please verify your email address before continuing.');
       } else {
