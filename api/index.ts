@@ -455,8 +455,17 @@ async function sendFirebaseVerificationEmail(params: {
       const signInData: any = await signInRes.json().catch(() => ({}));
       if (signInRes.ok && signInData?.idToken) {
         idToken = signInData.idToken;
-        if (signInData.emailVerified === true) {
-          return { sent: false, alreadyVerified: true };
+        const lookupRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken })
+        });
+        if (lookupRes.ok) {
+          const lookupData: any = await lookupRes.json().catch(() => ({}));
+          const fbUser = lookupData?.users?.[0];
+          if (fbUser && fbUser.emailVerified === true) {
+            return { sent: false, alreadyVerified: true };
+          }
         }
       } else {
         const provError = signInData?.error?.message || signInData?.error?.status || 'INVALID_LOGIN_CREDENTIALS';
@@ -593,6 +602,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
         authenticatedFbUser = signInData;
+
+        // Fetch live account record from Firebase Identity Toolkit to get emailVerified
+        try {
+          const lookupRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken: signInData.idToken })
+          });
+          if (lookupRes.ok) {
+            const lookupData: any = await lookupRes.json().catch(() => ({}));
+            const fbUser = lookupData?.users?.[0];
+            if (fbUser) {
+              authenticatedFbUser = { ...signInData, ...fbUser };
+            }
+          }
+        } catch (lookupErr) {
+          console.warn('[AUTH LOOKUP NOTICE]', lookupErr);
+        }
       } else if (firebaseIdToken) {
         const lookupRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
           method: 'POST',
@@ -661,7 +688,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const userId = appUser?.id || `usr_${crypto.createHash('md5').update(identity).digest('hex').slice(0, 12)}`;
 
       // 4. Email Verification Enforcement & Persistence
-      const isVerified = authenticatedFbUser?.emailVerified === true || appUser?.emailVerified === true;
+      let isVerified = authenticatedFbUser?.emailVerified === true || appUser?.emailVerified === true;
+
+      if (!isVerified) {
+        try {
+          if (admin.apps.length) {
+            const adminUser = firebaseUid
+              ? await admin.auth().getUser(firebaseUid).catch(() => null)
+              : await admin.auth().getUserByEmail(identity).catch(() => null);
+            if (adminUser?.emailVerified) {
+              isVerified = true;
+            }
+          }
+        } catch (adminAuthErr) {
+          console.warn('[ADMIN AUTH LOOKUP NOTICE]', adminAuthErr);
+        }
+      }
+
       if (!isVerified) {
         return sendJson(res, 403, {
           success: false,

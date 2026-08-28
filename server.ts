@@ -1855,9 +1855,28 @@ async function checkFirebaseUserEmailVerified(
       });
       if (res.ok) {
         const data: any = await res.json();
+        let isVerified = false;
+        if (data?.idToken) {
+          try {
+            const lookupRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ idToken: data.idToken })
+            });
+            if (lookupRes.ok) {
+              const lookupData: any = await lookupRes.json().catch(() => ({}));
+              const fbUser = lookupData?.users?.[0];
+              if (fbUser) {
+                isVerified = Boolean(fbUser.emailVerified);
+              }
+            }
+          } catch (lookupErr) {
+            console.warn("[FIREBASE AUTH] lookup after signInWithPassword error:", lookupErr);
+          }
+        }
         return {
           checked: true,
-          isVerified: Boolean(data.emailVerified),
+          isVerified,
           firebaseUid: data.localId,
           email: data.email?.toLowerCase().trim() || normalizedEmail
         };
