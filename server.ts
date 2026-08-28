@@ -2013,6 +2013,197 @@ function markFirebaseVerificationAttempt(email: string): void {
   if (key) firebaseVerificationResendCooldowns.set(key, Date.now() + FIREBASE_VERIFICATION_RESEND_COOLDOWN_MS);
 }
 
+function maskEmail(email: string): string {
+  if (!email || !email.includes("@")) return "***@***.com";
+  const [local, domain] = email.split("@");
+  if (local.length <= 2) {
+    return `${local[0]}***@${domain}`;
+  }
+  return `${local[0]}${"*".repeat(Math.max(1, local.length - 2))}${local[local.length - 1]}@${domain}`;
+}
+
+function initMailTransporter() {
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = parseInt(process.env.SMTP_PORT || "587", 10);
+  const smtpUser = (process.env.SMTP_USER || process.env.GMAIL_USER || process.env.EMAIL_USER || "").trim();
+  const smtpPass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS || "").replace(/\s+/g, "");
+  const smtpSecure = process.env.SMTP_SECURE === "true" || smtpPort === 465;
+
+  if (smtpHost && smtpUser && smtpPass) {
+    return nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
+  } else if (smtpUser && smtpPass) {
+    return nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
+  }
+  return null;
+}
+
+async function sendEmail(
+  toOrOptions: string | { to: string; subject: string; body?: string; text?: string; html?: string },
+  subjectParam?: string,
+  bodyParam?: string,
+  htmlParam?: string
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  let to: string;
+  let subject: string;
+  let body: string;
+  let html: string | undefined;
+
+  if (typeof toOrOptions === 'object' && toOrOptions !== null) {
+    to = toOrOptions.to;
+    subject = toOrOptions.subject;
+    body = toOrOptions.body || toOrOptions.text || '';
+    html = toOrOptions.html;
+  } else {
+    to = String(toOrOptions);
+    subject = subjectParam || '';
+    body = bodyParam || '';
+    html = htmlParam;
+  }
+
+  const fromAddress = process.env.SMTP_FROM || process.env.GMAIL_USER || process.env.EMAIL_USER || '"MTS Lab Security" <no-reply@mtslab.com>';
+
+  const defaultHtml = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; background-color: #f8fafc; border-radius: 16px;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; width: 48px; height: 48px; background-color: #0f172a; border-radius: 12px; line-height: 48px; color: #ffffff; font-size: 24px; font-weight: bold;">M</div>
+        <h2 style="color: #0f172a; margin: 12px 0 4px 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">MTS Lab Security OS</h2>
+        <p style="color: #64748b; margin: 0; font-size: 13px; font-weight: 500;">Mobile Technology Station (MTS) &bull; Smartphone Repair Management</p>
+      </div>
+      <div style="background-color: #ffffff; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+        <h3 style="color: #1e293b; margin-top: 0; font-size: 16px; font-weight: 700;">${subject}</h3>
+        <div style="color: #334155; font-size: 14px; line-height: 1.6; white-space: pre-line; margin: 16px 0;">${body}</div>
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; text-align: center;">
+          This is an automated security message. If you did not initiate this request, please contact the Super Administrator immediately.
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 1. Check Resend HTTP API
+  if (process.env.RESEND_API_KEY) {
+    try {
+      console.log(`[AUTH DIAGNOSTIC] Dispatching 2FA email via Resend API to ${maskEmail(to)}...`);
+      const resendFrom = process.env.SMTP_FROM || "MTS Lab <onboarding@resend.dev>";
+      const resendRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from: resendFrom.includes("<") ? resendFrom : `MTS Lab <${resendFrom}>`,
+          to: [to],
+          subject,
+          text: body,
+          html: html || defaultHtml
+        })
+      });
+      const resData: any = await resendRes.json();
+      if (resendRes.ok) {
+        console.log(`[AUTH DIAGNOSTIC] ✅ Resend delivery succeeded (Message ID: ${resData?.id})`);
+        return { success: true, messageId: resData?.id };
+      } else {
+        console.error(`[AUTH DIAGNOSTIC] ⚠️ Resend API returned error:`, resData?.message || resData);
+        if (resData?.name === 'validation_error' && resData?.message?.includes('testing emails')) {
+          console.warn(`[AUTH DIAGNOSTIC] 💡 Resend Free Tier Notice: Resend currently only allows sending to the account owner email. Verify your domain at https://resend.com/domains to send to all staff emails.`);
+        }
+      }
+    } catch (resendErr: any) {
+      console.error(`[AUTH DIAGNOSTIC] ⚠️ Resend fetch failed:`, resendErr?.message || resendErr);
+    }
+  }
+
+  // 2. Check SendGrid HTTP API
+  if (process.env.SENDGRID_API_KEY) {
+    try {
+      console.log(`[AUTH DIAGNOSTIC] Dispatching 2FA email via SendGrid API to ${maskEmail(to)}...`);
+      const sendgridRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.SENDGRID_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: to }] }],
+          from: { email: process.env.SMTP_FROM_EMAIL || "no-reply@mtslab.com", name: "MTS Lab Security" },
+          subject,
+          content: [
+            { type: "text/plain", value: body },
+            { type: "text/html", value: html || defaultHtml }
+          ]
+        })
+      });
+      if (sendgridRes.ok || sendgridRes.status === 202) {
+        console.log(`[AUTH DIAGNOSTIC] ✅ SendGrid delivery succeeded (HTTP ${sendgridRes.status})`);
+        return { success: true };
+      } else {
+        console.error(`[AUTH DIAGNOSTIC] ⚠️ SendGrid returned HTTP ${sendgridRes.status}`);
+      }
+    } catch (sgErr: any) {
+      console.error(`[AUTH DIAGNOSTIC] ⚠️ SendGrid fetch failed:`, sgErr?.message || sgErr);
+    }
+  }
+
+  // 3. Check Nodemailer (Gmail or Custom SMTP)
+  const transporter = initMailTransporter();
+  if (transporter) {
+    try {
+      console.log(`[AUTH DIAGNOSTIC] Dispatching 2FA email via SMTP to ${maskEmail(to)}...`);
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to,
+        subject,
+        text: body,
+        html: html || defaultHtml
+      });
+      console.log(`[AUTH DIAGNOSTIC] ✅ SMTP delivery succeeded (Message ID: ${info.messageId})`);
+      return { success: true, messageId: info.messageId };
+    } catch (err: any) {
+      console.error(`[AUTH DIAGNOSTIC] ❌ SMTP delivery failed (${err?.code || err?.message || err})`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[AUTH DIAGNOSTIC] ℹ️ Non-production fallback active: Simulating email delivery to ${maskEmail(to)}.`);
+        return { success: true, messageId: 'dev-fallback-' + Date.now() };
+      }
+      return { success: false, error: err?.message || "SMTP delivery failed" };
+    }
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[AUTH DIAGNOSTIC] ℹ️ Non-production mode: Simulating 2FA email delivery to ${maskEmail(to)}.`);
+    return { success: true, messageId: 'simulated-dev-mail-' + Date.now() };
+  }
+
+  return { success: false, error: "No active production email service configured in environment." };
+}
+
 // 2FA OTP Ticket Storage & Resend Cooldown Management Engine
 interface Pending2FATicket {
   ticketId: string;
@@ -2784,12 +2975,12 @@ export async function createServerApp() {
   };
 
   // Secure Real Email Dispatcher with Multi-Provider Support (Gmail, SMTP, Resend, SendGrid)
-  const sendEmail = async (
+  async function sendEmail(
     toOrOptions: string | { to: string; subject: string; body?: string; text?: string; html?: string },
     subjectParam?: string,
     bodyParam?: string,
     htmlParam?: string
-  ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
     let to: string;
     let subject: string;
     let body: string;

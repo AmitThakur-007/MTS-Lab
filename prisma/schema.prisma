@@ -34,6 +34,8 @@ model User {
   failedLoginAttempts Int                  @default(0)
   lockoutUntil        DateTime?
   lastLoginAt         DateTime?
+  twoFactorEnabled    Boolean              @default(true)
+  twoFactorType       String?              @default("EMAIL")
   emailChangePending  String?
   emailChangeCodeHash String?
   emailChangeExpiresAt DateTime?
@@ -54,6 +56,23 @@ model User {
   damageRecords       RepairRelatedDamage[] @relation("StaffDamageRecords")
   recordedDamages     RepairRelatedDamage[] @relation("RecordedDamageRecords")
   branch              Branch?              @relation(fields: [branchId], references: [id])
+}
+
+model OTPVerification {
+  id        String   @id @default(uuid())
+  userId    String
+  userEmail String
+  otpHash   String
+  purpose   String   @default("LOGIN_2FA")
+  attempts  Int      @default(0)
+  isUsed    Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userEmail])
+  @@index([purpose])
 }
 
 model ApprovedDevice {

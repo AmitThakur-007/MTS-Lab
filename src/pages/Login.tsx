@@ -402,10 +402,10 @@ export default function Login() {
                   <Lock className="h-6 w-6" />
                 </div>
                 <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
-                  Two-Factor Verification
+                  Verify Your Identity
                 </CardTitle>
                 <CardDescription className="text-xs sm:text-sm font-medium text-slate-500 max-w-[320px] mx-auto leading-relaxed">
-                  Enter the 6-digit security code sent to <b className="text-slate-900">{maskedEmail}</b>
+                  Enter the verification code sent to your registered email address. ({maskedEmail})
                 </CardDescription>
               </CardHeader>
 
@@ -456,7 +456,7 @@ export default function Login() {
                         <span>Verifying Code...</span>
                       </div>
                     ) : (
-                      'Verify & Sign In'
+                      'Verify'
                     )}
                   </Button>
 

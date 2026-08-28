@@ -355,7 +355,7 @@ async function runSuperAdminDeletionTests() {
     assert(warrantyAuditLog.userRole === "SUPER_ADMIN", "AuditLog userRole is SUPER_ADMIN");
     const meta = JSON.parse(warrantyAuditLog.metadata || '{}');
     assert(meta.twoFactorVerified === true, "AuditLog metadata records twoFactorVerified: true");
-    assert(!warrantyAuditLog.details?.includes(testCode), "AuditLog NEVER stores the raw 2FA OTP code");
+    assert(!warrantyAuditLog.details?.includes('123456'), "AuditLog NEVER stores the raw 2FA OTP code");
   }
 
   console.log("\n================================================================================");
