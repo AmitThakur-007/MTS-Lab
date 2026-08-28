@@ -496,9 +496,10 @@ export function StaffManagementContent() {
     if (!selectedUser) return;
     setSubmitting(true);
     try {
-      const updated = await api.patch(`/users/${selectedUser.id}`, { role: newSelectedRole });
-      if (updated && updated.id) {
-        await syncEntityToRtdb('users', updated.id, updated).catch(() => {});
+      const res: any = await api.patch(`/users/${selectedUser.id}/role`, { role: newSelectedRole });
+      const updatedUser = res?.user || res;
+      if (updatedUser && updatedUser.id) {
+        await syncEntityToRtdb('users', updatedUser.id, updatedUser).catch(() => {});
       }
       toast.success(`Role for ${selectedUser.name || 'Staff Member'} updated to ${newSelectedRole.replace(/_/g, ' ')}`);
       setIsChangeRoleOpen(false);

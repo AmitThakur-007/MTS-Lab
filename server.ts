@@ -231,7 +231,7 @@ async function fixInvalidStatuses() {
         targetStatus = "PENDING";
       } else {
         const uppercaseStatus = currentStatus.toUpperCase().trim();
-        const validStatuses = ["ACTIVE", "APPROVED", "PENDING", "REJECTED", "DISABLED", "INACTIVE", "SUSPENDED"];
+        const validStatuses = ["ACTIVE", "APPROVED", "PENDING", "REJECTED", "DISABLED", "INACTIVE", "SUSPENDED", "DELETED", "DEACTIVATED"];
         
         if (!validStatuses.includes(uppercaseStatus)) {
           console.log(`[STARTUP] Invalid user status found: "${currentStatus}" for user ${user.email}. Repairing...`);
@@ -1772,6 +1772,103 @@ function getAdminAuth() {
 }
 
 // -----------------------------------------------------------------------------
+// ROLE NORMALIZATION & PERMANENT DELETION HELPERS
+// -----------------------------------------------------------------------------
+
+function normalizeRole(role: string | null | undefined): string {
+  if (!role) return 'RECEPTIONIST';
+  const r = String(role).toUpperCase().trim();
+  if (r === 'SUPERADMIN' || r === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+  if (r === 'ADMIN') return 'ADMIN';
+  if (r === 'MANAGER') return 'MANAGER';
+  if (r === 'HEAD_TECHNICIAN' || r === 'HEADTECHNICIAN' || r === 'LEAD_TECHNICIAN' || r === 'LEAD_TECH') return 'HEAD_TECHNICIAN';
+  if (r === 'TECHNICIAN' || r === 'TECH') return 'TECHNICIAN';
+  if (r === 'RECEPTIONIST' || r === 'RECEPTION') return 'RECEPTIONIST';
+  if (r === 'CUSTOMER') return 'CUSTOMER';
+  return r;
+}
+
+async function permanentlyDeleteUserRecord(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return false;
+
+  // Find primary SuperAdmin to reassign creator foreign keys safely
+  const primarySuperAdmin = await prisma.user.findFirst({
+    where: {
+      role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] },
+      deletedAt: null,
+      id: { not: userId }
+    },
+    orderBy: { createdAt: 'asc' }
+  });
+
+  const fallbackAdminId = primarySuperAdmin ? primarySuperAdmin.id : userId;
+
+  // 1. Delete Firebase Authentication user
+  try {
+    await syncDeleteFirebaseAuthUser(user.firebaseUid, user.email);
+  } catch (fbErr: any) {
+    console.warn("[PERMANENT DELETE] Firebase Auth deletion notice:", fbErr?.message || fbErr);
+  }
+
+  // 2. Unlink / Reassign foreign keys to preserve repair and business history
+  if (fallbackAdminId !== userId) {
+    await prisma.repair.updateMany({
+      where: { createdById: userId },
+      data: { createdById: fallbackAdminId }
+    }).catch(() => {});
+  }
+
+  await prisma.repair.updateMany({
+    where: { technicianId: userId },
+    data: { technicianId: null }
+  }).catch(() => {});
+
+  if (fallbackAdminId !== userId) {
+    await prisma.batteryWarranty.updateMany({
+      where: { createdById: userId },
+      data: { createdById: fallbackAdminId }
+    }).catch(() => {});
+  }
+
+  if (fallbackAdminId !== userId) {
+    await prisma.attendance.updateMany({
+      where: { markedById: userId },
+      data: { markedById: fallbackAdminId }
+    }).catch(() => {});
+  }
+
+  if (fallbackAdminId !== userId) {
+    await prisma.repairRelatedDamage.updateMany({
+      where: { recordedById: userId },
+      data: { recordedById: fallbackAdminId }
+    }).catch(() => {});
+  }
+
+  await prisma.auditLog.updateMany({
+    where: { userId },
+    data: { userId: null }
+  }).catch(() => {});
+
+  await prisma.attendance.deleteMany({ where: { userId } }).catch(() => {});
+  await prisma.repairRelatedDamage.deleteMany({ where: { staffId: userId } }).catch(() => {});
+  await prisma.technicianNote.deleteMany({ where: { technicianId: userId } }).catch(() => {});
+  await prisma.session.deleteMany({ where: { userId } }).catch(() => {});
+  await prisma.loginActivity.deleteMany({ where: { userId } }).catch(() => {});
+  await prisma.approvedDevice.deleteMany({ where: { userId } }).catch(() => {});
+  await prisma.accessRequest.deleteMany({ where: { userId } }).catch(() => {});
+  await prisma.passwordResetToken.deleteMany({ where: { userId } }).catch(() => {});
+
+  // 3. Permanently delete User row from SQLite/PostgreSQL database
+  await prisma.user.delete({ where: { id: userId } });
+
+  // 4. Sync deletion to central Firestore and Realtime Database
+  await syncToRtdb("user", "DELETE", { id: userId }).catch(() => {});
+
+  return true;
+}
+
+// -----------------------------------------------------------------------------
 // AUTHORITATIVE FIREBASE AUTHENTICATION SYNCHRONIZATION HELPERS
 // -----------------------------------------------------------------------------
 
@@ -2986,7 +3083,7 @@ export async function createServerApp() {
       
       const userRoleRaw = String(req.user.role || '').trim().toUpperCase();
       const userRoleNorm = normalizeRole(userRoleRaw);
-      const isSuperAdminUser = userRoleNorm === 'SUPERADMIN' || userRoleRaw === 'SUPER_ADMIN' || userRoleRaw === 'SUPERADMIN' || (req.user.email && req.user.email.toLowerCase() === 'mtsmobilelab@gmail.com');
+      const isSuperAdminUser = userRoleNorm === 'SUPER_ADMIN' || userRoleNorm === 'SUPERADMIN' || userRoleRaw === 'SUPER_ADMIN' || userRoleRaw === 'SUPERADMIN' || (req.user.email && req.user.email.toLowerCase() === 'mtsmobilelab@gmail.com');
 
       // Super Admin ALWAYS passes all administrative endpoint permission checks
       if (isSuperAdminUser) {
@@ -6301,67 +6398,30 @@ export async function createServerApp() {
   });
 
   // ==========================================
-  // BULK USER DELETE / DEACTIVATION ENDPOINT
+  // BULK USER PERMANENT DELETION ENDPOINT (SUPER_ADMIN ONLY)
   // ==========================================
-  app.post("/api/admin/users/bulk-delete", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res: any) => {
+  app.post("/api/admin/users/bulk-delete", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res: any) => {
     try {
       const { userIds } = req.body;
       if (!Array.isArray(userIds) || userIds.length === 0) {
         return res.status(400).json({ error: "No user IDs provided for deletion" });
       }
 
-      const targetUsers = await prisma.user.findMany({
-        where: { id: { in: userIds }, deletedAt: null }
-      });
+      let deletedCount = 0;
+      for (const targetId of userIds) {
+        if (targetId === req.user.id) continue;
+        const targetUser = await prisma.user.findUnique({ where: { id: targetId } });
+        if (!targetUser) continue;
 
-      if (targetUsers.length === 0) {
-        return res.status(404).json({ error: "No valid user accounts found for the provided IDs" });
-      }
-
-      const currentUserId = req.user.id;
-      const primaryAdminEmail = 'mtsmobilelab@gmail.com';
-
-      const deletableUsers = targetUsers.filter(u => {
-        if (u.id === currentUserId) return false;
-        if (u.email?.toLowerCase() === primaryAdminEmail) return false;
-        return true;
-      });
-
-      if (deletableUsers.length === 0) {
-        return res.status(400).json({ 
-          error: "Selected accounts are protected (current user or primary Super Admin) and cannot be deleted." 
-        });
-      }
-
-      const deletableIds = deletableUsers.map(u => u.id);
-      const now = new Date();
-
-      await prisma.$transaction([
-        prisma.user.updateMany({
-          where: { id: { in: deletableIds } },
-          data: {
-            isActive: false,
-            accountStatus: "DEACTIVATED",
-            deletedAt: now
-          }
-        }),
-        prisma.session.deleteMany({
-          where: { userId: { in: deletableIds } }
-        })
-      ]);
-
-      for (const u of deletableUsers) {
-        try {
-          const firestore = getDb();
-          await firestore.collection("users").doc(u.id).set({
-            isActive: false,
-            accountStatus: "DEACTIVATED",
-            deletedAt: now.toISOString(),
-            updatedAt: now.toISOString()
-          }, { merge: true });
-        } catch (fsErr) {
-          console.warn(`[BULK DELETE] Firestore sync notice for user ${u.id}:`, fsErr);
+        if (normalizeRole(targetUser.role) === 'SUPER_ADMIN') {
+          const count = await prisma.user.count({
+            where: { role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] }, deletedAt: null }
+          });
+          if (count <= 1) continue;
         }
+
+        const deleted = await permanentlyDeleteUserRecord(targetId);
+        if (deleted) deletedCount++;
       }
 
       await recordAuditLog({
@@ -6371,14 +6431,14 @@ export async function createServerApp() {
         userName: req.user.name || req.user.email,
         action: 'BULK_DELETE_USERS',
         resource: 'User',
-        details: `Bulk deactivated ${deletableUsers.length} user accounts: ${deletableUsers.map(u => u.email).join(', ')}`
+        details: `Bulk permanently deleted ${deletedCount} staff member account(s)`
       });
 
       return res.json({
         success: true,
-        message: `Successfully deactivated ${deletableUsers.length} user record(s).`,
-        deactivatedCount: deletableUsers.length,
-        skippedCount: targetUsers.length - deletableUsers.length
+        message: `Successfully permanently deleted ${deletedCount} user record(s).`,
+        deletedCount,
+        deactivatedCount: deletedCount
       });
     } catch (err: any) {
       console.error("[BULK DELETE USERS ERROR]", err);
@@ -14678,6 +14738,96 @@ export async function createServerApp() {
     });
   });
 
+  // Dedicated Staff Role Change Endpoint (SUPER_ADMIN only)
+  app.patch("/api/users/:id/role", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
+    const { id } = req.params;
+    const requestedRole = req.body.role || req.body.newRole || req.body.targetRole;
+
+    try {
+      if (!requestedRole) {
+        return res.status(400).json({ error: "Role is required." });
+      }
+
+      const normalizedRole = normalizeRole(requestedRole);
+      const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST'];
+      if (!allowedRoles.includes(normalizedRole)) {
+        return res.status(400).json({ error: `Invalid role '${requestedRole}'. Allowed roles: ${allowedRoles.join(', ')}` });
+      }
+
+      const existingUser = await prisma.user.findUnique({ where: { id } });
+      if (!existingUser || existingUser.deletedAt) {
+        return res.status(404).json({ error: "Staff member not found." });
+      }
+
+      // Prevent SuperAdmin from revoking their own SuperAdmin role
+      if (id === req.user.id && normalizedRole !== 'SUPER_ADMIN') {
+        return res.status(400).json({ error: "You cannot revoke your own Super Administrator role." });
+      }
+
+      // If target user is SuperAdmin and role is changing, verify at least 1 remaining SuperAdmin exists
+      const targetRoleNorm = normalizeRole(existingUser.role);
+      if (targetRoleNorm === 'SUPER_ADMIN' && normalizedRole !== 'SUPER_ADMIN') {
+        const superAdminCount = await prisma.user.count({
+          where: {
+            role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] },
+            isActive: true,
+            accountStatus: 'ACTIVE',
+            deletedAt: null
+          }
+        });
+        if (superAdminCount <= 1) {
+          return res.status(400).json({ error: "Cannot downgrade the sole remaining Super Administrator." });
+        }
+      }
+
+      // Update role in Prisma DB
+      const user = await prisma.user.update({
+        where: { id },
+        data: { role: normalizedRole }
+      });
+
+      // Synchronize Firebase Auth user identity/claims if applicable
+      if (user.firebaseUid || user.email) {
+        try {
+          await syncUpdateFirebaseAuthUser(user.firebaseUid, user.email, { displayName: user.name });
+        } catch (fbErr) {
+          console.warn("[ROLE CHANGE] Firebase Auth sync notice:", fbErr);
+        }
+      }
+
+      // Sync user to central Firestore and Firebase RTDB
+      await syncUserToFirestore(user).catch(() => {});
+      await syncToRtdb("user", "UPDATE", user).catch(() => {});
+
+      // Broadcast real-time event
+      broadcastRealtimeEvent({
+        entity: "user",
+        action: "UPDATE",
+        id: user.id,
+        data: user
+      });
+
+      // Immediately delete active sessions for target user to enforce role update
+      await prisma.session.deleteMany({ where: { userId: id } });
+
+      // Audit Log
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        action: "USER_ROLE_CHANGED",
+        resource: "USER",
+        resourceId: user.id,
+        status: "SUCCESS",
+        details: `Changed role of ${user.name} (${user.email}) from ${existingUser.role} to ${normalizedRole}`
+      });
+
+      res.json({ message: "Staff role updated successfully", user, success: true });
+    } catch (err: any) {
+      console.error("[ROLE CHANGE ERROR]", err);
+      res.status(400).json({ error: err.message || "Failed to update staff role" });
+    }
+  });
+
   app.patch("/api/users/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res) => {
     const { id } = req.params;
     let { isActive, role, name, email, username, phoneNumber, department, address, profileImage, password, accountStatus } = req.body;
@@ -14689,22 +14839,26 @@ export async function createServerApp() {
       const callerRoleNorm = normalizeRole(req.user.role);
 
       // Only SUPERADMIN can change user roles
-      if (role !== undefined && role !== existingUser.role) {
-        if (callerRoleNorm !== 'SUPERADMIN') {
+      if (role !== undefined && normalizeRole(role) !== normalizeRole(existingUser.role)) {
+        if (callerRoleNorm !== 'SUPER_ADMIN') {
           return res.status(403).json({ error: "Forbidden: Only Super Administrators can change user roles." });
         }
 
+        const normalizedRequestedRole = normalizeRole(role);
+
         // Prevent SuperAdmin from downgrading their own role
-        if (id === req.user.id && normalizeRole(role) !== 'SUPERADMIN') {
+        if (id === req.user.id && normalizedRequestedRole !== 'SUPER_ADMIN') {
           return res.status(400).json({ error: "You cannot revoke your own Super Administrator role." });
         }
+
+        role = normalizedRequestedRole;
       }
 
       // Check if target is SuperAdmin and status/active is changing
       const targetRoleNorm = normalizeRole(existingUser.role);
-      if (targetRoleNorm === 'SUPERADMIN') {
+      if (targetRoleNorm === 'SUPER_ADMIN') {
         const isDisabling = isActive === false || (accountStatus && accountStatus !== 'ACTIVE' && accountStatus !== 'APPROVED');
-        const isChangingRole = role !== undefined && normalizeRole(role) !== 'SUPERADMIN';
+        const isChangingRole = role !== undefined && normalizeRole(role) !== 'SUPER_ADMIN';
 
         if (id === req.user.id && isDisabling) {
           return res.status(400).json({ error: "You cannot disable your own Super Administrator account." });
@@ -14779,7 +14933,7 @@ export async function createServerApp() {
       // 3. Prepare Prisma Update Data
       const updateData: any = {
         isActive,
-        role,
+        role: role !== undefined ? normalizeRole(role) : undefined,
         name: name !== undefined ? name.trim() : undefined,
         phoneNumber,
         department,
@@ -14841,7 +14995,7 @@ export async function createServerApp() {
         });
       }
 
-      res.json({ message: "User updated successfully", user });
+      res.json({ message: "User updated successfully", user, success: true });
     } catch (err: any) {
       console.error("[UPDATE USER ERROR]", err);
       res.status(400).json({ error: err.message || "Failed to update user" });
@@ -14860,7 +15014,7 @@ export async function createServerApp() {
       if (!targetUser) return res.status(404).json({ error: "User account not found." });
 
       const targetRoleNorm = normalizeRole(targetUser.role);
-      if (targetRoleNorm === 'SUPERADMIN') {
+      if (targetRoleNorm === 'SUPER_ADMIN') {
         const superAdminCount = await prisma.user.count({
           where: {
             role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] },
@@ -14874,29 +15028,11 @@ export async function createServerApp() {
         }
       }
 
-      // 1. Delete or disable Firebase Authentication account
-      try {
-        await syncDeleteFirebaseAuthUser(targetUser.firebaseUid, targetUser.email);
-      } catch (fbErr: any) {
-        console.warn("[DELETE USER] Firebase Auth deletion notice:", fbErr?.message || fbErr);
+      // Execute permanent deletion from local DB & Firebase Auth while unlinking historical references
+      const success = await permanentlyDeleteUserRecord(id);
+      if (!success) {
+        return res.status(404).json({ error: "Staff member not found or already deleted." });
       }
-
-      // 2. Soft delete local user record
-      const user = await prisma.user.update({
-        where: { id },
-        data: { 
-          deletedAt: new Date(),
-          isActive: false,
-          accountStatus: 'DELETED'
-        }
-      });
-
-      // Sync user to central Firestore
-      await syncUserToFirestore(user).catch(() => {});
-      await syncToRtdb("user", "DELETE", { id }).catch(() => {});
-
-      // Invalidate user sessions
-      await prisma.session.deleteMany({ where: { userId: id } });
 
       // Centralized Audit Log
       await recordAuditLog({
@@ -14906,13 +15042,45 @@ export async function createServerApp() {
         resource: "USER",
         resourceId: id,
         status: "SUCCESS",
-        details: `Soft deleted staff member and removed Firebase Auth account: ${user.name} (${user.email})`
+        details: `Permanently deleted staff account and removed Firebase Auth user: ${targetUser.name} (${targetUser.email})`
       });
 
-      res.json({ message: "Staff member deleted successfully", success: true });
-    } catch (err) {
+      res.json({ message: "Staff member permanently deleted successfully", success: true });
+    } catch (err: any) {
       console.error("[DELETE USER ERROR]", err);
-      res.status(400).json({ error: "Failed to delete staff member" });
+      res.status(400).json({ error: err?.message || "Failed to delete staff member" });
+    }
+  });
+
+  // Dedicated Bulk Staff Permanent Deletion Endpoint (SUPER_ADMIN only)
+  app.post("/api/admin/users/bulk-delete", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
+    const { userIds } = req.body;
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: "No user IDs provided for bulk deletion." });
+    }
+
+    try {
+      let deletedCount = 0;
+      for (const targetId of userIds) {
+        if (targetId === req.user.id) continue; // Prevent self deletion
+        const targetUser = await prisma.user.findUnique({ where: { id: targetId } });
+        if (!targetUser) continue;
+
+        if (normalizeRole(targetUser.role) === 'SUPER_ADMIN') {
+          const count = await prisma.user.count({
+            where: { role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] }, deletedAt: null }
+          });
+          if (count <= 1) continue;
+        }
+
+        const deleted = await permanentlyDeleteUserRecord(targetId);
+        if (deleted) deletedCount++;
+      }
+
+      res.json({ message: `Permanently deleted ${deletedCount} staff member account(s).`, success: true });
+    } catch (err: any) {
+      console.error("[BULK DELETE USERS ERROR]", err);
+      res.status(400).json({ error: err?.message || "Failed to perform bulk staff deletion" });
     }
   });
 
