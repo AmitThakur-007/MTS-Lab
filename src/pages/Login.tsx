@@ -124,6 +124,7 @@ export default function Login() {
 
     setLoading(true);
     setUnverifiedEmail(null);
+    setEmailVerificationSuccess(false);
     setEmailVerificationError(null);
 
     try {
@@ -362,7 +363,7 @@ export default function Login() {
             )}
 
             {/* Email Verification Required Alert */}
-            {unverifiedEmail && (
+            {!emailVerificationSuccess && unverifiedEmail && (
               <div className="mx-6 sm:mx-8 mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-3">
                 <div className="flex items-start gap-2.5">
                   <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
