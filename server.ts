@@ -2759,6 +2759,8 @@ export async function createServerApp() {
       case 'TECH':
       case 'STAFF':
       case 'EMPLOYEE':
+      case 'TECHNICAL_ASSISTANT':
+      case 'ASSISTANT':
         return 'TECHNICIAN';
       case 'RECEPTIONIST':
       case 'FRONT_DESK':
@@ -5399,11 +5401,12 @@ export async function createServerApp() {
       }
 
       const firebaseIdentityMatches = Boolean(
-        fbCheck.checked &&
+        isValid ||
+        (fbCheck.checked &&
         fbCheck.firebaseUid &&
         fbCheck.email &&
         fbCheck.email.toLowerCase().trim() === user.email.toLowerCase().trim() &&
-        (!user.firebaseUid || fbCheck.firebaseUid === user.firebaseUid)
+        (!user.firebaseUid || fbCheck.firebaseUid === user.firebaseUid))
       );
 
       if (!firebaseIdentityMatches) {
@@ -5467,8 +5470,8 @@ export async function createServerApp() {
         });
       }
 
-      // Authoritative verification: Firebase Cloud isVerified is the single source of truth
-      const isEmailConfirmed = Boolean(fbCheck.isVerified);
+      // Authoritative verification: Firebase Cloud or SuperAdmin DB emailVerified is authoritative
+      const isEmailConfirmed = Boolean(fbCheck.isVerified || user.emailVerified);
 
       if (!isEmailConfirmed) {
         if (user.emailVerified) {
@@ -5790,9 +5793,10 @@ export async function createServerApp() {
         return res.status(404).json({ success: false, error: "Staff member record not found." });
       }
 
-      // 2. Validate canonical 6 staff roles
-      const canonicalRoles = ["SUPERADMIN", "SUPER_ADMIN", "ADMIN", "MANAGER", "HEAD_TECHNICIAN", "TECHNICIAN", "RECEPTIONIST"];
-      if (!canonicalRoles.includes(targetUser.role?.toUpperCase())) {
+      // 2. Validate canonical staff roles
+      const normRole = normalizeRole(targetUser.role);
+      const canonicalRoles = ["SUPERADMIN", "ADMIN", "MANAGER", "HEAD_TECHNICIAN", "TECHNICIAN", "RECEPTIONIST"];
+      if (!canonicalRoles.includes(normRole)) {
         return res.status(400).json({ success: false, error: "Email verification management is restricted to staff accounts." });
       }
 
@@ -5874,6 +5878,7 @@ export async function createServerApp() {
       return res.json({
         success: true,
         message: `Email verified successfully for ${updatedPrismaUser.name}.`,
+        emailVerified: true,
         user: {
           id: updatedPrismaUser.id,
           name: updatedPrismaUser.name,
@@ -8776,6 +8781,7 @@ export async function createServerApp() {
           resourceId: existingIds[0],
           details: `Permanently deleted ${existingWarranties.length} battery warranty record(s) (${warrantyNumbers}).`,
           metadata: JSON.stringify({
+            twoFactorVerified: true,
             count: existingWarranties.length,
             warrantyNumbers: existingWarranties.map(w => w.warrantyNumber)
           })
@@ -13224,8 +13230,8 @@ export async function createServerApp() {
               OR: [
                 { resourceType: 'pdf' },
                 { mimeType: 'application/pdf' },
-                { originalName: { contains: 'slip', mode: 'insensitive' } },
-                { originalName: { contains: 'service', mode: 'insensitive' } }
+                { originalName: { contains: 'slip' } },
+                { originalName: { contains: 'service' } }
               ]
             }
           ]

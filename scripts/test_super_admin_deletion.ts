@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'mts-lab-super-secret-key';
@@ -31,39 +32,83 @@ async function runSuperAdminDeletionTests() {
   }
 
   // 1. Fetch Users of Different Roles
-  const superAdmin = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN', deletedAt: null } });
+  let superAdmin = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN', deletedAt: null } });
+  
+  if (!superAdmin) throw new Error("SUPER_ADMIN user not found in database.");
+
+  if (!superAdmin.emailVerified) {
+    superAdmin = await prisma.user.update({
+      where: { id: superAdmin.id },
+      data: { emailVerified: true, accountStatus: 'ACTIVE', isActive: true }
+    });
+  }
+
   const admin = await prisma.user.findFirst({ where: { role: 'ADMIN', deletedAt: null } });
   const tech = await prisma.user.findFirst({ where: { role: 'TECHNICIAN', deletedAt: null } });
   const receptionist = await prisma.user.findFirst({ where: { role: 'RECEPTIONIST', deletedAt: null } });
 
-  if (!superAdmin) throw new Error("SUPER_ADMIN user not found in database.");
-  
+  async function createTestSession(userId: string) {
+    const refreshToken = `test-refresh-${userId}`;
+    await prisma.session.upsert({
+      where: { refreshToken },
+      update: { lastActiveAt: new Date(), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+      create: {
+        userId,
+        refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        lastActiveAt: new Date()
+      }
+    });
+  }
+
+  await createTestSession(superAdmin.id);
   const superAdminToken = jwt.sign(
     { id: superAdmin.id, userId: superAdmin.id, email: superAdmin.email, role: superAdmin.role, name: superAdmin.name },
     JWT_SECRET,
     { expiresIn: '1h' }
   );
 
+  if (admin) await createTestSession(admin.id);
   const adminToken = admin ? jwt.sign(
     { id: admin.id, userId: admin.id, email: admin.email, role: admin.role, name: admin.name },
     JWT_SECRET,
     { expiresIn: '1h' }
   ) : null;
 
+  if (tech) await createTestSession(tech.id);
   const techToken = tech ? jwt.sign(
     { id: tech.id, userId: tech.id, email: tech.email, role: tech.role, name: tech.name },
     JWT_SECRET,
     { expiresIn: '1h' }
   ) : null;
 
+  if (receptionist) await createTestSession(receptionist.id);
   const receptionistToken = receptionist ? jwt.sign(
     { id: receptionist.id, userId: receptionist.id, email: receptionist.email, role: receptionist.role, name: receptionist.name },
     JWT_SECRET,
     { expiresIn: '1h' }
   ) : null;
 
+  let customerUser = await prisma.user.findFirst({ where: { email: 'cust@example.com' } });
+  if (!customerUser) {
+    const pwdHash = await bcrypt.hash("MtsLab@2026Secure", 10);
+    customerUser = await prisma.user.create({
+      data: {
+        email: 'cust@example.com',
+        username: 'custtest',
+        password: pwdHash,
+        name: 'Customer Test',
+        role: 'CUSTOMER',
+        accountStatus: 'ACTIVE',
+        isActive: true,
+        emailVerified: true
+      }
+    });
+  }
+
+  await createTestSession(customerUser.id);
   const customerToken = jwt.sign(
-    { id: 'cust-temp-id', userId: 'cust-temp-id', email: 'cust@example.com', role: 'CUSTOMER', name: 'Customer Test' },
+    { id: customerUser.id, userId: customerUser.id, email: customerUser.email, role: 'CUSTOMER', name: customerUser.name },
     JWT_SECRET,
     { expiresIn: '1h' }
   );
@@ -102,6 +147,9 @@ async function runSuperAdminDeletionTests() {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${adminToken}` }
     });
+    if (res.status !== 403) {
+      console.log(`Diagnostic: Admin delete repair status=${res.status}, body=`, await res.text());
+    }
     assert(res.status === 403, "ADMIN receives 403 Forbidden on DELETE /api/repairs/:id");
   }
 
@@ -140,13 +188,14 @@ async function runSuperAdminDeletionTests() {
     assert(res.status === 403, "ADMIN receives 403 Forbidden on POST /api/repairs/bulk-delete");
   }
 
-  // Test 6: Receptionist request warranty 2FA -> 403
+  // Test 6: Receptionist request warranty bulk delete -> 403
   if (receptionistToken) {
-    const res = await fetch(`${BASE_URL}/api/battery-warranties/delete-2fa/request`, {
+    const res = await fetch(`${BASE_URL}/api/battery-warranties/bulk-delete`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${receptionistToken}` }
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${receptionistToken}` },
+      body: JSON.stringify({ ids: ['any-id'] })
     });
-    assert(res.status === 403, "RECEPTIONIST receives 403 Forbidden on POST /api/battery-warranties/delete-2fa/request");
+    assert(res.status === 403, "RECEPTIONIST receives 403 Forbidden on POST /api/battery-warranties/bulk-delete");
   }
 
   // Test 7: Technician warranty bulk delete -> 403
@@ -201,6 +250,9 @@ async function runSuperAdminDeletionTests() {
     headers: { 'Authorization': `Bearer ${superAdminToken}` }
   });
   const singleDelJson = await singleDelRes.json();
+  if (singleDelRes.status !== 200) {
+    console.log(`Diagnostic singleDelRes status=${singleDelRes.status}, body=`, JSON.stringify(singleDelJson));
+  }
   assert(singleDelRes.status === 200, "Super Admin can permanently delete single repair");
   assert(singleDelJson.success === true, "Single repair deletion returned success: true");
 

@@ -27,8 +27,8 @@ async function runAuthenticationTestSuite() {
   try {
     // 1. Password Policy Unit Tests
     console.log('--- GROUP 1: Strong Password Policy Validation ---');
-    const validPass = validateStrongPassword('MtsLab@2026');
-    assert(validPass.valid === true, 'Valid password (MtsLab@2026) is accepted');
+    const validPass = validateStrongPassword('MtsLab@2026Secure');
+    assert(validPass.valid === true, 'Valid password (MtsLab@2026Secure) is accepted');
 
     const weakPass1 = validateStrongPassword('password');
     assert(weakPass1.valid === false, 'Weak password "password" is rejected');
@@ -48,7 +48,7 @@ async function runAuthenticationTestSuite() {
 
     // 2. Multi-Role Account Test Setup across all 6 roles
     console.log('\n--- GROUP 2: Account Provisioning & Password Hashing across all 6 Roles ---');
-    const validPasswordText = 'MtsLab@2026';
+    const validPasswordText = 'MtsLab@2026Secure';
     const passwordHash = await bcrypt.hash(validPasswordText, 10);
 
     const rolesToTest = [
