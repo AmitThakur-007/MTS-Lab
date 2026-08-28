@@ -268,9 +268,32 @@ function setVerificationCooldown(email: string): void {
   }
 }
 
+interface Serverless2FATicket {
+  ticketId: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  userRole: string;
+  otpHash: string;
+  expiresAt: number;
+  attemptsLeft: number;
+  lastSentAt: number;
+}
+
+const serverless2FAStore = new Map<string, Serverless2FATicket>();
+
+function cleanupServerless2FATickets(): void {
+  const now = Date.now();
+  for (const [ticketId, ticket] of serverless2FAStore.entries()) {
+    if (ticket.expiresAt < now || ticket.attemptsLeft <= 0) {
+      serverless2FAStore.delete(ticketId);
+    }
+  }
+}
+
 // Serverless Authentication Helper Policy
-export function requiresTwoFactorAuthentication(): boolean {
-  return false;
+export function requiresTwoFactorAuthentication(role?: string): boolean {
+  return true;
 }
 
 // Dispatch Official Firebase Email Verification via Identity Toolkit REST API
@@ -405,10 +428,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const password = String(body.password || '');
       const firebaseIdToken = body.firebaseIdToken;
 
-      if (!identity && !firebaseIdToken) {
-        return sendJson(res, 400, { success: false, message: 'Email or identity is required.' });
+      if (!identity) {
+        return sendJson(res, 400, { success: false, message: 'Work Email is required.' });
       }
 
+      if (!password && !firebaseIdToken) {
+        return sendJson(res, 400, { success: false, message: 'Password or authentication token is required.' });
+      }
+
+      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDw4d4eSahPP6KL-0qZzzIr8V5BJaHtpNs';
+      let authenticatedFbUser: any = null;
+
+      // 1. Authoritative Identity Verification via Firebase Identity Toolkit
+      if (password) {
+        const signInRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: identity, password, returnSecureToken: true })
+        });
+
+        const signInData: any = await signInRes.json().catch(() => ({}));
+        if (!signInRes.ok || !signInData?.idToken) {
+          console.warn(`[AUTH FAILED] Invalid password attempt for ${maskEmail(identity)}`);
+          return sendJson(res, 401, {
+            success: false,
+            message: 'Unable to sign in with these credentials.'
+          });
+        }
+        authenticatedFbUser = signInData;
+      } else if (firebaseIdToken) {
+        const lookupRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: firebaseIdToken })
+        });
+        const lookupData: any = await lookupRes.json().catch(() => ({}));
+        if (!lookupRes.ok || !lookupData?.users?.[0]) {
+          return sendJson(res, 401, {
+            success: false,
+            message: 'Unable to sign in with these credentials.'
+          });
+        }
+        authenticatedFbUser = lookupData.users[0];
+      }
+
+      // 2. Email Verification Enforcement
+      const isVerified = authenticatedFbUser?.emailVerified === true;
+      if (!isVerified) {
+        return sendJson(res, 403, {
+          success: false,
+          emailNotVerified: true,
+          email: identity,
+          message: 'Please verify your email address before continuing.'
+        });
+      }
+
+      // 3. User Role & Profile Determination
       const isSuperAdmin = identity === 'mtsmobilelab@gmail.com' || identity.includes('admin');
       const isHeadTech = identity.includes('head') || identity.includes('lead');
       const isTech = identity.includes('tech') && !isHeadTech;
@@ -421,8 +496,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       else if (isTech) role = 'TECHNICIAN';
 
       const userName = isSuperAdmin ? 'MTS Lab Super Admin' : (identity.split('@')[0] || 'Staff Member');
-      const userId = `usr_${crypto.createHash('md5').update(identity || 'anonymous').digest('hex').slice(0, 12)}`;
+      const userId = `usr_${crypto.createHash('md5').update(identity).digest('hex').slice(0, 12)}`;
 
+      // 4. 2FA Challenge Verification Check
+      if (requiresTwoFactorAuthentication(role)) {
+        cleanupServerless2FATickets();
+        const otpCode = generate6DigitOtp();
+        const otpHash = hashOtp(otpCode);
+        const ticketId = crypto.randomUUID();
+
+        const ticket: Serverless2FATicket = {
+          ticketId,
+          userId,
+          userEmail: identity,
+          userName,
+          userRole: role,
+          otpHash,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          attemptsLeft: 3,
+          lastSentAt: Date.now()
+        };
+
+        serverless2FAStore.set(ticketId, ticket);
+
+        // Dispatch 2FA OTP Email via Resend API / Multi-provider
+        const emailRes = await sendSecurityEmail({
+          to: identity,
+          subject: 'Your MTS Lab Verification Code',
+          text: `Your MTS Lab login verification code is: ${otpCode}. It expires in 5 minutes.`,
+          html: render2faEmailTemplate(userName, otpCode)
+        });
+
+        if (!emailRes.success) {
+          serverless2FAStore.delete(ticketId);
+          return sendJson(res, 503, {
+            success: false,
+            message: 'We could not send your verification code. Please try again later or contact MTS Lab administration.'
+          });
+        }
+
+        return sendJson(res, 200, {
+          success: true,
+          mfaRequired: true,
+          mfaTicket: ticketId,
+          emailMasked: maskEmail(identity),
+          message: `Verification code sent to ${maskEmail(identity)}`
+        });
+      }
+
+      // 5. Direct Session Token Issuance (only if 2FA disabled)
       const accessToken = `mts_${crypto.randomBytes(32).toString('hex')}`;
       const refreshToken = `mts_ref_${crypto.randomBytes(32).toString('hex')}`;
       return sendJson(res, 200, {
@@ -431,13 +553,148 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         refreshToken,
         user: {
           id: userId,
-          email: identity || 'mtsmobilelab@gmail.com',
+          email: identity,
           name: userName,
           role,
           emailVerified: true
         },
         mfaRequired: false,
-        message: isSuperAdmin ? 'Welcome back, MTS Lab Super Admin!' : 'Authenticated successfully.'
+        message: 'Authenticated successfully.'
+      });
+    }
+
+    // 1b. POST /api/auth/2fa/verify (Verify 6-Digit OTP Security Code)
+    if (pathname.includes('/auth/2fa/verify')) {
+      if (req.method !== 'POST') {
+        return sendJson(res, 405, { error: 'Method Not Allowed' });
+      }
+
+      cleanupServerless2FATickets();
+      const body = await parseJsonBody(req);
+      const mfaTicket = String(body.mfaTicket || '').trim();
+      const otp = String(body.otp || '').trim();
+
+      if (!mfaTicket || !otp || !/^\d{6}$/.test(otp)) {
+        return sendJson(res, 400, { success: false, message: 'Valid 2FA ticket and 6-digit OTP code are required.' });
+      }
+
+      const ticket = serverless2FAStore.get(mfaTicket);
+      if (!ticket) {
+        return sendJson(res, 400, { success: false, message: 'Invalid or expired verification session. Please log in again.' });
+      }
+
+      if (Date.now() > ticket.expiresAt) {
+        serverless2FAStore.delete(mfaTicket);
+        return sendJson(res, 400, { success: false, message: 'Verification code has expired. Please request a new code.' });
+      }
+
+      if (ticket.attemptsLeft <= 0) {
+        serverless2FAStore.delete(mfaTicket);
+        return sendJson(res, 400, { success: false, message: 'Too many invalid attempts. Please request a new verification code.' });
+      }
+
+      if (!verifyOtp(otp, ticket.otpHash)) {
+        ticket.attemptsLeft -= 1;
+        if (ticket.attemptsLeft <= 0) {
+          serverless2FAStore.delete(mfaTicket);
+          return sendJson(res, 400, { success: false, message: 'Too many invalid attempts. Verification session invalidated. Please log in again.' });
+        }
+        return sendJson(res, 400, {
+          success: false,
+          message: `Incorrect verification code. ${ticket.attemptsLeft} attempt(s) remaining.`
+        });
+      }
+
+      // OTP Verified -> Single-use ticket destroyed
+      serverless2FAStore.delete(mfaTicket);
+
+      const accessToken = `mts_${crypto.randomBytes(32).toString('hex')}`;
+      const refreshToken = `mts_ref_${crypto.randomBytes(32).toString('hex')}`;
+
+      return sendJson(res, 200, {
+        success: true,
+        token: accessToken,
+        refreshToken,
+        user: {
+          id: ticket.userId,
+          email: ticket.userEmail,
+          name: ticket.userName,
+          role: ticket.userRole,
+          emailVerified: true
+        }
+      });
+    }
+
+    // 1c. POST /api/auth/2fa/resend (Resend 6-Digit OTP Security Code)
+    if (pathname.includes('/auth/2fa/resend')) {
+      if (req.method !== 'POST') {
+        return sendJson(res, 405, { error: 'Method Not Allowed' });
+      }
+
+      cleanupServerless2FATickets();
+      const body = await parseJsonBody(req);
+      const mfaTicket = String(body.mfaTicket || '').trim();
+
+      if (!mfaTicket) {
+        return sendJson(res, 400, { success: false, message: 'Valid 2FA ticket is required.' });
+      }
+
+      const ticket = serverless2FAStore.get(mfaTicket);
+      if (!ticket) {
+        return sendJson(res, 400, { success: false, message: 'Invalid or expired verification session. Please log in again.' });
+      }
+
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - ticket.lastSentAt) / 1000);
+      if (elapsedSeconds < 60) {
+        const retryAfter = 60 - elapsedSeconds;
+        res.setHeader('Retry-After', String(retryAfter));
+        return sendJson(res, 429, {
+          success: false,
+          retryAfter,
+          message: `Please wait ${retryAfter} seconds before requesting a new code.`
+        });
+      }
+
+      const newOtpCode = generate6DigitOtp();
+      const newOtpHash = hashOtp(newOtpCode);
+      const newTicketId = crypto.randomUUID();
+
+      const updatedTicket: Serverless2FATicket = {
+        ticketId: newTicketId,
+        userId: ticket.userId,
+        userEmail: ticket.userEmail,
+        userName: ticket.userName,
+        userRole: ticket.userRole,
+        otpHash: newOtpHash,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+        attemptsLeft: 3,
+        lastSentAt: Date.now()
+      };
+
+      serverless2FAStore.delete(mfaTicket);
+      serverless2FAStore.set(newTicketId, updatedTicket);
+
+      const emailRes = await sendSecurityEmail({
+        to: ticket.userEmail,
+        subject: 'Your MTS Lab Verification Code',
+        text: `Your MTS Lab login verification code is: ${newOtpCode}. It expires in 5 minutes.`,
+        html: render2faEmailTemplate(ticket.userName, newOtpCode)
+      });
+
+      if (!emailRes.success) {
+        serverless2FAStore.delete(newTicketId);
+        return sendJson(res, 503, {
+          success: false,
+          message: 'We could not send your verification code. Please try again later or contact MTS Lab administration.'
+        });
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        mfaTicket: newTicketId,
+        emailMasked: maskEmail(ticket.userEmail),
+        message: `A new 6-digit verification code has been sent to ${maskEmail(ticket.userEmail)}.`
       });
     }
 
