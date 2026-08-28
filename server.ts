@@ -3753,19 +3753,37 @@ export async function createServerApp() {
     }
   });
 
-  // API Routes
-  app.delete("/api/admin/clear-all-data", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
-    const { password, startDate, endDate, deletionType } = req.body;
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  // Selection-Based System Data Wipe Handler for Super Admin
+  const handleSystemWipe = async (req: any, res: any) => {
+    const { password, startDate, endDate, deletionType, categories, selectedCategory } = req.body;
     
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    // Auth Check
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user || !user.password || !(await bcrypt.compare(password || '', user.password))) {
       return res.status(401).json({ error: "Invalid password confirmation" });
     }
 
     try {
-      let whereClause: any = {};
+      // Determine categories to wipe
+      let targetCategories: string[] = [];
+      if (Array.isArray(categories) && categories.length > 0) {
+        targetCategories = categories.map((c: string) => c.toUpperCase().trim());
+      } else if (selectedCategory && typeof selectedCategory === 'string') {
+        targetCategories = [selectedCategory.toUpperCase().trim()];
+      } else if (req.body.category && typeof req.body.category === 'string') {
+        targetCategories = [req.body.category.toUpperCase().trim()];
+      } else {
+        // Default to ALL system categories if no specific categories were specified
+        targetCategories = [
+          'REPAIRS', 'CUSTOMERS', 'BATTERY_WARRANTIES', 'ATTENDANCE', 
+          'DAMAGE_RECORDS', 'COURIER_RECORDS', 'REVENUE', 'INVENTORY', 
+          'SERVICES', 'SLIDES', 'NOTIFICATIONS'
+        ];
+      }
+
+      let dateFilter: any = {};
       if (startDate && endDate) {
-        whereClause = {
+        dateFilter = {
           createdAt: {
             gte: new Date(startDate),
             lte: new Date(endDate)
@@ -3773,83 +3791,219 @@ export async function createServerApp() {
         };
       }
 
-      // Count what we are about to delete for the audit log
-      const count = await prisma.repair.count({ where: whereClause });
+      const deletedCounts: Record<string, number> = {};
+      let totalDeleted = 0;
 
-      // 1. Delete from Prisma (SQLite)
-      // We delete related records based on repairs in the range
-      const repairIds = await prisma.repair.findMany({
-        where: whereClause,
-        select: { id: true, repairNumber: true }
-      });
-      const ids = repairIds.map(r => r.id);
+      // 1. REPAIRS Category
+      if (targetCategories.includes('REPAIRS') || targetCategories.includes('ALL')) {
+        const repairIds = await prisma.repair.findMany({
+          where: dateFilter,
+          select: { id: true }
+        });
+        const ids = repairIds.map(r => r.id);
 
-      await prisma.technicianNote.deleteMany({ where: { repairId: { in: ids } } });
-      await prisma.repairLog.deleteMany({ where: { repairId: { in: ids } } });
-      await prisma.payment.deleteMany({ where: { repairId: { in: ids } } });
-      await prisma.repair.deleteMany({ where: whereClause });
-      
-      // 2. Delete from Firebase (Firestore)
-      const firestore = getDb();
-      const repairsColl = firestore.collection('repairs');
-      
-      let query: any = repairsColl;
-      if (startDate && endDate) {
-        query = repairsColl
-          .where('createdAt', '>=', new Date(startDate).toISOString())
-          .where('createdAt', '<=', new Date(endDate).toISOString());
-      }
+        if (ids.length > 0) {
+          await prisma.technicianNote.deleteMany({ where: { repairId: { in: ids } } });
+          await prisma.repairLog.deleteMany({ where: { repairId: { in: ids } } });
+          await prisma.payment.deleteMany({ where: { repairId: { in: ids } } });
+          await prisma.repairRelatedDamage.deleteMany({ where: { repairId: { in: ids } } });
+          await prisma.repairTransferRequest.deleteMany({ where: { repairId: { in: ids } } });
+          await prisma.batteryWarranty.deleteMany({ where: { repairId: { in: ids } } });
+          const resDel = await prisma.repair.deleteMany({ where: dateFilter });
+          deletedCounts['REPAIRS'] = resDel.count;
+          totalDeleted += resDel.count;
 
-      const repairsSnapshot = await query.get();
-      
-      if (!repairsSnapshot.empty) {
-        const docs = repairsSnapshot.docs;
-        // Batch limit is 500 operations
-        for (let i = 0; i < docs.length; i += 500) {
-          const chunk = docs.slice(i, i + 500);
-          const batch = firestore.batch();
-          chunk.forEach(doc => {
-            // Safe check: ensure document exists in our snapshot
-            if (doc.exists) {
-              batch.delete(doc.ref);
+          // Clear Firestore repairs
+          try {
+            const firestore = getDb();
+            const repairsColl = firestore.collection('repairs');
+            const repairsSnapshot = await repairsColl.get();
+            if (!repairsSnapshot.empty) {
+              const docs = repairsSnapshot.docs;
+              for (let i = 0; i < docs.length; i += 500) {
+                const batch = firestore.batch();
+                docs.slice(i, i + 500).forEach(doc => { if (doc.exists) batch.delete(doc.ref); });
+                await batch.commit();
+              }
             }
-          });
-          await batch.commit();
+          } catch (e) {
+            console.error("[WIPE FIRESTORE REPAIRS NOTICE]", e);
+          }
+        } else {
+          deletedCounts['REPAIRS'] = 0;
         }
       }
 
-      // Log the activity with more details
+      // 2. CUSTOMERS Category
+      if (targetCategories.includes('CUSTOMERS') || targetCategories.includes('ALL')) {
+        const resDel = await prisma.customer.deleteMany({ where: dateFilter });
+        deletedCounts['CUSTOMERS'] = resDel.count;
+        totalDeleted += resDel.count;
+
+        try {
+          const firestore = getDb();
+          const custColl = firestore.collection('customers');
+          const snap = await custColl.get();
+          if (!snap.empty) {
+            const docs = snap.docs;
+            for (let i = 0; i < docs.length; i += 500) {
+              const batch = firestore.batch();
+              docs.slice(i, i + 500).forEach(doc => { if (doc.exists) batch.delete(doc.ref); });
+              await batch.commit();
+            }
+          }
+        } catch (e) {
+          console.error("[WIPE FIRESTORE CUSTOMERS NOTICE]", e);
+        }
+      }
+
+      // 3. BATTERY_WARRANTIES Category
+      if (targetCategories.includes('BATTERY_WARRANTIES') || targetCategories.includes('WARRANTIES') || targetCategories.includes('ALL')) {
+        await prisma.batteryWarrantyClaim.deleteMany({});
+        const resDel = await prisma.batteryWarranty.deleteMany({ where: dateFilter });
+        deletedCounts['BATTERY_WARRANTIES'] = resDel.count;
+        totalDeleted += resDel.count;
+
+        try {
+          const firestore = getDb();
+          const snap = await firestore.collection('batteryWarranties').get();
+          if (!snap.empty) {
+            const docs = snap.docs;
+            for (let i = 0; i < docs.length; i += 500) {
+              const batch = firestore.batch();
+              docs.slice(i, i + 500).forEach(doc => { if (doc.exists) batch.delete(doc.ref); });
+              await batch.commit();
+            }
+          }
+        } catch (e) {
+          console.error("[WIPE FIRESTORE WARRANTIES NOTICE]", e);
+        }
+      }
+
+      // 4. ATTENDANCE Category
+      if (targetCategories.includes('ATTENDANCE') || targetCategories.includes('ALL')) {
+        await prisma.attendanceAuditLog.deleteMany({});
+        const resDel = await prisma.attendance.deleteMany({ where: dateFilter });
+        deletedCounts['ATTENDANCE'] = resDel.count;
+        totalDeleted += resDel.count;
+      }
+
+      // 5. DAMAGE_RECORDS Category
+      if (targetCategories.includes('DAMAGE_RECORDS') || targetCategories.includes('DAMAGE') || targetCategories.includes('ALL')) {
+        await prisma.repairRelatedDamageAudit.deleteMany({});
+        const resDel = await prisma.repairRelatedDamage.deleteMany({ where: dateFilter });
+        deletedCounts['DAMAGE_RECORDS'] = resDel.count;
+        totalDeleted += resDel.count;
+      }
+
+      // 6. COURIER_RECORDS Category
+      if (targetCategories.includes('COURIER_RECORDS') || targetCategories.includes('COURIERS') || targetCategories.includes('ALL')) {
+        const resDel = await prisma.repair.updateMany({
+          data: {
+            isCourierIn: false,
+            courierInStatus: null,
+            courierCompany: null,
+            courierTrackingNumber: null,
+            isCourierOut: false,
+            courierOutStatus: null,
+            returnCourierCompany: null,
+            returnCourierTrackingNumber: null,
+            courierStatus: null,
+            courierArchived: false
+          }
+        });
+        deletedCounts['COURIER_RECORDS'] = resDel.count;
+        totalDeleted += resDel.count;
+      }
+
+      // 7. REVENUE Category
+      if (targetCategories.includes('REVENUE') || targetCategories.includes('PAYMENTS') || targetCategories.includes('ALL')) {
+        const resDel = await prisma.payment.deleteMany({ where: dateFilter });
+        deletedCounts['REVENUE'] = resDel.count;
+        totalDeleted += resDel.count;
+      }
+
+      // 8. INVENTORY Category
+      if (targetCategories.includes('INVENTORY') || targetCategories.includes('ALL')) {
+        await prisma.inventoryTransaction.deleteMany({});
+        const resDel = await prisma.inventoryItem.deleteMany({});
+        await prisma.inventoryCategory.deleteMany({});
+        deletedCounts['INVENTORY'] = resDel.count;
+        totalDeleted += resDel.count;
+      }
+
+      // 9. SERVICES Category
+      if (targetCategories.includes('SERVICES') || targetCategories.includes('PRICES') || targetCategories.includes('ALL')) {
+        const resDel = await prisma.repairPrice.deleteMany({});
+        deletedCounts['SERVICES'] = resDel.count;
+        totalDeleted += resDel.count;
+      }
+
+      // 10. SLIDES Category
+      if (targetCategories.includes('SLIDES') || targetCategories.includes('SLIDESHOW') || targetCategories.includes('ALL')) {
+        const resDel = await prisma.homeSlide.deleteMany({});
+        deletedCounts['SLIDES'] = resDel.count;
+        totalDeleted += resDel.count;
+      }
+
+      // 11. NOTIFICATIONS Category
+      if (targetCategories.includes('NOTIFICATIONS') || targetCategories.includes('ALL')) {
+        const resDel = await prisma.notification.deleteMany({});
+        deletedCounts['NOTIFICATIONS'] = resDel.count;
+        totalDeleted += resDel.count;
+      }
+
+      // 12. STAFF_ACCOUNTS Category (excluding current SuperAdmin!)
+      if (targetCategories.includes('STAFF_ACCOUNTS') || targetCategories.includes('STAFF')) {
+        const nonSuperAdmins = await prisma.user.findMany({
+          where: {
+            id: { not: req.user.id },
+            role: { notIn: ['SUPER_ADMIN', 'SUPERADMIN'] }
+          },
+          select: { id: true }
+        });
+        const staffIds = nonSuperAdmins.map(u => u.id);
+        if (staffIds.length > 0) {
+          await prisma.session.deleteMany({ where: { userId: { in: staffIds } } });
+          await prisma.loginActivity.deleteMany({ where: { userId: { in: staffIds } } });
+          await prisma.approvedDevice.deleteMany({ where: { userId: { in: staffIds } } });
+          await prisma.accessRequest.deleteMany({ where: { userId: { in: staffIds } } });
+          const resDel = await prisma.user.deleteMany({ where: { id: { in: staffIds } } });
+          deletedCounts['STAFF_ACCOUNTS'] = resDel.count;
+          totalDeleted += resDel.count;
+        } else {
+          deletedCounts['STAFF_ACCOUNTS'] = 0;
+        }
+      }
+
+      // Create Audit Log
       await prisma.auditLog.create({
         data: {
           userId: req.user.id,
           action: "CLEAR_DATA",
-          resource: "REPAIRS",
-          details: `Super Admin deleted ${count} records. Type: ${deletionType || 'RANGE'}. Range: ${startDate || 'N/A'} to ${endDate || 'N/A'}`
+          resource: targetCategories.join(", "),
+          details: `Super Admin executed selection-based system wipe for categories: [${targetCategories.join(", ")}]. Wiped ${totalDeleted} record(s).`
         }
       });
 
-      res.json({ 
-        message: count > 0 
-          ? `${count} customer records and repair data deleted successfully.` 
-          : "No records were found matching the selected criteria.",
-        deletedCount: count
+      res.json({
+        success: true,
+        message: totalDeleted > 0
+          ? `Successfully wiped ${totalDeleted} record(s) across selected categories: ${targetCategories.join(", ")}.`
+          : `No records were found matching the selected categories and criteria.`,
+        deletedCount: totalDeleted,
+        deletedCounts
       });
     } catch (err: any) {
-      console.error("[CLEAR DATA ERROR]", err);
-      let errorMsg = err.message || "Unknown error";
-      
-      // Detailed error mapping for user-friendly feedback
-      if (errorMsg.includes("5 NOT_FOUND") || errorMsg.includes("NOT_FOUND")) {
-        errorMsg = "Firebase resource not found. This typically happens if the collection is already empty or the database instance is misconfigured.";
-      } else if (errorMsg.includes("7 PERMISSION_DENIED") || errorMsg.includes("PERMISSION_DENIED")) {
-        errorMsg = "Access denied by Firebase. Please verify service account permissions.";
-      } else if (errorMsg.includes("QUOTA_EXCEEDED")) {
-        errorMsg = "Firebase quota exceeded. Please try again tomorrow.";
-      }
-
-      res.status(500).json({ error: "Deletion failed: " + errorMsg });
+      console.error("[SYSTEM WIPE ERROR]", err);
+      res.status(500).json({ error: "System wipe failed: " + (err.message || "Unknown error") });
     }
-  });
+  };
+
+  // Register System Wipe Routes
+  app.post("/api/admin/system-wipe", authenticate, authorize(['SUPER_ADMIN']), handleSystemWipe);
+  app.post("/api/admin/delete-data", authenticate, authorize(['SUPER_ADMIN']), handleSystemWipe);
+  app.delete("/api/admin/clear-all-data", authenticate, authorize(['SUPER_ADMIN']), handleSystemWipe);
 
   app.get("/api/admin/deletion-history", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
     const history = await prisma.auditLog.findMany({
@@ -14355,7 +14509,7 @@ export async function createServerApp() {
     }
   });
 
-  app.get("/api/users", authenticate, authorize(['SUPER_ADMIN']), syncRouteMiddleware(['user', 'branch']), async (req: any, res) => {
+  app.get("/api/users", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), syncRouteMiddleware(['user', 'branch']), async (req: any, res) => {
     try {
       const users = await prisma.user.findMany({
         where: { deletedAt: null },
