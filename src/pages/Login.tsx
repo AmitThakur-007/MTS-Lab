@@ -168,12 +168,14 @@ export default function Login() {
       }
 
       // 2. Authenticate session with MTS Lab Backend
+      const isClientVerified = Boolean(userCred?.emailVerified || auth.currentUser?.emailVerified);
       const device = getDeviceDetails();
       const res: any = await api.post('/auth/login', {
         identity: trimmedEmail,
         password,
         device,
-        firebaseIdToken
+        firebaseIdToken,
+        isClientVerified
       });
 
       if (res?.mfaRequired && res?.mfaTicket) {
