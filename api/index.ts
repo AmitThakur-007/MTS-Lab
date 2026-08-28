@@ -707,16 +707,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      if (!isVerified) {
-        return sendJson(res, 403, {
-          success: false,
-          emailNotVerified: true,
-          email: identity,
-          message: 'Please verify your email address before continuing.'
-        });
+      if (isVerified) {
+        await markApplicationUserVerified(appUser, firebaseUid, identity);
       }
-
-      await markApplicationUserVerified(appUser, firebaseUid, identity);
 
       // 4. 2FA Challenge Verification Check
       if (requiresTwoFactorAuthentication(role)) {

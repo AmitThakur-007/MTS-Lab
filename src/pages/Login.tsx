@@ -186,11 +186,6 @@ export default function Login() {
         return;
       }
 
-      if (res?.emailNotVerified || (res?.user && res?.user?.emailVerified === false)) {
-        setUnverifiedEmail(identity.trim());
-        toast.error('Please verify your email address before continuing.');
-        return;
-      }
 
       if (res?.token && res?.user) {
         const canonicalRole = normalizeRole(res.user.role);
@@ -206,12 +201,7 @@ export default function Login() {
         throw new Error(res?.message || 'Unable to sign in with these credentials.');
       }
     } catch (err: any) {
-      if (err?.emailNotVerified || err?.data?.emailNotVerified || err?.message?.toLowerCase().includes('verify your email')) {
-        setUnverifiedEmail(identity.trim());
-        toast.error('Please verify your email address before continuing.');
-      } else {
-        toast.error(err.message || 'Unable to sign in with these credentials.');
-      }
+      toast.error(err.message || 'Unable to sign in with these credentials.');
     } finally {
       setLoading(false);
     }
@@ -526,48 +516,7 @@ export default function Login() {
                 </div>
               )}
 
-              {/* Email Verification Required Alert */}
-              {!emailVerificationSuccess && unverifiedEmail && (
-                <div className="mx-6 sm:mx-8 mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-3">
-                  <div className="flex items-start gap-2.5">
-                    <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                    <div className="space-y-1">
-                      <p className="font-bold">Email Verification Required</p>
-                      <p className="text-amber-800 leading-relaxed">
-                        Please verify your email address (<b>{unverifiedEmail}</b>) before accessing the MTS Lab portal.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={handleResendVerificationEmail}
-                      disabled={resendingVerif || resendVerifCooldown > 0}
-                      className="h-8 text-xs font-bold rounded-xl bg-white border-amber-300 text-amber-900 hover:bg-amber-100 cursor-pointer"
-                    >
-                      {resendingVerif ? (
-                        <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
-                      ) : (
-                        <RefreshCw className="h-3 w-3 mr-1.5" />
-                      )}
-                      {resendVerifCooldown > 0 ? `Resend in ${resendVerifCooldown}s` : 'Resend Email'}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleCheckVerificationStatus}
-                      disabled={checkingVerif}
-                      className="h-8 text-xs font-bold rounded-xl text-amber-900 hover:bg-amber-100/60 cursor-pointer"
-                    >
-                      {checkingVerif ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
-                      Check Status
-                    </Button>
-                  </div>
-                </div>
-              )}
+
 
               <form onSubmit={handleLoginSubmit}>
                 <CardContent className="space-y-4 px-6 sm:px-8 pt-2">

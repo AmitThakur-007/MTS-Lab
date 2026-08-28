@@ -3183,17 +3183,6 @@ export async function createServerApp() {
           return res.status(401).json({ error: "AccountInactive", message: "Your account is no longer active or has been disabled." });
         }
 
-        if (!liveUser.emailVerified && 
-            req.path !== '/auth/resend-verification' && 
-            req.path !== '/auth/check-verification' && 
-            req.path !== '/auth/verify-email-status') {
-          return res.status(403).json({ 
-            error: "EmailNotVerified", 
-            emailNotVerified: true, 
-            message: "Please verify your email address before continuing." 
-          });
-        }
-
         req.user = {
           ...decoded,
           id: liveUser.id,
@@ -5467,13 +5456,6 @@ export async function createServerApp() {
         }
         if (provisioned.sent) {
           markFirebaseVerificationAttempt(user.email);
-          return res.status(403).json({
-            success: false,
-            emailNotVerified: true,
-            firebaseProvisioned: true,
-            email: user.email,
-            message: "A Firebase verification email has been sent. Please verify your email address before continuing."
-          });
         }
       }
 
@@ -5507,15 +5489,6 @@ export async function createServerApp() {
             role: user.role,
             emailVerified: true
           }
-        });
-      }
-
-      if (!isEmailConfirmed) {
-        return res.status(403).json({
-          success: false,
-          emailNotVerified: true,
-          email: user.email,
-          message: "Your email address has not been verified. Please verify your email before accessing the MTS Lab dashboard."
         });
       }
 
