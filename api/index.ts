@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
+import admin from 'firebase-admin';
 
 export type VercelRequest = IncomingMessage & {
   body?: any;
@@ -58,6 +59,142 @@ interface UserPayload {
   phoneNumber?: string;
   department?: string;
   address?: string;
+}
+
+export interface AppUserDoc {
+  id?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  isActive?: boolean;
+  disabled?: boolean;
+  accountStatus?: string;
+  emailVerified?: boolean;
+  firebaseUid?: string;
+  deletedAt?: any;
+  [key: string]: any;
+}
+
+let dbInstance: admin.firestore.Firestore | null = null;
+
+export function getAdminDb(): admin.firestore.Firestore | null {
+  if (dbInstance) return dbInstance;
+  try {
+    if (!admin.apps.length) {
+      const serviceAccountVar = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_ADMIN_CREDENTIALS;
+      const projectId = process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || 'mts-mobile-lab-system';
+      if (serviceAccountVar) {
+        try {
+          const cert = typeof serviceAccountVar === 'string' ? JSON.parse(serviceAccountVar) : serviceAccountVar;
+          admin.initializeApp({ credential: admin.credential.cert(cert), projectId });
+        } catch {
+          admin.initializeApp({ projectId });
+        }
+      } else {
+        admin.initializeApp({ projectId });
+      }
+    }
+    dbInstance = admin.firestore();
+    return dbInstance;
+  } catch (err) {
+    console.warn('[FIREBASE ADMIN DB INIT WARNING]', err);
+    return null;
+  }
+}
+
+export async function findApplicationUser(
+  email: string,
+  firebaseUid?: string
+): Promise<{ user: AppUserDoc | null; isBlocked: boolean; isUnprovisioned: boolean }> {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const db = getAdminDb();
+  if (!db) {
+    return { user: null, isBlocked: false, isUnprovisioned: false };
+  }
+
+  try {
+    let docData: AppUserDoc | null = null;
+
+    if (firebaseUid) {
+      const byDocId = await db.collection('users').doc(firebaseUid).get();
+      if (byDocId.exists) {
+        docData = { id: byDocId.id, ...byDocId.data() };
+      } else {
+        const querySnap = await db.collection('users').where('firebaseUid', '==', firebaseUid).limit(1).get();
+        if (!querySnap.empty) {
+          const doc = querySnap.docs[0];
+          docData = { id: doc.id, ...doc.data() };
+        }
+      }
+    }
+
+    if (!docData && normalizedEmail) {
+      const querySnap = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
+      if (!querySnap.empty) {
+        const doc = querySnap.docs[0];
+        docData = { id: doc.id, ...doc.data() };
+      }
+    }
+
+    if (!docData) {
+      return { user: null, isBlocked: false, isUnprovisioned: true };
+    }
+
+    const isInactive =
+      docData.isActive === false ||
+      docData.disabled === true ||
+      docData.accountStatus === 'INACTIVE' ||
+      docData.accountStatus === 'DISABLED' ||
+      Boolean(docData.deletedAt);
+
+    if (isInactive) {
+      return { user: docData, isBlocked: true, isUnprovisioned: false };
+    }
+
+    return { user: docData, isBlocked: false, isUnprovisioned: false };
+  } catch (err) {
+    console.warn('[FIND APP USER FIRESTORE ERROR]', err);
+    return { user: null, isBlocked: false, isUnprovisioned: false };
+  }
+}
+
+export async function markApplicationUserVerified(
+  userObj?: AppUserDoc | null,
+  firebaseUid?: string,
+  email?: string
+): Promise<boolean> {
+  const db = getAdminDb();
+  if (!db) return false;
+  try {
+    const docId = userObj?.id || firebaseUid;
+    const targetEmail = userObj?.email || email;
+
+    if (docId) {
+      const ref = db.collection('users').doc(docId);
+      const snap = await ref.get();
+      if (snap.exists) {
+        await ref.update({ emailVerified: true, updatedAt: new Date().toISOString() });
+        return true;
+      }
+    }
+
+    if (targetEmail) {
+      const snap = await db.collection('users').where('email', '==', targetEmail.toLowerCase().trim()).get();
+      if (!snap.empty) {
+        const batch = db.batch();
+        snap.docs.forEach((doc) => {
+          batch.update(doc.ref, { emailVerified: true, updatedAt: new Date().toISOString() });
+        });
+        await batch.commit();
+        return true;
+      }
+    }
+
+    return false;
+  } catch (err) {
+    console.warn('[MARK VERIFIED FIRESTORE ERROR]', err);
+    return false;
+  }
 }
 
 const OTP_SALT = process.env.OTP_SALT || process.env.JWT_SECRET || 'mts-lab-otp-secure-salt-2026';
@@ -472,8 +609,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         authenticatedFbUser = lookupData.users[0];
       }
 
-      // 2. Email Verification Enforcement
-      const isVerified = authenticatedFbUser?.emailVerified === true;
+      // 2. Authoritative Profile Lookup from Firestore & Account Status Enforcement
+      const firebaseUid = authenticatedFbUser?.localId;
+      const appUserRes = await findApplicationUser(identity, firebaseUid);
+
+      if (appUserRes.isBlocked) {
+        return sendJson(res, 403, {
+          success: false,
+          message: 'Your account has been disabled or is inactive. Please contact MTS Lab administration.'
+        });
+      }
+
+      const isKnownSystemAccount = [
+        'mtsmobilelab@gmail.com',
+        'test.superadmin@mtslab.com',
+        'test.admin@mtslab.com',
+        'test.manager@mtslab.com',
+        'test.headtech@mtslab.com',
+        'test.tech@mtslab.com',
+        'test.receptionist@mtslab.com'
+      ].includes(identity);
+
+      if (appUserRes.isUnprovisioned && !isKnownSystemAccount) {
+        return sendJson(res, 403, {
+          success: false,
+          message: 'Access Denied: Unprovisioned staff account. Please contact an administrator.'
+        });
+      }
+
+      const appUser = appUserRes.user;
+
+      // 3. User Role & Profile Determination
+      let role = appUser?.role || 'RECEPTIONIST';
+      if (!appUser?.role) {
+        if (identity === 'mtsmobilelab@gmail.com' || identity === 'test.superadmin@mtslab.com') {
+          role = 'SUPERADMIN';
+        } else if (identity === 'test.admin@mtslab.com') {
+          role = 'ADMIN';
+        } else if (identity === 'test.manager@mtslab.com') {
+          role = 'MANAGER';
+        } else if (identity === 'test.headtech@mtslab.com') {
+          role = 'HEAD_TECHNICIAN';
+        } else if (identity === 'test.tech@mtslab.com') {
+          role = 'TECHNICIAN';
+        } else if (identity === 'test.receptionist@mtslab.com') {
+          role = 'RECEPTIONIST';
+        }
+      }
+
+      const userName = appUser?.name || (role === 'SUPERADMIN' ? 'MTS Lab Super Admin' : (identity.split('@')[0] || 'Staff Member'));
+      const userId = appUser?.id || `usr_${crypto.createHash('md5').update(identity).digest('hex').slice(0, 12)}`;
+
+      // 4. Email Verification Enforcement & Persistence
+      const isVerified = authenticatedFbUser?.emailVerified === true || appUser?.emailVerified === true;
       if (!isVerified) {
         return sendJson(res, 403, {
           success: false,
@@ -483,24 +671,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      // 3. User Role & Profile Determination
-      let role = 'RECEPTIONIST';
-      if (identity === 'mtsmobilelab@gmail.com' || identity === 'test.superadmin@mtslab.com') {
-        role = 'SUPERADMIN';
-      } else if (identity === 'test.admin@mtslab.com') {
-        role = 'ADMIN';
-      } else if (identity === 'test.manager@mtslab.com') {
-        role = 'MANAGER';
-      } else if (identity === 'test.headtech@mtslab.com') {
-        role = 'HEAD_TECHNICIAN';
-      } else if (identity === 'test.tech@mtslab.com') {
-        role = 'TECHNICIAN';
-      } else if (identity === 'test.receptionist@mtslab.com') {
-        role = 'RECEPTIONIST';
-      }
-
-      const userName = role === 'SUPERADMIN' ? 'MTS Lab Super Admin' : (identity.split('@')[0] || 'Staff Member');
-      const userId = `usr_${crypto.createHash('md5').update(identity).digest('hex').slice(0, 12)}`;
+      await markApplicationUserVerified(appUser, firebaseUid, identity);
 
       // 4. 2FA Challenge Verification Check
       if (requiresTwoFactorAuthentication(role)) {
@@ -815,6 +986,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch (lookupErr) {
           console.warn('[VERIFY STATUS LOOKUP NOTICE]', lookupErr);
         }
+      }
+
+      if (isVerified) {
+        await markApplicationUserVerified(null, undefined, email);
       }
 
       return sendJson(res, 200, {

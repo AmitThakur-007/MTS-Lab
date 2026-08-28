@@ -3164,8 +3164,15 @@ export async function createServerApp() {
           return res.status(401).json({ error: "AccountInactive", message: "Your account is no longer active or has been disabled." });
         }
 
-        if (!liveUser.emailVerified && req.path !== '/auth/resend-verification' && req.path !== '/auth/check-verification') {
-          return res.status(403).json({ error: "EmailNotVerified", emailNotVerified: true, message: "Please verify your email address before continuing." });
+        if (!liveUser.emailVerified && 
+            req.path !== '/auth/resend-verification' && 
+            req.path !== '/auth/check-verification' && 
+            req.path !== '/auth/verify-email-status') {
+          return res.status(403).json({ 
+            error: "EmailNotVerified", 
+            emailNotVerified: true, 
+            message: "Please verify your email address before continuing." 
+          });
         }
 
         req.user = {

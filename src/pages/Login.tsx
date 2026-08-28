@@ -11,7 +11,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  KeyRound
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +40,13 @@ export default function Login() {
   const [checkingVerif, setCheckingVerif] = useState(false);
   const [emailVerificationSuccess, setEmailVerificationSuccess] = useState(false);
   const [emailVerificationError, setEmailVerificationError] = useState<string | null>(null);
+
+  // MFA 2FA state
+  const [mfaTicket, setMfaTicket] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [emailMasked, setEmailMasked] = useState<string | null>(null);
+  const [resendingMfa, setResendingMfa] = useState(false);
+  const [resendMfaCooldown, setResendMfaCooldown] = useState(0);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -103,16 +111,17 @@ export default function Login() {
     }
   }, [searchParams, navigate]);
 
-  // Countdown timer for Email Verification resends
+  // Countdown timers for Email Verification and MFA resends
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (resendVerifCooldown > 0) {
+    if (resendVerifCooldown > 0 || resendMfaCooldown > 0) {
       timer = setInterval(() => {
         setResendVerifCooldown((prev) => Math.max(0, prev - 1));
+        setResendMfaCooldown((prev) => Math.max(0, prev - 1));
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [resendVerifCooldown]);
+  }, [resendVerifCooldown, resendMfaCooldown]);
 
   // Handle credentials submission via Firebase Authentication + MTS Backend
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -167,6 +176,14 @@ export default function Login() {
         firebaseIdToken
       });
 
+      if (res?.mfaRequired && res?.mfaTicket) {
+        setMfaTicket(res.mfaTicket);
+        setEmailMasked(res.emailMasked || 'registered staff email');
+        setMfaCode('');
+        toast.info(res.message || 'Please enter the 6-digit verification code sent to your email.');
+        return;
+      }
+
       if (res?.emailNotVerified || (res?.user && res?.user?.emailVerified === false)) {
         setUnverifiedEmail(identity.trim());
         toast.error('Please verify your email address before continuing.');
@@ -195,6 +212,69 @@ export default function Login() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle MFA 2FA verification submission
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaTicket || !mfaCode.trim() || mfaCode.trim().length !== 6) {
+      toast.error('Please enter a valid 6-digit verification code');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const device = getDeviceDetails();
+      const res: any = await api.post('/auth/2fa/verify', {
+        mfaTicket,
+        otp: mfaCode.trim(),
+        device
+      });
+
+      if (res?.token && res?.user) {
+        const canonicalRole = normalizeRole(res.user.role);
+        if (!canonicalRole) {
+          toast.error('Access Denied: Invalid account role. Please contact an administrator.');
+          return;
+        }
+        const validatedUser = { ...res.user, role: canonicalRole };
+        setAuth(validatedUser, res.token, res.refreshToken);
+        toast.success(`Welcome back, ${validatedUser.name}!`);
+        navigate('/dashboard');
+      } else {
+        throw new Error(res?.message || 'Verification failed. Please try again.');
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Invalid verification code.';
+      toast.error(msg);
+      if (msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('log in again') || msg.toLowerCase().includes('invalidated')) {
+        setMfaTicket(null);
+        setMfaCode('');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Resend MFA 2FA Code
+  const handleResendMfa = async () => {
+    if (!mfaTicket || resendingMfa || resendMfaCooldown > 0) return;
+    setResendingMfa(true);
+    try {
+      const res: any = await api.post('/auth/2fa/resend', { mfaTicket });
+      if (res?.success && res?.mfaTicket) {
+        setMfaTicket(res.mfaTicket);
+        if (res.emailMasked) setEmailMasked(res.emailMasked);
+        setResendMfaCooldown(60);
+        toast.success(res.message || 'A new verification code has been sent to your email.');
+      } else {
+        toast.error(res?.message || 'Failed to resend verification code.');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to resend verification code.');
+    } finally {
+      setResendingMfa(false);
     }
   };
 
@@ -310,175 +390,258 @@ export default function Login() {
 
         {/* Main Card Container */}
         <Card className="border border-slate-200/90 shadow-xl shadow-slate-200/60 rounded-[28px] bg-white overflow-hidden">
-          <div>
-            <CardHeader className="pt-7 pb-3 text-center space-y-1">
-              <div className="mx-auto w-11 h-11 bg-slate-100 text-slate-900 rounded-2xl flex items-center justify-center mb-1 border border-slate-200/60 shadow-xs">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-              <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
-                Staff Sign In
-              </CardTitle>
-              <CardDescription className="text-xs sm:text-sm font-medium text-slate-500">
-                Enter your work credentials to access your dashboard
-              </CardDescription>
-            </CardHeader>
-
-            {/* Email Verification Success Alert */}
-            {emailVerificationSuccess && (
-              <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex items-start gap-2.5 shadow-sm">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-bold text-emerald-900">Email Verified Successfully!</p>
-                  <p className="text-emerald-700 leading-relaxed text-[11px]">
-                    Your email address is verified. Enter your password to sign in.
-                  </p>
+          {mfaTicket ? (
+            <form onSubmit={handleMfaSubmit}>
+              <CardHeader className="pt-7 pb-3 text-center space-y-1">
+                <div className="mx-auto w-11 h-11 bg-indigo-100 text-indigo-900 rounded-2xl flex items-center justify-center mb-1 border border-indigo-200/60 shadow-xs">
+                  <KeyRound className="h-5 w-5" />
                 </div>
-              </div>
-            )}
+                <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
+                  Two-Factor Authentication
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm font-medium text-slate-500">
+                  Enter the 6-digit code sent to <b className="text-slate-900">{emailMasked || 'your registered email'}</b>
+                </CardDescription>
+              </CardHeader>
 
-            {/* Email Verification Error Alert */}
-            {emailVerificationError && (
-              <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 text-xs flex items-start gap-2.5 shadow-sm">
-                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-bold text-rose-900">Verification Notice</p>
-                  <p className="text-rose-700 leading-relaxed text-[11px]">
-                    {emailVerificationError}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Session Inactivity Expiry Banner */}
-            {inactivityBanner && (
-              <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start gap-2.5 shadow-sm">
-                <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-bold text-amber-900">Session Expired Due to Inactivity</p>
-                  <p className="text-amber-700 leading-relaxed text-[11px]">
-                    Your session ended after inactivity. Please sign in again.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Email Verification Required Alert */}
-            {!emailVerificationSuccess && unverifiedEmail && (
-              <div className="mx-6 sm:mx-8 mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-3">
-                <div className="flex items-start gap-2.5">
-                  <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                  <div className="space-y-1">
-                    <p className="font-bold">Email Verification Required</p>
-                    <p className="text-amber-800 leading-relaxed">
-                      Please verify your email address (<b>{unverifiedEmail}</b>) before accessing the MTS Lab portal.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 pt-1">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={handleResendVerificationEmail}
-                    disabled={resendingVerif || resendVerifCooldown > 0}
-                    className="h-8 text-xs font-bold rounded-xl bg-white border-amber-300 text-amber-900 hover:bg-amber-100 cursor-pointer"
-                  >
-                    {resendingVerif ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
-                    ) : (
-                      <RefreshCw className="h-3 w-3 mr-1.5" />
-                    )}
-                    {resendVerifCooldown > 0 ? `Resend in ${resendVerifCooldown}s` : 'Resend Email'}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleCheckVerificationStatus}
-                    disabled={checkingVerif}
-                    className="h-8 text-xs font-bold rounded-xl text-amber-900 hover:bg-amber-100/60 cursor-pointer"
-                  >
-                    {checkingVerif ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
-                    Check Status
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <form onSubmit={handleLoginSubmit}>
               <CardContent className="space-y-4 px-6 sm:px-8 pt-2">
-                {/* Work Email Field */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 ml-1">
-                    Work Email
+                    Security Code (OTP)
                   </label>
                   <div className="relative">
-                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input
-                      type="email"
-                      placeholder="staff@mtslab.com"
-                      value={identity}
-                      onChange={(e) => setIdentity(e.target.value)}
-                      className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      placeholder="123456"
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                      className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-base sm:text-lg font-mono font-bold tracking-[0.3em] text-center"
                       required
                       autoFocus
-                      autoComplete="email"
+                      autoComplete="one-time-code"
                     />
                   </div>
                 </div>
 
-                {/* Password Field with Toggle */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between ml-1">
-                    <label className="text-xs font-bold text-slate-700">Password</label>
-                    <Link
-                      to="/forgot-password"
-                      className="text-[11px] sm:text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
-                    >
-                      Forgot Password?
-                    </Link>
-                  </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Enter password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
-                      required
-                      autoComplete="current-password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors p-1 cursor-pointer"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <span className="text-slate-500 font-medium">Didn't receive the code?</span>
+                  <button
+                    type="button"
+                    onClick={handleResendMfa}
+                    disabled={resendingMfa || resendMfaCooldown > 0}
+                    className="font-bold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    {resendingMfa ? <Loader2 className="h-3 w-3 animate-spin inline" /> : <RefreshCw className="h-3 w-3 inline" />}
+                    {resendMfaCooldown > 0 ? `Resend in ${resendMfaCooldown}s` : 'Resend Code'}
+                  </button>
                 </div>
               </CardContent>
 
-              <CardFooter className="px-6 sm:px-8 pb-7 pt-3 flex flex-col gap-3">
+              <CardFooter className="px-6 sm:px-8 pb-7 pt-3 flex flex-col gap-2.5">
                 <Button
                   type="submit"
                   className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-850 text-white font-bold text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 shadow-md shadow-slate-950/15 cursor-pointer"
-                  disabled={loading}
+                  disabled={loading || mfaCode.trim().length !== 6}
                 >
                   {loading ? (
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Authenticating Staff...</span>
+                      <span>Verifying Code...</span>
                     </div>
                   ) : (
-                    'Sign In to Dashboard'
+                    'Verify Code & Sign In'
                   )}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setMfaTicket(null);
+                    setMfaCode('');
+                  }}
+                  className="w-full h-10 rounded-xl text-slate-500 hover:text-slate-900 font-semibold text-xs transition-all cursor-pointer"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+                  Back to Password Login
                 </Button>
               </CardFooter>
             </form>
-          </div>
+          ) : (
+            <div>
+              <CardHeader className="pt-7 pb-3 text-center space-y-1">
+                <div className="mx-auto w-11 h-11 bg-slate-100 text-slate-900 rounded-2xl flex items-center justify-center mb-1 border border-slate-200/60 shadow-xs">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
+                  Staff Sign In
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm font-medium text-slate-500">
+                  Enter your work credentials to access your dashboard
+                </CardDescription>
+              </CardHeader>
+
+              {/* Email Verification Success Alert */}
+              {emailVerificationSuccess && (
+                <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex items-start gap-2.5 shadow-sm">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-emerald-900">Email Verified Successfully!</p>
+                    <p className="text-emerald-700 leading-relaxed text-[11px]">
+                      Your email address is verified. Enter your password to sign in.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Email Verification Error Alert */}
+              {emailVerificationError && (
+                <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 text-xs flex items-start gap-2.5 shadow-sm">
+                  <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-rose-900">Verification Notice</p>
+                    <p className="text-rose-700 leading-relaxed text-[11px]">
+                      {emailVerificationError}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Session Inactivity Expiry Banner */}
+              {inactivityBanner && (
+                <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start gap-2.5 shadow-sm">
+                  <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-amber-900">Session Expired Due to Inactivity</p>
+                    <p className="text-amber-700 leading-relaxed text-[11px]">
+                      Your session ended after inactivity. Please sign in again.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Email Verification Required Alert */}
+              {!emailVerificationSuccess && unverifiedEmail && (
+                <div className="mx-6 sm:mx-8 mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <div className="space-y-1">
+                      <p className="font-bold">Email Verification Required</p>
+                      <p className="text-amber-800 leading-relaxed">
+                        Please verify your email address (<b>{unverifiedEmail}</b>) before accessing the MTS Lab portal.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleResendVerificationEmail}
+                      disabled={resendingVerif || resendVerifCooldown > 0}
+                      className="h-8 text-xs font-bold rounded-xl bg-white border-amber-300 text-amber-900 hover:bg-amber-100 cursor-pointer"
+                    >
+                      {resendingVerif ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3 mr-1.5" />
+                      )}
+                      {resendVerifCooldown > 0 ? `Resend in ${resendVerifCooldown}s` : 'Resend Email'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleCheckVerificationStatus}
+                      disabled={checkingVerif}
+                      className="h-8 text-xs font-bold rounded-xl text-amber-900 hover:bg-amber-100/60 cursor-pointer"
+                    >
+                      {checkingVerif ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
+                      Check Status
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleLoginSubmit}>
+                <CardContent className="space-y-4 px-6 sm:px-8 pt-2">
+                  {/* Work Email Field */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 ml-1">
+                      Work Email
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        type="email"
+                        placeholder="staff@mtslab.com"
+                        value={identity}
+                        onChange={(e) => setIdentity(e.target.value)}
+                        className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
+                        required
+                        autoFocus
+                        autoComplete="email"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password Field with Toggle */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between ml-1">
+                      <label className="text-xs font-bold text-slate-700">Password</label>
+                      <Link
+                        to="/forgot-password"
+                        className="text-[11px] sm:text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                      >
+                        Forgot Password?
+                      </Link>
+                    </div>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
+                        required
+                        autoComplete="current-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors p-1 cursor-pointer"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </CardContent>
+
+                <CardFooter className="px-6 sm:px-8 pb-7 pt-3 flex flex-col gap-3">
+                  <Button
+                    type="submit"
+                    className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-850 text-white font-bold text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 shadow-md shadow-slate-950/15 cursor-pointer"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Authenticating Staff...</span>
+                      </div>
+                    ) : (
+                      'Sign In to Dashboard'
+                    )}
+                  </Button>
+                </CardFooter>
+              </form>
+            </div>
+          )}
         </Card>
 
         {/* Clean Footer Link */}
