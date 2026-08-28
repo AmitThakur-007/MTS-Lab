@@ -1769,8 +1769,8 @@ function getAdminAuth() {
 }
 
 function validateStrongPasswordServer(password: string): { valid: boolean; message?: string } {
-  if (!password || password.length < 8) {
-    return { valid: false, message: "Password must be at least 8 characters long." };
+  if (!password || password.length < 12) {
+    return { valid: false, message: "Password must be at least 12 characters long." };
   }
   if (!/[A-Z]/.test(password)) {
     return { valid: false, message: "Password must contain at least 1 uppercase letter (A-Z)." };
@@ -2202,84 +2202,6 @@ async function sendEmail(
   }
 
   return { success: false, error: "No active production email service configured in environment." };
-}
-
-// 2FA OTP Ticket Storage & Resend Cooldown Management Engine
-interface Pending2FATicket {
-  ticketId: string;
-  userId: string;
-  userEmail: string;
-  otpHash: string;
-  expiresAt: number;
-  attemptsLeft: number;
-  lastSentAt: number;
-  deviceDetails?: any;
-}
-
-const pending2FAStore = new Map<string, Pending2FATicket>();
-
-function cleanupExpired2FATickets(): void {
-  const now = Date.now();
-  for (const [ticketId, ticket] of pending2FAStore.entries()) {
-    if (ticket.expiresAt < now || ticket.attemptsLeft <= 0) {
-      pending2FAStore.delete(ticketId);
-    }
-  }
-}
-setInterval(cleanupExpired2FATickets, 60 * 1000);
-
-async function issue2FAOTPTicket(user: any, deviceDetails?: any): Promise<{ success: boolean; mfaTicket?: string; error?: string }> {
-  const otpCode = crypto.randomInt(100000, 999999).toString();
-  const otpHash = crypto.createHash("sha256").update(otpCode).digest("hex");
-  const ticketId = crypto.randomUUID();
-
-  const ticket: Pending2FATicket = {
-    ticketId,
-    userId: user.id,
-    userEmail: user.email,
-    otpHash,
-    expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes validity
-    attemptsLeft: 3,
-    lastSentAt: Date.now(),
-    deviceDetails
-  };
-
-  pending2FAStore.set(ticketId, ticket);
-
-  const emailHtml = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; background-color: #f8fafc; border-radius: 16px;">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <div style="display: inline-block; width: 48px; height: 48px; background-color: #0f172a; border-radius: 12px; line-height: 48px; color: #ffffff; font-size: 24px; font-weight: bold;">M</div>
-        <h2 style="color: #0f172a; margin: 12px 0 4px 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">MTS Lab Security OS</h2>
-        <p style="color: #64748b; margin: 0; font-size: 13px; font-weight: 500;">Mobile Technology Station &bull; Two-Factor Authentication</p>
-      </div>
-      <div style="background-color: #ffffff; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-        <h3 style="color: #1e293b; margin-top: 0; font-size: 16px; font-weight: 700;">Your Login Verification Code</h3>
-        <p style="color: #475569; font-size: 14px; line-height: 1.5; margin: 12px 0;">Use the following 6-digit security code to complete your sign-in to MTS Lab OS:</p>
-        <div style="background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0; letter-spacing: 8px; font-size: 32px; font-weight: 900; color: #0f172a;">
-          ${otpCode}
-        </div>
-        <p style="color: #64748b; font-size: 13px; margin: 16px 0 0 0;">This code is valid for <strong>5 minutes</strong> and can only be used once. If you did not initiate this login attempt, please notify the Super Administrator immediately.</p>
-        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; text-align: center;">
-          Confidential &bull; Do not share this code with anyone.
-        </div>
-      </div>
-    </div>
-  `;
-
-  const emailRes = await sendEmail({
-    to: user.email,
-    subject: "Your MTS Lab Verification Code",
-    text: `Your MTS Lab login verification code is: ${otpCode}. It expires in 5 minutes.`,
-    html: emailHtml
-  });
-
-  if (!emailRes.success) {
-    pending2FAStore.delete(ticketId);
-    return { success: false, error: emailRes.error || "We could not send your verification code. Please try again later or contact MTS Lab administration." };
-  }
-
-  return { success: true, mfaTicket: ticketId };
 }
 
 // Create or locate the Firebase Auth account and dispatch Firebase's official
@@ -5564,37 +5486,6 @@ export async function createServerApp() {
       const freshUser = await prisma.user.findUnique({ where: { id: user.id } }) || user;
       user = freshUser;
 
-      // 2FA Challenge Check
-      if (user.twoFactorEnabled) {
-        const issueRes = await issue2FAOTPTicket(user, { deviceIdentifier, deviceName, deviceType, browser, os });
-        if (!issueRes.success) {
-          return res.status(503).json({
-            success: false,
-            message: issueRes.error || "We could not send your verification code. Please try again later or contact MTS Lab administration."
-          });
-        }
-
-        await recordAuditLog({
-          req,
-          userId: user.id,
-          userEmail: user.email,
-          userName: user.name,
-          userRole: user.role,
-          action: "LOGIN_2FA_CHALLENGE",
-          resource: "AUTH",
-          status: "SUCCESS",
-          details: `2FA OTP challenge issued to ${maskEmail(user.email)}`
-        });
-
-        return res.json({
-          success: true,
-          mfaRequired: true,
-          mfaTicket: issueRes.mfaTicket,
-          emailMasked: maskEmail(user.email),
-          message: `Verification code sent to ${maskEmail(user.email)}`
-        });
-      }
-
       const updatedUser = await prisma.user.update({
         where: { id: user.id },
         data: { 
@@ -5678,8 +5569,7 @@ export async function createServerApp() {
           branchId: updatedUser.branchId,
           profileImage: updatedUser.profileImage,
           emailVerified: true
-        },
-        mfaRequired: false
+        }
       });
 
     } catch (err: any) {
@@ -5689,171 +5579,6 @@ export async function createServerApp() {
         message: "Authentication service temporarily unavailable. Please try again.",
         error: err.message || String(err)
       });
-    }
-  });
-
-  // Verify 2FA OTP Code Endpoint
-  app.post("/api/auth/2fa/verify", authLimiter, async (req: any, res) => {
-    const { mfaTicket, otp } = req.body;
-
-    try {
-      if (!mfaTicket || typeof mfaTicket !== "string" || !otp || typeof otp !== "string") {
-        return res.status(400).json({ success: false, message: "Valid 2FA ticket and 6-digit OTP code are required." });
-      }
-
-      const cleanOtp = otp.trim();
-      if (!/^\d{6}$/.test(cleanOtp)) {
-        return res.status(400).json({ success: false, message: "Verification code must be exactly 6 digits." });
-      }
-
-      const ticket = pending2FAStore.get(mfaTicket.trim());
-      if (!ticket) {
-        return res.status(400).json({ success: false, message: "Invalid or expired verification session. Please log in again." });
-      }
-
-      if (Date.now() > ticket.expiresAt) {
-        pending2FAStore.delete(mfaTicket.trim());
-        return res.status(400).json({ success: false, message: "Verification code has expired. Please request a new code." });
-      }
-
-      if (ticket.attemptsLeft <= 0) {
-        pending2FAStore.delete(mfaTicket.trim());
-        return res.status(400).json({ success: false, message: "Too many invalid attempts. Please request a new verification code." });
-      }
-
-      const inputHash = crypto.createHash("sha256").update(cleanOtp).digest("hex");
-      if (inputHash !== ticket.otpHash) {
-        ticket.attemptsLeft -= 1;
-        if (ticket.attemptsLeft <= 0) {
-          pending2FAStore.delete(mfaTicket.trim());
-          return res.status(400).json({ success: false, message: "Too many invalid attempts. Verification session invalidated. Please log in again." });
-        }
-        return res.status(400).json({
-          success: false,
-          message: `Incorrect verification code. ${ticket.attemptsLeft} attempt(s) remaining.`
-        });
-      }
-
-      // Successful OTP Verification -> Invalidate single-use ticket immediately
-      pending2FAStore.delete(mfaTicket.trim());
-
-      const user = await prisma.user.findUnique({ where: { id: ticket.userId } });
-      if (!user || !user.isActive || user.deletedAt) {
-        return res.status(403).json({ success: false, message: "Account is no longer active." });
-      }
-
-      const updatedUser = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          failedLoginAttempts: 0,
-          lockoutUntil: null,
-          lastLoginAt: new Date()
-        }
-      });
-
-      const device = ticket.deviceDetails || {};
-      const { accessToken, refreshToken } = await generateTokens(
-        updatedUser,
-        req.headers["user-agent"] || "",
-        String(req.ip || ""),
-        device
-      );
-
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
-        action: "LOGIN_SUCCESS_2FA",
-        resource: "AUTH",
-        status: "SUCCESS",
-        details: `2FA OTP verified successfully`
-      });
-
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
-
-      return res.json({
-        success: true,
-        token: accessToken,
-        refreshToken,
-        user: {
-          id: updatedUser.id,
-          name: updatedUser.name,
-          email: updatedUser.email,
-          role: updatedUser.role,
-          username: updatedUser.username,
-          branchId: updatedUser.branchId,
-          profileImage: updatedUser.profileImage,
-          emailVerified: true
-        }
-      });
-
-    } catch (err: any) {
-      console.error("[2FA VERIFY ERROR]", err);
-      res.status(500).json({ success: false, message: "Failed to verify 2FA code. Please try again." });
-    }
-  });
-
-  // Resend 2FA OTP Code Endpoint
-  app.post("/api/auth/2fa/resend", authLimiter, async (req: any, res) => {
-    const { mfaTicket } = req.body;
-
-    try {
-      if (!mfaTicket || typeof mfaTicket !== "string") {
-        return res.status(400).json({ success: false, message: "Valid 2FA ticket is required." });
-      }
-
-      const ticket = pending2FAStore.get(mfaTicket.trim());
-      if (!ticket) {
-        return res.status(400).json({ success: false, message: "Invalid or expired verification session. Please log in again." });
-      }
-
-      // Enforce 60-second cooldown rate limit
-      const now = Date.now();
-      const elapsedSeconds = Math.floor((now - ticket.lastSentAt) / 1000);
-      if (elapsedSeconds < 60) {
-        const retryAfter = 60 - elapsedSeconds;
-        res.setHeader("Retry-After", String(retryAfter));
-        return res.status(429).json({
-          success: false,
-          retryAfter,
-          message: `Please wait ${retryAfter} seconds before requesting a new code.`
-        });
-      }
-
-      const user = await prisma.user.findUnique({ where: { id: ticket.userId } });
-      if (!user || !user.isActive || user.deletedAt) {
-        pending2FAStore.delete(mfaTicket.trim());
-        return res.status(403).json({ success: false, message: "Account is no longer active." });
-      }
-
-      // Invalidate old ticket and issue new ticket
-      pending2FAStore.delete(mfaTicket.trim());
-      const newIssue = await issue2FAOTPTicket(user, ticket.deviceDetails);
-
-      if (!newIssue.success) {
-        return res.status(503).json({
-          success: false,
-          message: newIssue.error || "We could not send your verification code. Please try again later or contact MTS Lab administration."
-        });
-      }
-
-      return res.json({
-        success: true,
-        mfaTicket: newIssue.mfaTicket,
-        emailMasked: maskEmail(user.email),
-        message: `A new 6-digit verification code has been sent to ${maskEmail(user.email)}.`
-      });
-
-    } catch (err: any) {
-      console.error("[2FA RESEND ERROR]", err);
-      res.status(500).json({ success: false, message: "Failed to resend 2FA code." });
     }
   });
 
@@ -14448,14 +14173,6 @@ export async function createServerApp() {
       // If someone tries to disable 2FA for a SUPER_ADMIN, require the requester to be the user themselves
       if (existingUser.role === 'SUPER_ADMIN' && !targetEnabled && req.user.id !== existingUser.id) {
         return res.status(403).json({ error: "You are not authorized to change 2FA settings for another Super Administrator." });
-      }
-
-      // If disabling 2FA, invalidate any existing unused 2FA OTP codes for this user
-      if (!targetEnabled) {
-        await prisma.oTPVerification.updateMany({
-          where: { userId: id, purpose: "LOGIN_2FA", isUsed: false },
-          data: { isUsed: true }
-        });
       }
 
       const user = await prisma.user.update({

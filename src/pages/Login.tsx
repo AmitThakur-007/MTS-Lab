@@ -10,7 +10,8 @@ import {
   RefreshCw,
   AlertCircle,
   CheckCircle2,
-  Clock
+  Clock,
+  ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +23,7 @@ import { motion } from 'motion/react';
 import { getDeviceDetails } from '@/lib/device';
 import mtsLogo from '@/assets/images/mts-logo.jpg';
 import { auth } from '@/lib/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { normalizeRole } from '@/lib/rbac';
 
 export default function Login() {
@@ -39,19 +40,11 @@ export default function Login() {
   const [emailVerificationSuccess, setEmailVerificationSuccess] = useState(false);
   const [emailVerificationError, setEmailVerificationError] = useState<string | null>(null);
 
-  // 2FA OTP state
-  const [mfaRequired, setMfaRequired] = useState(false);
-  const [mfaTicket, setMfaTicket] = useState<string | null>(null);
-  const [maskedEmail, setMaskedEmail] = useState<string | null>(null);
-  const [otpCode, setOtpCode] = useState('');
-  const [verifyingOtp, setVerifyingOtp] = useState(false);
-  const [resendingOtp, setResendingOtp] = useState(false);
-  const [otpCooldown, setOtpCooldown] = useState(0);
-
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const setAuth = useAuthStore((state) => state.setAuth);
-  // Shown when user is redirected here after 2-hour inactivity session expiration
+
+  // Shown when user is redirected here after inactivity session expiration
   const [inactivityBanner, setInactivityBanner] = useState(false);
 
   useEffect(() => {
@@ -110,7 +103,7 @@ export default function Login() {
     }
   }, [searchParams, navigate]);
 
-  // Countdown timer for Email Verification & OTP resends
+  // Countdown timer for Email Verification resends
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (resendVerifCooldown > 0) {
@@ -121,17 +114,7 @@ export default function Login() {
     return () => clearInterval(timer);
   }, [resendVerifCooldown]);
 
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (otpCooldown > 0) {
-      timer = setInterval(() => {
-        setOtpCooldown((prev) => Math.max(0, prev - 1));
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [otpCooldown]);
-
-  // Handle credentials submission via Firebase Authentication
+  // Handle credentials submission via Firebase Authentication + MTS Backend
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identity.trim() || !password) {
@@ -163,9 +146,6 @@ export default function Login() {
           setLoading(false);
           return;
         }
-        // For other auth errors (e.g. auth/invalid-credential, user not yet in Firebase Auth,
-        // or password not yet synced), fall back to backend login handler so bcrypt password
-        // is validated FIRST and account synced/provisioned in Firebase Auth.
       }
 
       if (userCred) {
@@ -190,15 +170,6 @@ export default function Login() {
         device,
         firebaseIdToken
       });
-
-      if (res?.mfaRequired && res?.mfaTicket) {
-        setMfaRequired(true);
-        setMfaTicket(res.mfaTicket);
-        setMaskedEmail(res.emailMasked || trimmedEmail);
-        setOtpCooldown(60);
-        toast.info(res.message || 'Please enter the 6-digit verification code sent to your email.');
-        return;
-      }
 
       if (res?.emailNotVerified || (res?.user && res?.user?.emailVerified === false)) {
         setUnverifiedEmail(identity.trim());
@@ -231,59 +202,6 @@ export default function Login() {
     }
   };
 
-  // Handle 2FA OTP Submission
-  const handleOtpSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otpCode.trim() || otpCode.trim().length !== 6 || !mfaTicket) {
-      toast.error('Please enter the 6-digit verification code');
-      return;
-    }
-
-    setVerifyingOtp(true);
-    try {
-      const res: any = await api.post('/auth/2fa/verify', {
-        mfaTicket,
-        otp: otpCode.trim()
-      });
-
-      if (res?.token && res?.user) {
-        const canonicalRole = normalizeRole(res.user.role);
-        if (!canonicalRole) {
-          toast.error('Access Denied: Invalid account role. Please contact an administrator.');
-          return;
-        }
-        const validatedUser = { ...res.user, role: canonicalRole };
-        setAuth(validatedUser, res.token, res.refreshToken);
-        toast.success(`Welcome back, ${validatedUser.name}!`);
-        navigate('/dashboard');
-      } else {
-        throw new Error(res?.message || 'Failed to verify 2FA code.');
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'Incorrect or expired verification code.');
-    } finally {
-      setVerifyingOtp(false);
-    }
-  };
-
-  // Handle 2FA OTP Resend
-  const handleResendOtp = async () => {
-    if (!mfaTicket || resendingOtp || otpCooldown > 0) return;
-    setResendingOtp(true);
-    try {
-      const res: any = await api.post('/auth/2fa/resend', { mfaTicket });
-      if (res?.mfaTicket) {
-        setMfaTicket(res.mfaTicket);
-      }
-      setOtpCooldown(60);
-      toast.success(res?.message || 'A new 6-digit verification code has been sent.');
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to resend verification code.');
-    } finally {
-      setResendingOtp(false);
-    }
-  };
-
   // Handle Resend Firebase Verification Email
   const handleResendVerificationEmail = async () => {
     if (!unverifiedEmail || resendingVerif || resendVerifCooldown > 0) return;
@@ -304,7 +222,7 @@ export default function Login() {
         }
 
         await sendEmailVerification(auth.currentUser);
-        toast.success('Verification email sent through Firebase. Please check your Gmail inbox.');
+        toast.success('Verification email sent through Firebase. Please check your inbox.');
         setResendVerifCooldown(60);
         return;
       }
@@ -358,7 +276,7 @@ export default function Login() {
         setEmailVerificationSuccess(true);
         setUnverifiedEmail(null);
       } else {
-        toast.info('Email is not yet verified. Please click the link sent to your Gmail inbox.');
+        toast.info('Email is not yet verified. Please click the link sent to your email inbox.');
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to check verification status.');
@@ -368,282 +286,203 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50/60 px-4 py-8 selection:bg-slate-900 selection:text-white font-sans antialiased">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50/70 px-4 py-10 selection:bg-slate-900 selection:text-white font-sans antialiased">
       <motion.div
-        initial={{ opacity: 0, y: 15 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="w-full max-w-[420px]"
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="w-full max-w-[440px]"
       >
         {/* MTS Lab Official Logo & Header */}
-        <div className="flex flex-col items-center mb-6 text-center space-y-2">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full p-1 bg-white shadow-xl shadow-slate-900/10 border border-slate-200/90 flex items-center justify-center overflow-hidden transition-transform duration-300 hover:scale-105">
+        <div className="flex flex-col items-center mb-7 text-center space-y-2.5">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl p-1.5 bg-white shadow-xl shadow-slate-900/10 border border-slate-200/90 flex items-center justify-center overflow-hidden transition-transform duration-300 hover:scale-105">
             <img
               src={mtsLogo}
               alt="MTS Lab Logo"
-              className="w-full h-full object-contain rounded-full"
+              className="w-full h-full object-contain rounded-2xl"
             />
           </div>
-          <div className="space-y-0.5">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950">MTS Lab</h1>
-            <p className="text-slate-500 text-xs sm:text-sm font-medium">
-              Professional Smartphone Repair & Technical Services
+          <div className="space-y-1">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950 flex items-center justify-center gap-2">
+              MTS Lab Portal
+            </h1>
+            <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed max-w-[340px]">
+              Authorized Staff Authentication & Service Operations
             </p>
           </div>
         </div>
 
         {/* Main Card Container */}
-        <Card className="border border-slate-200/90 shadow-xl shadow-slate-200/50 rounded-[28px] bg-white overflow-hidden">
-          {mfaRequired ? (
-            /* 2FA OTP Input Step */
-            <div>
-              <CardHeader className="pt-7 pb-3 text-center space-y-1">
-                <div className="mx-auto w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-1 border border-indigo-100/60 shadow-xs">
-                  <Lock className="h-6 w-6" />
-                </div>
-                <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
-                  Verify Your Identity
-                </CardTitle>
-                <CardDescription className="text-xs sm:text-sm font-medium text-slate-500 max-w-[320px] mx-auto leading-relaxed">
-                  Enter the verification code sent to your registered email address. ({maskedEmail})
-                </CardDescription>
-              </CardHeader>
+        <Card className="border border-slate-200/90 shadow-xl shadow-slate-200/60 rounded-[28px] bg-white overflow-hidden">
+          <div>
+            <CardHeader className="pt-7 pb-3 text-center space-y-1">
+              <div className="mx-auto w-11 h-11 bg-slate-100 text-slate-900 rounded-2xl flex items-center justify-center mb-1 border border-slate-200/60 shadow-xs">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
+                Staff Sign In
+              </CardTitle>
+              <CardDescription className="text-xs sm:text-sm font-medium text-slate-500">
+                Enter your work credentials to access your dashboard
+              </CardDescription>
+            </CardHeader>
 
-              <form onSubmit={handleOtpSubmit}>
-                <CardContent className="space-y-4 px-6 sm:px-8 pt-3">
-                  <div className="space-y-2 text-center">
-                    <label className="text-xs font-bold text-slate-700">
-                      Security Code (6 Digits)
-                    </label>
+            {/* Email Verification Success Alert */}
+            {emailVerificationSuccess && (
+              <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex items-start gap-2.5 shadow-sm">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold text-emerald-900">Email Verified Successfully!</p>
+                  <p className="text-emerald-700 leading-relaxed text-[11px]">
+                    Your email address is verified. Enter your password to sign in.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Email Verification Error Alert */}
+            {emailVerificationError && (
+              <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 text-xs flex items-start gap-2.5 shadow-sm">
+                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold text-rose-900">Verification Notice</p>
+                  <p className="text-rose-700 leading-relaxed text-[11px]">
+                    {emailVerificationError}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Session Inactivity Expiry Banner */}
+            {inactivityBanner && (
+              <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start gap-2.5 shadow-sm">
+                <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold text-amber-900">Session Expired Due to Inactivity</p>
+                  <p className="text-amber-700 leading-relaxed text-[11px]">
+                    Your session ended after inactivity. Please sign in again.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Email Verification Required Alert */}
+            {unverifiedEmail && (
+              <div className="mx-6 sm:mx-8 mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="font-bold">Email Verification Required</p>
+                    <p className="text-amber-800 leading-relaxed">
+                      Please verify your email address (<b>{unverifiedEmail}</b>) before accessing the MTS Lab portal.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleResendVerificationEmail}
+                    disabled={resendingVerif || resendVerifCooldown > 0}
+                    className="h-8 text-xs font-bold rounded-xl bg-white border-amber-300 text-amber-900 hover:bg-amber-100 cursor-pointer"
+                  >
+                    {resendingVerif ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3 mr-1.5" />
+                    )}
+                    {resendVerifCooldown > 0 ? `Resend in ${resendVerifCooldown}s` : 'Resend Email'}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleCheckVerificationStatus}
+                    disabled={checkingVerif}
+                    className="h-8 text-xs font-bold rounded-xl text-amber-900 hover:bg-amber-100/60 cursor-pointer"
+                  >
+                    {checkingVerif ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
+                    Check Status
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleLoginSubmit}>
+              <CardContent className="space-y-4 px-6 sm:px-8 pt-2">
+                {/* Work Email Field */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 ml-1">
+                    Work Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="\d*"
-                      maxLength={6}
-                      placeholder="123456"
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="h-14 rounded-2xl border-slate-200 bg-slate-50/50 text-center text-2xl font-extrabold tracking-[10px] text-slate-950 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all font-mono"
+                      type="email"
+                      placeholder="staff@mtslab.com"
+                      value={identity}
+                      onChange={(e) => setIdentity(e.target.value)}
+                      className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
                       required
                       autoFocus
-                      autoComplete="one-time-code"
+                      autoComplete="email"
                     />
                   </div>
+                </div>
 
-                  <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
-                    <span>Didn't get the code?</span>
+                {/* Password Field with Toggle */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-xs font-bold text-slate-700">Password</label>
+                    <Link
+                      to="/forgot-password"
+                      className="text-[11px] sm:text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                    >
+                      Forgot Password?
+                    </Link>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
+                      required
+                      autoComplete="current-password"
+                    />
                     <button
                       type="button"
-                      onClick={handleResendOtp}
-                      disabled={resendingOtp || otpCooldown > 0}
-                      className="font-bold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 transition-colors cursor-pointer inline-flex items-center gap-1"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors p-1 cursor-pointer"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
                     >
-                      {resendingOtp ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                      {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : 'Resend Code'}
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                </CardContent>
-
-                <CardFooter className="px-6 sm:px-8 pb-7 pt-2 flex flex-col gap-3">
-                  <Button
-                    type="submit"
-                    className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-850 text-white font-bold text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 shadow-md shadow-slate-950/15 cursor-pointer"
-                    disabled={verifyingOtp || otpCode.length !== 6}
-                  >
-                    {verifyingOtp ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Verifying Code...</span>
-                      </div>
-                    ) : (
-                      'Verify'
-                    )}
-                  </Button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMfaRequired(false);
-                      setMfaTicket(null);
-                      setOtpCode('');
-                    }}
-                    className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors pt-1 cursor-pointer"
-                  >
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    <span>Back to Password Sign In</span>
-                  </button>
-                </CardFooter>
-              </form>
-            </div>
-          ) : (
-            /* Regular Credentials Step */
-            <div>
-              <CardHeader className="pt-7 pb-3 text-center space-y-1">
-                <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
-                  Welcome Back
-                </CardTitle>
-                <CardDescription className="text-xs sm:text-sm font-medium text-slate-500">
-                  Sign in to your MTS Lab account
-                </CardDescription>
-              </CardHeader>
-
-              {/* Email Verification Success Alert */}
-              {emailVerificationSuccess && (
-                <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex items-start gap-2.5 shadow-sm">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-emerald-900">Email Verified Successfully!</p>
-                    <p className="text-emerald-700 leading-relaxed text-[11px]">
-                      Your email address is verified. Enter your password to sign in.
-                    </p>
-                  </div>
                 </div>
-              )}
+              </CardContent>
 
-              {/* Email Verification Error Alert */}
-              {emailVerificationError && (
-                <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 text-xs flex items-start gap-2.5 shadow-sm">
-                  <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-rose-900">Verification Notice</p>
-                    <p className="text-rose-700 leading-relaxed text-[11px]">
-                      {emailVerificationError}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Session Inactivity Expiry Banner */}
-              {inactivityBanner && (
-                <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start gap-2.5 shadow-sm">
-                  <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-amber-900">Session Expired Due to Inactivity</p>
-                    <p className="text-amber-700 leading-relaxed text-[11px]">
-                      Your session ended after 2 hours of inactivity. Please sign in again.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Email Verification Required Alert */}
-              {unverifiedEmail && (
-                <div className="mx-6 sm:mx-8 mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-3">
-                  <div className="flex items-start gap-2.5">
-                    <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                    <div className="space-y-1">
-                      <p className="font-bold">Email Verification Required</p>
-                      <p className="text-amber-800 leading-relaxed">
-                        Please verify your email address (<b>{unverifiedEmail}</b>) before continuing.
-                      </p>
+              <CardFooter className="px-6 sm:px-8 pb-7 pt-3 flex flex-col gap-3">
+                <Button
+                  type="submit"
+                  className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-850 text-white font-bold text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 shadow-md shadow-slate-950/15 cursor-pointer"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Authenticating Staff...</span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={handleResendVerificationEmail}
-                      disabled={resendingVerif || resendVerifCooldown > 0}
-                      className="h-8 text-xs font-bold rounded-xl bg-white border-amber-300 text-amber-900 hover:bg-amber-100"
-                    >
-                      {resendingVerif ? (
-                        <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
-                      ) : (
-                        <RefreshCw className="h-3 w-3 mr-1.5" />
-                      )}
-                      {resendVerifCooldown > 0 ? `Available in ${resendVerifCooldown}s` : 'Resend Verification Email'}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleCheckVerificationStatus}
-                      disabled={checkingVerif}
-                      className="h-8 text-xs font-bold rounded-xl text-amber-900 hover:bg-amber-100/60"
-                    >
-                      {checkingVerif ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
-                      Check Status
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <form onSubmit={handleLoginSubmit}>
-                <CardContent className="space-y-4 px-6 sm:px-8 pt-2">
-                  {/* Work Email Field */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 ml-1">
-                      Work Email
-                    </label>
-                    <div className="relative">
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        type="email"
-                        placeholder="Work Email"
-                        value={identity}
-                        onChange={(e) => setIdentity(e.target.value)}
-                        className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
-                        required
-                        autoFocus
-                        autoComplete="email"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Password Field with Toggle */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between ml-1">
-                      <label className="text-xs font-bold text-slate-700">Password</label>
-                      <Link
-                        to="/forgot-password"
-                        className="text-[11px] sm:text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
-                      >
-                        Forgot Password?
-                      </Link>
-                    </div>
-                    <div className="relative">
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
-                        required
-                        autoComplete="current-password"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors p-1 cursor-pointer"
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-                </CardContent>
-
-                <CardFooter className="px-6 sm:px-8 pb-7 pt-3 flex flex-col gap-3">
-                  <Button
-                    type="submit"
-                    className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-850 text-white font-bold text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 shadow-md shadow-slate-950/15 cursor-pointer"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Signing In...</span>
-                      </div>
-                    ) : (
-                      'Sign In'
-                    )}
-                  </Button>
-                </CardFooter>
-              </form>
-            </div>
-          )}
+                  ) : (
+                    'Sign In to Dashboard'
+                  )}
+                </Button>
+              </CardFooter>
+            </form>
+          </div>
         </Card>
 
         {/* Clean Footer Link */}

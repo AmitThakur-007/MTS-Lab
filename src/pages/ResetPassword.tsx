@@ -111,7 +111,7 @@ export default function ResetPassword() {
               Create New Password
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm font-medium text-slate-500 max-w-[320px] mx-auto leading-relaxed">
-              Choose a strong, secure password with at least 8 characters.
+              Choose a strong, secure password with at least 12 characters.
             </CardDescription>
           </CardHeader>
 
@@ -136,7 +136,7 @@ export default function ResetPassword() {
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
                     type={showPassword ? "text" : "password"}
-                    placeholder="New password (min 8 chars)"
+                    placeholder="New password (min 12 chars)"
                     value={newPassword}
                     onChange={(e) => {
                       setNewPassword(e.target.value);

@@ -58,23 +58,6 @@ model User {
   branch              Branch?              @relation(fields: [branchId], references: [id])
 }
 
-model OTPVerification {
-  id        String   @id @default(uuid())
-  userId    String
-  userEmail String
-  otpHash   String
-  purpose   String   @default("LOGIN_2FA")
-  attempts  Int      @default(0)
-  isUsed    Boolean  @default(false)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
-  @@index([userEmail])
-  @@index([purpose])
-}
-
 model ApprovedDevice {
   id               String    @id @default(uuid())
   userId           String

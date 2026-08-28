@@ -11,7 +11,7 @@ export interface PasswordValidationResult {
 }
 
 export function validateStrongPassword(password: string): PasswordValidationResult {
-  const minLength = Boolean(password && password.length >= 8);
+  const minLength = Boolean(password && password.length >= 12);
   const hasUppercase = /[A-Z]/.test(password || '');
   const hasLowercase = /[a-z]/.test(password || '');
   const hasNumber = /[0-9]/.test(password || '');
@@ -22,7 +22,7 @@ export function validateStrongPassword(password: string): PasswordValidationResu
   let message: string | undefined;
   if (!valid) {
     const missing: string[] = [];
-    if (!minLength) missing.push('at least 8 characters');
+    if (!minLength) missing.push('at least 12 characters');
     if (!hasUppercase) missing.push('at least 1 uppercase letter (A-Z)');
     if (!hasLowercase) missing.push('at least 1 lowercase letter (a-z)');
     if (!hasNumber) missing.push('at least 1 numeric digit (0-9)');
