@@ -1778,7 +1778,7 @@ function getAdminAuth() {
 function normalizeRole(role: string | null | undefined): string {
   if (!role) return 'RECEPTIONIST';
   const r = String(role).toUpperCase().trim();
-  if (r === 'SUPERADMIN' || r === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+  if (r === 'SUPERADMIN' || r === 'SUPER_ADMIN') return 'SUPERADMIN';
   if (r === 'ADMIN') return 'ADMIN';
   if (r === 'MANAGER') return 'MANAGER';
   if (r === 'HEAD_TECHNICIAN' || r === 'HEADTECHNICIAN' || r === 'LEAD_TECHNICIAN' || r === 'LEAD_TECH') return 'HEAD_TECHNICIAN';
@@ -14905,7 +14905,7 @@ export async function createServerApp() {
             username: normalizedUsername,
             password: hashedPassword, 
             name: name.trim(), 
-            role: role || "RECEPTIONIST", 
+            role: normalizeRole(role || "RECEPTIONIST"), 
             phoneNumber: phoneNumber ? phoneNumber.trim() : null, 
             department: department ? department.trim() : null, 
             address: address ? address.trim() : null, 

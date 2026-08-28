@@ -39,6 +39,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { validateStrongPassword } from '@/lib/passwordPolicy';
+import { normalizeRole } from '@/lib/rbac';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -256,10 +257,16 @@ export function StaffManagementContent() {
   // Calculate high-level summary counts
   const counts = useMemo(() => {
     const total = users.length;
-    const active = users.filter(u => u && u.isActive && (u.accountStatus || 'ACTIVE') === 'ACTIVE').length;
+    const active = users.filter(u => u && u.isActive && ((u.accountStatus || 'ACTIVE').toUpperCase() === 'ACTIVE' || (u.accountStatus || '').toUpperCase() === 'APPROVED')).length;
     const disabled = total - active;
-    const admins = users.filter(u => u && (u.role === 'SUPER_ADMIN' || u.role === 'SUPERADMIN' || u.role === 'ADMIN')).length;
-    const technicians = users.filter(u => u && u.role && String(u.role).includes('TECH')).length;
+    const admins = users.filter(u => {
+      const normRole = normalizeRole(u?.role);
+      return normRole === 'SUPERADMIN' || normRole === 'ADMIN';
+    }).length;
+    const technicians = users.filter(u => {
+      const normRole = normalizeRole(u?.role);
+      return normRole === 'HEAD_TECHNICIAN' || normRole === 'TECHNICIAN';
+    }).length;
     return { total, active, disabled, admins, technicians };
   }, [users]);
 
@@ -281,9 +288,11 @@ export function StaffManagementContent() {
         phone.includes(term) ||
         department.includes(term);
 
-      const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
+      const normUserRole = normalizeRole(u.role);
+      const normFilterRole = roleFilter === 'ALL' ? 'ALL' : normalizeRole(roleFilter);
+      const matchesRole = roleFilter === 'ALL' || normUserRole === normFilterRole || u.role === roleFilter;
 
-      const isUserActive = Boolean(u.isActive && (u.accountStatus || 'ACTIVE') === 'ACTIVE');
+      const isUserActive = Boolean(u.isActive && ((u.accountStatus || 'ACTIVE').toUpperCase() === 'ACTIVE' || (u.accountStatus || '').toUpperCase() === 'APPROVED'));
       const matchesStatus = 
         statusFilter === 'ALL' ? true :
         statusFilter === 'ACTIVE' ? isUserActive :
@@ -323,15 +332,17 @@ export function StaffManagementContent() {
   const handleExecuteBulkDelete = async () => {
     if (selectedUserIds.length === 0 || bulkDeleting) return;
     setBulkDeleting(true);
+    const idsToDelete = [...selectedUserIds];
     try {
-      const res: any = await api.post('/admin/users/bulk-delete', { userIds: selectedUserIds });
+      const res: any = await api.post('/admin/users/bulk-delete', { userIds: idsToDelete });
       if (res && res.error) {
         throw new Error(res.error);
       }
-      for (const uid of selectedUserIds) {
+      setUsers(prev => prev.filter(u => !idsToDelete.includes(u.id)));
+      for (const uid of idsToDelete) {
         await deleteEntityFromRtdb('users', uid).catch(() => {});
       }
-      toast.success(res?.message || `Permanently deleted ${selectedUserIds.length} staff member record(s).`);
+      toast.success(res?.message || `Permanently deleted ${idsToDelete.length} staff member record(s).`);
       setSelectedUserIds([]);
       setIsBulkDeleteModalOpen(false);
       await fetchUsers(true);
@@ -460,6 +471,7 @@ export function StaffManagementContent() {
     try {
       const created = await api.post('/users', formData);
       if (created && created.id) {
+        setUsers(prev => [created, ...prev.filter(u => u.id !== created.id)]);
         await syncEntityToRtdb('users', created.id, created).catch(() => {});
       }
       
@@ -468,7 +480,19 @@ export function StaffManagementContent() {
 
       toast.success(`Staff member '${formData.name}' created successfully. Verification email dispatched to ${formData.email}.`);
       setIsAddDialogOpen(false);
-      fetchUsers();
+      setFormData({
+        name: '',
+        email: '',
+        username: '',
+        password: '',
+        role: 'TECHNICIAN',
+        phoneNumber: '',
+        department: '',
+        address: '',
+        profileImage: '',
+        isActive: true
+      });
+      await fetchUsers(true);
     } catch (err: any) {
       console.error('[ADD STAFF ERROR]', err);
       toast.error(err.message || 'Failed to add staff member. Please try again.');
@@ -483,14 +507,16 @@ export function StaffManagementContent() {
     setSubmitting(true);
     try {
       const { password, ...updateData } = formData;
-      const updated = await api.patch(`/users/${selectedUser.id}`, updateData);
-      if (updated && updated.id) {
-        await syncEntityToRtdb('users', updated.id, updated).catch(() => {});
+      const res: any = await api.patch(`/users/${selectedUser.id}`, updateData);
+      const updatedUser = res?.user || res;
+      if (updatedUser && updatedUser.id) {
+        setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
+        await syncEntityToRtdb('users', updatedUser.id, updatedUser).catch(() => {});
       }
       toast.success(`Staff profile for '${formData.name}' updated`);
       setIsEditDialogOpen(false);
-      setSelectedUser((prev: any) => prev ? { ...prev, ...updateData } : null);
-      fetchUsers();
+      setSelectedUser(null);
+      await fetchUsers(true);
     } catch (err: any) {
       console.error('[UPDATE STAFF ERROR]', err);
       toast.error(err.message || 'Failed to update staff member. Please try again.');
@@ -506,13 +532,14 @@ export function StaffManagementContent() {
       const res: any = await api.patch(`/users/${selectedUser.id}/role`, { role: newSelectedRole });
       const updatedUser = res?.user || res;
       if (updatedUser && updatedUser.id) {
+        setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser, role: newSelectedRole } : u));
         await syncEntityToRtdb('users', updatedUser.id, updatedUser).catch(() => {});
       }
       toast.success(`Role for ${selectedUser.name || 'Staff Member'} updated to ${newSelectedRole.replace(/_/g, ' ')}`);
       setIsChangeRoleOpen(false);
       setIsOperationsModalOpen(false);
-      setSelectedUser((prev: any) => prev ? { ...prev, role: newSelectedRole } : null);
-      fetchUsers();
+      setSelectedUser(null);
+      await fetchUsers(true);
     } catch (err: any) {
       console.error('[CHANGE ROLE ERROR]', err);
       toast.error(err.message || 'Failed to change role. Please try again.');
@@ -526,18 +553,20 @@ export function StaffManagementContent() {
     setSubmitting(true);
     const newStatus = !selectedUser.isActive;
     try {
-      const updated = await api.patch(`/users/${selectedUser.id}`, { 
+      const res: any = await api.patch(`/users/${selectedUser.id}`, { 
         isActive: newStatus,
         accountStatus: newStatus ? 'ACTIVE' : 'DISABLED'
       });
-      if (updated && updated.id) {
-        await syncEntityToRtdb('users', updated.id, updated).catch(() => {});
+      const updatedUser = res?.user || res;
+      if (updatedUser && updatedUser.id) {
+        setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser, isActive: newStatus, accountStatus: newStatus ? 'ACTIVE' : 'DISABLED' } : u));
+        await syncEntityToRtdb('users', updatedUser.id, updatedUser).catch(() => {});
       }
       toast.success(`Account for ${selectedUser.name || 'Staff Member'} ${newStatus ? 'activated' : 'deactivated'}`);
       setIsToggleStatusOpen(false);
       setIsOperationsModalOpen(false);
-      setSelectedUser((prev: any) => prev ? { ...prev, isActive: newStatus, accountStatus: newStatus ? 'ACTIVE' : 'DISABLED' } : null);
-      fetchUsers();
+      setSelectedUser(null);
+      await fetchUsers(true);
     } catch (err: any) {
       console.error('[TOGGLE STATUS ERROR]', err);
       toast.error(err.message || 'Failed to change account status. Please try again.');
@@ -546,17 +575,17 @@ export function StaffManagementContent() {
     }
   };
 
-
-
   const handleDeleteUser = async () => {
     if (!selectedUser || submitting) return;
     setSubmitting(true);
+    const deletedId = selectedUser.id;
     try {
-      const res: any = await api.delete(`/users/${selectedUser.id}`);
+      const res: any = await api.delete(`/users/${deletedId}`);
       if (res && res.error) {
         throw new Error(res.error);
       }
-      await deleteEntityFromRtdb('users', selectedUser.id).catch(() => {});
+      setUsers(prev => prev.filter(u => u.id !== deletedId));
+      await deleteEntityFromRtdb('users', deletedId).catch(() => {});
       toast.success(res?.message || 'Staff account permanently deleted successfully');
       setIsDeleteDialogOpen(false);
       setIsOperationsModalOpen(false);
