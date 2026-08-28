@@ -172,6 +172,12 @@ export default function Login() {
         firebaseIdToken
       });
 
+      if (res?.emailNotVerified || (res?.user && res?.user?.emailVerified === false)) {
+        setUnverifiedEmail(identity.trim());
+        toast.error('Please verify your email address before continuing.');
+        return;
+      }
+
       if (res?.token && res?.user) {
         const canonicalRole = normalizeRole(res.user.role);
         if (!canonicalRole) {

@@ -5275,6 +5275,15 @@ export async function createServerApp() {
       const isEmailConfirmed = Boolean(fbCheck.isVerified);
 
       if (!isEmailConfirmed) {
+        if (user.emailVerified) {
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: { emailVerified: false }
+          });
+          await syncUserToFirestore(user).catch(() => {});
+          await syncToRtdb("user", "UPDATE", user).catch(() => {});
+        }
+
         return res.status(403).json({
           success: false,
           emailNotVerified: true,
@@ -6828,13 +6837,13 @@ export async function createServerApp() {
                   role: fsData.role || "TECHNICIAN",
                   accountStatus: fsData.accountStatus || "ACTIVE",
                   isActive: fsData.isActive !== false,
-                  emailVerified: fsData.emailVerified !== false
+                  emailVerified: Boolean(fsData.emailVerified === true)
                 },
                 update: {
                   name: fsData.name || undefined,
                   accountStatus: fsData.accountStatus || undefined,
                   isActive: fsData.isActive !== false,
-                  emailVerified: fsData.emailVerified !== false
+                  emailVerified: Boolean(fsData.emailVerified === true)
                 }
               });
             }

@@ -54,7 +54,14 @@ export default function ForgotPassword() {
           handleCodeInApp: true
         });
       } catch (fbErr: any) {
-        console.warn('[FIREBASE RESET] Client reset email notice:', fbErr);
+        console.error('[FIREBASE RESET ERROR]', fbErr);
+        if (fbErr?.code === 'auth/user-not-found' || fbErr?.code === 'auth/invalid-email') {
+          throw new Error('This email address is not registered with MTS Lab.');
+        } else if (fbErr?.code === 'auth/too-many-requests') {
+          throw new Error('Too many password reset requests. Please wait a few minutes before trying again.');
+        } else {
+          throw new Error(fbErr?.message || 'Failed to dispatch password reset email through Firebase.');
+        }
       }
 
       setSubmitted(true);

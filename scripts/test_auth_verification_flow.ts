@@ -10,6 +10,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+const BASE_URL = "http://localhost:3000";
 
 async function runAuthVerificationTests() {
   console.log("=================================================");
@@ -38,14 +39,33 @@ async function runAuthVerificationTests() {
     });
     assert(userInDb === null, "Unknown email is NOT in database");
 
-    // 2. Forgot Password — Existing SuperAdmin Email Check
-    console.log("\n--- Test 2: Forgot Password with Registered Email ---");
-    const superAdminEmail = "mtsmobilelab@gmail.com";
-    const superAdminUser = await prisma.user.findFirst({
-      where: { email: superAdminEmail, deletedAt: null }
+    const forgotRes = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: unknownEmail })
     });
-    assert(Boolean(superAdminUser), "Registered SuperAdmin email exists in database");
-    assert(superAdminUser?.accountStatus === 'ACTIVE', "SuperAdmin account is ACTIVE and eligible for recovery");
+    assert(forgotRes.status === 404, "Forgot password endpoint returns HTTP 404 for unregistered email");
+    const forgotJson: any = await forgotRes.json().catch(() => ({}));
+    assert(forgotJson.success === false, "Forgot password response indicates failure for unregistered email");
+
+    // 2. Forgot Password — Existing Registered Email Check
+    console.log("\n--- Test 2: Forgot Password with Registered Email ---");
+    const registeredEmail = "mtsmobilelab@gmail.com";
+    const registeredUser = await prisma.user.findFirst({
+      where: { email: registeredEmail, deletedAt: null }
+    });
+    assert(Boolean(registeredUser), "Registered email exists in database");
+
+    if (registeredUser) {
+      const validForgotRes = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: registeredEmail })
+      });
+      assert(validForgotRes.status === 200, "Forgot password returns HTTP 200 for registered email");
+      const validForgotJson: any = await validForgotRes.json().catch(() => ({}));
+      assert(validForgotJson.success === true, "Forgot password returns success for registered email");
+    }
 
     // 3. Unverified User Setup & Login Verification Test
     console.log("\n--- Test 3: Unverified Account Handling ---");
@@ -68,11 +88,20 @@ async function runAuthVerificationTests() {
 
     assert(unverifiedUser.emailVerified === false, "Created test user with emailVerified = false");
 
-    // Test password validation
-    const isCorrectPassword = await bcrypt.compare("MtsLab@2026", unverifiedUser.password);
-    const isWrongPassword = await bcrypt.compare("WrongPassword123!", unverifiedUser.password);
-    assert(isCorrectPassword === true, "Password verification succeeds for correct password");
-    assert(isWrongPassword === false, "Password verification fails for wrong password");
+    // Attempt login with unverified user credentials
+    const unverifiedLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        identity: unverifiedEmail,
+        password: "MtsLab@2026",
+        device: { deviceName: "Test Device", deviceType: "DESKTOP", browser: "Chrome", os: "Windows" }
+      })
+    });
+
+    assert(unverifiedLoginRes.status === 403, "Login for unverified account is denied with HTTP 403");
+    const unverifiedLoginJson: any = await unverifiedLoginRes.json().catch(() => ({}));
+    assert(unverifiedLoginJson.emailNotVerified === true, "Response payload confirms emailNotVerified = true");
 
     // Clean up test user
     await prisma.user.delete({ where: { id: unverifiedUser.id } });
