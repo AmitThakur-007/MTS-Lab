@@ -5390,8 +5390,8 @@ export async function createServerApp() {
         return res.status(401).json({ success: false, message: "Unable to sign in with these credentials." });
       }
 
-      // Firebase Authentication is the single authority for ALL user roles (including SUPER_ADMIN)
-      const fbCheck = await checkFirebaseUserEmailVerified(user.email, rawPassword, firebaseIdToken, user.firebaseUid);
+      // Firebase Authentication is authoritative for user verification
+      let fbCheck = await checkFirebaseUserEmailVerified(user.email, rawPassword, firebaseIdToken, user.firebaseUid);
 
       if (fbCheck.authFailed) {
         return res.status(401).json({
@@ -5400,46 +5400,26 @@ export async function createServerApp() {
         });
       }
 
-      const firebaseIdentityMatches = Boolean(
-        isValid ||
-        (fbCheck.checked &&
-        fbCheck.firebaseUid &&
-        fbCheck.email &&
-        fbCheck.email.toLowerCase().trim() === user.email.toLowerCase().trim() &&
-        (!user.firebaseUid || fbCheck.firebaseUid === user.firebaseUid))
-      );
-
-      if (!firebaseIdentityMatches) {
-        // Legacy local accounts are migrated only after the local password
-        // has already passed lockout and bcrypt validation above. The new
-        // Firebase account remains unverified, so access stays blocked until
-        // Firebase confirms ownership of the email address.
+      // If user account is unlinked in Firebase Auth or not yet checked, attempt resilient provisioning/linking
+      if (!user.firebaseUid || !fbCheck.checked) {
         const provisioned = await ensureFirebaseUserAndSendVerification(user.email, rawPassword, user.name);
-        if (provisioned.sent || provisioned.errorCode === 'TOO_MANY_ATTEMPTS_TRY_LATER') {
-          markFirebaseVerificationAttempt(user.email);
-        }
         if (provisioned.firebaseUid) {
           user = await prisma.user.update({
             where: { id: user.id },
-            data: { firebaseUid: provisioned.firebaseUid, emailVerified: false }
+            data: { firebaseUid: provisioned.firebaseUid }
           });
-          await syncUserToFirestore(user).catch(() => {});
-          await syncToRtdb("user", "UPDATE", user).catch(() => {});
+          fbCheck = await checkFirebaseUserEmailVerified(user.email, rawPassword, firebaseIdToken, provisioned.firebaseUid);
+        }
+        if (provisioned.sent) {
+          markFirebaseVerificationAttempt(user.email);
           return res.status(403).json({
             success: false,
             emailNotVerified: true,
             firebaseProvisioned: true,
             email: user.email,
-            message: provisioned.sent
-              ? "A Firebase verification email has been sent. Please verify your email address before continuing."
-              : "Your account has been linked to Firebase. Please request a new verification email before continuing."
+            message: "A Firebase verification email has been sent. Please verify your email address before continuing."
           });
         }
-
-        return res.status(401).json({
-          success: false,
-          message: "Unable to authenticate with Firebase credentials. Please contact the administrator if your staff account has not been provisioned in Firebase."
-        });
       }
 
       if (fbCheck.firebaseUid && !user.firebaseUid) {
@@ -5470,8 +5450,10 @@ export async function createServerApp() {
         });
       }
 
-      // Authoritative verification: Firebase Authentication is authoritative for email verification
-      const isEmailConfirmed = Boolean(fbCheck.isVerified);
+      // Authoritative verification state determination:
+      // 1. If Firebase Auth state was checked, fbCheck.isVerified is authoritative.
+      // 2. If Firebase Auth state could not be checked (e.g. offline/unreachable API), fallback to DB emailVerified state.
+      const isEmailConfirmed = fbCheck.checked ? Boolean(fbCheck.isVerified) : Boolean(user.emailVerified);
 
       if (!isEmailConfirmed) {
         if (user.emailVerified) {
