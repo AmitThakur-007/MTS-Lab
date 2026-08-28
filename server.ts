@@ -5186,18 +5186,23 @@ export async function createServerApp() {
         console.warn("[LOGIN] Background sync user warning (proceeding with local db):", syncErr);
       }
 
-      // 2. Query local SQLite user table
-      let user = await prisma.user.findFirst({
-        where: {
-          deletedAt: null,
-          OR: [
-            { email: lowerIdentity },
-            { email: rawIdentity },
-            { username: rawIdentity },
-            { username: lowerIdentity }
-          ]
-        }
-      });
+      // 2. Query local user table
+      let user: any = null;
+      try {
+        user = await prisma.user.findFirst({
+          where: {
+            deletedAt: null,
+            OR: [
+              { email: lowerIdentity },
+              { email: rawIdentity },
+              { username: rawIdentity },
+              { username: lowerIdentity }
+            ]
+          }
+        });
+      } catch (dbErr) {
+        console.warn("[LOGIN AUTH] Local database query notice (falling back to Firestore):", dbErr);
+      }
 
       // 3. Fallback: If not in local SQLite, query central Firestore users collection directly
       if (!user) {
@@ -6997,10 +7002,15 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, message: "Please enter a valid email address." });
       }
 
-      // 1. Check local SQLite user table
-      let user = await prisma.user.findFirst({
-        where: { email: normalizedEmail, deletedAt: null }
-      });
+      // 1. Check local user table
+      let user: any = null;
+      try {
+        user = await prisma.user.findFirst({
+          where: { email: normalizedEmail, deletedAt: null }
+        });
+      } catch (dbErr) {
+        console.warn("[FORGOT PASSWORD] Local database query notice (falling back to Firestore):", dbErr);
+      }
 
       // 2. Fallback check to central Firestore
       if (!user) {
