@@ -528,6 +528,8 @@ model BatteryWarranty {
   claimCount       Int                    @default(0)
   lastClaimDate    DateTime?
   terms            String?
+  pdfUrl           String?
+  cloudinaryPublicId String?
   createdById      String
   branchId         String?
   createdAt        DateTime               @default(now())

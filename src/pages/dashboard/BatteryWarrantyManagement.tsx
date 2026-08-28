@@ -36,7 +36,10 @@ import {
   FileSpreadsheet,
   Upload,
   FileDown,
-  FileCheck2
+  FileCheck2,
+  Edit3,
+  UploadCloud,
+  Globe
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +72,7 @@ import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { 
   downloadWarrantyCertificatePdf, 
   getWarrantyWhatsAppShareUrl,
+  uploadWarrantyCertificateToCloudinary,
   BatteryWarrantyData
 } from '@/services/warrantyCertificateService';
 import { cn } from '@/lib/utils';
@@ -121,6 +125,25 @@ export default function BatteryWarrantyManagement() {
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Edit Form State
+  const [editingWarranty, setEditingWarranty] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({
+    customerName: '',
+    customerPhone: '',
+    customerEmail: '',
+    customerAddress: '',
+    deviceBrand: '',
+    deviceModel: '',
+    imeiNumber: '',
+    batteryType: 'Original Replacement Battery',
+    warrantyPeriod: '6_MONTHS',
+    status: 'ACTIVE',
+    terms: ''
+  });
+  const [submittingEdit, setSubmittingEdit] = useState(false);
+  const [uploadingCloudinary, setUploadingCloudinary] = useState(false);
 
   // Claim Form State
   const [claimIssue, setClaimIssue] = useState('');
@@ -511,6 +534,73 @@ export default function BatteryWarrantyManagement() {
       toast.error(err.message || 'Failed to create battery warranty');
     } finally {
       setCreatingWarranty(false);
+    }
+  };
+
+  // Upload Certificate directly to Cloudinary
+  const handleUploadToCloudinary = async (warranty: any) => {
+    if (!warranty) return;
+    setUploadingCloudinary(true);
+    try {
+      const res = await uploadWarrantyCertificateToCloudinary(warranty);
+      toast.success(res.message || "Warranty certificate successfully uploaded & saved to Cloudinary!");
+      if (res.warranty) {
+        setSelectedWarranty(res.warranty);
+      } else if (res.pdfUrl) {
+        setSelectedWarranty((prev: any) => ({ ...prev, pdfUrl: res.pdfUrl, cloudinaryPublicId: res.cloudinaryPublicId }));
+      }
+      fetchWarranties(true);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to upload certificate to Cloudinary");
+    } finally {
+      setUploadingCloudinary(false);
+    }
+  };
+
+  // Open Edit Modal
+  const handleOpenEditModal = (warranty: any) => {
+    setEditingWarranty(warranty);
+    setEditForm({
+      customerName: warranty.customerName || '',
+      customerPhone: warranty.customerPhone || '',
+      customerEmail: warranty.customerEmail || warranty.customer?.email || '',
+      customerAddress: warranty.customerAddress || warranty.customer?.address || '',
+      deviceBrand: warranty.deviceBrand || '',
+      deviceModel: warranty.deviceModel || '',
+      imeiNumber: warranty.imeiNumber || '',
+      batteryType: warranty.batteryType || 'Original Replacement Battery',
+      warrantyPeriod: warranty.warrantyPeriod || '6_MONTHS',
+      status: warranty.status || 'ACTIVE',
+      terms: warranty.terms || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  // Save Edited Warranty
+  const handleSaveEdit = async () => {
+    if (!editingWarranty) return;
+    if (!editForm.customerName.trim()) {
+      toast.error("Customer name cannot be empty");
+      return;
+    }
+    if (!editForm.customerPhone.trim()) {
+      toast.error("Customer phone cannot be empty");
+      return;
+    }
+
+    setSubmittingEdit(true);
+    try {
+      const res = await api.patch(`/battery-warranties/${editingWarranty.id}`, editForm);
+      toast.success(res.message || "Battery warranty updated successfully!");
+      setIsEditModalOpen(false);
+      setEditingWarranty(null);
+      fetchWarranties(true);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to update battery warranty");
+    } finally {
+      setSubmittingEdit(false);
     }
   };
 
@@ -1063,6 +1153,18 @@ export default function BatteryWarrantyManagement() {
                               Certificate
                             </Button>
 
+                            {/* Edit Warranty Button */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenEditModal(item)}
+                              className="h-8 px-2.5 rounded-lg border-blue-200 bg-blue-50/50 hover:bg-blue-100 text-blue-700 text-xs font-semibold"
+                              title="Edit Warranty Details"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                              Edit
+                            </Button>
+
                             {/* Process Claim Button */}
                             <Button
                               variant="outline"
@@ -1188,6 +1290,25 @@ export default function BatteryWarrantyManagement() {
                   <span className="font-bold text-slate-700">Specification: </span>
                   {selectedWarranty.batteryType || 'Original Replacement Battery'} ({selectedWarranty.warrantyPeriod === '1_YEAR' ? '1 Year Plan' : '6 Months Plan'})
                 </div>
+
+                {/* Cloudinary Storage Indicator & Direct Link */}
+                {selectedWarranty.pdfUrl && (
+                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5 text-emerald-700 font-bold">
+                      <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Stored on Cloudinary Cloud Storage</span>
+                    </div>
+                    <a
+                      href={selectedWarranty.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 underline"
+                    >
+                      <span>Open Cloudinary PDF</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
               </div>
 
               {/* Email Send Input */}
@@ -1217,16 +1338,34 @@ export default function BatteryWarrantyManagement() {
             </div>
           )}
 
-          <DialogFooter className="flex items-center justify-between sm:justify-between border-t border-slate-100 pt-4 mt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleShareWhatsApp(selectedWarranty)}
-              className="rounded-xl border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs flex items-center gap-1.5"
-            >
-              <MessageCircle className="w-3.5 h-3.5 text-emerald-700" />
-              <span>WhatsApp Share</span>
-            </Button>
+          <DialogFooter className="flex flex-wrap items-center justify-between sm:justify-between gap-2 border-t border-slate-100 pt-4 mt-2">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleShareWhatsApp(selectedWarranty)}
+                className="rounded-xl border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs flex items-center gap-1.5"
+              >
+                <MessageCircle className="w-3.5 h-3.5 text-emerald-700" />
+                <span>WhatsApp Share</span>
+              </Button>
+
+              {/* Cloudinary Upload Action */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleUploadToCloudinary(selectedWarranty)}
+                disabled={uploadingCloudinary}
+                className="rounded-xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100 font-bold text-xs flex items-center gap-1.5"
+              >
+                {uploadingCloudinary ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                ) : (
+                  <UploadCloud className="w-3.5 h-3.5 text-blue-600" />
+                )}
+                <span>{selectedWarranty?.pdfUrl ? "Re-sync Cloudinary" : "Upload to Cloudinary"}</span>
+              </Button>
+            </div>
 
             <div className="flex items-center gap-2">
               <Button
@@ -1247,6 +1386,194 @@ export default function BatteryWarrantyManagement() {
                 <span>Download PDF</span>
               </Button>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================================================== */}
+      {/* EDIT BATTERY WARRANTY MODAL */}
+      {/* ==================================================== */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-6">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
+                <Edit3 className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-slate-900">
+                  Edit Battery Warranty — #{editingWarranty?.warrantyNumber}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  Update customer contact details, device hardware info, warranty period, or lifecycle status.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {editingWarranty && (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Customer Name */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Customer Full Name *</Label>
+                  <Input
+                    value={editForm.customerName}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, customerName: e.target.value }))}
+                    placeholder="Full Name"
+                    className="h-10 rounded-xl border-slate-200 text-xs"
+                  />
+                </div>
+
+                {/* Customer Phone */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Customer Phone Number *</Label>
+                  <Input
+                    value={editForm.customerPhone}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, customerPhone: e.target.value }))}
+                    placeholder="98XXXXXXXX"
+                    className="h-10 rounded-xl border-slate-200 text-xs font-mono"
+                  />
+                </div>
+
+                {/* Customer Email */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Customer Email</Label>
+                  <Input
+                    value={editForm.customerEmail}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, customerEmail: e.target.value }))}
+                    placeholder="customer@email.com"
+                    className="h-10 rounded-xl border-slate-200 text-xs"
+                  />
+                </div>
+
+                {/* Customer Address */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Customer Address / City</Label>
+                  <Input
+                    value={editForm.customerAddress}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, customerAddress: e.target.value }))}
+                    placeholder="e.g. New Road, Kathmandu"
+                    className="h-10 rounded-xl border-slate-200 text-xs"
+                  />
+                </div>
+
+                {/* Device Brand */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Device Brand *</Label>
+                  <Input
+                    value={editForm.deviceBrand}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, deviceBrand: e.target.value }))}
+                    placeholder="e.g. Apple, Samsung, Xiaomi"
+                    className="h-10 rounded-xl border-slate-200 text-xs uppercase"
+                  />
+                </div>
+
+                {/* Device Model */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Device Model *</Label>
+                  <Input
+                    value={editForm.deviceModel}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, deviceModel: e.target.value }))}
+                    placeholder="e.g. iPhone 13 Pro Max"
+                    className="h-10 rounded-xl border-slate-200 text-xs"
+                  />
+                </div>
+
+                {/* IMEI Number */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Device IMEI / Serial</Label>
+                  <Input
+                    value={editForm.imeiNumber}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, imeiNumber: e.target.value }))}
+                    placeholder="15-digit IMEI"
+                    className="h-10 rounded-xl border-slate-200 text-xs font-mono"
+                  />
+                </div>
+
+                {/* Battery Type / Specification */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Battery Specification</Label>
+                  <Input
+                    value={editForm.batteryType}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, batteryType: e.target.value }))}
+                    placeholder="e.g. Original Replacement Battery"
+                    className="h-10 rounded-xl border-slate-200 text-xs"
+                  />
+                </div>
+
+                {/* Warranty Period */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Warranty Coverage Plan</Label>
+                  <Select
+                    value={editForm.warrantyPeriod}
+                    onValueChange={(val: any) => setEditForm(prev => ({ ...prev, warrantyPeriod: val }))}
+                  >
+                    <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs">
+                      <SelectValue placeholder="Select Plan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="6_MONTHS">6 Months (Standard Plan)</SelectItem>
+                      <SelectItem value="1_YEAR">1 Year (Extended Plan)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Lifecycle Status */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Warranty Lifecycle Status</Label>
+                  <Select
+                    value={editForm.status}
+                    onValueChange={(val: any) => setEditForm(prev => ({ ...prev, status: val }))}
+                  >
+                    <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-bold">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ACTIVE">ACTIVE — Valid & In Coverage</SelectItem>
+                      <SelectItem value="EXPIRING_SOON">EXPIRING SOON — Within 30 Days</SelectItem>
+                      <SelectItem value="EXPIRED">EXPIRED — Coverage Ended</SelectItem>
+                      <SelectItem value="CLAIMED">CLAIMED — Serviced under Claim</SelectItem>
+                      <SelectItem value="REPLACED">REPLACED — Replaced under Warranty</SelectItem>
+                      <SelectItem value="CANCELLED">CANCELLED — Void / Revoked</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Terms & Conditions */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700">Terms & Coverage Notes</Label>
+                <Textarea
+                  value={editForm.terms}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, terms: e.target.value }))}
+                  placeholder="Custom terms, conditions, or exclusions for this warranty..."
+                  rows={3}
+                  className="rounded-xl border-slate-200 text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4 mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditModalOpen(false)}
+              disabled={submittingEdit}
+              className="rounded-xl text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveEdit}
+              disabled={submittingEdit}
+              className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm"
+            >
+              {submittingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              <span>{submittingEdit ? "Saving..." : "Save Changes"}</span>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

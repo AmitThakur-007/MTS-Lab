@@ -9333,6 +9333,16 @@ export async function createServerApp() {
       const existingIds = existingWarranties.map(w => w.id);
       const warrantyNumbers = existingWarranties.map(w => `#${w.warrantyNumber}`).join(', ');
 
+      // Clean up associated Cloudinary PDF certificate assets
+      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+        for (const w of existingWarranties) {
+          if (w.cloudinaryPublicId) {
+            await cloudinary.uploader.destroy(w.cloudinaryPublicId, { resource_type: 'raw' }).catch(() => {});
+            await cloudinary.uploader.destroy(w.cloudinaryPublicId, { resource_type: 'image' }).catch(() => {});
+          }
+        }
+      }
+
       // Atomic transaction: Delete warranty claims first, then warranties
       await prisma.$transaction(async (tx) => {
         await tx.batteryWarrantyClaim.deleteMany({ where: { warrantyId: { in: existingIds } } });
@@ -9398,11 +9408,17 @@ export async function createServerApp() {
 
       const warranty = await prisma.batteryWarranty.findUnique({
         where: { id },
-        select: { id: true, warrantyNumber: true, customerName: true }
+        select: { id: true, warrantyNumber: true, customerName: true, cloudinaryPublicId: true }
       });
 
       if (!warranty) {
         return res.status(404).json({ error: "Battery warranty record not found or already deleted." });
+      }
+
+      // Destroy Cloudinary PDF certificate asset if exists
+      if (warranty.cloudinaryPublicId && process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+        await cloudinary.uploader.destroy(warranty.cloudinaryPublicId, { resource_type: 'raw' }).catch(() => {});
+        await cloudinary.uploader.destroy(warranty.cloudinaryPublicId, { resource_type: 'image' }).catch(() => {});
       }
 
       await prisma.$transaction(async (tx) => {
@@ -12661,7 +12677,7 @@ export async function createServerApp() {
   // ==========================================
 
   // List all battery warranties with metrics, search, and filters
-  app.get("/api/battery-warranties", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), syncRouteMiddleware(['batteryWarranty', 'batteryWarrantyClaim', 'repair', 'customer']), async (req: any, res) => {
+  app.get("/api/battery-warranties", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), syncRouteMiddleware(['batteryWarranty', 'batteryWarrantyClaim', 'repair', 'customer']), async (req: any, res) => {
     try {
       const { search, status, period } = req.query;
 
@@ -13684,7 +13700,7 @@ export async function createServerApp() {
   });
 
   // Get Claim History for a Warranty
-  app.get("/api/battery-warranties/:id/claims", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
+  app.get("/api/battery-warranties/:id/claims", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     const { id } = req.params;
     try {
       const claims = await prisma.batteryWarrantyClaim.findMany({
@@ -13796,6 +13812,223 @@ export async function createServerApp() {
     } catch (err: any) {
       console.error("[SEND WARRANTY EMAIL ERROR]", err);
       res.status(500).json({ error: "Failed to send warranty email. Please verify SMTP configuration." });
+    }
+  });
+
+  // Edit / Update Battery Warranty (SUPER_ADMIN, ADMIN, MANAGER, RECEPTIONIST)
+  app.patch("/api/battery-warranties/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
+    const { id } = req.params;
+    const {
+      customerName,
+      customerPhone,
+      customerEmail,
+      customerAddress,
+      deviceBrand,
+      deviceModel,
+      imeiNumber,
+      batteryType,
+      warrantyPeriod,
+      registrationDate,
+      expiryDate,
+      status,
+      terms,
+      pdfUrl,
+      cloudinaryPublicId
+    } = req.body;
+
+    try {
+      const existingWarranty = await prisma.batteryWarranty.findUnique({
+        where: { id },
+        include: { customer: true, repair: true }
+      });
+
+      if (!existingWarranty) {
+        return res.status(404).json({ error: "Battery warranty record not found." });
+      }
+
+      const updateData: any = {};
+
+      if (customerName !== undefined) updateData.customerName = String(customerName).trim();
+      if (customerPhone !== undefined) updateData.customerPhone = normalizePhone(customerPhone);
+      if (customerEmail !== undefined) updateData.customerEmail = customerEmail ? String(customerEmail).trim().toLowerCase() : null;
+      if (customerAddress !== undefined) updateData.customerAddress = customerAddress ? String(customerAddress).trim() : null;
+      if (deviceBrand !== undefined) updateData.deviceBrand = String(deviceBrand).trim();
+      if (deviceModel !== undefined) updateData.deviceModel = String(deviceModel).trim();
+      if (imeiNumber !== undefined) updateData.imeiNumber = imeiNumber ? String(imeiNumber).trim() : null;
+      if (batteryType !== undefined) updateData.batteryType = String(batteryType).trim() || 'Original Replacement Battery';
+      if (terms !== undefined) updateData.terms = terms ? String(terms).trim() : null;
+      if (pdfUrl !== undefined) updateData.pdfUrl = pdfUrl ? String(pdfUrl).trim() : null;
+      if (cloudinaryPublicId !== undefined) updateData.cloudinaryPublicId = cloudinaryPublicId ? String(cloudinaryPublicId).trim() : null;
+
+      if (warrantyPeriod !== undefined) {
+        const period = warrantyPeriod === '1_YEAR' ? '1_YEAR' : '6_MONTHS';
+        updateData.warrantyPeriod = period;
+      }
+
+      if (registrationDate !== undefined) {
+        updateData.registrationDate = new Date(registrationDate);
+      }
+
+      if (expiryDate !== undefined) {
+        updateData.expiryDate = new Date(expiryDate);
+      } else if (warrantyPeriod !== undefined || registrationDate !== undefined) {
+        const regDate = updateData.registrationDate || existingWarranty.registrationDate || new Date();
+        const period = updateData.warrantyPeriod || existingWarranty.warrantyPeriod || '6_MONTHS';
+        updateData.expiryDate = calculateWarrantyExpiryDate(regDate, period);
+      }
+
+      if (status !== undefined) {
+        const validStatuses = ['ACTIVE', 'EXPIRING_SOON', 'EXPIRED', 'CLAIMED', 'REPLACED', 'CANCELLED'];
+        const normStatus = String(status).trim().toUpperCase();
+        if (validStatuses.includes(normStatus)) {
+          updateData.status = normStatus;
+        }
+      }
+
+      updateData.updatedAt = new Date();
+
+      // Transaction: Update BatteryWarranty and also synchronize Customer record if customer details changed
+      const updatedWarranty = await prisma.$transaction(async (tx) => {
+        const w = await tx.batteryWarranty.update({
+          where: { id },
+          data: updateData,
+          include: {
+            claims: { orderBy: { claimDate: 'desc' } },
+            repair: true,
+            customer: true,
+            createdBy: { select: { id: true, name: true, role: true } }
+          }
+        });
+
+        // Sync Customer record if customerId exists
+        if (w.customerId) {
+          const custUpdate: any = {};
+          if (updateData.customerName) custUpdate.name = updateData.customerName;
+          if (updateData.customerPhone) custUpdate.phone = updateData.customerPhone;
+          if (updateData.customerEmail !== undefined) custUpdate.email = updateData.customerEmail;
+          if (updateData.customerAddress !== undefined) custUpdate.address = updateData.customerAddress;
+
+          if (Object.keys(custUpdate).length > 0) {
+            custUpdate.updatedAt = new Date();
+            await tx.customer.update({
+              where: { id: w.customerId },
+              data: custUpdate
+            }).catch(() => {});
+          }
+        }
+
+        return w;
+      });
+
+      // Sync to Firestore & Realtime event
+      await syncToFirestore("batteryWarranty", updatedWarranty);
+      broadcastRealtimeEvent({ entity: "batteryWarranty", action: "UPDATE", id: updatedWarranty.id, data: updatedWarranty });
+
+      // Audit Log
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: "BATTERY_WARRANTY_UPDATED",
+        resource: "WARRANTY",
+        resourceId: updatedWarranty.id,
+        status: "SUCCESS",
+        details: `Updated Battery Warranty #${updatedWarranty.warrantyNumber} for customer ${updatedWarranty.customerName}.`
+      });
+
+      res.json({
+        success: true,
+        message: `Battery Warranty #${updatedWarranty.warrantyNumber} updated successfully.`,
+        warranty: updatedWarranty
+      });
+    } catch (err: any) {
+      console.error("[UPDATE BATTERY WARRANTY ERROR]", err);
+      res.status(500).json({ error: err.message || "Failed to update battery warranty." });
+    }
+  });
+
+  // Upload and attach Cloudinary PDF Certificate to Battery Warranty
+  app.post("/api/battery-warranties/:id/upload-certificate", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), upload.single("file"), async (req: any, res) => {
+    const { id } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ success: false, error: "No PDF certificate file provided for upload." });
+    }
+
+    try {
+      const warranty = await prisma.batteryWarranty.findUnique({ where: { id } });
+      if (!warranty) {
+        return res.status(404).json({ success: false, error: "Battery warranty record not found." });
+      }
+
+      const originalName = file.originalname || `warranty_${warranty.warrantyNumber}.pdf`;
+
+      let secureUrl = "";
+      let publicId = "";
+
+      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+        // Destroy old Cloudinary certificate asset if one was previously stored
+        if (warranty.cloudinaryPublicId) {
+          await cloudinary.uploader.destroy(warranty.cloudinaryPublicId, { resource_type: 'raw' }).catch(() => {});
+          await cloudinary.uploader.destroy(warranty.cloudinaryPublicId, { resource_type: 'image' }).catch(() => {});
+        }
+
+        const cloudResult = await uploadToCloudinaryStream(file.buffer, "mts-lab/warranties", "raw", originalName);
+        secureUrl = cloudResult.secure_url;
+        publicId = cloudResult.public_id;
+      } else {
+        console.warn("[CLOUDINARY NOTICE] Cloudinary credentials not configured; generating inline data URI fallback.");
+        publicId = `local_warranty_pdf_${uuidv4()}`;
+        secureUrl = `data:application/pdf;base64,${file.buffer.toString("base64")}`;
+      }
+
+      const updatedWarranty = await prisma.batteryWarranty.update({
+        where: { id },
+        data: {
+          pdfUrl: secureUrl,
+          cloudinaryPublicId: publicId,
+          updatedAt: new Date()
+        },
+        include: {
+          claims: { orderBy: { claimDate: 'desc' } },
+          repair: true,
+          customer: true
+        }
+      });
+
+      // Also record MediaAttachment in database
+      await prisma.mediaAttachment.create({
+        data: {
+          publicId,
+          resourceType: 'pdf',
+          format: 'pdf',
+          mimeType: 'application/pdf',
+          originalName,
+          size: file.size,
+          secureUrl,
+          folder: 'mts-lab/warranties',
+          entityType: 'WARRANTY',
+          entityId: warranty.id,
+          uploadedById: req.user.id
+        }
+      }).catch((e) => console.warn("[MEDIA ATTACHMENT NOTICE]", e?.message));
+
+      await syncToFirestore("batteryWarranty", updatedWarranty);
+      broadcastRealtimeEvent({ entity: "batteryWarranty", action: "UPDATE", id: updatedWarranty.id, data: updatedWarranty });
+
+      res.json({
+        success: true,
+        message: `Warranty certificate uploaded and saved to Cloudinary successfully.`,
+        pdfUrl: secureUrl,
+        cloudinaryPublicId: publicId,
+        warranty: updatedWarranty
+      });
+    } catch (err: any) {
+      console.error("[UPLOAD WARRANTY CERTIFICATE ERROR]", err);
+      res.status(500).json({ success: false, error: err.message || "Failed to upload warranty certificate." });
     }
   });
 
@@ -14108,6 +14341,23 @@ export async function createServerApp() {
           });
         }
 
+        // Sync Customer record if customerId is present on repair
+        if (updated.customerId) {
+          const custUpdate: any = {};
+          if (updateData.customerName) custUpdate.name = updateData.customerName;
+          if (updateData.customerPhone) custUpdate.phone = updateData.customerPhone;
+          if (updateData.customerEmail !== undefined) custUpdate.email = updateData.customerEmail;
+          if (updateData.customerAddress !== undefined) custUpdate.address = updateData.customerAddress;
+
+          if (Object.keys(custUpdate).length > 0) {
+            custUpdate.updatedAt = new Date();
+            await tx.customer.update({
+              where: { id: updated.customerId },
+              data: custUpdate
+            }).catch(() => {});
+          }
+        }
+
         return [updated, logEntry];
       });
 
@@ -14249,7 +14499,7 @@ export async function createServerApp() {
               batteryType: bType,
               warrantyPeriod: periodToUse,
               expiryDate,
-              status: existingWarranty.status === 'CANCELLED' ? 'ACTIVE' : existingWarranty.status,
+              status: 'ACTIVE',
               updatedAt: new Date()
             }
           });
@@ -14275,7 +14525,7 @@ export async function createServerApp() {
           where: { repairId: id }
         });
 
-        if (existingWarranty && existingWarranty.status === 'ACTIVE') {
+        if (existingWarranty && existingWarranty.status !== 'CANCELLED') {
           updatedWarranty = await prisma.batteryWarranty.update({
             where: { id: existingWarranty.id },
             data: {
