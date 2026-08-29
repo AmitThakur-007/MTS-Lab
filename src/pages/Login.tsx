@@ -172,58 +172,20 @@ export default function Login() {
 
     try {
       const trimmedEmail = identity.trim().toLowerCase();
-
-      // 1. Primary: Authenticate directly via Supabase Auth
-      try {
-        const { data: sbAuth, error: sbErr } = await supabase.auth.signInWithPassword({
-          email: trimmedEmail,
-          password: password,
-        });
-
-        if (!sbErr && sbAuth?.session && sbAuth?.user) {
-          // Fetch authoritative profile from Supabase PostgreSQL Database
-          const { data: profile } = await supabase
-            .from('User')
-            .select('*')
-            .eq('email', trimmedEmail)
-            .single();
-
-          if (profile && profile.accountStatus === 'DISABLED') {
-            toast.error('Your MTS account is disabled. Please contact the administrator.');
-            return;
-          }
-
-          const userObj = {
-            id: profile?.id || sbAuth.user.id,
-            name: profile?.name || (sbAuth.user.user_metadata as any)?.name || 'MTS Staff',
-            email: profile?.email || sbAuth.user.email || trimmedEmail,
-            role: profile?.role || (sbAuth.user.user_metadata as any)?.role || 'RECEPTIONIST',
-            username: profile?.username || (sbAuth.user.user_metadata as any)?.username,
-            branchId: profile?.branchId,
-            profileImage: profile?.profileImage,
-            phoneNumber: profile?.phoneNumber,
-            department: profile?.department,
-            address: profile?.address,
-          };
-
-          setAuth(userObj, sbAuth.session.access_token, sbAuth.session.refresh_token);
-          toast.success(`Welcome back, ${userObj.name}!`);
-          navigate('/dashboard');
-          return;
-        }
-      } catch (sbDirectErr) {
-        console.warn('[SUPABASE AUTH DIRECT NOTICE] Attempting API gateway fallback:', sbDirectErr);
-      }
-
-      // 2. Fallback: Authenticate via MTS Lab Server API Gateway
       const device = getDeviceDetails();
+
+      // Single unified login path via MTS Lab backend API.
+      // Backend validates credentials (Supabase Auth + bcrypt fallback),
+      // looks up the authoritative User profile, and returns a standard JWT.
+      // This avoids storing Supabase access_tokens which expire and behave
+      // differently than our backend JWTs.
       const res: any = await api.post('/auth/login', {
         email: trimmedEmail,
         password,
-        device
+        device,
       });
 
-      if (res.mfaRequired && res.mfaTicket) {
+      if (res.requires2FA && res.mfaTicket) {
         setMfaTicket(res.mfaTicket);
         setEmailMasked(res.emailMasked || 'your registered email');
         setStage('2FA');
@@ -239,13 +201,15 @@ export default function Login() {
         setAuth(res.user, res.token, res.refreshToken);
         toast.success(`Welcome back, ${res.user.name}!`);
         navigate('/dashboard');
+      } else {
+        toast.error('Login failed. Please try again.');
       }
     } catch (err: any) {
       if (err?.emailNotVerified || err?.message?.toLowerCase().includes('verify your email')) {
         setUnverifiedEmail(err.email || identity.trim());
         toast.error('Please verify your email address before continuing.');
       } else {
-        toast.error(err.message || 'Unable to sign in with these credentials. Please check your email and password.');
+        toast.error(err.message || 'Unable to sign in. Please check your email and password.');
       }
     } finally {
       setLoading(false);
