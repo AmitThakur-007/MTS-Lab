@@ -218,7 +218,7 @@ export default function Login() {
       // 2. Fallback: Authenticate via MTS Lab Server API Gateway
       const device = getDeviceDetails();
       const res: any = await api.post('/auth/login', {
-        identity: trimmedEmail,
+        email: trimmedEmail,
         password,
         device
       });

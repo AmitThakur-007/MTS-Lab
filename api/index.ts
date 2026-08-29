@@ -21,11 +21,6 @@ export default async function handler(req: IncomingMessage & { url?: string }, r
     return;
   }
 
-  // Normalize URL to always start with /api
-  if (req.url && !req.url.startsWith('/api')) {
-    req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
-  }
-
   const app = getAppInstance();
 
   return new Promise<void>((resolve, reject) => {

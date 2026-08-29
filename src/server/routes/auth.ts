@@ -36,7 +36,8 @@ function generateTokens(user: any) {
 // 1. POST /api/auth/login
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { email, password, deviceIdentifier, deviceName, deviceType, browser, os, ipAddress } = req.body;
+    const { email: emailField, identity, password, deviceIdentifier, deviceName, deviceType, browser, os, ipAddress } = req.body;
+    const email = emailField || identity;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required.' });

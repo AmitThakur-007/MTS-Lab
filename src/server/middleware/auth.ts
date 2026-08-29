@@ -78,17 +78,33 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     }
 
     // 3. Query authoritative Staff Profile from public.User
+    // Strategy: prefer email match (most reliable) then fall back to UID-based match.
+    // This handles cases where supabaseUid is not yet synced in the User row.
     let query = supabaseAdmin.from('User').select('*').is('deletedAt', null);
 
-    if (authUid && userEmail) {
-      query = query.or(`id.eq.${authUid},supabaseUid.eq.${authUid},email.eq.${userEmail.toLowerCase()}`);
-    } else if (authUid) {
-      query = query.or(`id.eq.${authUid},supabaseUid.eq.${authUid}`);
-    } else if (userEmail) {
+    if (userEmail) {
+      // Primary: email match (guaranteed unique)
       query = query.eq('email', userEmail.toLowerCase());
+    } else if (authUid) {
+      // Fallback: UID-based match when email is unavailable
+      query = query.or(`id.eq.${authUid},supabaseUid.eq.${authUid}`);
     }
 
-    const { data: users, error: dbError } = await query.limit(1);
+    let { data: users, error: dbError } = await query.limit(1);
+
+    // Secondary fallback: if email didn't find anything, try UID
+    if ((!users || users.length === 0) && authUid && userEmail) {
+      const { data: uidUsers } = await supabaseAdmin
+        .from('User')
+        .select('*')
+        .or(`id.eq.${authUid},supabaseUid.eq.${authUid}`)
+        .is('deletedAt', null)
+        .limit(1);
+      if (uidUsers && uidUsers.length > 0) {
+        users = uidUsers;
+        dbError = null;
+      }
+    }
 
     if (dbError || !users || users.length === 0) {
       return res.status(401).json({
