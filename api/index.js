@@ -1350,6 +1350,12 @@ var handleRepairUpdate = async (req, res) => {
     delete updateData.notes;
     delete updateData.logs;
     delete updateData.payments;
+    delete updateData.claims;
+    delete updateData.batteryType;
+    delete updateData.warrantyMonths;
+    delete updateData.warrantyNumber;
+    delete updateData.warrantyPeriod;
+    delete updateData.terms;
     if (updateData.estimatedCost !== void 0) updateData.estimatedCost = parseFloat(updateData.estimatedCost) || 0;
     if (updateData.advancePaid !== void 0) updateData.advancePaid = parseFloat(updateData.advancePaid) || 0;
     if (updateData.totalPaid !== void 0) updateData.totalPaid = parseFloat(updateData.totalPaid) || 0;

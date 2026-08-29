@@ -452,7 +452,7 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const updateData = { ...req.body };
 
-    // Clean relations and immutables from payload
+    // Clean relations, immutables, and warranty module fields from the Repair update payload
     delete updateData.id;
     delete updateData.createdAt;
     delete updateData.customer;
@@ -460,8 +460,14 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
     delete updateData.notes;
     delete updateData.logs;
     delete updateData.payments;
+    delete updateData.claims;
+    delete updateData.batteryType;
+    delete updateData.warrantyMonths;
+    delete updateData.warrantyNumber;
+    delete updateData.warrantyPeriod;
+    delete updateData.terms;
 
-    // Convert numbers if present
+    // Convert numbers safely if present
     if (updateData.estimatedCost !== undefined) updateData.estimatedCost = parseFloat(updateData.estimatedCost) || 0;
     if (updateData.advancePaid !== undefined) updateData.advancePaid = parseFloat(updateData.advancePaid) || 0;
     if (updateData.totalPaid !== undefined) updateData.totalPaid = parseFloat(updateData.totalPaid) || 0;
