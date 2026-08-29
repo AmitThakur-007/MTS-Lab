@@ -10,6 +10,9 @@ import { sendEmail } from '../services/emailService';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+// In-memory OTP store for 2FA deletion (expires in 5 minutes)
+const otpStore: { [userId: string]: { code: string; expiresAt: number } } = {};
+
 // Helper to generate next unique warranty number (BW-YYYY-XXXX)
 async function generateWarrantyNumber(): Promise<string> {
   const currentYear = new Date().getFullYear();
@@ -460,23 +463,101 @@ router.post('/:id/send-email', authenticate, async (req: AuthRequest, res: Respo
 
 // 11. POST /api/battery-warranties/delete-2fa/request
 router.post('/delete-2fa/request', authenticate, async (req: AuthRequest, res: Response) => {
-  return res.json({ success: true, message: '2FA verification bypassed for administrative session.' });
+  try {
+    const userId = req.user!.id;
+    const userEmail = req.user!.email || 'mtsmobilelab@gmail.com';
+
+    // Generate random 6-digit OTP code
+    const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes validity
+
+    otpStore[userId] = { code: generatedCode, expiresAt };
+
+    console.log(`[2FA OTP GENERATED] For User: ${userEmail}, OTP: ${generatedCode}`);
+
+    // Mask email for display in UI (e.g. m***b@gmail.com)
+    let masked = userEmail;
+    if (userEmail.includes('@')) {
+      const [name, domain] = userEmail.split('@');
+      masked = `${name.slice(0, 2)}***${name.slice(-1)}@${domain}`;
+    }
+
+    // Send the OTP email to registered address
+    try {
+      await sendEmail({
+        to: userEmail,
+        subject: 'MTS Lab — Super Admin 2FA Deletion Code',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 24px; border: 1px solid #fee2e2; border-radius: 12px; background-color: #fff;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <span style="font-size: 24px; font-weight: bold; color: #dc2626;">MTS Lab Security Alert</span>
+            </div>
+            <p style="color: #374151; font-size: 14px;">A request was made to permanently delete battery warranty records.</p>
+            <p style="color: #374151; font-size: 14px;">Your 6-digit verification code is:</p>
+            <div style="background-color: #fef2f2; border: 2px dashed #f87171; border-radius: 8px; text-align: center; padding: 16px; margin: 20px 0;">
+              <span style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #991b1b; font-family: monospace;">${generatedCode}</span>
+            </div>
+            <p style="color: #6b7280; font-size: 12px; text-align: center;">This code will expire in 5 minutes. If you did not initiate this deletion, please secure your account immediately.</p>
+          </div>
+        `,
+      });
+    } catch (emailErr) {
+      console.error('[2FA EMAIL SEND WARNING]', emailErr);
+    }
+
+    return res.json({
+      success: true,
+      message: '2FA verification code sent to your registered email.',
+      emailMasked: masked,
+    });
+  } catch (err: any) {
+    console.error('[2FA REQUEST ERROR]', err);
+    return res.status(500).json({ error: 'Failed to generate 2FA code.' });
+  }
 });
 
 // 12. POST /api/battery-warranties/bulk-delete
 router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
-    const { ids } = req.body;
-    if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'No IDs provided.' });
+    const { ids, code } = req.body;
+    const userId = req.user!.id;
 
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No warranty IDs provided for deletion.' });
+    }
+
+    const trimmedCode = String(code || '').trim();
+    const storedOtp = otpStore[userId];
+
+    // Verification check: accept live OTP or Super Admin emergency bypass PIN (007007)
+    const isMasterBypass = trimmedCode === '007007';
+    const isOtpValid = storedOtp && storedOtp.code === trimmedCode && storedOtp.expiresAt > Date.now();
+
+    if (!isOtpValid && !isMasterBypass) {
+      return res.status(401).json({ error: 'Invalid or expired 2FA code. Please request a new code or use backup PIN.' });
+    }
+
+    // Clear used OTP
+    delete otpStore[userId];
+
+    // Delete associated claims first
     await supabaseAdmin.from('BatteryWarrantyClaim').delete().in('warrantyId', ids);
+
+    // Delete the warranties
     const { error } = await supabaseAdmin.from('BatteryWarranty').delete().in('id', ids);
 
-    if (error) return res.status(500).json({ error: 'Failed to delete warranties.' });
+    if (error) {
+      console.error('[BULK DELETE ERROR]', error);
+      return res.status(500).json({ error: error.message || 'Failed to delete warranty records.' });
+    }
 
-    return res.json({ success: true, message: `Deleted ${ids.length} warranty records.` });
+    return res.json({
+      success: true,
+      message: `Successfully and permanently deleted ${ids.length} warranty record(s).`,
+    });
   } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to bulk delete warranties.' });
+    console.error('[BULK DELETE EXCEPTION]', err);
+    return res.status(500).json({ error: 'Failed to execute bulk deletion.' });
   }
 });
 
