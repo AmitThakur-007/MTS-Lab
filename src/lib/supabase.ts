@@ -18,11 +18,11 @@ const getEnvVar = (viteKey: string, nodeKey: string, fallback: string = ''): str
   return fallback;
 };
 
-const SUPABASE_URL = getEnvVar('VITE_SUPABASE_URL', 'SUPABASE_URL', 'https://mts-mobile-lab.supabase.co');
+const SUPABASE_URL = getEnvVar('VITE_SUPABASE_URL', 'SUPABASE_URL', 'https://pirynpugkiurjobrqiqg.supabase.co');
 const SUPABASE_ANON_KEY = getEnvVar(
   'VITE_SUPABASE_ANON_KEY',
   'SUPABASE_ANON_KEY',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10cy1sYWIiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjoyMDAwMDAwMDAwfQ.placeholder'
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w'
 );
 
 let supabaseInstance: SupabaseClient | null = null;

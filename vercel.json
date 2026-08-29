@@ -1,6 +1,12 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/*.ts": {
+      "maxDuration": 30,
+      "includeFiles": "prisma/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/:match*",

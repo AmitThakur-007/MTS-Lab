@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { getDeviceDetails } from '@/lib/device';
@@ -171,6 +172,50 @@ export default function Login() {
 
     try {
       const trimmedEmail = identity.trim().toLowerCase();
+
+      // 1. Primary: Authenticate directly via Supabase Auth
+      try {
+        const { data: sbAuth, error: sbErr } = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password: password,
+        });
+
+        if (!sbErr && sbAuth?.session && sbAuth?.user) {
+          // Fetch authoritative profile from Supabase PostgreSQL Database
+          const { data: profile } = await supabase
+            .from('User')
+            .select('*')
+            .eq('email', trimmedEmail)
+            .single();
+
+          if (profile && profile.accountStatus === 'DISABLED') {
+            toast.error('Your MTS account is disabled. Please contact the administrator.');
+            return;
+          }
+
+          const userObj = {
+            id: profile?.id || sbAuth.user.id,
+            name: profile?.name || (sbAuth.user.user_metadata as any)?.name || 'MTS Staff',
+            email: profile?.email || sbAuth.user.email || trimmedEmail,
+            role: profile?.role || (sbAuth.user.user_metadata as any)?.role || 'RECEPTIONIST',
+            username: profile?.username || (sbAuth.user.user_metadata as any)?.username,
+            branchId: profile?.branchId,
+            profileImage: profile?.profileImage,
+            phoneNumber: profile?.phoneNumber,
+            department: profile?.department,
+            address: profile?.address,
+          };
+
+          setAuth(userObj, sbAuth.session.access_token, sbAuth.session.refresh_token);
+          toast.success(`Welcome back, ${userObj.name}!`);
+          navigate('/dashboard');
+          return;
+        }
+      } catch (sbDirectErr) {
+        console.warn('[SUPABASE AUTH DIRECT NOTICE] Attempting API gateway fallback:', sbDirectErr);
+      }
+
+      // 2. Fallback: Authenticate via MTS Lab Server API Gateway
       const device = getDeviceDetails();
       const res: any = await api.post('/auth/login', {
         identity: trimmedEmail,
@@ -200,7 +245,7 @@ export default function Login() {
         setUnverifiedEmail(err.email || identity.trim());
         toast.error('Please verify your email address before continuing.');
       } else {
-        toast.error(err.message || 'Unable to sign in with these credentials. Please check your email and password or contact MTS Lab administration.');
+        toast.error(err.message || 'Unable to sign in with these credentials. Please check your email and password.');
       }
     } finally {
       setLoading(false);
