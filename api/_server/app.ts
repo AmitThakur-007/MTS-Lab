@@ -44,13 +44,13 @@ export function createApp(): Express {
   // Mount API Domain Routes
   app.use('/api/auth', authRoutes);
   app.use('/api/users', usersRoutes);
-  app.use('/api/staff', usersRoutes); // Compatibility alias
+  app.use('/api/staff', usersRoutes);
   app.use('/api/repairs', repairsRoutes);
   app.use('/api/customers', customersRoutes);
   app.use('/api/inventory', inventoryRoutes);
   app.use('/api/couriers', couriersRoutes);
 
-  // Battery Warranties (with all frontend path aliases)
+  // Battery Warranties (all path aliases)
   app.use('/api/battery-warranties', batteryWarrantiesRoutes);
   app.use('/api/battery-warranty', batteryWarrantiesRoutes);
   app.use('/api/warranties', batteryWarrantiesRoutes);
@@ -66,16 +66,24 @@ export function createApp(): Express {
   app.use('/api/notifications', notificationsRoutes);
   app.use('/api/admin', superAdminRoutes);
 
-  // SuperAdmin aliases for direct routes requested by frontend
+  // SuperAdmin & Access alias mounts
   app.use('/api/share', superAdminRoutes);
   app.use('/api/access-requests', superAdminRoutes);
   app.use('/api/approved-devices', superAdminRoutes);
 
+  // Fallback stubs for inventory & repair-prices folder structures
+  app.get('/api/inventory/folders', (req: Request, res: Response) => res.json([]));
+  app.get('/api/inventory/suppliers', (req: Request, res: Response) => res.json([]));
+  app.get('/api/inventory/locations', (req: Request, res: Response) => res.json([]));
+  app.get('/api/repair-prices/folders', (req: Request, res: Response) => res.json([]));
+  app.get('/api/access-requests', (req: Request, res: Response) => res.json([]));
+  app.get('/api/approved-devices', (req: Request, res: Response) => res.json([]));
+
   app.use('/api/upload', uploadRoutes);
   app.use('/api/events', eventsRoutes);
-  app.use('/api', publicRoutes); // /api/track, /api/manager/*, /api/dashboard/*
+  app.use('/api', publicRoutes);
 
-  // Compatibility root endpoints
+  // Health check
   app.get('/api/health', (req: Request, res: Response) => {
     res.json({ status: 'healthy', timestamp: new Date().toISOString() });
   });
@@ -85,7 +93,7 @@ export function createApp(): Express {
     res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.path}` });
   });
 
-  // Centralized Error Handling Middleware
+  // Error Handler
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     console.error('[API UNHANDLED ERROR]', err);
     if (res.headersSent) {
@@ -93,7 +101,7 @@ export function createApp(): Express {
     }
     res.status(err.status || 500).json({
       error: 'Internal Server Error',
-      message: err.message || 'An unexpected error occurred during request processing.',
+      message: err.message || 'An unexpected error occurred.',
     });
   });
 

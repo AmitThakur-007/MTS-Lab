@@ -4058,6 +4058,12 @@ function createApp() {
   app2.use("/api/share", superAdmin_default);
   app2.use("/api/access-requests", superAdmin_default);
   app2.use("/api/approved-devices", superAdmin_default);
+  app2.get("/api/inventory/folders", (req, res) => res.json([]));
+  app2.get("/api/inventory/suppliers", (req, res) => res.json([]));
+  app2.get("/api/inventory/locations", (req, res) => res.json([]));
+  app2.get("/api/repair-prices/folders", (req, res) => res.json([]));
+  app2.get("/api/access-requests", (req, res) => res.json([]));
+  app2.get("/api/approved-devices", (req, res) => res.json([]));
   app2.use("/api/upload", upload_default);
   app2.use("/api/events", events_default);
   app2.use("/api", public_default);
@@ -4074,7 +4080,7 @@ function createApp() {
     }
     res.status(err.status || 500).json({
       error: "Internal Server Error",
-      message: err.message || "An unexpected error occurred during request processing."
+      message: err.message || "An unexpected error occurred."
     });
   });
   return app2;
