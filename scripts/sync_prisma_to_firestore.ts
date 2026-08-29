@@ -32,9 +32,6 @@ async function syncAllToFirestore() {
         name: b.name,
         location: b.location,
         phone: b.phone || null,
-        email: b.email || null,
-        status: b.status || 'ACTIVE',
-        isMain: Boolean(b.isMain),
         createdAt: b.createdAt.toISOString(),
         updatedAt: b.updatedAt.toISOString()
       }, { merge: true });
@@ -107,11 +104,12 @@ async function syncAllToFirestore() {
       await setDoc(doc(db, 'homeSlides', s.id), {
         id: s.id,
         title: s.title,
-        subtitle: s.subtitle || null,
+        description: s.description || null,
         imageUrl: s.imageUrl,
+        buttonText: s.buttonText || null,
+        buttonLink: s.buttonLink || null,
         displayOrder: Number(s.displayOrder || 0),
         status: s.status || 'ACTIVE',
-        linkUrl: s.linkUrl || null,
         createdAt: s.createdAt.toISOString(),
         updatedAt: s.updatedAt.toISOString()
       }, { merge: true });
@@ -121,30 +119,6 @@ async function syncAllToFirestore() {
     }
   }
   console.log(`  ✅ Synced ${homeSlides.length} home slide(s)`);
-
-  // 5. Sync Products
-  console.log('🛍️ Syncing Products...');
-  const products = await prisma.product.findMany();
-  for (const p of products) {
-    try {
-      await setDoc(doc(db, 'products', p.id), {
-        id: p.id,
-        name: p.name,
-        category: p.category,
-        brand: p.brand || null,
-        model: p.model || null,
-        price: Number(p.price),
-        stock: Number(p.stock || 0),
-        status: p.status || 'ACTIVE',
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt.toISOString()
-      }, { merge: true });
-      syncedTotal++;
-    } catch (e: any) {
-      console.warn(`  ⚠️ Product notice:`, e.message);
-    }
-  }
-  console.log(`  ✅ Synced ${products.length} product(s)`);
 
   // 6. Sync Customers
   console.log('🤝 Syncing Customers...');

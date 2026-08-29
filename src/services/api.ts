@@ -177,9 +177,9 @@ async function request(endpoint: string, options: any = {}) {
     serverHandled = false;
   }
 
-  // Handle Firebase Direct Cloud Persistence Fallback ONLY if network was unreachable (no server response)
+  // Handle Firebase Direct Cloud Persistence Fallback if server did not handle or was unreachable
   // and NEVER on server-authoritative endpoints (users, admin, auth, system, access-requests, wipe)
-  if (!res && !serverHandled && !isServerAuthoritativeEndpoint(cleanEndpoint)) {
+  if (!serverHandled && !isServerAuthoritativeEndpoint(cleanEndpoint)) {
     try {
       if (method === 'GET') {
         const fbResult = await handleFirebaseGet(cleanEndpoint);

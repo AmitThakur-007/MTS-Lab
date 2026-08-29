@@ -10833,7 +10833,8 @@ export async function createServerApp() {
       // 2. Validate technician if provided
       if (technicianId) {
         const technician = await prisma.user.findUnique({ where: { id: technicianId } });
-        if (!technician || (technician.role !== 'TECHNICIAN' && technician.role !== 'LEAD_TECHNICIAN')) {
+        const techRole = technician ? normalizeRole(technician.role) : null;
+        if (!technician || !['TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'ADMIN', 'SUPERADMIN', 'SUPER_ADMIN'].includes(techRole || '')) {
           return res.status(400).json({ error: "Invalid technician ID" });
         }
       }
@@ -14262,7 +14263,8 @@ export async function createServerApp() {
         updateData.technicianId = null;
       } else if (technicianId) {
         const technician = await prisma.user.findUnique({ where: { id: technicianId } });
-        if (!technician || technician.role !== 'TECHNICIAN') {
+        const techRole = technician ? normalizeRole(technician.role) : null;
+        if (!technician || !['TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'ADMIN', 'SUPERADMIN', 'SUPER_ADMIN'].includes(techRole || '')) {
           return res.status(400).json({ error: "Invalid technician ID" });
         }
       }
@@ -18367,9 +18369,11 @@ export async function createServerApp() {
       let requestStatus = 'DIRECT';
 
       // Role and window validation
-      if (req.user.role === 'MANAGER') {
+      const userRole = normalizeRole(req.user.role);
+      if (userRole === 'MANAGER') {
         const isSelf = req.user.id === targetUser.id;
-        const isAllowedStaff = ['TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST'].includes(targetUser.role);
+        const targetUserRole = normalizeRole(targetUser.role);
+        const isAllowedStaff = ['TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST'].includes(targetUserRole || '');
 
         if (!isSelf && !isAllowedStaff) {
           return res.status(403).json({ error: "Managers can only take attendance for Technicians, Receptionists, and themselves." });
@@ -18393,9 +18397,9 @@ export async function createServerApp() {
           method = 'MANAGER_REQUEST';
           requestStatus = 'PENDING';
         }
-      } else if (req.user.role === 'SUPER_ADMIN' || req.user.role === 'ADMIN') {
+      } else if (userRole === 'SUPER_ADMIN' || userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
         finalStatus = status || 'PRESENT';
-        method = req.user.role === 'SUPER_ADMIN' ? 'DIRECT_SUPER_ADMIN' : 'DIRECT_ADMIN';
+        method = userRole === 'SUPER_ADMIN' || userRole === 'SUPERADMIN' ? 'DIRECT_SUPER_ADMIN' : 'DIRECT_ADMIN';
         requestStatus = 'DIRECT';
       }
 

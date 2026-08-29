@@ -270,13 +270,29 @@ export async function deleteRepairFromRtdb(repairId: string) {
   }
 }
 
+export function getRtdbPathForEntity(entityName: string): string {
+  if (!entityName) return 'general';
+  if (entityName === 'inventory' || entityName === 'inventoryItem' || entityName === 'inventoryItems') return 'inventory';
+  if (entityName === 'batteryWarranty' || entityName === 'batteryWarranties') return 'batteryWarranties';
+  if (entityName === 'batteryWarrantyClaim' || entityName === 'batteryWarrantyClaims') return 'batteryWarrantyClaims';
+  if (entityName === 'repairPrice' || entityName === 'repairPrices') return 'repairPrices';
+  if (entityName === 'repair' || entityName === 'repairs') return 'repairs';
+  if (entityName === 'user' || entityName === 'users') return 'users';
+  if (entityName === 'customer' || entityName === 'customers') return 'customers';
+  if (entityName === 'courier' || entityName === 'couriers') return 'couriers';
+  if (entityName === 'attendance' || entityName === 'attendances') return 'attendances';
+  if (entityName === 'damageRecord' || entityName === 'damageRecords' || entityName === 'repairDamage') return 'damageRecords';
+  if (entityName === 'homeSlide' || entityName === 'homeSlides' || entityName === 'slides') return 'homeSlides';
+  return entityName.endsWith('s') ? entityName : `${entityName}s`;
+}
+
 /**
  * Atomically sync any entity record to Firebase Realtime Database and touch syncTimestamp
  */
 export async function syncEntityToRtdb(entityName: string, id: string, data: any) {
   if (!entityName || !id || !data) return;
   try {
-    const pathName = entityName.endsWith('s') ? entityName : `${entityName}s`;
+    const pathName = getRtdbPathForEntity(entityName);
     const entityRef = ref(rtdb, `${pathName}/${id}`);
     const sanitized = {
       ...data,
@@ -300,7 +316,7 @@ export async function syncEntityToRtdb(entityName: string, id: string, data: any
 export async function deleteEntityFromRtdb(entityName: string, id: string) {
   if (!entityName || !id) return;
   try {
-    const pathName = entityName.endsWith('s') ? entityName : `${entityName}s`;
+    const pathName = getRtdbPathForEntity(entityName);
     const entityRef = ref(rtdb, `${pathName}/${id}`);
     await remove(entityRef);
     const syncRef = ref(rtdb, 'syncTimestamp');
