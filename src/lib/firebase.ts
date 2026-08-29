@@ -71,6 +71,7 @@ export const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) || defaultFirebaseConfig.storageBucket || '',
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID) || defaultFirebaseConfig.messagingSenderId || '',
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_FIREBASE_APP_ID) || defaultFirebaseConfig.appId || '',
+  firestoreDatabaseId: process.env.NEXT_PUBLIC_FIREBASE_FIRESTORE_DATABASE_ID || (typeof import.meta !== 'undefined' && (import.meta.env as any)?.NEXT_PUBLIC_FIREBASE_FIRESTORE_DATABASE_ID) || (defaultFirebaseConfig as any).firestoreDatabaseId || 'ai-studio-2055fd37-20d3-4977-8216-3cd8cd5f87c9',
 };
 
 function initFirebaseApp() {
@@ -87,7 +88,9 @@ function initFirebaseApp() {
 
 const app = initFirebaseApp();
 
-export const db = getFirestore(app);
+export const db = (firebaseConfig as any).firestoreDatabaseId 
+  ? getFirestore(app, (firebaseConfig as any).firestoreDatabaseId) 
+  : getFirestore(app);
 export const rtdb = getDatabase(app, firebaseConfig.databaseURL);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();

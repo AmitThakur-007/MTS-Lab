@@ -6,5 +6,6 @@
   "databaseURL": "https://mts-lab-eb8d2-default-rtdb.firebaseio.com",
   "storageBucket": "mts-lab-eb8d2.firebasestorage.app",
   "messagingSenderId": "473440131766",
-  "measurementId": ""
+  "measurementId": "",
+  "firestoreDatabaseId": "ai-studio-2055fd37-20d3-4977-8216-3cd8cd5f87c9"
 }
