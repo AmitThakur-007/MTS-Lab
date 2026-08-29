@@ -5,10 +5,12 @@ import crypto from 'crypto';
 const prisma = new PrismaClient();
 const BASE_URL = 'http://localhost:3000';
 
+const OTP_SALT = process.env.OTP_SALT || 'mts-lab-otp-secure-salt-2026';
+
 function crackOtp(hash: string): string {
-  for (let i = 0; i <= 999999; i++) {
-    const code = String(i).padStart(6, '0');
-    if (crypto.createHash('sha256').update(code).digest('hex') === hash) {
+  for (let i = 100000; i <= 999999; i++) {
+    const code = String(i);
+    if (crypto.createHmac('sha256', OTP_SALT).update(code).digest('hex') === hash) {
       return code;
     }
   }
@@ -22,12 +24,12 @@ async function testSuperAdminDashboardFlow() {
 
   try {
     // 1. Send Login Credentials to POST /api/auth/login
-    console.log('Step 1: Authenticating with credentials (admin@mtslab.com)...');
+    console.log('Step 1: Authenticating with credentials (mtsmobilelab@gmail.com)...');
     const loginRes = await fetch(`${BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        identity: 'admin@mtslab.com',
+        identity: 'mtsmobilelab@gmail.com',
         password: 'admin123'
       })
     });
@@ -56,8 +58,7 @@ async function testSuperAdminDashboardFlow() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ticket: loginData.mfaTicket || loginData.ticket,
-          userId: loginData.userId,
+          mfaTicket: loginData.mfaTicket,
           code: otpCode
         })
       });
