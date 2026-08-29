@@ -21,7 +21,7 @@ class RealtimeService {
   private sseConnected = false;
   private reconnectTimer: any = null;
   private reconnectAttempts = 0;
-  private maxReconnectDelay = 6000;
+  private maxReconnectDelay = 60000; // Cap at 60s — on Vercel, SSE closes every ~20s by design
   private lastActivityTime = Date.now();
   private healthCheckInterval: any = null;
   private supabaseChannel: any = null;
@@ -265,6 +265,8 @@ class RealtimeService {
   private scheduleReconnect() {
     if (this.reconnectTimer) return;
     this.reconnectAttempts++;
+    // Exponential backoff: 1.4^n * 1000ms, capped at maxReconnectDelay (60s on Vercel)
+    // Supabase Realtime WebSocket handles live events while SSE reconnects
     const delay = Math.min(1000 * Math.pow(1.4, this.reconnectAttempts), this.maxReconnectDelay);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;

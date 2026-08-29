@@ -18,6 +18,7 @@ import notificationsRoutes from './routes/notifications';
 import superAdminRoutes from './routes/superAdmin';
 import uploadRoutes from './routes/upload';
 import publicRoutes from './routes/public';
+import eventsRoutes from './routes/events';
 
 export function createApp(): Express {
   const app = express();
@@ -61,6 +62,7 @@ export function createApp(): Express {
   app.use('/api/admin', superAdminRoutes);
   app.use('/api/share', superAdminRoutes);
   app.use('/api/upload', uploadRoutes);
+  app.use('/api/events', eventsRoutes); // SSE endpoint for realtime.ts — must exist or Vercel floods with FUNCTION_INVOCATION_FAILED
   app.use('/api', publicRoutes); // /api/track, /api/manager/*, /api/dashboard/*
 
   // Compatibility root endpoints
