@@ -1745,9 +1745,14 @@ let firestoreSyncDisabled = !(process.env.GOOGLE_APPLICATION_CREDENTIALS || proc
 function ensureFirebaseAdminApp() {
   if (!admin.apps.length) {
     try {
-      admin.initializeApp({
+      const hasCreds = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.FIREBASE_ADMIN_CREDENTIALS);
+      const initOptions: any = {
         projectId: firebaseConfig.projectId || "mts-lab-eb8d2",
-      });
+      };
+      if (hasCreds) {
+        initOptions.databaseURL = firebaseConfig.databaseURL || "https://mts-lab-eb8d2-default-rtdb.firebaseio.com";
+      }
+      admin.initializeApp(initOptions);
       console.log("[FIREBASE] Admin SDK initialized for project:", firebaseConfig.projectId || "mts-lab-eb8d2");
     } catch (err: any) {
       console.warn("[FIREBASE] Admin SDK initialization notice:", err?.message || err);
@@ -1765,6 +1770,20 @@ function getAdminAuth() {
       return admin.auth();
     } catch (err) {
       console.warn("[FIREBASE] Admin auth unavailable:", err);
+      return null;
+    }
+  }
+  return null;
+}
+
+function getAdminDatabase() {
+  const hasCreds = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.FIREBASE_ADMIN_CREDENTIALS);
+  if (!hasCreds) return null;
+  ensureFirebaseAdminApp();
+  if (admin.apps.length > 0) {
+    try {
+      return admin.database();
+    } catch (err) {
       return null;
     }
   }
@@ -2779,15 +2798,23 @@ async function syncToRtdb(modelName: string, action: string, record: any) {
     if (!recId) return;
 
     const pathName = modelName === 'repair' ? 'repairs' : (modelName === 'user' ? 'users' : `${modelName}s`);
+    const adminDb = getAdminDatabase();
 
     if (action === 'DELETE') {
-      await fetch(`${RTDB_BASE_URL}/${pathName}/${recId}.json`, {
-        method: 'DELETE'
-      }).catch(() => {});
-      if (modelName === 'user' && record.firebaseUid) {
-        await fetch(`${RTDB_BASE_URL}/users/${record.firebaseUid}.json`, {
+      if (adminDb) {
+        await adminDb.ref(`${pathName}/${recId}`).remove().catch(() => {});
+        if (modelName === 'user' && record.firebaseUid) {
+          await adminDb.ref(`users/${record.firebaseUid}`).remove().catch(() => {});
+        }
+      } else {
+        await fetch(`${RTDB_BASE_URL}/${pathName}/${recId}.json`, {
           method: 'DELETE'
         }).catch(() => {});
+        if (modelName === 'user' && record.firebaseUid) {
+          await fetch(`${RTDB_BASE_URL}/users/${record.firebaseUid}.json`, {
+            method: 'DELETE'
+          }).catch(() => {});
+        }
       }
     } else {
       const dataToSync: any = typeof record === 'object' ? { ...record } : { id: recId };
@@ -2820,28 +2847,38 @@ async function syncToRtdb(modelName: string, action: string, record: any) {
         delete dataToSync.twoFactorSecret;
       }
 
-      await fetch(`${RTDB_BASE_URL}/${pathName}/${recId}.json`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataToSync)
-      }).catch(() => {});
-
-      // If user has firebaseUid, also write to users/${firebaseUid} for direct client lookup
-      if (modelName === 'user' && record.firebaseUid && record.firebaseUid !== recId) {
-        await fetch(`${RTDB_BASE_URL}/users/${record.firebaseUid}.json`, {
+      if (adminDb) {
+        await adminDb.ref(`${pathName}/${recId}`).set(dataToSync).catch(() => {});
+        if (modelName === 'user' && record.firebaseUid && record.firebaseUid !== recId) {
+          await adminDb.ref(`users/${record.firebaseUid}`).set(dataToSync).catch(() => {});
+        }
+      } else {
+        await fetch(`${RTDB_BASE_URL}/${pathName}/${recId}.json`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dataToSync)
         }).catch(() => {});
+
+        if (modelName === 'user' && record.firebaseUid && record.firebaseUid !== recId) {
+          await fetch(`${RTDB_BASE_URL}/users/${record.firebaseUid}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataToSync)
+          }).catch(() => {});
+        }
       }
     }
 
     // Touch syncTimestamp on RTDB
-    await fetch(`${RTDB_BASE_URL}/syncTimestamp.json`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Date.now())
-    }).catch(() => {});
+    if (adminDb) {
+      await adminDb.ref('syncTimestamp').set(Date.now()).catch(() => {});
+    } else {
+      await fetch(`${RTDB_BASE_URL}/syncTimestamp.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Date.now())
+      }).catch(() => {});
+    }
   } catch (err: any) {
     // Non-blocking RTDB sync notice
   }
@@ -9323,7 +9360,7 @@ export async function createServerApp() {
       const cleanIds = targetIds.filter(id => typeof id === "string" && id.trim().length > 0);
       const existingWarranties = await prisma.batteryWarranty.findMany({
         where: { id: { in: cleanIds } },
-        select: { id: true, warrantyNumber: true, customerName: true, repairNumber: true }
+        select: { id: true, warrantyNumber: true, customerName: true, repairNumber: true, cloudinaryPublicId: true }
       });
 
       if (existingWarranties.length === 0) {

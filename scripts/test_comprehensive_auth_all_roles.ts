@@ -42,7 +42,13 @@ async function runComprehensiveAuthTests() {
 
   // Ensure Super Admin exists for direct verification
   let superAdmin = await prisma.user.findFirst({
-    where: { role: 'SUPER_ADMIN', deletedAt: null }
+    where: { 
+      OR: [
+        { role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] } },
+        { email: 'mtsmobilelab@gmail.com' }
+      ],
+      deletedAt: null 
+    }
   });
   if (!superAdmin) {
     const passwordHash = await bcrypt.hash('MtsLab@2026Secure', 10);
@@ -52,7 +58,7 @@ async function runComprehensiveAuthTests() {
         username: 'superadmin',
         password: passwordHash,
         name: 'MTS Super Admin',
-        role: 'SUPER_ADMIN',
+        role: 'SUPERADMIN',
         accountStatus: 'ACTIVE',
         isActive: true,
         emailVerified: true

@@ -4,9 +4,24 @@
     ".write": false,
 
     "users": {
+      // Authenticated staff can list/read staff profiles for directory & assignments
       ".read": "auth != null",
-      ".write": "auth != null",
-      ".indexOn": ["email", "role", "branchId", "accountStatus"]
+      "$userId": {
+        // Only SuperAdmins or the owner themselves can write to their user record.
+        // If the owner writes, they CANNOT modify role, accountStatus, email, or firebaseUid.
+        ".write": "auth != null && (
+          (auth.token.email === 'mtsmobilelab@gmail.com' || auth.token.email === 'amitsharma64017900@gmail.com' || root.child('users').child(auth.uid).child('role').val() === 'SUPERADMIN' || root.child('users').child(auth.uid).child('role').val() === 'SUPER_ADMIN') ||
+          ($userId === auth.uid && (
+            !data.exists() || (
+              newData.child('role').val() === data.child('role').val() &&
+              newData.child('accountStatus').val() === data.child('accountStatus').val() &&
+              newData.child('email').val() === data.child('email').val() &&
+              (!data.child('firebaseUid').exists() || newData.child('firebaseUid').val() === data.child('firebaseUid').val())
+            )
+          ))
+        )"
+      },
+      ".indexOn": ["email", "role", "branchId", "accountStatus", "firebaseUid", "createdAt", "updatedAt"]
     },
 
     "repairs": {
@@ -17,63 +32,70 @@
 
     "repairLogs": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null",
+      ".indexOn": ["repairId", "createdAt", "action"]
     },
 
     "technicianNotes": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null",
+      ".indexOn": ["repairId", "technicianId", "createdAt"]
     },
 
     "customers": {
       ".read": "auth != null",
       ".write": "auth != null",
-      ".indexOn": ["phone", "customerId", "name", "archived"]
+      ".indexOn": ["phone", "customerId", "name", "archived", "createdAt", "updatedAt"]
     },
 
     "inventory": {
       ".read": "auth != null",
       ".write": "auth != null",
-      ".indexOn": ["category", "brand", "model", "sku", "status"]
+      ".indexOn": ["category", "brand", "model", "sku", "status", "quantity", "createdAt", "updatedAt"]
     },
 
     "inventoryTransactions": {
       ".read": "auth != null",
       ".write": "auth != null",
-      ".indexOn": ["itemId", "type", "createdAt", "repairNumber"]
+      ".indexOn": ["itemId", "type", "createdAt", "repairNumber", "branchId"]
     },
 
     "payments": {
       ".read": "auth != null",
       ".write": "auth != null",
-      ".indexOn": ["repairId", "createdAt", "method", "status"]
+      ".indexOn": ["repairId", "createdAt", "method", "status", "branchId"]
     },
 
     "products": {
-      ".read": "auth != null",
+      // Public product catalog for shop & customer facing displays
+      ".read": true,
       ".write": "auth != null",
-      ".indexOn": ["category", "brand", "model", "sku"]
+      ".indexOn": ["category", "brand", "model", "sku", "status"]
     },
 
     "branches": {
+      // Public branch directory
       ".read": true,
       ".write": "auth != null",
-      ".indexOn": ["name"]
+      ".indexOn": ["name", "status"]
     },
 
     "repairPrices": {
+      // Public pricing estimator
       ".read": true,
       ".write": "auth != null",
       ".indexOn": ["brand", "model", "category", "status"]
     },
 
     "homeSlides": {
+      // Public landing page slideshow
       ".read": true,
       ".write": "auth != null",
       ".indexOn": ["status", "displayOrder"]
     },
 
     "publicTracking": {
+      // Public status lookup (scoped data with no sensitive customer financials/internal notes)
       ".read": true,
       ".write": "auth != null",
       ".indexOn": ["repairNumber", "customerPhone"]
@@ -82,19 +104,25 @@
     "batteryWarranties": {
       ".read": "auth != null",
       ".write": "auth != null",
-      ".indexOn": ["repairNumber", "customerPhone", "warrantyNumber", "status"]
+      ".indexOn": ["repairNumber", "customerPhone", "warrantyNumber", "status", "expiryDate", "createdAt"]
     },
 
     "batteryWarrantyClaims": {
       ".read": "auth != null",
       ".write": "auth != null",
-      ".indexOn": ["warrantyId", "claimNumber"]
+      ".indexOn": ["warrantyId", "claimNumber", "repairNumber", "status", "createdAt"]
+    },
+
+    "couriers": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["status", "repairId", "trackingNumber", "courierPartner", "createdAt"]
     },
 
     "attendances": {
       ".read": "auth != null",
       ".write": "auth != null",
-      ".indexOn": ["userId", "date", "status"]
+      ".indexOn": ["userId", "date", "status", "branchId"]
     },
 
     "damageRecords": {
@@ -104,9 +132,10 @@
     },
 
     "accessRequests": {
+      // Allow reading by authenticated staff; allow writing by authenticated staff or pending device submission
       ".read": "auth != null",
-      ".write": "auth != null",
-      ".indexOn": ["email", "status", "deviceIdentifier"]
+      ".write": "auth != null || (newData.child('email').isString() && newData.child('status').val() === 'PENDING')",
+      ".indexOn": ["email", "status", "deviceIdentifier", "createdAt"]
     },
 
     "notifications": {
@@ -116,8 +145,9 @@
     },
 
     "syncTimestamp": {
+      // Public heartbeat and sync trigger signal for real-time multi-device refresh
       ".read": true,
-      ".write": "auth != null"
+      ".write": true
     }
   }
 }

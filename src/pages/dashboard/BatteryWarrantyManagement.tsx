@@ -544,8 +544,8 @@ export default function BatteryWarrantyManagement() {
     try {
       const res = await uploadWarrantyCertificateToCloudinary(warranty);
       toast.success(res.message || "Warranty certificate successfully uploaded & saved to Cloudinary!");
-      if (res.warranty) {
-        setSelectedWarranty(res.warranty);
+      if ((res as any).warranty) {
+        setSelectedWarranty((res as any).warranty);
       } else if (res.pdfUrl) {
         setSelectedWarranty((prev: any) => ({ ...prev, pdfUrl: res.pdfUrl, cloudinaryPublicId: res.cloudinaryPublicId }));
       }

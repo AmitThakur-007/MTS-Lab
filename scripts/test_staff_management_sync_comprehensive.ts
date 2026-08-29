@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import * as jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -61,7 +61,7 @@ async function runStaffManagementComprehensiveTests() {
     }
   });
 
-  const superAdminToken = jwt.default.sign(
+  const superAdminToken = jwt.sign(
     { id: superAdmin.id, email: superAdmin.email, role: 'SUPER_ADMIN', name: superAdmin.name },
     JWT_SECRET,
     { expiresIn: '1d' }
@@ -236,7 +236,7 @@ async function runStaffManagementComprehensiveTests() {
       }
     });
 
-    const staffToken = jwt.default.sign(
+    const staffToken = jwt.sign(
       { id: staffId, email: staffUser?.email, role: r, name: staffUser?.name },
       JWT_SECRET,
       { expiresIn: '1d' }

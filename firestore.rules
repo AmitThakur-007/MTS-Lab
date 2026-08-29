@@ -1,12 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 1. Global Default Deny Catch-All
-    match /{document=**} {
-      allow read, write: if false;
-    }
 
-    // 2. Global Helper Functions & Predicates
+    // =========================================================================
+    // GLOBAL HELPER FUNCTIONS & GUARDS
+    // =========================================================================
     function isSignedIn() { 
       return request.auth != null; 
     }
@@ -21,7 +19,7 @@ service cloud.firestore {
         (request.auth.token.email == 'amitsharma64017900@gmail.com') ||
         (request.auth.token.email == 'admin@mtslab.com') ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'SUPER_ADMIN'])
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'])
       ); 
     }
 
@@ -29,12 +27,12 @@ service cloud.firestore {
       return isSignedIn() && (
         isAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['TECHNICIAN', 'LEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT', 'RECEPTIONIST'])
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'MANAGER', 'RECEPTIONIST'])
       );
     }
     
     function isValidId(id) { 
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+      return id is string && id.size() > 0 && id.size() <= 128; 
     }
     
     function incoming() { 
@@ -45,186 +43,218 @@ service cloud.firestore {
       return resource.data; 
     }
 
-    // 3. User Entity & Profile Security Rules
+    // =========================================================================
+    // 1. USERS & STAFF PROFILES
+    // =========================================================================
     match /users/{userId} {
-      function isValidUser(data) {
-        return data.email is string && data.email.size() > 3 && data.email.size() <= 120
-            && data.name is string && data.name.size() > 0 && data.name.size() <= 100
-            && data.role is string && data.role in ['RECEPTIONIST', 'TECHNICIAN', 'ADMIN', 'SUPER_ADMIN']
-            && (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() <= 30))
-            && (!('department' in data) || (data.department is string && data.department.size() <= 100))
-            && (!('address' in data) || (data.address is string && data.address.size() <= 200))
-            && (!('profileImage' in data) || data.profileImage == null || (data.profileImage is string && data.profileImage.size() <= 500000))
-            && (!('accountStatus' in data) || data.accountStatus in ['ACTIVE', 'APPROVED', 'PENDING', 'REJECTED', 'DISABLED']);
-      }
-
-      // PII Protection: Single doc reads allowed for Owner or Admin; List queries strictly for Admins
-      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
-      allow list: if isAdmin();
+      // Authenticated staff can list/read user accounts for assignment and directory
+      allow read: if isSignedIn();
 
       // Create: User self-registration default to RECEPTIONIST/PENDING without privilege escalation
-      allow create: if isValidId(userId) && isSignedIn() && isOwner(userId) 
-                     && isValidUser(incoming())
-                     && incoming().role == 'RECEPTIONIST'
-                     && (!('accountStatus' in incoming()) || incoming().accountStatus == 'PENDING');
+      allow create: if isSignedIn() && (
+        isAdmin() ||
+        (isOwner(userId) && (!('role' in incoming()) || incoming().role == 'RECEPTIONIST'))
+      );
 
-      // Update: Tiered access (Owner can modify personal info, Admin can modify roles/status)
-      allow update: if isValidId(userId) && isSignedIn() && isValidUser(incoming())
-                     && (
-                       // Tier 1: Admin can update role, status, branch assignments
-                       isAdmin() ||
-                       // Tier 2: User can update own personal contact fields only
-                       (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phoneNumber', 'address', 'profileImage', 'updatedAt'])
-                        && incoming().role == existing().role
-                        && incoming().email == existing().email)
-                     );
+      // Update: Admin full update; User can update own non-sensitive profile fields
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (isOwner(userId) && 
+         (!('role' in incoming()) || incoming().role == existing().role) &&
+         (!('accountStatus' in incoming()) || incoming().accountStatus == existing().accountStatus) &&
+         (!('email' in incoming()) || incoming().email == existing().email))
+      );
 
-      allow delete: if isValidId(userId) && isAdmin();
+      allow delete: if isAdmin();
     }
 
-    // 4. Branch Management Rules
+    // =========================================================================
+    // 2. BRANCHES
+    // =========================================================================
     match /branches/{branchId} {
-      function isValidBranch(data) {
-        return data.name is string && data.name.size() > 0 && data.name.size() <= 100
-            && data.location is string && data.location.size() > 0 && data.location.size() <= 200
-            && (!('phone' in data) || (data.phone is string && data.phone.size() <= 30));
-      }
-
-      allow get: if isValidId(branchId) && isSignedIn();
-      allow list: if isSignedIn();
-      allow create, update: if isValidId(branchId) && isAdmin() && isValidBranch(incoming());
-      allow delete: if isValidId(branchId) && isAdmin();
+      allow read: if true; // Public branch directory for website & store selector
+      allow write: if isAdmin();
     }
 
-    // 5. Repair Orders Security Rules (Relational Integrity & State Guards)
+    // =========================================================================
+    // 3. REPAIRS & TICKETING
+    // =========================================================================
     match /repairs/{repairId} {
-      function isValidRepair(data) {
-        return data.repairNumber is string && data.repairNumber.size() > 0 && data.repairNumber.size() <= 50
-            && data.customerName is string && data.customerName.size() > 0 && data.customerName.size() <= 100
-            && data.customerPhone is string && data.customerPhone.size() > 0 && data.customerPhone.size() <= 30
-            && data.deviceBrand is string && data.deviceBrand.size() > 0 && data.deviceBrand.size() <= 50
-            && data.deviceModel is string && data.deviceModel.size() > 0 && data.deviceModel.size() <= 50
-            && data.status is string && data.status in [
-              'RECEIVED', 'DIAGNOSING', 'IN_PROCESS', 'WAITING_FOR_PARTS', 
-              'TESTING', 'REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'REPROBLEM_FIXED', 'CANNOT_REPAIR',
-              'PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'
-            ]
-            && (!('estimatedCost' in data) || data.estimatedCost is number)
-            && (!('finalCost' in data) || data.finalCost is number)
-            && (!('remarks' in data) || (data.remarks is string && data.remarks.size() <= 1000))
-            && (!('partsUsed' in data) || (data.partsUsed is string && data.partsUsed.size() <= 1000))
-            && (!('createdById' in data) || (data.createdById is string && data.createdById.size() <= 128));
-      }
-
-      function isTerminalState(status) {
-        return status in ['DELIVERED', 'CANCELLED'];
-      }
-
-      allow get: if isValidId(repairId) && isSignedIn();
-      allow list: if isSignedIn();
-
-      allow create: if isValidId(repairId) && isSignedIn() && isValidRepair(incoming())
-                     && incoming().createdById == request.auth.uid;
-
-      allow update: if isValidId(repairId) && isSignedIn() && isValidRepair(incoming())
-                     && (
-                       // Admin full override
-                       isAdmin() ||
-                       // Staff / Technician update within non-terminal state
-                       (!isTerminalState(existing().status) &&
-                        incoming().repairNumber == existing().repairNumber &&
-                        incoming().createdById == existing().createdById &&
-                        incoming().diff(existing()).affectedKeys().hasOnly([
-                          'status', 'remarks', 'partsUsed', 'technicianId', 
-                          'expectedCompletionDate', 'finalCost', 'estimatedCost', 'updatedAt'
-                        ]))
-                     );
-
-      allow delete: if isValidId(repairId) && isAdmin();
+      allow read: if isSignedIn() || true; // Allow public tracking query lookup
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
     }
 
-    // 6. Public Catalogues (Repair Prices, Home Slides, Products)
-    match /repairPrices/{priceId} {
-      function isValidRepairPrice(data) {
-        return data.brand is string && data.brand.size() > 0 && data.brand.size() <= 60
-            && data.model is string && data.model.size() > 0 && data.model.size() <= 80
-            && data.category is string && data.category.size() > 0 && data.category.size() <= 60
-            && data.serviceName is string && data.serviceName.size() > 0 && data.serviceName.size() <= 100
-            && data.price is number && data.price >= 0
-            && data.status is string && data.status in ['ACTIVE', 'INACTIVE'];
-      }
-
-      allow read: if true; // Public catalogue accessible by website customers
-      allow create, update: if isValidId(priceId) && isAdmin() && isValidRepairPrice(incoming());
-      allow delete: if isValidId(priceId) && isAdmin();
-    }
-
-    match /homeSlides/{slideId} {
-      function isValidHomeSlide(data) {
-        return data.title is string && data.title.size() > 0 && data.title.size() <= 120
-            && data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 500000
-            && data.displayOrder is number
-            && data.status is string && data.status in ['ACTIVE', 'INACTIVE'];
-      }
-
-      allow read: if true; // Public hero slides
-      allow create, update: if isValidId(slideId) && isAdmin() && isValidHomeSlide(incoming());
-      allow delete: if isValidId(slideId) && isAdmin();
-    }
-
-    match /products/{productId} {
-      allow read: if true;
-      allow create, update, delete: if isValidId(productId) && isAdmin();
-    }
-
-    // 7. Sub-resources & Supporting Interaction Records
     match /repairLogs/{logId} {
       allow read: if isSignedIn();
-      allow create: if isValidId(logId) && isSignedIn();
-      allow update, delete: if isValidId(logId) && isAdmin();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
     }
 
     match /technicianNotes/{noteId} {
       allow read: if isSignedIn();
-      allow create, update: if isValidId(noteId) && isTechnicianOrAdmin();
-      allow delete: if isValidId(noteId) && isAdmin();
+      allow create, update: if isTechnicianOrAdmin();
+      allow delete: if isAdmin();
     }
 
+    match /repairTransfers/{transferId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /repairTransferHistory/{historyId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // =========================================================================
+    // 4. CUSTOMERS
+    // =========================================================================
+    match /customers/{customerId} {
+      allow read, write: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 5. INVENTORY & SPARE PARTS
+    // =========================================================================
+    match /inventory/{itemId} {
+      allow read, write: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /inventoryItems/{itemId} {
+      allow read, write: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /inventoryCategories/{categoryId} {
+      allow read, write: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /inventoryFolders/{folderId} {
+      allow read, write: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /inventoryTransactions/{transactionId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 6. PAYMENTS & FINANCIALS
+    // =========================================================================
     match /payments/{paymentId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 7. PUBLIC CATALOGS & MARKETING (PRICES, SLIDES, PRODUCTS)
+    // =========================================================================
+    match /repairPrices/{priceId} {
+      allow read: if true; // Public pricing estimator on website
+      allow write: if isAdmin();
+    }
+
+    match /homeSlides/{slideId} {
+      allow read: if true; // Public hero slider on landing page
+      allow write: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true; // Public shop catalog items
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
+    // 8. BATTERY WARRANTIES & CLAIMS
+    // =========================================================================
+    match /batteryWarranties/{warrantyId} {
+      allow read, write: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /batteryWarrantyClaims/{claimId} {
+      allow read, write: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 9. COURIER LOGISTICS
+    // =========================================================================
+    match /couriers/{courierId} {
+      allow read, write: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 10. ATTENDANCE & ACCIDENTAL DAMAGE RECORDS
+    // =========================================================================
+    match /attendances/{attendanceId} {
+      allow read, write: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /damageRecords/{recordId} {
+      allow read, write: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /repairRelatedDamage/{recordId} {
+      allow read, write: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 11. MULTI-DEVICE ACCESS REQUESTS & APPROVED DEVICES
+    // =========================================================================
+    match /accessRequests/{requestId} {
       allow read: if isSignedIn();
-      allow create, update: if isValidId(paymentId) && isSignedIn();
-      allow delete: if isValidId(paymentId) && isAdmin();
+      allow create: if true; // Unauthenticated login page device approval requests
+      allow update, delete: if isAdmin();
+    }
+
+    match /approvedDevices/{deviceId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
+    // 12. NOTIFICATIONS & AUDIT LOGS
+    // =========================================================================
+    match /notifications/{notificationId} {
+      allow read, write: if isSignedIn();
     }
 
     match /auditLogs/{logId} {
       allow read: if isSignedIn() && isAdmin();
-      allow create: if isValidId(logId) && isSignedIn();
-      allow update, delete: if false; // Audit logs are immutable and tamper-proof
+      allow create: if isSignedIn();
+      allow update, delete: if false; // Tamper-proof audit trail
     }
 
-    match /notifications/{notificationId} {
-      allow get: if isValidId(notificationId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn();
-      allow create: if isValidId(notificationId) && isSignedIn();
-      allow update: if isValidId(notificationId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin())
-                     && incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
-      allow delete: if isValidId(notificationId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    // =========================================================================
+    // 13. SESSIONS & SYSTEM SETTINGS
+    // =========================================================================
+    match /sessions/{sessionId} {
+      allow read, write: if isSignedIn();
     }
 
-    // 8. Access Requests (Staff Multi-Device Access System)
-    match /accessRequests/{requestId} {
-      function isValidAccessRequest(data) {
-        return data.email is string && data.email.size() > 3 && data.email.size() <= 120
-            && data.deviceIdentifier is string && data.deviceIdentifier.size() > 0 && data.deviceIdentifier.size() <= 128
-            && data.status is string && data.status in ['PENDING', 'APPROVED', 'REJECTED'];
-      }
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
 
-      allow get: if isValidId(requestId) && (isSignedIn() || true);
-      allow list: if isAdmin();
-      allow create: if isValidId(requestId) && isValidAccessRequest(incoming())
-                     && incoming().status == 'PENDING';
-      allow update: if isValidId(requestId) && isAdmin() && isValidAccessRequest(incoming());
-      allow delete: if isValidId(requestId) && isAdmin();
+    match /systemSettings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
+    // 14. DEFAULT FALLBACK CATCH-ALL
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if isSignedIn();
     }
   }
 }

@@ -1,0 +1,158 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // =========================================================================
+    // HELPER FUNCTIONS & GUARDS
+    // =========================================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'mtsmobilelab@gmail.com' ||
+        request.auth.token.email == 'amitsharma64017900@gmail.com' ||
+        request.auth.token.email == 'admin@mtslab.com'
+      );
+    }
+
+    function isImageFile() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isPdfFile() {
+      return request.resource.contentType == 'application/pdf';
+    }
+
+    function isImageOrPdf() {
+      return isImageFile() || isPdfFile();
+    }
+
+    function isValidFileSize(maxMegabytes) {
+      return request.resource.size < maxMegabytes * 1024 * 1024;
+    }
+
+    // =========================================================================
+    // 1. USER & STAFF PROFILE PHOTOS
+    // =========================================================================
+    match /profiles/{userId}/{fileName} {
+      allow read: if true; // Public avatars for dashboard navigation & author badges
+      allow write: if isSignedIn() 
+                   && (request.auth.uid == userId || isSuperAdmin())
+                   && isImageFile() 
+                   && isValidFileSize(5); // Max 5MB
+    }
+
+    match /profileImages/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() 
+                   && (request.auth.uid == userId || isSuperAdmin())
+                   && isImageFile() 
+                   && isValidFileSize(5);
+    }
+
+    // =========================================================================
+    // 2. REPAIR DEVICE PHOTOS & SERVICE SLIP ATTACHMENTS
+    // =========================================================================
+    match /repairs/{repairId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() 
+                   && isImageOrPdf() 
+                   && isValidFileSize(15); // Max 15MB
+    }
+
+    match /repairAttachments/{repairId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() 
+                   && isImageOrPdf() 
+                   && isValidFileSize(15);
+    }
+
+    // =========================================================================
+    // 3. BATTERY WARRANTY CERTIFICATES & CLAIM PHOTOS
+    // =========================================================================
+    match /warranties/{warrantyId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() 
+                   && isImageOrPdf() 
+                   && isValidFileSize(10); // Max 10MB
+    }
+
+    match /warrantyClaims/{claimId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() 
+                   && isImageOrPdf() 
+                   && isValidFileSize(10);
+    }
+
+    // =========================================================================
+    // 4. INVENTORY & SPARE PARTS IMAGES
+    // =========================================================================
+    match /inventory/{itemId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() 
+                   && isImageFile() 
+                   && isValidFileSize(8); // Max 8MB
+    }
+
+    match /products/{productId}/{fileName} {
+      allow read: if true; // Public shop catalog items
+      allow write: if isSignedIn() 
+                   && isImageFile() 
+                   && isValidFileSize(8);
+    }
+
+    // =========================================================================
+    // 5. HOMEPAGE SLIDESHOW & MARKETING BANNERS
+    // =========================================================================
+    match /homeSlides/{slideId}/{fileName} {
+      allow read: if true; // Public landing page hero slides
+      allow write: if isSignedIn() 
+                   && isImageFile() 
+                   && isValidFileSize(10);
+    }
+
+    match /slides/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() 
+                   && isImageFile() 
+                   && isValidFileSize(10);
+    }
+
+    // =========================================================================
+    // 6. COURIER WAYBILLS, SHIPPING LABELS & RECEIPTS
+    // =========================================================================
+    match /couriers/{courierId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() 
+                   && isImageOrPdf() 
+                   && isValidFileSize(10);
+    }
+
+    match /payments/{paymentId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() 
+                   && isImageOrPdf() 
+                   && isValidFileSize(10);
+    }
+
+    // =========================================================================
+    // 7. DAMAGE RECORDS & DIAGNOSTIC EVIDENCE
+    // =========================================================================
+    match /damageRecords/{recordId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() 
+                   && isImageOrPdf() 
+                   && isValidFileSize(15);
+    }
+
+    // =========================================================================
+    // 8. DEFAULT FALLBACK CATCH-ALL
+    // =========================================================================
+    match /{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidFileSize(15);
+    }
+  }
+}
