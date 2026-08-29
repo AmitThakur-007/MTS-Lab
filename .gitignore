@@ -31,10 +31,10 @@ dist-ssr
 *.key
 
 # Database
-prisma/*.db
 prisma/*.db-journal
 *.sqlite
 *.sqlite3
+
 
 # Scratch & Temporary
 scratch/

@@ -69,30 +69,69 @@ const __dirname = typeof import.meta !== "undefined" && import.meta && import.me
   ? path.dirname(__filename)
   : ((globalThis as any).__dirname || "");
 
-// Sync db schema automatically at runtime with automatic corruption recovery
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.SERVERLESS
+);
+
+// Sync db schema automatically at runtime with automatic serverless / corruption recovery
 function initializeDatabase() {
-  const dbPath = path.join(process.cwd(), "prisma/dev.db");
-  try {
-    console.log("[STARTUP] Running Prisma DB push programmatically...");
-    execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
-  } catch (err: any) {
-    console.error("[STARTUP] Failed to push DB schema. Checking for corruption:", err?.message || err);
+  // 1. Serverless environment handling (Vercel / AWS Lambda)
+  if (isServerless) {
+    const tmpDbPath = "/tmp/dev.db";
+    const sourceDbPath = path.join(process.cwd(), "prisma/dev.db");
     try {
-      if (fs.existsSync(dbPath)) {
-        console.warn("[STARTUP] Malformed database detected. Recreating clean SQLite database...");
-        fs.unlinkSync(dbPath);
-        execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
-        console.log("[STARTUP] Clean database recreated successfully.");
+      if (!fs.existsSync(tmpDbPath)) {
+        if (fs.existsSync(sourceDbPath)) {
+          fs.copyFileSync(sourceDbPath, tmpDbPath);
+          console.log("[SERVERLESS DB] Successfully copied dev.db to /tmp/dev.db");
+        }
       }
-    } catch (recoverErr) {
-      console.error("[STARTUP FATAL] Failed to recover SQLite database:", recoverErr);
+      process.env.DATABASE_URL = `file:${tmpDbPath}`;
+    } catch (copyErr) {
+      console.warn("[SERVERLESS DB COPY NOTICE]", copyErr);
+      process.env.DATABASE_URL = `file:${tmpDbPath}`;
+    }
+    return;
+  }
+
+  // 2. Local environment handling
+  if (!process.env.DATABASE_URL) {
+    process.env.DATABASE_URL = "file:./prisma/dev.db";
+  }
+
+  // Only run programmatic db push in non-production local development
+  if (process.env.NODE_ENV !== "production" && !isServerless && !process.env.NO_DB_PUSH) {
+    const dbPath = path.join(process.cwd(), "prisma/dev.db");
+    try {
+      console.log("[STARTUP] Running Prisma DB push programmatically...");
+      execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
+    } catch (err: any) {
+      console.error("[STARTUP] Failed to push DB schema. Checking for corruption:", err?.message || err);
+      try {
+        if (fs.existsSync(dbPath)) {
+          console.warn("[STARTUP] Malformed database detected. Recreating clean SQLite database...");
+          fs.unlinkSync(dbPath);
+          execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
+          console.log("[STARTUP] Clean database recreated successfully.");
+        }
+      } catch (recoverErr) {
+        console.error("[STARTUP FATAL] Failed to recover SQLite database:", recoverErr);
+      }
     }
   }
 }
 
 initializeDatabase();
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL || "file:./prisma/dev.db"
+    }
+  }
+});
 
 // Automatic Prisma to Firestore sync & Real-Time Event broadcasting middleware
 prisma.$use(async (params, next) => {
