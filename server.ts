@@ -4081,6 +4081,33 @@ export async function createServerApp() {
     }
   });
 
+  app.get("/api/auth/me", authenticate, async (req: any, res) => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.id }
+      });
+      if (!user || user.deletedAt) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        department: user.department,
+        phoneNumber: user.phoneNumber,
+        address: user.address,
+        profileImage: user.profileImage,
+        twoFactorEnabled: user.twoFactorEnabled,
+        accountStatus: user.accountStatus,
+        branchId: user.branchId
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch user profile" });
+    }
+  });
+
   app.get("/api/auth/login", (req: any, res: any) => {
     if (req.accepts("html") && !req.xhr) {
       return res.redirect("/login");
