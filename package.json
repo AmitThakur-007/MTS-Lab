@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx src/server/dev.ts",
-    "build": "vite build",
+    "dev": "tsx api/_server/dev.ts",
+    "build": "vite build && esbuild api/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=api/index.js --packages=external",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
@@ -64,6 +64,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4"
+    "@types/react-dom": "^19.2.4",
+    "esbuild": "^0.28.2"
   }
 }
