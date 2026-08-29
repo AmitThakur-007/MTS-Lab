@@ -5109,11 +5109,11 @@ export async function createServerApp() {
       os?: string;
     }
   ) => {
-    // Access token is short-lived (15 min); inactivity enforcement is via Session.lastActiveAt
+    // Access token lifespan: 7 days; inactivity enforcement is via Session.lastActiveAt
     const accessToken = jwt.sign(
       { id: user.id, role: user.role, email: user.email, name: user.name }, 
       JWT_SECRET, 
-      { expiresIn: "15m" }
+      { expiresIn: "7d" }
     );
     const refreshToken = uuidv4();
     
@@ -11084,6 +11084,7 @@ export async function createServerApp() {
       }
 
       broadcastRealtimeEvent({ entity: "repair", action: "CREATE", id: repair.id, data: repair });
+      await syncToRtdb("repair", "CREATE", repair).catch(() => {});
 
       res.status(201).json({
         ...repair,

@@ -140,7 +140,7 @@ async function request(endpoint: string, options: any = {}) {
   const cleanEndpoint = normalizeEndpoint(endpoint);
   const method = (options.method || 'GET').toUpperCase();
   
-  const headers = {
+  let headers = {
     ...options.headers,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
@@ -155,6 +155,22 @@ async function request(endpoint: string, options: any = {}) {
       headers,
       credentials: 'include'
     });
+
+    // Handle token expiration & automatic seamless renewal on 401
+    if (res && res.status === 401 && token && !cleanEndpoint.includes('/auth/refresh') && !cleanEndpoint.includes('/auth/login')) {
+      const newToken = await doRefreshToken();
+      if (newToken) {
+        headers = {
+          ...options.headers,
+          Authorization: `Bearer ${newToken}`
+        };
+        res = await fetch(`${API_BASE}${cleanEndpoint}`, {
+          ...options,
+          headers,
+          credentials: 'include'
+        });
+      }
+    }
 
     if (res && res.ok) {
       const rawSuccessText = await res.text();
@@ -177,9 +193,9 @@ async function request(endpoint: string, options: any = {}) {
     serverHandled = false;
   }
 
-  // Handle Firebase Direct Cloud Persistence Fallback if server did not handle or was unreachable
+  // Handle Firebase Direct Cloud Persistence Fallback ONLY if server was completely unreachable (offline/network error)
   // and NEVER on server-authoritative endpoints (users, admin, auth, system, access-requests, wipe)
-  if (!serverHandled && !isServerAuthoritativeEndpoint(cleanEndpoint)) {
+  if (!serverHandled && !res && !isServerAuthoritativeEndpoint(cleanEndpoint)) {
     try {
       if (method === 'GET') {
         const fbResult = await handleFirebaseGet(cleanEndpoint);
