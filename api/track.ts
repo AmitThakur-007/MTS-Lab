@@ -1,8 +1,13 @@
 import { Request, Response } from 'express';
-import { supabaseAdmin } from './_server/config/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseAdminKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseKey;
+
+const supabase = createClient(supabaseUrl, supabaseAdminKey);
 
 export default async function handler(req: Request, res: Response) {
-    // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -22,10 +27,9 @@ export default async function handler(req: Request, res: Response) {
             return res.status(400).json({ error: 'Please enter a Repair Job Number or Registered Phone Number.' });
         }
 
-        const selectFields = `
+        let query = supabase.from('Repair').select(`
       id,
       repairNumber,
-      customerId,
       customerName,
       customerPhone,
       deviceBrand,
@@ -38,90 +42,39 @@ export default async function handler(req: Request, res: Response) {
       advancePaid,
       totalPaid,
       paymentStatus,
-      isCourierIn,
-      isCourierOut,
-      courierStatus,
-      courierCompany,
-      returnCourierCompany,
-      returnCourierTrackingNumber,
-      hasBatteryWarranty,
-      batteryWarrantyPeriod,
-      batteryType,
       createdAt,
       updatedAt,
       completedAt,
-      deliveredAt,
-      logs:RepairLog(action, status, notes, createdAt)
-    `;
+      deliveredAt
+    `);
 
-        let repairRecord: any = null;
-
-        if (cleanRepairNumber) {
-            const { data } = await supabaseAdmin
-                .from('Repair')
-                .select(selectFields)
-                .or(`repairNumber.eq.${cleanRepairNumber},repairNumber.ilike.%${cleanRepairNumber}%`)
-                .order('createdAt', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-            if (data) repairRecord = data;
+        if (cleanRepairNumber && cleanPhone) {
+            query = query.ilike('repairNumber', `%${cleanRepairNumber}%`).ilike('customerPhone', `%${cleanPhone}%`);
+        } else if (cleanRepairNumber) {
+            query = query.ilike('repairNumber', `%${cleanRepairNumber}%`);
+        } else if (cleanPhone) {
+            query = query.ilike('customerPhone', `%${cleanPhone}%`);
         }
 
-        if (!repairRecord && cleanPhone) {
-            const { data: directMatch } = await supabaseAdmin
-                .from('Repair')
-                .select(selectFields)
-                .ilike('customerPhone', `%${cleanPhone}%`)
-                .order('createdAt', { ascending: false })
-                .limit(1)
-                .maybeSingle();
+        const { data: repairs, error } = await query.order('createdAt', { ascending: false }).limit(5);
 
-            if (directMatch) {
-                repairRecord = directMatch;
-            } else {
-                const { data: customerData } = await supabaseAdmin
-                    .from('Customer')
-                    .select('id')
-                    .ilike('phone', `%${cleanPhone}%`)
-                    .limit(1)
-                    .maybeSingle();
-
-                if (customerData) {
-                    const { data: customerRepair } = await supabaseAdmin
-                        .from('Repair')
-                        .select(selectFields)
-                        .eq('customerId', customerData.id)
-                        .order('createdAt', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-
-                    if (customerRepair) repairRecord = customerRepair;
-                }
-            }
+        if (error) {
+            console.error('[SUPABASE QUERY ERROR]', error);
+            return res.status(500).json({ error: error.message || 'Database query failed.' });
         }
 
-        if (!repairRecord) {
+        if (!repairs || repairs.length === 0) {
             return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
         }
 
-        const sanitizedName = repairRecord.customerName
-            ? `${repairRecord.customerName.charAt(0)}*** ${repairRecord.customerName.split(' ').slice(-1)[0] || ''}`.trim()
-            : 'Customer';
+        const sanitized = repairs.map((r: any) => ({
+            ...r,
+            customerName: r.customerName ? `${r.customerName.charAt(0)}*** ${r.customerName.split(' ').slice(-1)[0] || ''}` : 'Customer',
+        }));
 
-        const sanitizedRecord = {
-            ...repairRecord,
-            customerName: sanitizedName,
-            customerPhone: cleanPhone ? `${cleanPhone.slice(0, 3)}****${cleanPhone.slice(-3)}` : undefined,
-        };
-
-        return res.json({
-            success: true,
-            repair: sanitizedRecord,
-            ...sanitizedRecord
-        });
+        return res.json(sanitized.length === 1 ? sanitized[0] : { devices: sanitized, customer: { name: sanitized[0].customerName } });
     } catch (err: any) {
-        console.error('[PUBLIC TRACK EXCEPTION]', err);
-        return res.status(500).json({ error: 'Failed to retrieve tracking details.' });
+        console.error('[TRACK FUNCTION EXCEPTION]', err);
+        return res.status(500).json({ error: err?.message || 'Server error tracking repair.' });
     }
 }
