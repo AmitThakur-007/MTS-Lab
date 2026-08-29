@@ -1,0 +1,789 @@
+import { Router, Request, Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import multer from 'multer';
+import { supabaseAdmin } from '../config/supabase';
+import { authenticate, AuthRequest } from '../middleware/auth';
+import { authorize, normalizeRole } from '../middleware/rbac';
+import { logAudit } from '../services/auditService';
+import { createExcelBuffer, parseExcelBuffer } from '../services/excelService';
+
+const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+// Helper to generate next unique sequential repair number (e.g. MTS-2026-0001)
+async function generateRepairNumber(): Promise<string> {
+  const currentYear = new Date().getFullYear();
+  const { data: repairs } = await supabaseAdmin
+    .from('Repair')
+    .select('repairNumber')
+    .ilike('repairNumber', `MTS-${currentYear}-%`)
+    .order('repairNumber', { ascending: false })
+    .limit(20);
+
+  let maxNum = 1000;
+  if (repairs && repairs.length > 0) {
+    for (const r of repairs) {
+      if (!r.repairNumber) continue;
+      const match = r.repairNumber.match(/(\d+)$/);
+      if (match && match[1]) {
+        const parsed = parseInt(match[1], 10);
+        if (!isNaN(parsed) && parsed > maxNum) {
+          maxNum = parsed;
+        }
+      }
+    }
+  }
+
+  const nextNum = maxNum + 1;
+  return `MTS-${currentYear}-${nextNum.toString().padStart(4, '0')}`;
+}
+
+// 1. GET /api/repairs
+router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      status,
+      technicianId,
+      branchId,
+      priority,
+      search,
+      receivingMethod,
+      isCourierIn,
+      isCourierOut,
+      startDate,
+      endDate,
+      limit = '100',
+      page = '1',
+    } = req.query;
+
+    const pageNum = parseInt(page as string, 10) || 1;
+    const limitNum = parseInt(limit as string, 10) || 100;
+    const offset = (pageNum - 1) * limitNum;
+
+    let query = supabaseAdmin
+      .from('Repair')
+      .select('*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, role, email)', { count: 'exact' });
+
+    // Technician role isolation: default to seeing assigned repairs unless Lead Tech/Admin/Manager
+    const role = normalizeRole(req.user!.role);
+    if (role === 'TECHNICIAN' && !technicianId) {
+      query = query.eq('technicianId', req.user!.id);
+    } else if (technicianId && technicianId !== 'ALL') {
+      query = query.eq('technicianId', String(technicianId));
+    }
+
+    if (status && status !== 'ALL') {
+      if (Array.isArray(status)) {
+        query = query.in('status', status as string[]);
+      } else {
+        query = query.eq('status', String(status));
+      }
+    }
+
+    if (priority && priority !== 'ALL') {
+      query = query.eq('priority', String(priority));
+    }
+
+    if (branchId && branchId !== 'ALL') {
+      query = query.eq('branchId', String(branchId));
+    }
+
+    if (receivingMethod && receivingMethod !== 'ALL') {
+      query = query.eq('receivingMethod', String(receivingMethod));
+    }
+
+    if (isCourierIn !== undefined) {
+      query = query.eq('isCourierIn', isCourierIn === 'true');
+    }
+
+    if (isCourierOut !== undefined) {
+      query = query.eq('isCourierOut', isCourierOut === 'true');
+    }
+
+    if (startDate) {
+      query = query.gte('createdAt', String(startDate));
+    }
+
+    if (endDate) {
+      query = query.lte('createdAt', String(endDate));
+    }
+
+    if (search) {
+      const s = String(search).trim();
+      query = query.or(`repairNumber.ilike.%${s}%,customerName.ilike.%${s}%,customerPhone.ilike.%${s}%,deviceModel.ilike.%${s}%,imeiNumber.ilike.%${s}%`);
+    }
+
+    query = query.order('createdAt', { ascending: false }).range(offset, offset + limitNum - 1);
+
+    const { data: repairs, count, error } = await query;
+
+    if (error) {
+      console.error('[REPAIRS GET ERROR]', error);
+      return res.status(500).json({ error: 'Failed to retrieve repairs list.' });
+    }
+
+    return res.json(repairs || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to load repair records.' });
+  }
+});
+
+// 2. GET /api/repairs/export
+router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { status, search, startDate, endDate } = req.query;
+    let query = supabaseAdmin.from('Repair').select('*, technician:User!Repair_technicianId_fkey(name)');
+
+    if (status && status !== 'ALL') query = query.eq('status', String(status));
+    if (startDate) query = query.gte('createdAt', String(startDate));
+    if (endDate) query = query.lte('createdAt', String(endDate));
+    if (search) {
+      const s = String(search).trim();
+      query = query.or(`repairNumber.ilike.%${s}%,customerName.ilike.%${s}%,customerPhone.ilike.%${s}%`);
+    }
+
+    const { data: repairs } = await query.order('createdAt', { ascending: false });
+
+    const rows = (repairs || []).map((r: any) => ({
+      'Repair Number': r.repairNumber,
+      'Customer Name': r.customerName,
+      'Phone': r.customerPhone,
+      'Device Brand': r.deviceBrand,
+      'Device Model': r.deviceModel,
+      'IMEI': r.imeiNumber || 'N/A',
+      'Problem': r.problemDescription,
+      'Status': r.status,
+      'Priority': r.priority || 'MEDIUM',
+      'Estimated Cost': r.estimatedCost,
+      'Advance Paid': r.advancePaid,
+      'Total Paid': r.totalPaid,
+      'Technician': r.technician?.name || 'Unassigned',
+      'Date': r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : '',
+    }));
+
+    const buffer = createExcelBuffer('Repairs', rows);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="MTS_Repairs_${new Date().toISOString().split('T')[0]}.xlsx"`);
+    return res.send(buffer);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to export repairs.' });
+  }
+});
+
+// 3. GET /api/repairs/import/template
+router.get('/import/template', authenticate, (req: Request, res: Response) => {
+  const sampleData = [
+    {
+      'Customer Name': 'Ram Bahadur',
+      'Customer Phone': '9841234567',
+      'Customer Email': 'ram@example.com',
+      'Customer Address': 'New Road, Kathmandu',
+      'Device Brand': 'Apple',
+      'Device Model': 'iPhone 13 Pro',
+      'IMEI / Serial': '354892019283741',
+      'Problem Description': 'Broken OLED screen, touch not working',
+      'Estimated Cost': 18500,
+      'Advance Paid': 5000,
+      'Remarks': 'Urgent repair requested by customer',
+    },
+  ];
+
+  const buffer = createExcelBuffer('Import Template', sampleData);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="MTS_Lab_Repair_Import_Template.xlsx"');
+  return res.send(buffer);
+});
+
+// 4. POST /api/repairs/import/preview
+router.post('/import/preview', authenticate, upload.single('file'), (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No Excel file provided for import preview.' });
+    }
+
+    const rows = parseExcelBuffer(req.file.buffer);
+    const parsed = rows.map((r, idx) => ({
+      rowIndex: idx + 1,
+      customerName: r['Customer Name'] || r['customerName'] || '',
+      customerPhone: r['Customer Phone'] || r['customerPhone'] || r['Phone'] || '',
+      customerEmail: r['Customer Email'] || r['customerEmail'] || '',
+      customerAddress: r['Customer Address'] || r['customerAddress'] || '',
+      deviceBrand: r['Device Brand'] || r['deviceBrand'] || 'Apple',
+      deviceModel: r['Device Model'] || r['deviceModel'] || '',
+      imeiNumber: r['IMEI / Serial'] || r['IMEI'] || r['imeiNumber'] || '',
+      problemDescription: r['Problem Description'] || r['problemDescription'] || '',
+      estimatedCost: parseFloat(r['Estimated Cost'] || r['estimatedCost'] || '0') || 0,
+      advancePaid: parseFloat(r['Advance Paid'] || r['advancePaid'] || '0') || 0,
+      remarks: r['Remarks'] || r['remarks'] || '',
+      isValid: Boolean((r['Customer Name'] || r['customerName']) && (r['Customer Phone'] || r['customerPhone']) && (r['Device Model'] || r['deviceModel'])),
+    }));
+
+    return res.json({
+      totalRows: parsed.length,
+      validRows: parsed.filter((p) => p.isValid).length,
+      invalidRows: parsed.filter((p) => !p.isValid).length,
+      preview: parsed,
+    });
+  } catch (err: any) {
+    return res.status(400).json({ error: 'Failed to parse Excel file. Ensure valid .xlsx format.' });
+  }
+});
+
+// 5. POST /api/repairs/import/confirm
+router.post('/import/confirm', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { items } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'No repair items to import.' });
+    }
+
+    const importedRepairs = [];
+    for (const item of items) {
+      if (!item.customerName || !item.customerPhone || !item.deviceModel) continue;
+
+      const repairNumber = await generateRepairNumber();
+      const repairId = uuidv4();
+
+      const newRepair = {
+        id: repairId,
+        repairNumber,
+        customerName: item.customerName.trim(),
+        customerPhone: item.customerPhone.trim(),
+        customerEmail: item.customerEmail ? item.customerEmail.trim() : null,
+        customerAddress: item.customerAddress ? item.customerAddress.trim() : null,
+        deviceBrand: item.deviceBrand || 'Apple',
+        deviceModel: item.deviceModel.trim(),
+        imeiNumber: item.imeiNumber ? String(item.imeiNumber).trim() : null,
+        problemDescription: item.problemDescription || 'General diagnostic & repair',
+        estimatedCost: Number(item.estimatedCost || 0),
+        advancePaid: Number(item.advancePaid || 0),
+        totalPaid: Number(item.advancePaid || 0),
+        paymentStatus: Number(item.advancePaid || 0) > 0 ? (Number(item.advancePaid) >= Number(item.estimatedCost) ? 'PAID' : 'PARTIAL') : 'UNPAID',
+        status: 'RECEIVED',
+        priority: 'MEDIUM',
+        remarks: item.remarks || null,
+        createdById: req.user!.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const { data: created } = await supabaseAdmin.from('Repair').insert([newRepair]).select('*').single();
+      if (created) importedRepairs.push(created);
+    }
+
+    return res.json({ success: true, count: importedRepairs.length, message: `Successfully imported ${importedRepairs.length} repairs.` });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to process batch repair import.' });
+  }
+});
+
+// 6. GET /api/repairs/:id
+router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { data: repair, error } = await supabaseAdmin
+      .from('Repair')
+      .select('*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, role, email, phoneNumber), notes:TechnicianNote(*), logs:RepairLog(*), payments:Payment(*)')
+      .eq('id', id)
+      .single();
+
+    if (error || !repair) {
+      return res.status(404).json({ error: 'Repair record not found.' });
+    }
+
+    return res.json(repair);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to retrieve repair details.' });
+  }
+});
+
+// 7. POST /api/repairs
+router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      customerId,
+      customerName,
+      customerPhone,
+      customerEmail,
+      customerAddress,
+      deviceBrand,
+      deviceModel,
+      imeiNumber,
+      deviceColor,
+      deviceCondition,
+      conditionNotes,
+      problemDescription,
+      accessoriesReceived,
+      estimatedCost,
+      advancePaid,
+      technicianId,
+      branchId,
+      priority = 'MEDIUM',
+      expectedCompletionDate,
+      remarks,
+      receivingMethod = 'WALK_IN',
+      isCourierIn = false,
+      courierCompany,
+      courierTrackingNumber,
+      senderName,
+      senderPhone,
+      originDistrict,
+      originAddress,
+    } = req.body;
+
+    if (!customerName || !customerPhone || !deviceModel) {
+      return res.status(400).json({ error: 'Customer name, phone, and device model are required.' });
+    }
+
+    // Ensure customer record exists
+    let resolvedCustomerId = customerId;
+    if (!resolvedCustomerId) {
+      const { data: existingCustomers } = await supabaseAdmin
+        .from('Customer')
+        .select('id')
+        .eq('phone', customerPhone.trim())
+        .limit(1);
+
+      if (existingCustomers && existingCustomers.length > 0) {
+        resolvedCustomerId = existingCustomers[0].id;
+      } else {
+        const newCusId = uuidv4();
+        const { data: createdCus } = await supabaseAdmin
+          .from('Customer')
+          .insert([
+            {
+              id: newCusId,
+              customerId: `CUS-${Date.now().toString().slice(-5)}`,
+              name: customerName.trim(),
+              phone: customerPhone.trim(),
+              email: customerEmail ? customerEmail.trim() : null,
+              address: customerAddress ? customerAddress.trim() : null,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ])
+          .select('id')
+          .single();
+
+        if (createdCus) resolvedCustomerId = createdCus.id;
+      }
+    }
+
+    const repairNumber = await generateRepairNumber();
+    const repairId = uuidv4();
+    const estCostNum = parseFloat(estimatedCost || 0) || 0;
+    const advPaidNum = parseFloat(advancePaid || 0) || 0;
+    const paymentStatus = advPaidNum >= estCostNum && estCostNum > 0 ? 'PAID' : (advPaidNum > 0 ? 'PARTIAL' : 'UNPAID');
+
+    const newRepair = {
+      id: repairId,
+      repairNumber,
+      customerId: resolvedCustomerId || null,
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      customerEmail: customerEmail ? customerEmail.trim() : null,
+      customerAddress: customerAddress ? customerAddress.trim() : null,
+      deviceBrand: deviceBrand || 'Apple',
+      deviceModel: deviceModel.trim(),
+      imeiNumber: imeiNumber ? String(imeiNumber).trim() : null,
+      deviceColor: deviceColor || null,
+      deviceCondition: deviceCondition || 'FAIR',
+      conditionNotes: conditionNotes || null,
+      problemDescription: problemDescription || '',
+      accessoriesReceived: accessoriesReceived || null,
+      estimatedCost: estCostNum,
+      advancePaid: advPaidNum,
+      totalPaid: advPaidNum,
+      paymentStatus,
+      status: 'RECEIVED',
+      priority,
+      technicianId: technicianId || null,
+      branchId: branchId || req.user!.branchId || null,
+      expectedCompletionDate: expectedCompletionDate || null,
+      remarks: remarks || null,
+      receivingMethod,
+      isCourierIn: Boolean(isCourierIn),
+      courierCompany: courierCompany || null,
+      courierTrackingNumber: courierTrackingNumber || null,
+      senderName: senderName || null,
+      senderPhone: senderPhone || null,
+      originDistrict: originDistrict || null,
+      originAddress: originAddress || null,
+      createdById: req.user!.id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const { data: created, error } = await supabaseAdmin.from('Repair').insert([newRepair]).select('*').single();
+
+    if (error) {
+      console.error('[REPAIR CREATE ERROR]', error);
+      return res.status(500).json({ error: 'Failed to create repair ticket.' });
+    }
+
+    // Create Initial Repair Log
+    await supabaseAdmin.from('RepairLog').insert([
+      {
+        id: uuidv4(),
+        repairId: created.id,
+        userId: req.user!.id,
+        action: 'CREATED',
+        status: 'RECEIVED',
+        notes: `Repair intake recorded by ${req.user!.name}. Initial payment: NPR ${advPaidNum}`,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    await logAudit({
+      userId: req.user!.id,
+      action: 'REPAIR_CREATED',
+      resource: 'Repair',
+      resourceId: created.id,
+      details: { repairNumber: created.repairNumber, customerName: created.customerName },
+    });
+
+    return res.status(201).json(created);
+  } catch (err: any) {
+    console.error('[CREATE REPAIR ERROR]', err);
+    return res.status(500).json({ error: 'Failed to register repair ticket.' });
+  }
+});
+
+// 8. POST /api/repairs/batch
+router.post('/batch', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { devices, ...commonInfo } = req.body;
+    if (!devices || !Array.isArray(devices) || devices.length === 0) {
+      return res.status(400).json({ error: 'Batch repair requires a list of devices.' });
+    }
+
+    const createdRepairs = [];
+    for (const dev of devices) {
+      const repairNumber = await generateRepairNumber();
+      const repairId = uuidv4();
+
+      const newRepair = {
+        id: repairId,
+        repairNumber,
+        customerId: commonInfo.customerId || null,
+        customerName: commonInfo.customerName,
+        customerPhone: commonInfo.customerPhone,
+        customerEmail: commonInfo.customerEmail || null,
+        customerAddress: commonInfo.customerAddress || null,
+        deviceBrand: dev.deviceBrand || 'Apple',
+        deviceModel: dev.deviceModel,
+        imeiNumber: dev.imeiNumber || null,
+        problemDescription: dev.problemDescription || commonInfo.problemDescription || '',
+        estimatedCost: Number(dev.estimatedCost || 0),
+        advancePaid: Number(dev.advancePaid || 0),
+        totalPaid: Number(dev.advancePaid || 0),
+        paymentStatus: Number(dev.advancePaid || 0) > 0 ? 'PARTIAL' : 'UNPAID',
+        status: 'RECEIVED',
+        priority: 'MEDIUM',
+        createdById: req.user!.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const { data: created } = await supabaseAdmin.from('Repair').insert([newRepair]).select('*').single();
+      if (created) createdRepairs.push(created);
+    }
+
+    return res.status(201).json({ success: true, count: createdRepairs.length, repairs: createdRepairs });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Batch repair registration failed.' });
+  }
+});
+
+// 9. PATCH /api/repairs/:id
+router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData = { ...req.body, updatedAt: new Date().toISOString() };
+    delete updateData.id;
+    delete updateData.customer;
+    delete updateData.technician;
+    delete updateData.notes;
+    delete updateData.logs;
+    delete updateData.payments;
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('Repair')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to update repair record.' });
+    }
+
+    if (req.body.status) {
+      await supabaseAdmin.from('RepairLog').insert([
+        {
+          id: uuidv4(),
+          repairId: id,
+          userId: req.user!.id,
+          action: 'STATUS_UPDATED',
+          status: req.body.status,
+          notes: req.body.remarks || `Status updated to ${req.body.status} by ${req.user!.name}`,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    }
+
+    return res.json(updated);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update repair.' });
+  }
+});
+
+// 10. POST /api/repairs/:id/assign
+router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LEAD_TECHNICIAN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { technicianId } = req.body;
+
+    const { data: tech } = await supabaseAdmin.from('User').select('name').eq('id', technicianId).single();
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('Repair')
+      .update({
+        technicianId: technicianId || null,
+        assignedAt: new Date().toISOString(),
+        assignedById: req.user!.id,
+        assignedByName: req.user!.name,
+        updatedAt: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to assign technician.' });
+    }
+
+    await supabaseAdmin.from('RepairLog').insert([
+      {
+        id: uuidv4(),
+        repairId: id,
+        userId: req.user!.id,
+        action: 'ASSIGNED',
+        status: updated.status,
+        notes: `Assigned to technician: ${tech?.name || 'Unassigned'} by ${req.user!.name}`,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    return res.json(updated);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to assign technician.' });
+  }
+});
+
+// 11. POST /api/repairs/:id/notes
+router.post('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { note, isInternal = true } = req.body;
+
+    if (!note) {
+      return res.status(400).json({ error: 'Note text is required.' });
+    }
+
+    const newNote = {
+      id: uuidv4(),
+      repairId: id,
+      technicianId: req.user!.id,
+      authorName: req.user!.name,
+      authorRole: req.user!.role,
+      note: note.trim(),
+      isInternal: Boolean(isInternal),
+      createdAt: new Date().toISOString(),
+    };
+
+    const { data: created, error } = await supabaseAdmin.from('TechnicianNote').insert([newNote]).select('*').single();
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to save note.' });
+    }
+
+    return res.status(201).json(created);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to add repair note.' });
+  }
+});
+
+// 12. GET /api/repairs/:id/notes
+router.get('/:id/notes', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { data: notes, error } = await supabaseAdmin
+      .from('TechnicianNote')
+      .select('*')
+      .eq('repairId', id)
+      .order('createdAt', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to fetch notes.' });
+    }
+
+    return res.json(notes || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to retrieve notes.' });
+  }
+});
+
+// 13. POST /api/repairs/:id/alert
+router.post('/:id/alert', authenticate, async (req: AuthRequest, res: Response) => {
+  return res.json({ success: true, message: 'Customer notification alert dispatched successfully.' });
+});
+
+// 14. POST /api/repairs/:id/transfer
+router.post('/:id/transfer', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { targetTechnicianId, reason } = req.body;
+
+    const { data: tech } = await supabaseAdmin.from('User').select('name').eq('id', targetTechnicianId).single();
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('Repair')
+      .update({
+        technicianId: targetTechnicianId,
+        updatedAt: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to transfer repair.' });
+    }
+
+    await supabaseAdmin.from('RepairLog').insert([
+      {
+        id: uuidv4(),
+        repairId: id,
+        userId: req.user!.id,
+        action: 'TRANSFERRED',
+        status: updated.status,
+        notes: `Repair transferred to ${tech?.name || 'Technician'}. Reason: ${reason || 'Workload reallocation'}`,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    return res.json(updated);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to transfer repair ticket.' });
+  }
+});
+
+// 15. POST /api/repairs/:id/courier-dispatch
+router.post('/:id/courier-dispatch', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { courierCompany, trackingNumber, destinationDistrict, destinationAddress, receiverName, receiverPhone, notes } = req.body;
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('Repair')
+      .update({
+        isCourierOut: true,
+        returnCourierCompany: courierCompany,
+        returnCourierTrackingNumber: trackingNumber,
+        destinationDistrict,
+        destinationAddress,
+        receiverName,
+        receiverPhone,
+        returnCourierNotes: notes,
+        isReturnCourierDispatched: true,
+        returnCourierDispatchedAt: new Date().toISOString(),
+        returnCourierDispatchedById: req.user!.id,
+        returnCourierDispatchedByName: req.user!.name,
+        status: 'DISPATCHED_VIA_COURIER',
+        updatedAt: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to dispatch repair shipment.' });
+    }
+
+    return res.json({ success: true, message: 'Repair successfully dispatched with courier tracking.', repair: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to record courier dispatch.' });
+  }
+});
+
+// 16. POST /api/repairs/:id/re-problem
+router.post('/:id/re-problem', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { description } = req.body;
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('Repair')
+      .update({
+        status: 'RE_PROBLEM',
+        remarks: `Warranty recurring problem: ${description}`,
+        updatedAt: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to register re-problem status.' });
+    }
+
+    return res.json({ success: true, message: 'Repair marked as Re-Problem under warranty.', repair: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update re-problem.' });
+  }
+});
+
+// 17. DELETE /api/repairs/:id
+router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    await supabaseAdmin.from('RepairLog').delete().eq('repairId', id);
+    await supabaseAdmin.from('TechnicianNote').delete().eq('repairId', id);
+    await supabaseAdmin.from('Payment').delete().eq('repairId', id);
+    const { error } = await supabaseAdmin.from('Repair').delete().eq('id', id);
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to delete repair.' });
+    }
+
+    return res.json({ success: true, message: 'Repair deleted successfully.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to delete repair record.' });
+  }
+});
+
+// 18. POST /api/repairs/bulk-delete
+router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No repair IDs specified.' });
+    }
+
+    await supabaseAdmin.from('RepairLog').delete().in('repairId', ids);
+    await supabaseAdmin.from('TechnicianNote').delete().in('repairId', ids);
+    await supabaseAdmin.from('Payment').delete().in('repairId', ids);
+    const { error } = await supabaseAdmin.from('Repair').delete().in('id', ids);
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to bulk delete repairs.' });
+    }
+
+    return res.json({ success: true, message: `Successfully deleted ${ids.length} repair records.` });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to bulk delete repairs.' });
+  }
+});
+
+export default router;

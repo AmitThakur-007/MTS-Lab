@@ -3,8 +3,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/*.ts": {
-      "maxDuration": 30,
-      "includeFiles": "prisma/**"
+      "maxDuration": 30
     }
   },
   "rewrites": [

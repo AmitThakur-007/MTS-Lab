@@ -1,29 +1,17 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { createServerApp } from '../server';
+import { createApp } from '../src/server/app';
 
-export type VercelRequest = IncomingMessage & {
-  body?: any;
-  query?: any;
-  cookies?: any;
-};
+let cachedApp: any = null;
 
-export type VercelResponse = ServerResponse & {
-  status?: (statusCode: number) => VercelResponse;
-  json?: (body: any) => void;
-  send?: (body: any) => void;
-};
-
-let serverAppPromise: Promise<any> | null = null;
-
-async function getServerApp() {
-  if (!serverAppPromise) {
-    serverAppPromise = createServerApp();
+function getAppInstance() {
+  if (!cachedApp) {
+    cachedApp = createApp();
   }
-  return serverAppPromise;
+  return cachedApp;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS Preflight
+export default async function handler(req: IncomingMessage & { url?: string }, res: ServerResponse) {
+  // CORS Preflight Handler
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -33,46 +21,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Normalize URL so Express routes matching /api/* always match
+  // Normalize URL to always start with /api
   if (req.url && !req.url.startsWith('/api')) {
     req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
   }
 
+  const app = getAppInstance();
+
   return new Promise<void>((resolve, reject) => {
-    // Keep Vercel serverless function alive until response is finished
     res.on('finish', () => resolve());
     res.on('close', () => resolve());
     res.on('error', (err) => reject(err));
 
-    getServerApp()
-      .then((app) => {
-        app(req, res, (err: any) => {
-          if (err) {
-            console.error('[API SERVERLESS ROUTE ERROR]', err);
-            if (!res.headersSent) {
-              res.statusCode = 500;
-              res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({
-                error: 'Internal Server Error',
-                message: err?.message || 'Route execution error'
-              }));
-            }
-            resolve();
-          }
-        });
-      })
-      .catch((err: any) => {
-        console.error('[API SERVERLESS GATEWAY ERROR]', err);
+    app(req, res, (err: any) => {
+      if (err) {
+        console.error('[API SERVERLESS EXECUTION ERROR]', err);
         if (!res.headersSent) {
           res.statusCode = 500;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({
             error: 'Internal Server Error',
-            message: err?.message || 'Serverless application handler encountered an error.'
+            message: err?.message || 'Serverless route execution failure',
           }));
         }
-        resolve();
-      });
+      }
+      resolve();
+    });
   });
 }
-

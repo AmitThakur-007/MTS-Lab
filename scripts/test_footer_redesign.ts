@@ -21,7 +21,7 @@ async function runTests() {
   console.log('--- 1. Testing Brand Name Update Across Codebase ---');
   const footerPath = path.join(process.cwd(), 'src/components/Footer.tsx');
   const loginPath = path.join(process.cwd(), 'src/pages/Login.tsx');
-  const serverPath = path.join(process.cwd(), 'server.ts');
+  const serverPath = path.join(process.cwd(), 'src/server/app.ts');
   const securityPath = path.join(process.cwd(), 'SECURITY.md');
 
   const footerContent = fs.readFileSync(footerPath, 'utf8');
