@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
+import {
   Briefcase,
   Users,
   Wrench,
@@ -42,28 +42,28 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel
@@ -72,15 +72,15 @@ import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { useRealtimeSync } from '@/services/realtime';
 import { toast } from 'sonner';
-import { 
-  format, 
-  isToday, 
-  isYesterday, 
-  isThisWeek, 
-  isThisMonth, 
-  parseISO, 
-  startOfDay, 
-  endOfDay 
+import {
+  format,
+  isToday,
+  isYesterday,
+  isThisWeek,
+  isThisMonth,
+  parseISO,
+  startOfDay,
+  endOfDay
 } from 'date-fns';
 import { cn } from '@/lib/utils';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
@@ -104,6 +104,9 @@ const statusConfig: Record<string, { label: string; badge: string; bgSoft: strin
 };
 
 type DateFilterOption = 'ALL' | 'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'THIS_MONTH' | 'CUSTOM';
+
+// Static array to ensure stable hook dependencies across renders
+const MANAGER_REALTIME_ENTITIES = ['repair', 'technicianNote', 'repairTransfer', 'repairLog', 'notification', 'user'];
 
 export default function ManagerDashboard() {
   const { user } = useAuthStore();
@@ -140,7 +143,7 @@ export default function ManagerDashboard() {
 
   // Modals & Action States
   const [selectedRepair, setSelectedRepair] = useState<any | null>(null);
-  
+
   // Assign Modal
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignTechId, setAssignTechId] = useState('');
@@ -171,10 +174,10 @@ export default function ManagerDashboard() {
   // Repair-Related Damage team overview
   const [damageOverview, setDamageOverview] = useState<any>(null);
 
-  // Fetch all core manager data
-  const fetchData = useCallback(async () => {
+  // Fetch all core manager data with optional silent background execution
+  const fetchData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [repairsRes, statsRes, workloadRes, staffRes, damageRes] = await Promise.all([
         api.get('/repairs'),
         api.get('/manager/stats').catch(() => null),
@@ -243,9 +246,9 @@ export default function ManagerDashboard() {
 
     } catch (err: any) {
       console.error("[MANAGER DASHBOARD ERROR]", err);
-      toast.error(err.message || "Failed to load manager dashboard.");
+      if (!silent) toast.error(err.message || "Failed to load manager dashboard.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -253,13 +256,27 @@ export default function ManagerDashboard() {
     fetchData();
   }, [fetchData]);
 
-  // Real-time synchronization
-  useRealtimeSync(
-    ['repair', 'technicianNote', 'repairTransfer', 'repairLog', 'notification', 'user'],
-    () => {
-      fetchData();
+  // Debounced realtime synchronization to prevent infinite re-render cycles
+  const realtimeDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (realtimeDebounceTimerRef.current) {
+        clearTimeout(realtimeDebounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleRealtimeUpdate = useCallback(() => {
+    if (realtimeDebounceTimerRef.current) {
+      clearTimeout(realtimeDebounceTimerRef.current);
     }
-  );
+    realtimeDebounceTimerRef.current = setTimeout(() => {
+      fetchData(true);
+    }, 500);
+  }, [fetchData]);
+
+  useRealtimeSync(MANAGER_REALTIME_ENTITIES, handleRealtimeUpdate);
 
   // Filtered & Sorted Repairs computation
   const filteredRepairs = useMemo(() => {
@@ -273,10 +290,10 @@ export default function ManagerDashboard() {
         const brandModel = `${r.deviceBrand || ''} ${r.deviceModel || ''}`.toLowerCase();
         const imei = (r.imeiNumber || '').toLowerCase();
 
-        const matches = repNum.includes(q) || 
-          custName.includes(q) || 
-          custPhone.includes(q) || 
-          brandModel.includes(q) || 
+        const matches = repNum.includes(q) ||
+          custName.includes(q) ||
+          custPhone.includes(q) ||
+          brandModel.includes(q) ||
           imei.includes(q);
 
         if (!matches) return false;
@@ -377,7 +394,7 @@ export default function ManagerDashboard() {
       toast.success(assignTechId ? "Technician assigned successfully." : "Repair marked as unassigned.");
       setIsAssignModalOpen(false);
       setSelectedRepair(null);
-      fetchData();
+      fetchData(true);
     } catch (err: any) {
       toast.error(err.message || "Failed to assign technician.");
     } finally {
@@ -414,7 +431,7 @@ export default function ManagerDashboard() {
       toast.success("Repair transferred and specialist notified.");
       setIsTransferModalOpen(false);
       setSelectedRepair(null);
-      fetchData();
+      fetchData(true);
     } catch (err: any) {
       toast.error(err.message || "Failed to transfer repair.");
     } finally {
@@ -444,7 +461,7 @@ export default function ManagerDashboard() {
       toast.success("Managerial instruction / note added.");
       setIsNoteModalOpen(false);
       setSelectedRepair(null);
-      fetchData();
+      fetchData(true);
     } catch (err: any) {
       toast.error(err.message || "Failed to add internal note.");
     } finally {
@@ -471,7 +488,7 @@ export default function ManagerDashboard() {
       toast.success(`Status updated to ${newStatus.replace(/_/g, ' ')}`);
       setIsStatusModalOpen(false);
       setSelectedRepair(null);
-      fetchData();
+      fetchData(true);
     } catch (err: any) {
       toast.error(err.message || "Failed to update status.");
     } finally {
@@ -483,7 +500,7 @@ export default function ManagerDashboard() {
     try {
       await api.patch(`/repairs/${repair.id}/priority`, { priority: nextPriority });
       toast.success(`Priority set to ${nextPriority}`);
-      fetchData();
+      fetchData(true);
     } catch (err: any) {
       toast.error(err.message || "Failed to update priority.");
     }
@@ -529,7 +546,6 @@ export default function ManagerDashboard() {
   return (
     <div className="space-y-8 pb-32 max-w-7xl mx-auto px-2 sm:px-4">
       {/* 1. Header Banner */}
-      {/* 1. Header Banner */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-5 sm:p-7 md:p-8 rounded-[28px] sm:rounded-[32px] border border-slate-200 shadow-sm relative overflow-hidden">
         <div className="space-y-1.5 z-10 max-w-2xl">
           <div className="flex flex-wrap items-center gap-2">
@@ -570,7 +586,7 @@ export default function ManagerDashboard() {
           </Button>
 
           <DashboardRefreshButton
-            onRefresh={fetchData}
+            onRefresh={() => fetchData(false)}
             showLiveBadge={false}
             showLastUpdated={false}
             size="sm"
@@ -583,7 +599,7 @@ export default function ManagerDashboard() {
 
       {/* Quick Access Hubs for Operations */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
-        <div 
+        <div
           onClick={() => navigate('/dashboard/attendance')}
           className="group flex items-center justify-between p-4 sm:p-5 rounded-[22px] sm:rounded-[24px] bg-gradient-to-r from-blue-950 to-indigo-900 text-white shadow-md hover:shadow-xl transition-all cursor-pointer border border-blue-800/60"
         >
@@ -602,7 +618,7 @@ export default function ManagerDashboard() {
           <ArrowRight className="h-5 w-5 text-blue-300 group-hover:text-white group-hover:translate-x-1 transition-all shrink-0" />
         </div>
 
-        <div 
+        <div
           onClick={() => navigate('/dashboard/inventory')}
           className="group flex items-center justify-between p-4 sm:p-5 rounded-[22px] sm:rounded-[24px] bg-gradient-to-r from-slate-900 to-slate-800 text-white shadow-md hover:shadow-xl transition-all cursor-pointer border border-slate-700/60"
         >
@@ -621,7 +637,7 @@ export default function ManagerDashboard() {
           <ArrowRight className="h-5 w-5 text-slate-400 group-hover:text-white group-hover:translate-x-1 transition-all shrink-0" />
         </div>
 
-        <div 
+        <div
           onClick={() => navigate('/dashboard/battery-warranty')}
           className="group flex items-center justify-between p-4 sm:p-5 rounded-[22px] sm:rounded-[24px] bg-gradient-to-r from-emerald-950 to-teal-900 text-white shadow-md hover:shadow-xl transition-all cursor-pointer border border-emerald-800/60 sm:col-span-2 lg:col-span-1"
         >
@@ -644,7 +660,7 @@ export default function ManagerDashboard() {
       {/* 2. Operations Overview KPI Metrics Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {/* Total Repairs */}
-        <Card 
+        <Card
           onClick={() => { setStatusFilter('ALL'); setTechFilter('ALL'); }}
           className={cn(
             "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
@@ -660,12 +676,12 @@ export default function ManagerDashboard() {
         </Card>
 
         {/* Unassigned Attention Card */}
-        <Card 
+        <Card
           onClick={() => { setStatusFilter('UNASSIGNED'); }}
           className={cn(
             "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
-            statusFilter === 'UNASSIGNED' 
-              ? "border-amber-600 bg-amber-600 text-white shadow-md" 
+            statusFilter === 'UNASSIGNED'
+              ? "border-amber-600 bg-amber-600 text-white shadow-md"
               : "border-amber-200 bg-amber-50/50 text-slate-900"
           )}
         >
@@ -682,12 +698,12 @@ export default function ManagerDashboard() {
         </Card>
 
         {/* In Progress */}
-        <Card 
+        <Card
           onClick={() => { setStatusFilter('IN_PROGRESS'); }}
           className={cn(
             "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
-            statusFilter === 'IN_PROGRESS' 
-              ? "border-indigo-600 bg-indigo-600 text-white shadow-md" 
+            statusFilter === 'IN_PROGRESS'
+              ? "border-indigo-600 bg-indigo-600 text-white shadow-md"
               : "border-slate-200 bg-white text-slate-900"
           )}
         >
@@ -700,12 +716,12 @@ export default function ManagerDashboard() {
         </Card>
 
         {/* Repaired / Ready */}
-        <Card 
+        <Card
           onClick={() => { setStatusFilter('REPAIRED'); }}
           className={cn(
             "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
-            statusFilter === 'REPAIRED' 
-              ? "border-teal-600 bg-teal-600 text-white shadow-md" 
+            statusFilter === 'REPAIRED'
+              ? "border-teal-600 bg-teal-600 text-white shadow-md"
               : "border-slate-200 bg-white text-slate-900"
           )}
         >
@@ -718,12 +734,12 @@ export default function ManagerDashboard() {
         </Card>
 
         {/* Delivered */}
-        <Card 
+        <Card
           onClick={() => { setStatusFilter('DELIVERED'); }}
           className={cn(
             "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
-            statusFilter === 'DELIVERED' 
-              ? "border-slate-700 bg-slate-700 text-white shadow-md" 
+            statusFilter === 'DELIVERED'
+              ? "border-slate-700 bg-slate-700 text-white shadow-md"
               : "border-slate-200 bg-white text-slate-900"
           )}
         >
@@ -736,12 +752,12 @@ export default function ManagerDashboard() {
         </Card>
 
         {/* Re-Problem / Warranty */}
-        <Card 
+        <Card
           onClick={() => { setStatusFilter('RE_PROBLEM'); }}
           className={cn(
             "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
-            statusFilter === 'RE_PROBLEM' 
-              ? "border-rose-600 bg-rose-600 text-white shadow-md" 
+            statusFilter === 'RE_PROBLEM'
+              ? "border-rose-600 bg-rose-600 text-white shadow-md"
               : "border-rose-200 bg-rose-50/50 text-slate-900"
           )}
         >
@@ -758,9 +774,7 @@ export default function ManagerDashboard() {
         </Card>
       </div>
 
-      {/* ========================================================================= */}
-      {/* ATTENDANCE & REPAIR-RELATED DAMAGE PERSONAL SUMMARY CARDS                  */}
-      {/* ========================================================================= */}
+      {/* ATTENDANCE & REPAIR-RELATED DAMAGE PERSONAL SUMMARY CARDS */}
       <UserOverviewCards />
 
       {/* 3. Technician Workload Hub */}
@@ -801,8 +815,8 @@ export default function ManagerDashboard() {
                     onClick={() => setTechFilter(isSelected ? 'ALL' : item.technician.id)}
                     className={cn(
                       "p-5 rounded-3xl border transition-all cursor-pointer relative overflow-hidden",
-                      isSelected 
-                        ? "border-indigo-600 bg-indigo-50/30 shadow-md ring-2 ring-indigo-600/20" 
+                      isSelected
+                        ? "border-indigo-600 bg-indigo-50/30 shadow-md ring-2 ring-indigo-600/20"
                         : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
                     )}
                   >
@@ -877,7 +891,7 @@ export default function ManagerDashboard() {
           {/* Search Input */}
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input 
+            <Input
               type="text"
               placeholder="Search by Repair #, Customer, Phone, IMEI, Device Model..."
               value={searchQuery}
@@ -885,7 +899,7 @@ export default function ManagerDashboard() {
               className="pl-10 sm:pl-11 h-11 sm:h-12 rounded-xl sm:rounded-2xl border-slate-200 font-bold text-xs sm:text-sm bg-slate-50/50 focus:bg-white transition-all"
             />
             {searchQuery && (
-              <button 
+              <button
                 onClick={() => setSearchQuery('')}
                 className="absolute right-3.5 sm:right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
               >
@@ -961,7 +975,7 @@ export default function ManagerDashboard() {
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 pt-3 border-t border-slate-100">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-500">From:</span>
-              <Input 
+              <Input
                 type="date"
                 value={customStartDate}
                 onChange={e => setCustomStartDate(e.target.value)}
@@ -970,7 +984,7 @@ export default function ManagerDashboard() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-500">To:</span>
-              <Input 
+              <Input
                 type="date"
                 value={customEndDate}
                 onChange={e => setCustomEndDate(e.target.value)}
@@ -978,8 +992,8 @@ export default function ManagerDashboard() {
               />
             </div>
             {(customStartDate || customEndDate) && (
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 onClick={() => { setCustomStartDate(''); setCustomEndDate(''); }}
                 className="text-xs font-bold text-slate-400 hover:text-slate-600 h-8"
@@ -1013,8 +1027,8 @@ export default function ManagerDashboard() {
                   isActive
                     ? "bg-slate-900 text-white shadow-xs"
                     : tab.alert
-                    ? "bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100"
-                    : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                      ? "bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100"
+                      : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                 )}
               >
                 <span>{tab.label}</span>
@@ -1148,19 +1162,19 @@ export default function ManagerDashboard() {
                                 )}
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="start" className="rounded-2xl p-1.5 w-36">
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleTogglePriority(repair, 'URGENT')}
                                   className="font-bold text-xs text-rose-600 rounded-xl"
                                 >
                                   Urgent Priority
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleTogglePriority(repair, 'HIGH')}
                                   className="font-bold text-xs text-amber-600 rounded-xl"
                                 >
                                   High Priority
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleTogglePriority(repair, 'NORMAL')}
                                   className="font-bold text-xs text-slate-700 rounded-xl"
                                 >
@@ -1202,7 +1216,7 @@ export default function ManagerDashboard() {
 
                           {/* Status Badge */}
                           <td className="py-4 px-4 whitespace-nowrap">
-                            <Badge 
+                            <Badge
                               onClick={() => handleOpenStatusModal(repair)}
                               className={cn(
                                 "cursor-pointer font-bold text-[11px] px-2.5 py-0.5 rounded-lg border shadow-none",
@@ -1279,19 +1293,19 @@ export default function ManagerDashboard() {
                               )}
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="rounded-2xl p-1.5 w-36">
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={() => handleTogglePriority(repair, 'URGENT')}
                                 className="font-bold text-xs text-rose-600 rounded-xl cursor-pointer"
                               >
                                 Urgent Priority
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={() => handleTogglePriority(repair, 'HIGH')}
                                 className="font-bold text-xs text-amber-600 rounded-xl cursor-pointer"
                               >
                                 High Priority
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={() => handleTogglePriority(repair, 'NORMAL')}
                                 className="font-bold text-xs text-slate-700 rounded-xl cursor-pointer"
                               >
