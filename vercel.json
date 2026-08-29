@@ -3,13 +3,14 @@
   "outputDirectory": "dist",
   "functions": {
     "api/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "src/**"
     }
   },
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "/api"
+      "source": "/api/(.*)",
+      "destination": "/api/index.ts"
     },
     {
       "source": "/:match*",

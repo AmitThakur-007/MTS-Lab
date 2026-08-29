@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { createApp } from '../src/server/app';
+import { createApp } from '../src/server/app.js';
 
 let cachedApp: any = null;
 
