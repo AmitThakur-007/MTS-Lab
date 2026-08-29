@@ -166,56 +166,35 @@ async function logAudit(entry) {
 }
 
 // api/_server/services/emailService.ts
-import nodemailer from "nodemailer";
-var transporter = null;
-function getTransporter() {
-  if (transporter) return transporter;
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
-  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
-  if (!smtpUser || !smtpPass) {
-    return null;
-  }
-  if (smtpHost) {
-    transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587,
-      secure: process.env.SMTP_SECURE === "true",
-      auth: {
-        user: smtpUser,
-        pass: smtpPass
-      }
-    });
-  } else if (process.env.GMAIL_USER) {
-    transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD
-      }
-    });
-  }
-  return transporter;
-}
+import { Resend } from "resend";
+var resendApiKey = process.env.RESEND_API_KEY;
+var resend = resendApiKey ? new Resend(resendApiKey) : null;
 async function sendEmail(options) {
-  const mailer = getTransporter();
-  if (!mailer) {
-    console.warn(`[EMAIL NOTICE] No SMTP configured. Email to ${options.to} was not sent (Subject: ${options.subject})`);
+  if (!resend) {
+    console.warn(`[EMAIL NOTICE] RESEND_API_KEY is not configured. Email to ${options.to} not sent.`);
     return true;
   }
   try {
-    const fromAddress = process.env.SMTP_FROM || `"MTS Lab Security" <no-reply@mtslab.com>`;
-    await mailer.sendMail({
+    const fromAddress = process.env.SMTP_FROM || "MTS Lab Security <noreply@mobiletechnologystation.com.np>";
+    const { error } = await resend.emails.send({
       from: fromAddress,
       to: options.to,
       subject: options.subject,
-      text: options.text,
       html: options.html,
-      attachments: options.attachments
+      text: options.text,
+      attachments: options.attachments?.map((att) => ({
+        filename: att.filename,
+        content: att.content
+      }))
     });
+    if (error) {
+      console.error("[RESEND ERROR] Failed to send email:", error);
+      return false;
+    }
+    console.log(`[EMAIL SUCCESS] Sent email to ${options.to}`);
     return true;
   } catch (err) {
-    console.error("[EMAIL ERROR] Failed to send email:", err);
+    console.error("[EMAIL ERROR] Exception sending email via Resend:", err);
     return false;
   }
 }
