@@ -27,9 +27,11 @@ export default async function handler(req: Request, res: Response) {
             return res.status(400).json({ error: 'Please enter a Repair Job Number or Registered Phone Number.' });
         }
 
-        let query = supabase.from('Repair').select(`
+        // Select only standard verified columns
+        const selectFields = `
       id,
       repairNumber,
+      customerId,
       customerName,
       customerPhone,
       deviceBrand,
@@ -37,16 +39,15 @@ export default async function handler(req: Request, res: Response) {
       problemDescription,
       status,
       priority,
-      expectedCompletionDate,
       estimatedCost,
       advancePaid,
       totalPaid,
       paymentStatus,
       createdAt,
-      updatedAt,
-      completedAt,
-      deliveredAt
-    `);
+      updatedAt
+    `;
+
+        let query = supabase.from('Repair').select(selectFields);
 
         if (cleanRepairNumber && cleanPhone) {
             query = query.ilike('repairNumber', `%${cleanRepairNumber}%`).ilike('customerPhone', `%${cleanPhone}%`);
