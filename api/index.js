@@ -1059,7 +1059,7 @@ router3.get("/", authenticate, async (req, res) => {
       query = query.or(`repairNumber.ilike.%${s}%,customerName.ilike.%${s}%,customerPhone.ilike.%${s}%,deviceModel.ilike.%${s}%,imeiNumber.ilike.%${s}%`);
     }
     query = query.order("createdAt", { ascending: false }).range(offset, offset + limitNum - 1);
-    const { data: repairs, count, error } = await query;
+    const { data: repairs, error } = await query;
     if (error) {
       console.error("[REPAIRS GET ERROR]", error);
       return res.status(500).json({ error: "Failed to retrieve repairs list." });
@@ -1339,59 +1339,25 @@ router3.post("/", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to register repair ticket." });
   }
 });
-router3.post("/batch", authenticate, async (req, res) => {
-  try {
-    const { devices, ...commonInfo } = req.body;
-    if (!devices || !Array.isArray(devices) || devices.length === 0) {
-      return res.status(400).json({ error: "Batch repair requires a list of devices." });
-    }
-    const createdRepairs = [];
-    for (const dev of devices) {
-      const repairNumber = await generateRepairNumber();
-      const repairId = uuidv44();
-      const newRepair = {
-        id: repairId,
-        repairNumber,
-        customerId: commonInfo.customerId || null,
-        customerName: commonInfo.customerName,
-        customerPhone: commonInfo.customerPhone,
-        customerEmail: commonInfo.customerEmail || null,
-        customerAddress: commonInfo.customerAddress || null,
-        deviceBrand: dev.deviceBrand || "Apple",
-        deviceModel: dev.deviceModel,
-        imeiNumber: dev.imeiNumber || null,
-        problemDescription: dev.problemDescription || commonInfo.problemDescription || "",
-        estimatedCost: Number(dev.estimatedCost || 0),
-        advancePaid: Number(dev.advancePaid || 0),
-        totalPaid: Number(dev.advancePaid || 0),
-        paymentStatus: Number(dev.advancePaid || 0) > 0 ? "PARTIAL" : "UNPAID",
-        status: "RECEIVED",
-        priority: "MEDIUM",
-        createdById: req.user.id,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      const { data: created } = await supabaseAdmin.from("Repair").insert([newRepair]).select("*").single();
-      if (created) createdRepairs.push(created);
-    }
-    return res.status(201).json({ success: true, count: createdRepairs.length, repairs: createdRepairs });
-  } catch (err) {
-    return res.status(500).json({ error: "Batch repair registration failed." });
-  }
-});
-router3.patch("/:id", authenticate, async (req, res) => {
+var handleRepairUpdate = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const updateData = { ...req.body };
     delete updateData.id;
+    delete updateData.createdAt;
     delete updateData.customer;
     delete updateData.technician;
     delete updateData.notes;
     delete updateData.logs;
     delete updateData.payments;
+    if (updateData.estimatedCost !== void 0) updateData.estimatedCost = parseFloat(updateData.estimatedCost) || 0;
+    if (updateData.advancePaid !== void 0) updateData.advancePaid = parseFloat(updateData.advancePaid) || 0;
+    if (updateData.totalPaid !== void 0) updateData.totalPaid = parseFloat(updateData.totalPaid) || 0;
+    updateData.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
     const { data: updated, error } = await supabaseAdmin.from("Repair").update(updateData).eq("id", id).select("*").single();
     if (error) {
-      return res.status(500).json({ error: "Failed to update repair record." });
+      console.error("[REPAIR UPDATE ERROR]", error);
+      return res.status(400).json({ error: error.message });
     }
     if (req.body.status) {
       await supabaseAdmin.from("RepairLog").insert([
@@ -1408,9 +1374,12 @@ router3.patch("/:id", authenticate, async (req, res) => {
     }
     return res.json(updated);
   } catch (err) {
+    console.error("[REPAIR UPDATE EXCEPTION]", err);
     return res.status(500).json({ error: "Failed to update repair." });
   }
-});
+};
+router3.patch("/:id", authenticate, handleRepairUpdate);
+router3.put("/:id", authenticate, handleRepairUpdate);
 router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER", "LEAD_TECHNICIAN"]), async (req, res) => {
   try {
     const { id } = req.params;
@@ -2504,7 +2473,7 @@ async function generateClaimNumber() {
 router7.get("/", authenticate, async (req, res) => {
   try {
     const { status, brand, search, startDate, endDate } = req.query;
-    let query = supabaseAdmin.from("BatteryWarranty").select("*, claims:BatteryWarrantyClaim(*)");
+    let query = supabaseAdmin.from("BatteryWarranty").select("*");
     if (status && status !== "ALL") {
       query = query.eq("status", String(status));
     }
@@ -2524,10 +2493,16 @@ router7.get("/", authenticate, async (req, res) => {
     const { data: warranties, error } = await query.order("createdAt", { ascending: false });
     if (error) {
       console.error("[BATTERY WARRANTIES ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch battery warranties." });
+      return res.status(500).json({ error: error.message || "Failed to fetch battery warranties." });
     }
-    return res.json(warranties || []);
+    const { data: allClaims } = await supabaseAdmin.from("BatteryWarrantyClaim").select("*");
+    const combined = (warranties || []).map((w) => ({
+      ...w,
+      claims: (allClaims || []).filter((c) => c.warrantyId === w.id)
+    }));
+    return res.json(combined);
   } catch (err) {
+    console.error("[BATTERY WARRANTIES EXCEPTION]", err);
     return res.status(500).json({ error: "Failed to load warranties." });
   }
 });
@@ -2649,11 +2624,12 @@ router7.post("/import/confirm", authenticate, async (req, res) => {
 router7.get("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { data: warranty, error } = await supabaseAdmin.from("BatteryWarranty").select("*, claims:BatteryWarrantyClaim(*)").eq("id", id).single();
+    const { data: warranty, error } = await supabaseAdmin.from("BatteryWarranty").select("*").eq("id", id).single();
     if (error || !warranty) {
       return res.status(404).json({ error: "Battery warranty not found." });
     }
-    return res.json(warranty);
+    const { data: claims } = await supabaseAdmin.from("BatteryWarrantyClaim").select("*").eq("warrantyId", id);
+    return res.json({ ...warranty, claims: claims || [] });
   } catch (err) {
     return res.status(500).json({ error: "Failed to fetch warranty record." });
   }
@@ -2714,6 +2690,21 @@ router7.post("/", authenticate, async (req, res) => {
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to register battery warranty." });
+  }
+});
+router7.all("/:id/edit", authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    delete updateData.id;
+    delete updateData.claims;
+    const { data: updated, error } = await supabaseAdmin.from("BatteryWarranty").update(updateData).eq("id", id).select("*").single();
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    return res.json({ success: true, data: updated });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to update warranty." });
   }
 });
 router7.post("/:id/claim", authenticate, async (req, res) => {
@@ -3905,6 +3896,8 @@ function createApp() {
   app2.use("/api/inventory", inventory_default);
   app2.use("/api/couriers", couriers_default);
   app2.use("/api/battery-warranties", batteryWarranties_default);
+  app2.use("/api/battery-warranty", batteryWarranties_default);
+  app2.use("/api/warranties", batteryWarranties_default);
   app2.use("/api/attendance", attendance_default);
   app2.use("/api/repair-damage", repairDamage_default);
   app2.use("/api/repair-prices", repairPrices_default);
@@ -3916,6 +3909,8 @@ function createApp() {
   app2.use("/api/notifications", notifications_default);
   app2.use("/api/admin", superAdmin_default);
   app2.use("/api/share", superAdmin_default);
+  app2.use("/api/access-requests", superAdmin_default);
+  app2.use("/api/approved-devices", superAdmin_default);
   app2.use("/api/upload", upload_default);
   app2.use("/api/events", events_default);
   app2.use("/api", public_default);

@@ -49,7 +49,12 @@ export function createApp(): Express {
   app.use('/api/customers', customersRoutes);
   app.use('/api/inventory', inventoryRoutes);
   app.use('/api/couriers', couriersRoutes);
+
+  // Battery Warranties (with all frontend path aliases)
   app.use('/api/battery-warranties', batteryWarrantiesRoutes);
+  app.use('/api/battery-warranty', batteryWarrantiesRoutes);
+  app.use('/api/warranties', batteryWarrantiesRoutes);
+
   app.use('/api/attendance', attendanceRoutes);
   app.use('/api/repair-damage', repairDamageRoutes);
   app.use('/api/repair-prices', repairPricesRoutes);
@@ -60,9 +65,14 @@ export function createApp(): Express {
   app.use('/api/public/products', productsRoutes);
   app.use('/api/notifications', notificationsRoutes);
   app.use('/api/admin', superAdminRoutes);
+
+  // SuperAdmin aliases for direct routes requested by frontend
   app.use('/api/share', superAdminRoutes);
+  app.use('/api/access-requests', superAdminRoutes);
+  app.use('/api/approved-devices', superAdminRoutes);
+
   app.use('/api/upload', uploadRoutes);
-  app.use('/api/events', eventsRoutes); // SSE endpoint for realtime.ts — must exist or Vercel floods with FUNCTION_INVOCATION_FAILED
+  app.use('/api/events', eventsRoutes);
   app.use('/api', publicRoutes); // /api/track, /api/manager/*, /api/dashboard/*
 
   // Compatibility root endpoints

@@ -66,7 +66,8 @@ async function generateClaimNumber(): Promise<string> {
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { status, brand, search, startDate, endDate } = req.query;
-    let query = supabaseAdmin.from('BatteryWarranty').select('*, claims:BatteryWarrantyClaim(*)');
+
+    let query = supabaseAdmin.from('BatteryWarranty').select('*');
 
     if (status && status !== 'ALL') {
       query = query.eq('status', String(status));
@@ -93,11 +94,20 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     if (error) {
       console.error('[BATTERY WARRANTIES ERROR]', error);
-      return res.status(500).json({ error: 'Failed to fetch battery warranties.' });
+      return res.status(500).json({ error: error.message || 'Failed to fetch battery warranties.' });
     }
 
-    return res.json(warranties || []);
+    // Fetch claims safely
+    const { data: allClaims } = await supabaseAdmin.from('BatteryWarrantyClaim').select('*');
+
+    const combined = (warranties || []).map((w: any) => ({
+      ...w,
+      claims: (allClaims || []).filter((c: any) => c.warrantyId === w.id),
+    }));
+
+    return res.json(combined);
   } catch (err: any) {
+    console.error('[BATTERY WARRANTIES EXCEPTION]', err);
     return res.status(500).json({ error: 'Failed to load warranties.' });
   }
 });
@@ -242,7 +252,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { data: warranty, error } = await supabaseAdmin
       .from('BatteryWarranty')
-      .select('*, claims:BatteryWarrantyClaim(*)')
+      .select('*')
       .eq('id', id)
       .single();
 
@@ -250,7 +260,12 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Battery warranty not found.' });
     }
 
-    return res.json(warranty);
+    const { data: claims } = await supabaseAdmin
+      .from('BatteryWarrantyClaim')
+      .select('*')
+      .eq('warrantyId', id);
+
+    return res.json({ ...warranty, claims: claims || [] });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch warranty record.' });
   }
@@ -322,7 +337,32 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 8. POST /api/battery-warranties/:id/claim
+// 8. PUT / PATCH /api/battery-warranties/:id (Edit Warranty)
+router.all('/:id/edit', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData = { ...req.body, updatedAt: new Date().toISOString() };
+    delete updateData.id;
+    delete updateData.claims;
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('BatteryWarranty')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    return res.json({ success: true, data: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update warranty.' });
+  }
+});
+
+// 9. POST /api/battery-warranties/:id/claim
 router.post('/:id/claim', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -376,7 +416,7 @@ router.post('/:id/claim', authenticate, async (req: AuthRequest, res: Response) 
   }
 });
 
-// 9. POST /api/battery-warranties/:id/send-email
+// 10. POST /api/battery-warranties/:id/send-email
 router.post('/:id/send-email', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -413,12 +453,12 @@ router.post('/:id/send-email', authenticate, async (req: AuthRequest, res: Respo
   }
 });
 
-// 10. POST /api/battery-warranties/delete-2fa/request
+// 11. POST /api/battery-warranties/delete-2fa/request
 router.post('/delete-2fa/request', authenticate, async (req: AuthRequest, res: Response) => {
   return res.json({ success: true, message: '2FA verification bypassed for administrative session.' });
 });
 
-// 11. POST /api/battery-warranties/bulk-delete
+// 12. POST /api/battery-warranties/bulk-delete
 router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { ids } = req.body;
@@ -435,7 +475,7 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
   }
 });
 
-// 12. DELETE /api/battery-warranties/:id
+// 13. DELETE /api/battery-warranties/:id
 router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;

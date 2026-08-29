@@ -64,7 +64,6 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       .from('Repair')
       .select('*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, role, email)', { count: 'exact' });
 
-    // Technician role isolation: default to seeing assigned repairs unless Lead Tech/Admin/Manager
     const role = normalizeRole(req.user!.role);
     if (role === 'TECHNICIAN' && !technicianId) {
       query = query.eq('technicianId', req.user!.id);
@@ -115,7 +114,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     query = query.order('createdAt', { ascending: false }).range(offset, offset + limitNum - 1);
 
-    const { data: repairs, count, error } = await query;
+    const { data: repairs, error } = await query;
 
     if (error) {
       console.error('[REPAIRS GET ERROR]', error);
@@ -335,7 +334,6 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Customer name, phone, and device model are required.' });
     }
 
-    // Ensure customer record exists
     let resolvedCustomerId = customerId;
     if (!resolvedCustomerId) {
       const { data: existingCustomers } = await supabaseAdmin
@@ -421,7 +419,6 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ error: 'Failed to create repair ticket.' });
     }
 
-    // Create Initial Repair Log
     await supabaseAdmin.from('RepairLog').insert([
       {
         id: uuidv4(),
@@ -449,63 +446,27 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 8. POST /api/repairs/batch
-router.post('/batch', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const { devices, ...commonInfo } = req.body;
-    if (!devices || !Array.isArray(devices) || devices.length === 0) {
-      return res.status(400).json({ error: 'Batch repair requires a list of devices.' });
-    }
-
-    const createdRepairs = [];
-    for (const dev of devices) {
-      const repairNumber = await generateRepairNumber();
-      const repairId = uuidv4();
-
-      const newRepair = {
-        id: repairId,
-        repairNumber,
-        customerId: commonInfo.customerId || null,
-        customerName: commonInfo.customerName,
-        customerPhone: commonInfo.customerPhone,
-        customerEmail: commonInfo.customerEmail || null,
-        customerAddress: commonInfo.customerAddress || null,
-        deviceBrand: dev.deviceBrand || 'Apple',
-        deviceModel: dev.deviceModel,
-        imeiNumber: dev.imeiNumber || null,
-        problemDescription: dev.problemDescription || commonInfo.problemDescription || '',
-        estimatedCost: Number(dev.estimatedCost || 0),
-        advancePaid: Number(dev.advancePaid || 0),
-        totalPaid: Number(dev.advancePaid || 0),
-        paymentStatus: Number(dev.advancePaid || 0) > 0 ? 'PARTIAL' : 'UNPAID',
-        status: 'RECEIVED',
-        priority: 'MEDIUM',
-        createdById: req.user!.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      const { data: created } = await supabaseAdmin.from('Repair').insert([newRepair]).select('*').single();
-      if (created) createdRepairs.push(created);
-    }
-
-    return res.status(201).json({ success: true, count: createdRepairs.length, repairs: createdRepairs });
-  } catch (err: any) {
-    return res.status(500).json({ error: 'Batch repair registration failed.' });
-  }
-});
-
-// 9. PATCH /api/repairs/:id
-router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+// 8. PUT & PATCH /api/repairs/:id (Unified update handler)
+const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const updateData = { ...req.body, updatedAt: new Date().toISOString() };
+    const updateData = { ...req.body };
+
+    // Clean relations and immutables from payload
     delete updateData.id;
+    delete updateData.createdAt;
     delete updateData.customer;
     delete updateData.technician;
     delete updateData.notes;
     delete updateData.logs;
     delete updateData.payments;
+
+    // Convert numbers if present
+    if (updateData.estimatedCost !== undefined) updateData.estimatedCost = parseFloat(updateData.estimatedCost) || 0;
+    if (updateData.advancePaid !== undefined) updateData.advancePaid = parseFloat(updateData.advancePaid) || 0;
+    if (updateData.totalPaid !== undefined) updateData.totalPaid = parseFloat(updateData.totalPaid) || 0;
+
+    updateData.updatedAt = new Date().toISOString();
 
     const { data: updated, error } = await supabaseAdmin
       .from('Repair')
@@ -515,7 +476,8 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       .single();
 
     if (error) {
-      return res.status(500).json({ error: 'Failed to update repair record.' });
+      console.error('[REPAIR UPDATE ERROR]', error);
+      return res.status(400).json({ error: error.message });
     }
 
     if (req.body.status) {
@@ -534,11 +496,15 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 
     return res.json(updated);
   } catch (err: any) {
+    console.error('[REPAIR UPDATE EXCEPTION]', err);
     return res.status(500).json({ error: 'Failed to update repair.' });
   }
-});
+};
 
-// 10. POST /api/repairs/:id/assign
+router.patch('/:id', authenticate, handleRepairUpdate);
+router.put('/:id', authenticate, handleRepairUpdate);
+
+// 9. POST /api/repairs/:id/assign
 router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LEAD_TECHNICIAN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -581,7 +547,7 @@ router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MAN
   }
 });
 
-// 11. POST /api/repairs/:id/notes
+// 10. POST /api/repairs/:id/notes
 router.post('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -614,7 +580,7 @@ router.post('/:id/notes', authenticate, async (req: AuthRequest, res: Response) 
   }
 });
 
-// 12. GET /api/repairs/:id/notes
+// 11. GET /api/repairs/:id/notes
 router.get('/:id/notes', authenticate, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -634,12 +600,12 @@ router.get('/:id/notes', authenticate, async (req: Request, res: Response) => {
   }
 });
 
-// 13. POST /api/repairs/:id/alert
+// 12. POST /api/repairs/:id/alert
 router.post('/:id/alert', authenticate, async (req: AuthRequest, res: Response) => {
   return res.json({ success: true, message: 'Customer notification alert dispatched successfully.' });
 });
 
-// 14. POST /api/repairs/:id/transfer
+// 13. POST /api/repairs/:id/transfer
 router.post('/:id/transfer', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -679,7 +645,7 @@ router.post('/:id/transfer', authenticate, async (req: AuthRequest, res: Respons
   }
 });
 
-// 15. POST /api/repairs/:id/courier-dispatch
+// 14. POST /api/repairs/:id/courier-dispatch
 router.post('/:id/courier-dispatch', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -717,7 +683,7 @@ router.post('/:id/courier-dispatch', authenticate, async (req: AuthRequest, res:
   }
 });
 
-// 16. POST /api/repairs/:id/re-problem
+// 15. POST /api/repairs/:id/re-problem
 router.post('/:id/re-problem', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -744,7 +710,7 @@ router.post('/:id/re-problem', authenticate, async (req: AuthRequest, res: Respo
   }
 });
 
-// 17. DELETE /api/repairs/:id
+// 16. DELETE /api/repairs/:id
 router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -763,7 +729,7 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
   }
 });
 
-// 18. POST /api/repairs/bulk-delete
+// 17. POST /api/repairs/bulk-delete
 router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { ids } = req.body;
