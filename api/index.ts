@@ -33,6 +33,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  // Normalize URL so Express routes matching /api/* always match
+  if (req.url && !req.url.startsWith('/api')) {
+    req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
+  }
+
   try {
     const app = await getServerApp();
     return app(req, res);

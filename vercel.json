@@ -3,17 +3,17 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/:path*",
+      "source": "/api/:match*",
       "destination": "/api"
     },
     {
-      "source": "/((?!api/|assets/|favicon\\.ico|robots\\.txt|manifest\\.json).*)",
+      "source": "/:match*",
       "destination": "/index.html"
     }
   ],
   "headers": [
     {
-      "source": "/assets/:path*",
+      "source": "/assets/:match*",
       "headers": [
         {
           "key": "Cache-Control",
@@ -22,7 +22,7 @@
       ]
     },
     {
-      "source": "/:path*",
+      "source": "/:match*",
       "headers": [
         {
           "key": "X-Content-Type-Options",
