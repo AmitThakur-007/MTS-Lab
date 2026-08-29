@@ -5938,8 +5938,16 @@ export async function createServerApp() {
         });
       }
 
-      // Password comparison via bcrypt
-      const isValid = await bcrypt.compare(rawPassword, user.password);
+      // Password comparison via bcrypt (guarded against missing/corrupt hashes)
+      let isValid = false;
+      try {
+        if (user.password && typeof user.password === 'string' && user.password.length > 0) {
+          isValid = await bcrypt.compare(rawPassword, user.password);
+        }
+      } catch (bcryptErr) {
+        console.warn("[LOGIN BCRYPT COMPARE ERROR]", bcryptErr);
+        isValid = false;
+      }
 
       if (!isValid) {
         const attempts = (user.failedLoginAttempts || 0) + 1;
@@ -5950,7 +5958,7 @@ export async function createServerApp() {
             failedLoginAttempts: attempts,
             lockoutUntil: isLockedNow ? new Date(Date.now() + 15 * 60 * 1000) : null
           }
-        });
+        }).catch(() => {});
         await recordAuditLog({
           req,
           userId: user.id,
@@ -5961,7 +5969,7 @@ export async function createServerApp() {
           resource: "AUTH",
           status: "FAILED",
           details: `Invalid password attempt (${attempts}/5)`
-        });
+        }).catch(() => {});
         return res.status(401).json({ success: false, message: "Unable to sign in with these credentials." });
       }
 
@@ -5982,7 +5990,7 @@ export async function createServerApp() {
           user = await prisma.user.update({
             where: { id: user.id },
             data: { firebaseUid: provisioned.firebaseUid }
-          });
+          }).catch(() => user);
           fbCheck = await checkFirebaseUserEmailVerified(user.email, rawPassword, firebaseIdToken, provisioned.firebaseUid);
         }
         if (provisioned.sent) {
@@ -5994,7 +6002,7 @@ export async function createServerApp() {
         user = await prisma.user.update({
           where: { id: user.id },
           data: { firebaseUid: fbCheck.firebaseUid }
-        });
+        }).catch(() => user);
       }
 
       // Authoritative verification state determination:
@@ -6006,7 +6014,7 @@ export async function createServerApp() {
         user = await prisma.user.update({
           where: { id: user.id },
           data: { emailVerified: true }
-        });
+        }).catch(() => user);
         await syncUserToFirestore(user).catch(() => {});
         await syncToRtdb("user", "UPDATE", user).catch(() => {});
         broadcastRealtimeEvent({
@@ -6041,61 +6049,69 @@ export async function createServerApp() {
           lockoutUntil: null, 
           lastLoginAt: new Date() 
         }
-      });
+      }).catch(() => user);
 
       // Seamless Multi-Device Registration
-      await prisma.approvedDevice.upsert({
-        where: {
-          userId_deviceIdentifier: {
+      try {
+        await prisma.approvedDevice.upsert({
+          where: {
+            userId_deviceIdentifier: {
+              userId: user.id,
+              deviceIdentifier: String(deviceIdentifier)
+            }
+          },
+          update: {
+            deviceName: String(deviceName || 'Browser Device'),
+            deviceType: String(deviceType || 'DESKTOP'),
+            browser: String(browser || 'Browser'),
+            os: String(os || 'OS'),
+            ipAddress: String(clientIp),
+            userAgent: String(clientUserAgent),
+            status: "APPROVED",
+            lastUsedAt: new Date()
+          },
+          create: {
             userId: user.id,
-            deviceIdentifier
+            deviceIdentifier: String(deviceIdentifier),
+            deviceName: String(deviceName || 'Browser Device'),
+            deviceType: String(deviceType || 'DESKTOP'),
+            browser: String(browser || 'Browser'),
+            os: String(os || 'OS'),
+            ipAddress: String(clientIp),
+            userAgent: String(clientUserAgent),
+            status: "APPROVED",
+            approvedBy: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "DIRECT_LOGIN",
+            approvedAt: new Date(),
+            lastUsedAt: new Date()
           }
-        },
-        update: {
-          deviceName,
-          deviceType,
-          browser,
-          os,
-          ipAddress: String(clientIp),
-          userAgent: clientUserAgent,
-          status: "APPROVED",
-          lastUsedAt: new Date()
-        },
-        create: {
-          userId: user.id,
-          deviceIdentifier,
-          deviceName,
-          deviceType,
-          browser,
-          os,
-          ipAddress: String(clientIp),
-          userAgent: clientUserAgent,
-          status: "APPROVED",
-          approvedBy: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "DIRECT_LOGIN",
-          approvedAt: new Date(),
-          lastUsedAt: new Date()
-        }
-      });
+        });
+      } catch (devErr) {
+        console.warn("[LOGIN DEVICE UPSERT NOTICE]", devErr);
+      }
 
       // Generate Authenticated Tokens
       const { accessToken, refreshToken } = await generateTokens(
         updatedUser, 
         clientUserAgent, 
         String(clientIp),
-        { deviceIdentifier, deviceName, deviceType, browser, os }
+        { deviceIdentifier: String(deviceIdentifier), deviceName, deviceType, browser, os }
       );
 
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
-        action: "LOGIN_SUCCESS",
-        resource: "AUTH",
-        status: "SUCCESS",
-        details: `Firebase authenticated login from ${deviceType} (${deviceName})`
-      });
+      try {
+        await recordAuditLog({
+          req,
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          userRole: user.role,
+          action: "LOGIN_SUCCESS",
+          resource: "AUTH",
+          status: "SUCCESS",
+          details: `Firebase authenticated login from ${deviceType} (${deviceName})`
+        });
+      } catch (auditErr) {
+        console.warn("[LOGIN AUDIT NOTICE]", auditErr);
+      }
 
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
