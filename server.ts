@@ -1,6 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
-import { execSync } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 import { PrismaClient } from "@prisma/client";
@@ -17,6 +15,7 @@ import { EventEmitter } from "events";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import * as XLSX from "xlsx";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -69,69 +68,41 @@ const __dirname = typeof import.meta !== "undefined" && import.meta && import.me
   ? path.dirname(__filename)
   : ((globalThis as any).__dirname || "");
 
-const isServerless = Boolean(
+export const isServerless = Boolean(
   process.env.VERCEL ||
   process.env.AWS_LAMBDA_FUNCTION_NAME ||
   process.env.SERVERLESS
 );
 
-// Sync db schema automatically at runtime with automatic serverless / corruption recovery
-function initializeDatabase() {
-  // 1. Serverless environment handling (Vercel / AWS Lambda)
-  if (isServerless) {
-    const tmpDbPath = "/tmp/dev.db";
-    const sourceDbPath = path.join(process.cwd(), "prisma/dev.db");
-    try {
-      if (!fs.existsSync(tmpDbPath)) {
-        if (fs.existsSync(sourceDbPath)) {
-          fs.copyFileSync(sourceDbPath, tmpDbPath);
-          console.log("[SERVERLESS DB] Successfully copied dev.db to /tmp/dev.db");
-        }
-      }
-      process.env.DATABASE_URL = `file:${tmpDbPath}`;
-    } catch (copyErr) {
-      console.warn("[SERVERLESS DB COPY NOTICE]", copyErr);
-      process.env.DATABASE_URL = `file:${tmpDbPath}`;
-    }
-    return;
-  }
+// Supabase Server-Side Client Configuration
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://pirynpugkiurjobrqiqg.supabase.co';
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  // 2. Local environment handling
-  if (!process.env.DATABASE_URL) {
-    process.env.DATABASE_URL = "file:./prisma/dev.db";
+export const supabase = createClient(
+  SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
   }
+);
 
-  // Only run programmatic db push in non-production local development
-  if (process.env.NODE_ENV !== "production" && !isServerless && !process.env.NO_DB_PUSH) {
-    const dbPath = path.join(process.cwd(), "prisma/dev.db");
-    try {
-      console.log("[STARTUP] Running Prisma DB push programmatically...");
-      execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
-    } catch (err: any) {
-      console.error("[STARTUP] Failed to push DB schema. Checking for corruption:", err?.message || err);
-      try {
-        if (fs.existsSync(dbPath)) {
-          console.warn("[STARTUP] Malformed database detected. Recreating clean SQLite database...");
-          fs.unlinkSync(dbPath);
-          execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
-          console.log("[STARTUP] Clean database recreated successfully.");
-        }
-      } catch (recoverErr) {
-        console.error("[STARTUP FATAL] Failed to recover SQLite database:", recoverErr);
-      }
-    }
-  }
+// Serverless-safe PrismaClient Singleton Pattern
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+
+export const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
 }
 
-initializeDatabase();
-
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL || "file:./prisma/dev.db"
-    }
-  }
-});
 
 // Automatic Prisma to Firestore sync & Real-Time Event broadcasting middleware
 prisma.$use(async (params, next) => {
@@ -1798,20 +1769,23 @@ const upload = multer({
 export async function createServerApp() {
   const app = express();
 
-  // Connect to database and seed defaults
-  try {
-    await prisma.$connect();
-    console.log("[DB] Connected successfully to SQLite database");
-    await ensureDefaultBranch();
-    await ensureAdminUser();
-    await ensureDefaultRepairPrices();
-    await ensureDefaultHomeSlides();
-    await ensureDefaultInventoryData();
-    await fixInvalidStatuses();
-    await syncAndMigrateCustomers();
-  } catch (err) {
-    console.error("[DB ERROR] Initial connection failed:", err);
+  // Connect to database and seed defaults (only on explicit local setup, never blocking serverless execution)
+  if (!isServerless && process.env.NODE_ENV !== "test" && process.env.RUN_STARTUP_SEEDERS === "true") {
+    try {
+      await prisma.$connect();
+      console.log("[DB] Connected successfully to PostgreSQL database");
+      await ensureDefaultBranch();
+      await ensureAdminUser();
+      await ensureDefaultRepairPrices();
+      await ensureDefaultHomeSlides();
+      await ensureDefaultInventoryData();
+      await fixInvalidStatuses();
+      await syncAndMigrateCustomers();
+    } catch (err) {
+      console.error("[DB ERROR] Initial database startup check notice:", err);
+    }
   }
+
 
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '50mb' }));
@@ -2183,19 +2157,65 @@ export async function createServerApp() {
     }
 
     let decoded: any = null;
+
+    // 1. Check Supabase Auth token
     try {
-      decoded = jwt.verify(token, JWT_SECRET);
-    } catch (err: any) {
-      if (err?.name === "TokenExpiredError") {
-        // The 15-min JWT expired — client should use /api/auth/refresh to get a new one
-        console.warn(`[AUTH] Access token expired for route: ${req.path}`);
-        return res.status(401).json({ error: "TokenExpiredError", message: "Session token expired. Please refresh your session." });
+      const { data: sbData, error: sbErr } = await supabase.auth.getUser(token);
+      if (!sbErr && sbData?.user) {
+        const sbUser = sbData.user;
+        const email = sbUser.email ? sbUser.email.toLowerCase().trim() : "";
+        const profile = await prisma.user.findFirst({
+          where: {
+            OR: [
+              ...(email ? [{ email }] : []),
+              { supabaseUid: sbUser.id },
+              { id: sbUser.id }
+            ]
+          }
+        });
+
+        if (profile) {
+          if (profile.deletedAt || !profile.isActive || profile.accountStatus === 'DISABLED') {
+            return res.status(403).json({ error: "Forbidden", message: "Account is disabled or inactive." });
+          }
+          decoded = {
+            id: profile.id,
+            email: profile.email,
+            name: profile.name,
+            role: profile.role,
+            branchId: profile.branchId,
+            supabaseUid: sbUser.id,
+            isSupabaseAuth: true
+          };
+        } else {
+          decoded = {
+            id: sbUser.id,
+            email: sbUser.email || '',
+            name: (sbUser.user_metadata as any)?.name || 'MTS Staff',
+            role: (sbUser.user_metadata as any)?.role || 'RECEPTIONIST',
+            supabaseUid: sbUser.id,
+            isSupabaseAuth: true
+          };
+        }
       }
-      console.warn("[AUTH WARNING] Token verification failed:", err?.message || err);
-      return res.status(401).json({ error: "Invalid token" });
+    } catch (sbErr) {
+      // Ignore and fallback to standard JWT verify
+    }
+
+    // 2. Fallback to Local JWT verification
+    if (!decoded) {
+      try {
+        decoded = jwt.verify(token, JWT_SECRET);
+      } catch (err: any) {
+        if (err?.name === "TokenExpiredError") {
+          return res.status(401).json({ error: "TokenExpiredError", message: "Session token expired. Please refresh your session." });
+        }
+        return res.status(401).json({ error: "Invalid token" });
+      }
     }
 
     req.user = decoded;
+
 
     // --- 2-Hour Inactivity Check via Session table ---
     // Only check for routes that are NOT the activity ping or refresh endpoints
