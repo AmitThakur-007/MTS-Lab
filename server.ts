@@ -14859,17 +14859,30 @@ export async function createServerApp() {
   });
 
   app.get("/api/dashboard/stats", authenticate, syncRouteMiddleware(['repair', 'payment', 'product', 'user', 'branch']), async (req: any, res) => {
-    const totalRepairs = await prisma.repair.count();
-    const pendingRepairs = await prisma.repair.count({ where: { status: 'PENDING' } });
-    const completedRepairs = await prisma.repair.count({ where: { status: { in: ['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED'] } } });
-    const totalRevenue = await prisma.repair.aggregate({ _sum: { totalPaid: true } });
+    try {
+      const [totalRepairs, pendingRepairs, activeRepairs, completedRepairs, totalProducts, totalUsers, totalRevenue] = await Promise.all([
+        prisma.repair.count().catch(() => 0),
+        prisma.repair.count({ where: { status: 'PENDING' } }).catch(() => 0),
+        prisma.repair.count({ where: { status: { notIn: ['DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'] } } }).catch(() => 0),
+        prisma.repair.count({ where: { status: { in: ['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED'] } } }).catch(() => 0),
+        prisma.inventoryItem.count().catch(() => 0),
+        prisma.user.count({ where: { isActive: true } }).catch(() => 0),
+        prisma.repair.aggregate({ _sum: { totalPaid: true } }).catch(() => ({ _sum: { totalPaid: 0 } }))
+      ]);
 
-    res.json({
-      totalRepairs,
-      pendingRepairs,
-      completedRepairs,
-      revenue: totalRevenue._sum.totalPaid || 0,
-    });
+      res.json({
+        totalRepairs,
+        pendingRepairs,
+        activeRepairs,
+        completedRepairs,
+        totalProducts,
+        totalUsers,
+        revenue: totalRevenue._sum.totalPaid || 0,
+      });
+    } catch (err: any) {
+      console.error("[DASHBOARD STATS ERROR]", err);
+      res.status(500).json({ error: "Failed to fetch dashboard statistics", message: err.message || String(err) });
+    }
   });
 
   app.get("/api/staff", authenticate, syncRouteMiddleware(['user', 'branch']), async (req: any, res) => {
@@ -20105,14 +20118,25 @@ export async function startServer() {
   const app = await getApp();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-  // Vite middleware for development
+  // Vite middleware for development (with fallback to static dist if vite/rollup is unavailable on host)
   if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (viteErr: any) {
+      console.warn("[VITE LOAD NOTICE] Vite dev server failed to load (falling back to static dist):", viteErr?.message || viteErr);
+      const distPath = path.join(process.cwd(), "dist");
+      if (fs.existsSync(distPath)) {
+        app.use(express.static(distPath));
+        app.get("*", (req, res) => {
+          res.sendFile(path.join(distPath, "index.html"));
+        });
+      }
+    }
   } else if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
