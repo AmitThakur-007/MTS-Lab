@@ -330,8 +330,10 @@ router.post("/login", async (req, res) => {
         `
       });
       return res.json({
+        success: true,
         requires2FA: true,
         mfaTicket,
+        email: user.email,
         twoFactorType: user.twoFactorType || "EMAIL",
         message: "A 2FA verification code has been sent to your email."
       });
@@ -345,6 +347,7 @@ router.post("/login", async (req, res) => {
       details: { email: user.email, role: user.role }
     });
     return res.json({
+      success: true,
       token,
       refreshToken,
       user: {
@@ -367,11 +370,18 @@ router.post("/login", async (req, res) => {
 });
 router.post("/2fa/verify", async (req, res) => {
   try {
-    const { mfaTicket, code } = req.body;
-    if (!mfaTicket || !code) {
-      return res.status(400).json({ error: "MFA ticket and verification code are required." });
+    const { mfaTicket, code, email } = req.body;
+    if (!code) {
+      return res.status(400).json({ error: "Verification code is required." });
     }
-    const { data: otps, error: otpErr } = await supabaseAdmin.from("OTPVerification").select("*").eq("id", mfaTicket).eq("purpose", "LOGIN_2FA").eq("isUsed", false).limit(1);
+    const inputHash = crypto.createHash("sha256").update(String(code).trim()).digest("hex");
+    let query = supabaseAdmin.from("OTPVerification").select("*").eq("purpose", "LOGIN_2FA").eq("isUsed", false);
+    if (mfaTicket) {
+      query = query.eq("id", mfaTicket);
+    } else if (email) {
+      query = query.eq("email", email.toLowerCase().trim()).order("createdAt", { ascending: false });
+    }
+    const { data: otps, error: otpErr } = await query.limit(1);
     if (otpErr || !otps || otps.length === 0) {
       return res.status(400).json({ error: "Invalid or expired 2FA verification session." });
     }
@@ -379,7 +389,6 @@ router.post("/2fa/verify", async (req, res) => {
     if (new Date(otp.expiresAt) < /* @__PURE__ */ new Date()) {
       return res.status(400).json({ error: "Verification code has expired. Please request a new code." });
     }
-    const inputHash = crypto.createHash("sha256").update(code.trim()).digest("hex");
     if (otp.codeHash !== inputHash) {
       const attempts = (otp.attempts || 0) + 1;
       await supabaseAdmin.from("OTPVerification").update({ attempts }).eq("id", otp.id);
@@ -400,6 +409,7 @@ router.post("/2fa/verify", async (req, res) => {
       details: { email: user.email }
     });
     return res.json({
+      success: true,
       token,
       refreshToken,
       user: {
@@ -422,11 +432,16 @@ router.post("/2fa/verify", async (req, res) => {
 });
 router.post("/2fa/resend", async (req, res) => {
   try {
-    const { mfaTicket } = req.body;
-    if (!mfaTicket) {
-      return res.status(400).json({ error: "MFA ticket is required." });
+    const { mfaTicket, email } = req.body;
+    let query = supabaseAdmin.from("OTPVerification").select("*");
+    if (mfaTicket) {
+      query = query.eq("id", mfaTicket);
+    } else if (email) {
+      query = query.eq("email", email.toLowerCase().trim()).order("createdAt", { ascending: false });
+    } else {
+      return res.status(400).json({ error: "MFA session identifier is required." });
     }
-    const { data: otps } = await supabaseAdmin.from("OTPVerification").select("*").eq("id", mfaTicket).limit(1);
+    const { data: otps } = await query.limit(1);
     if (!otps || otps.length === 0) {
       return res.status(400).json({ error: "Session not found. Please log in again." });
     }
@@ -449,7 +464,7 @@ router.post("/2fa/resend", async (req, res) => {
         </div>
       `
     });
-    return res.json({ success: true, message: "Verification code resent successfully." });
+    return res.json({ success: true, mfaTicket: otp.id, message: "Verification code resent successfully." });
   } catch (err) {
     console.error("[2FA RESEND ERROR]", err);
     return res.status(500).json({ error: "Failed to resend verification code." });
@@ -474,6 +489,7 @@ router.post("/refresh", async (req, res) => {
     const user = users[0];
     const { token: newToken, refreshToken: newRefreshToken } = generateTokens(user);
     return res.json({
+      success: true,
       token: newToken,
       refreshToken: newRefreshToken,
       user: {
@@ -560,7 +576,7 @@ router.post("/verify-otp", async (req, res) => {
       return res.status(400).json({ error: "Email and OTP code are required." });
     }
     const normalizedEmail = email.toLowerCase().trim();
-    const inputHash = crypto.createHash("sha256").update(code.trim()).digest("hex");
+    const inputHash = crypto.createHash("sha256").update(String(code).trim()).digest("hex");
     const { data: otps } = await supabaseAdmin.from("OTPVerification").select("*").eq("email", normalizedEmail).eq("purpose", "PASSWORD_RESET").eq("isUsed", false).order("createdAt", { ascending: false }).limit(1);
     if (!otps || otps.length === 0) {
       return res.status(400).json({ error: "Invalid or expired OTP code." });
