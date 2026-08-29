@@ -10,6 +10,56 @@ import { createExcelBuffer, parseExcelBuffer } from '../services/excelService';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+// Allowed column list for PostgreSQL public."Repair" table
+const ALLOWED_REPAIR_COLUMNS = new Set([
+  'customerId',
+  'customerName',
+  'customerPhone',
+  'customerEmail',
+  'customerAddress',
+  'deviceBrand',
+  'deviceModel',
+  'imeiNumber',
+  'deviceColor',
+  'deviceCondition',
+  'conditionNotes',
+  'problemDescription',
+  'accessoriesReceived',
+  'estimatedCost',
+  'advancePaid',
+  'totalPaid',
+  'paymentStatus',
+  'status',
+  'priority',
+  'technicianId',
+  'branchId',
+  'expectedCompletionDate',
+  'remarks',
+  'receivingMethod',
+  'isCourierIn',
+  'courierCompany',
+  'courierTrackingNumber',
+  'senderName',
+  'senderPhone',
+  'originDistrict',
+  'originAddress',
+  'isCourierOut',
+  'returnCourierCompany',
+  'returnCourierTrackingNumber',
+  'destinationDistrict',
+  'destinationAddress',
+  'receiverName',
+  'receiverPhone',
+  'returnCourierNotes',
+  'isReturnCourierDispatched',
+  'returnCourierDispatchedAt',
+  'returnCourierDispatchedById',
+  'returnCourierDispatchedByName',
+  'assignedAt',
+  'assignedById',
+  'assignedByName',
+]);
+
 // Helper to generate next unique sequential repair number (e.g. MTS-2026-0001)
 async function generateRepairNumber(): Promise<string> {
   const currentYear = new Date().getFullYear();
@@ -446,28 +496,21 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 8. PUT & PATCH /api/repairs/:id (Unified update handler)
+// 8. PUT & PATCH /api/repairs/:id (Unified update handler with strict column allowlist)
 const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const updateData = { ...req.body };
+    const rawBody = req.body || {};
 
-    // Clean relations, immutables, and warranty module fields from the Repair update payload
-    delete updateData.id;
-    delete updateData.createdAt;
-    delete updateData.customer;
-    delete updateData.technician;
-    delete updateData.notes;
-    delete updateData.logs;
-    delete updateData.payments;
-    delete updateData.claims;
-    delete updateData.batteryType;
-    delete updateData.warrantyMonths;
-    delete updateData.warrantyNumber;
-    delete updateData.warrantyPeriod;
-    delete updateData.terms;
+    // Filter incoming payload against allowed PostgreSQL table columns only
+    const updateData: Record<string, any> = {};
+    for (const key of Object.keys(rawBody)) {
+      if (ALLOWED_REPAIR_COLUMNS.has(key)) {
+        updateData[key] = rawBody[key];
+      }
+    }
 
-    // Convert numbers safely if present
+    // Convert numbers safely
     if (updateData.estimatedCost !== undefined) updateData.estimatedCost = parseFloat(updateData.estimatedCost) || 0;
     if (updateData.advancePaid !== undefined) updateData.advancePaid = parseFloat(updateData.advancePaid) || 0;
     if (updateData.totalPaid !== undefined) updateData.totalPaid = parseFloat(updateData.totalPaid) || 0;
@@ -486,15 +529,15 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: error.message });
     }
 
-    if (req.body.status) {
+    if (rawBody.status) {
       await supabaseAdmin.from('RepairLog').insert([
         {
           id: uuidv4(),
           repairId: id,
           userId: req.user!.id,
           action: 'STATUS_UPDATED',
-          status: req.body.status,
-          notes: req.body.remarks || `Status updated to ${req.body.status} by ${req.user!.name}`,
+          status: rawBody.status,
+          notes: rawBody.remarks || `Status updated to ${rawBody.status} by ${req.user!.name}`,
           createdAt: new Date().toISOString(),
         },
       ]);

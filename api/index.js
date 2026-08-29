@@ -981,6 +981,54 @@ function parseExcelBuffer(buffer) {
 // api/_server/routes/repairs.ts
 var router3 = Router3();
 var upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+var ALLOWED_REPAIR_COLUMNS = /* @__PURE__ */ new Set([
+  "customerId",
+  "customerName",
+  "customerPhone",
+  "customerEmail",
+  "customerAddress",
+  "deviceBrand",
+  "deviceModel",
+  "imeiNumber",
+  "deviceColor",
+  "deviceCondition",
+  "conditionNotes",
+  "problemDescription",
+  "accessoriesReceived",
+  "estimatedCost",
+  "advancePaid",
+  "totalPaid",
+  "paymentStatus",
+  "status",
+  "priority",
+  "technicianId",
+  "branchId",
+  "expectedCompletionDate",
+  "remarks",
+  "receivingMethod",
+  "isCourierIn",
+  "courierCompany",
+  "courierTrackingNumber",
+  "senderName",
+  "senderPhone",
+  "originDistrict",
+  "originAddress",
+  "isCourierOut",
+  "returnCourierCompany",
+  "returnCourierTrackingNumber",
+  "destinationDistrict",
+  "destinationAddress",
+  "receiverName",
+  "receiverPhone",
+  "returnCourierNotes",
+  "isReturnCourierDispatched",
+  "returnCourierDispatchedAt",
+  "returnCourierDispatchedById",
+  "returnCourierDispatchedByName",
+  "assignedAt",
+  "assignedById",
+  "assignedByName"
+]);
 async function generateRepairNumber() {
   const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
   const { data: repairs } = await supabaseAdmin.from("Repair").select("repairNumber").ilike("repairNumber", `MTS-${currentYear}-%`).order("repairNumber", { ascending: false }).limit(20);
@@ -1342,20 +1390,13 @@ router3.post("/", authenticate, async (req, res) => {
 var handleRepairUpdate = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = { ...req.body };
-    delete updateData.id;
-    delete updateData.createdAt;
-    delete updateData.customer;
-    delete updateData.technician;
-    delete updateData.notes;
-    delete updateData.logs;
-    delete updateData.payments;
-    delete updateData.claims;
-    delete updateData.batteryType;
-    delete updateData.warrantyMonths;
-    delete updateData.warrantyNumber;
-    delete updateData.warrantyPeriod;
-    delete updateData.terms;
+    const rawBody = req.body || {};
+    const updateData = {};
+    for (const key of Object.keys(rawBody)) {
+      if (ALLOWED_REPAIR_COLUMNS.has(key)) {
+        updateData[key] = rawBody[key];
+      }
+    }
     if (updateData.estimatedCost !== void 0) updateData.estimatedCost = parseFloat(updateData.estimatedCost) || 0;
     if (updateData.advancePaid !== void 0) updateData.advancePaid = parseFloat(updateData.advancePaid) || 0;
     if (updateData.totalPaid !== void 0) updateData.totalPaid = parseFloat(updateData.totalPaid) || 0;
@@ -1365,15 +1406,15 @@ var handleRepairUpdate = async (req, res) => {
       console.error("[REPAIR UPDATE ERROR]", error);
       return res.status(400).json({ error: error.message });
     }
-    if (req.body.status) {
+    if (rawBody.status) {
       await supabaseAdmin.from("RepairLog").insert([
         {
           id: uuidv44(),
           repairId: id,
           userId: req.user.id,
           action: "STATUS_UPDATED",
-          status: req.body.status,
-          notes: req.body.remarks || `Status updated to ${req.body.status} by ${req.user.name}`,
+          status: rawBody.status,
+          notes: rawBody.remarks || `Status updated to ${rawBody.status} by ${req.user.name}`,
           createdAt: (/* @__PURE__ */ new Date()).toISOString()
         }
       ]);
