@@ -4008,6 +4008,8 @@ var handlePublicTrack = async (req, res) => {
 };
 router16.get("/track", handlePublicTrack);
 router16.post("/track", handlePublicTrack);
+router16.get("/public/track", handlePublicTrack);
+router16.post("/public/track", handlePublicTrack);
 router16.get("/manager/stats", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
   try {
     const { data: repairs } = await supabaseAdmin.from("Repair").select("technicianId, status, priority, estimatedCost, advancePaid, totalPaid");

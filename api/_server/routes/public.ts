@@ -134,6 +134,8 @@ const handlePublicTrack = async (req: Request, res: Response) => {
 
 router.get('/track', handlePublicTrack);
 router.post('/track', handlePublicTrack);
+router.get('/public/track', handlePublicTrack);
+router.post('/public/track', handlePublicTrack);
 
 // 2. GET /api/manager/stats
 router.get('/manager/stats', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER']), async (req: AuthRequest, res: Response) => {
