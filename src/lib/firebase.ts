@@ -99,9 +99,18 @@ let authBridgePromise: Promise<any> | null = null;
 
 /**
  * Returns current authenticated Firebase user without hardcoded fallback credentials.
+ * Resiliently waits for onAuthStateChanged if auth is still hydrating from IndexedDB.
  */
 export async function ensureFirebaseAuth(): Promise<any> {
-  return auth.currentUser;
+  if (auth.currentUser) return auth.currentUser;
+  return new Promise((resolve) => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      unsub();
+      resolve(user);
+    });
+    // Safe timeout to prevent indefinite hanging if offline
+    setTimeout(() => resolve(auth.currentUser), 2000);
+  });
 }
 
 // Connectivity check & Auth initialization

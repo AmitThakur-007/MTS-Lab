@@ -3575,40 +3575,50 @@ export async function createServerApp() {
     const skipInactivityCheck = req.path === '/auth/activity' || req.path === '/auth/refresh' || req.path === '/auth/logout';
     if (!skipInactivityCheck) {
       try {
+        const effectiveUserId = decoded.id || decoded.userId || decoded.uid || req.user?.id;
         // Find the most recently active session for this user
-        const session = await prisma.session.findFirst({
+        let session = effectiveUserId ? await prisma.session.findFirst({
           where: {
-            userId: decoded.id,
+            userId: effectiveUserId,
             expiresAt: { gt: new Date() }
           },
           orderBy: { lastActiveAt: 'desc' }
-        });
+        }) : null;
 
-        if (!session) {
-          return res.status(401).json({ error: "InactivityExpired", message: "Your session has expired due to inactivity. Please log in again." });
+        if (!session && effectiveUserId) {
+          session = await prisma.session.create({
+            data: {
+              userId: effectiveUserId,
+              refreshToken: uuidv4(),
+              expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+              lastActiveAt: new Date()
+            }
+          }).catch(() => null);
         }
 
-        const lastActive = session.lastActiveAt ? new Date(session.lastActiveAt).getTime() : 0;
-        const inactiveDuration = Date.now() - lastActive;
+        if (session) {
+          const lastActive = session.lastActiveAt ? new Date(session.lastActiveAt).getTime() : 0;
+          const inactiveDuration = Date.now() - lastActive;
 
-        if (inactiveDuration > INACTIVITY_TIMEOUT_MS) {
-          // Session has been inactive for > 2 hours — invalidate it
-          console.warn(`[AUTH] Session inactivity exceeded 2h for user ${decoded.id}. Invalidating session.`);
-          await prisma.session.deleteMany({ where: { userId: decoded.id } });
-          return res.status(401).json({ error: "InactivityExpired", message: "Your session has expired due to inactivity. Please log in again." });
+          if (inactiveDuration > INACTIVITY_TIMEOUT_MS) {
+            // Session has been inactive for > 2 hours — invalidate it
+            console.warn(`[AUTH] Session inactivity exceeded 2h for user ${effectiveUserId}. Invalidating session.`);
+            await prisma.session.deleteMany({ where: { userId: effectiveUserId } });
+            return res.status(401).json({ error: "InactivityExpired", message: "Your session has expired due to inactivity. Please log in again." });
+          }
+
+          // Throttle lastActiveAt updates (max once per 30s per session) to avoid excessive DB writes
+          if (inactiveDuration > LAST_ACTIVE_UPDATE_THROTTLE_MS) {
+            await prisma.session.update({
+              where: { id: session.id },
+              data: { lastActiveAt: new Date() }
+            }).catch(() => {}); // Non-blocking; don't fail the request if update fails
+          }
+
+          // Attach sessionId for use in activity/logout endpoints
+          req.sessionId = session.id;
+          req.sessionRefreshToken = session.refreshToken;
         }
-
-        // Throttle lastActiveAt updates (max once per 30s per session) to avoid excessive DB writes
-        if (inactiveDuration > LAST_ACTIVE_UPDATE_THROTTLE_MS) {
-          await prisma.session.update({
-            where: { id: session.id },
-            data: { lastActiveAt: new Date() }
-          }).catch(() => {}); // Non-blocking; don't fail the request if update fails
-        }
-
-        // Attach sessionId for use in activity/logout endpoints
-        req.sessionId = session.id;
-        req.sessionRefreshToken = session.refreshToken;
       } catch (dbErr) {
         // Non-blocking: if session DB check fails, allow request to proceed
         console.warn("[AUTH] Session inactivity check DB error (proceeding):", dbErr);
@@ -10220,7 +10230,7 @@ export async function createServerApp() {
   // ==========================================
 
   // List all customers with pagination & statistics
-  app.get("/api/customers", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST']), syncRouteMiddleware(['repair', 'user']), async (req: any, res) => {
+  app.get("/api/customers", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST']), syncRouteMiddleware(['repair', 'user']), async (req: any, res) => {
     try {
       const { search, sortBy, sortOrder } = req.query;
       const requestedPage = Number.parseInt(String(req.query.page || '1'), 10);
@@ -10464,7 +10474,7 @@ export async function createServerApp() {
   });
 
   // Get specific customer profile (repairs paginated separately)
-  app.get("/api/customers/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST']), syncRouteMiddleware(['repair', 'repairLog', 'payment']), async (req: any, res) => {
+  app.get("/api/customers/:id", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST']), syncRouteMiddleware(['repair', 'repairLog', 'payment']), async (req: any, res) => {
     try {
       const { id } = req.params;
       const customer = await prisma.customer.findFirst({
@@ -11301,7 +11311,7 @@ export async function createServerApp() {
   // ==========================================
 
   // List all courier shipments with filtering, search, and pagination
-  app.get("/api/couriers", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), syncRouteMiddleware(['repair', 'customer']), async (req: any, res) => {
+  app.get("/api/couriers", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), syncRouteMiddleware(['repair', 'customer']), async (req: any, res) => {
     try {
       const { 
         type = 'ALL', 
@@ -11520,7 +11530,7 @@ export async function createServerApp() {
   });
 
   // Dynamic Filters Metadata (Distinct Courier Companies & Districts)
-  app.get("/api/couriers/filters-metadata", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
+  app.get("/api/couriers/filters-metadata", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const repairs = await prisma.repair.findMany({
         where: {
@@ -11561,7 +11571,7 @@ export async function createServerApp() {
   });
 
   // Customer Autocomplete / Search for Intake Deduplication
-  app.get("/api/couriers/search-customers", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
+  app.get("/api/couriers/search-customers", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const { query } = req.query;
       if (!query || String(query).trim().length < 2) {
@@ -11753,7 +11763,7 @@ export async function createServerApp() {
   });
 
   // Courier Hub Overview Statistics
-  app.get("/api/couriers/stats", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
+  app.get("/api/couriers/stats", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -11856,7 +11866,7 @@ export async function createServerApp() {
   });
 
   // Eligible Repairs for Outgoing Dispatch (repairs ready/completed but not yet delivered)
-  app.get("/api/couriers/eligible-repairs", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
+  app.get("/api/couriers/eligible-repairs", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const { search } = req.query;
       const where: any = {
@@ -11895,7 +11905,7 @@ export async function createServerApp() {
   });
 
   // Get Single Courier Shipment Details
-  app.get("/api/couriers/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), syncRouteMiddleware(['repair', 'customer']), async (req: any, res) => {
+  app.get("/api/couriers/:id", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), syncRouteMiddleware(['repair', 'customer']), async (req: any, res) => {
     try {
       const { id } = req.params;
       const repair = await prisma.repair.findUnique({
@@ -13520,7 +13530,7 @@ export async function createServerApp() {
   });
 
   // Get single battery warranty details with full claim history
-  app.get("/api/battery-warranties/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), syncRouteMiddleware(['batteryWarranty', 'batteryWarrantyClaim', 'repair', 'customer']), async (req: any, res) => {
+  app.get("/api/battery-warranties/:id", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), syncRouteMiddleware(['batteryWarranty', 'batteryWarrantyClaim', 'repair', 'customer']), async (req: any, res) => {
     const { id } = req.params;
     try {
       const warranty = await prisma.batteryWarranty.findUnique({
@@ -14867,6 +14877,17 @@ export async function createServerApp() {
     }
   });
 
+  app.get(["/api/branches", "/api/branch"], authenticate, async (req: any, res) => {
+    try {
+      const branches = await prisma.branch.findMany({
+        orderBy: { name: 'asc' }
+      });
+      res.json(branches);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch branches" });
+    }
+  });
+
   app.get("/api/users", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), syncRouteMiddleware(['user', 'branch']), async (req: any, res) => {
     try {
       const users = await prisma.user.findMany({
@@ -15859,13 +15880,8 @@ export async function createServerApp() {
     }
   });
 
-  // ==========================================
-  // INTERNAL INVENTORY MANAGEMENT ENDPOINTS
-  // Strictly internal for SUPER_ADMIN, ADMIN, RECEPTIONIST, INVENTORY_MANAGER
-  // ==========================================
-
-  // Get All Inventory Items with filtering & searching
-  app.get("/api/inventory", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
+  // ==================  // Get All Inventory Items with filtering & searching
+  app.get("/api/inventory", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const { search, category, brand, stockStatus, status, sortBy, sortOrder } = req.query;
       const where: any = {};
@@ -15928,7 +15944,7 @@ export async function createServerApp() {
   });
 
   // Get Inventory Dashboard Statistics Summary
-  app.get("/api/inventory/stats", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
+  app.get("/api/inventory/stats", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const items = await prisma.inventoryItem.findMany({
         where: { status: { in: ['ACTIVE', 'INACTIVE'] } }
@@ -15968,13 +15984,13 @@ export async function createServerApp() {
   });
 
   // Categories list & creation
-  app.get("/api/inventory/categories", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
+  app.get("/api/inventory/categories", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const categories = await prisma.inventoryCategory.findMany({
         orderBy: { displayOrder: 'asc' }
       });
       res.json(categories);
-    } catch (err: any) {
+    } catch (err) {
       res.status(500).json({ error: "Failed to fetch inventory categories" });
     }
   });
@@ -16006,7 +16022,7 @@ export async function createServerApp() {
   });
 
   // Global Transaction Audit History
-  app.get("/api/inventory/transactions/history", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
+  app.get("/api/inventory/transactions/history", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const history = await prisma.inventoryTransaction.findMany({
         take: 100,
@@ -16032,7 +16048,7 @@ export async function createServerApp() {
   });
 
   // Get Single Item Details with complete history
-  app.get("/api/inventory/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
+  app.get("/api/inventory/:id", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const item = await prisma.inventoryItem.findUnique({
         where: { id: req.params.id },
@@ -16598,7 +16614,7 @@ export async function createServerApp() {
   };
 
   // Get Custom Inventory Folders
-  app.get("/api/inventory/folders", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
+  app.get("/api/inventory/folders", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const folders = getCustomInventoryFolders();
       res.json(folders);
@@ -16954,7 +16970,7 @@ export async function createServerApp() {
   });
 
   // Distinct Suppliers and Storage Locations for fast auto-completion
-  app.get("/api/inventory/suppliers", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
+  app.get("/api/inventory/suppliers", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const items = await prisma.inventoryItem.findMany({
         where: { supplier: { not: null } },
@@ -16968,7 +16984,7 @@ export async function createServerApp() {
     }
   });
 
-  app.get("/api/inventory/locations", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
+  app.get("/api/inventory/locations", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const items = await prisma.inventoryItem.findMany({
         where: { storageLocation: { not: null } },
@@ -17077,7 +17093,7 @@ export async function createServerApp() {
   });
 
   // Admin endpoint: List all repair prices with full management data
-  app.get("/api/repair-prices", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), syncRouteMiddleware(['repairPrice']), async (req: any, res) => {
+  app.get("/api/repair-prices", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), syncRouteMiddleware(['repairPrice']), async (req: any, res) => {
     try {
       const { search, brand, category, status } = req.query;
       const where: any = {};
@@ -17385,7 +17401,7 @@ export async function createServerApp() {
   };
 
   // Admin endpoint: Get custom empty folders
-  app.get("/api/repair-prices/folders", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res) => {
+  app.get("/api/repair-prices/folders", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
     try {
       const folders = getCustomFolders();
       res.json(folders);
@@ -17788,7 +17804,7 @@ export async function createServerApp() {
   });
 
   // Admin endpoint: Get all slides (active & inactive)
-  app.get("/api/admin/slides", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res) => {
+  app.get("/api/admin/slides", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER']), async (req: any, res) => {
     try {
       const slides = await prisma.homeSlide.findMany({
         orderBy: { displayOrder: "asc" }
@@ -18191,8 +18207,33 @@ export async function createServerApp() {
     }
   });
 
+  // Root Attendance Records Query Endpoint
+  app.get("/api/attendance", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'ACCOUNTANT']), async (req: any, res) => {
+    try {
+      const { date, month, year, userId, staffId } = req.query;
+      const where: any = {};
+      const targetUser = userId || staffId;
+      if (targetUser) where.userId = String(targetUser);
+      if (date) where.date = String(date);
+      if (month && year) {
+        where.date = { startsWith: `${year}-${String(month).padStart(2, '0')}` };
+      }
+
+      const attendances = await prisma.attendance.findMany({
+        where,
+        include: { user: { select: { id: true, name: true, role: true, email: true } } },
+        orderBy: { date: 'desc' },
+        take: 100
+      });
+      res.json(attendances);
+    } catch (err: any) {
+      console.error("[ATTENDANCE LIST ERROR]", err);
+      res.status(500).json({ error: "Failed to load attendance records." });
+    }
+  });
+
   // 2. Staff Daily Attendance Roster & Daily Attendance Board
-  app.get("/api/attendance/today", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'TECHNICIAN', 'LEAD_TECHNICIAN', 'ACCOUNTANT']), async (req: any, res) => {
+  app.get("/api/attendance/today", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'ACCOUNTANT']), async (req: any, res) => {
     try {
       const timeInfo = getMTSCurrentTime();
       const targetDate = (req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date)))
