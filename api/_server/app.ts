@@ -81,7 +81,10 @@ export function createApp(): Express {
 
   app.use('/api/upload', uploadRoutes);
   app.use('/api/events', eventsRoutes);
+
+  // Public Tracking & Info Routes (Mounted with explicit path aliases to prevent 404s)
   app.use('/api', publicRoutes);
+  app.use('/api/public', publicRoutes);
 
   // Health check
   app.get('/api/health', (req: Request, res: Response) => {

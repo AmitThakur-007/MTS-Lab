@@ -4227,6 +4227,7 @@ function createApp() {
   app2.use("/api/upload", upload_default);
   app2.use("/api/events", events_default);
   app2.use("/api", public_default);
+  app2.use("/api/public", public_default);
   app2.get("/api/health", (req, res) => {
     res.json({ status: "healthy", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   });
