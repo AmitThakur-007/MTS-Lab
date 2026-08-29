@@ -90,18 +90,32 @@ export const supabase = createClient(
   }
 );
 
+const DEFAULT_POSTGRES_URL = 'postgresql://mts_app:MtsLab2026SecureDbKey!@db.pirynpugkiurjobrqiqg.supabase.co:5432/postgres?sslmode=require';
+if (!process.env.DATABASE_URL || !process.env.DATABASE_URL.startsWith('postgres')) {
+  process.env.DATABASE_URL = DEFAULT_POSTGRES_URL;
+}
+if (!process.env.DIRECT_URL || !process.env.DIRECT_URL.startsWith('postgres')) {
+  process.env.DIRECT_URL = DEFAULT_POSTGRES_URL;
+}
+
 // Serverless-safe PrismaClient Singleton Pattern
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL,
+      },
+    },
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
+
 
 
 // Automatic Prisma to Firestore sync & Real-Time Event broadcasting middleware
@@ -2217,13 +2231,11 @@ export async function createServerApp() {
     req.user = decoded;
 
 
-    // --- 2-Hour Inactivity Check via Session table ---
-    // Only check for routes that are NOT the activity ping or refresh endpoints
-    const skipInactivityCheck = req.path === '/auth/activity' || req.path === '/auth/refresh' || req.path === '/auth/logout';
-    if (!skipInactivityCheck) {
+    // --- 2-Hour Inactivity Check via Session table (for local JWT sessions) ---
+    const skipInactivityCheck = decoded?.isSupabaseAuth || req.path === '/auth/activity' || req.path === '/auth/refresh' || req.path === '/auth/logout';
+    if (!skipInactivityCheck && decoded?.id) {
       try {
-        // Find the most recently active session for this user
-        const session = await prisma.session.findFirst({
+        let session = await prisma.session.findFirst({
           where: {
             userId: decoded.id,
             expiresAt: { gt: new Date() }
@@ -2234,42 +2246,40 @@ export async function createServerApp() {
         if (!session) {
           const userExists = await prisma.user.findUnique({ where: { id: decoded.id } });
           if (userExists && !userExists.deletedAt) {
-            await prisma.session.create({
+            session = await prisma.session.create({
               data: {
                 userId: decoded.id,
                 refreshToken: uuidv4(),
                 expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
                 lastActiveAt: new Date()
               }
-            }).catch(() => {});
+            }).catch(() => null);
           } else {
             return res.status(401).json({ error: "InactivityExpired", message: "Your session has expired due to inactivity. Please log in again." });
           }
         }
 
-        const lastActive = (session && session.lastActiveAt) ? new Date(session.lastActiveAt).getTime() : Date.now();
-        const inactiveDuration = Date.now() - lastActive;
+        if (session) {
+          const lastActive = session.lastActiveAt ? new Date(session.lastActiveAt).getTime() : Date.now();
+          const inactiveDuration = Date.now() - lastActive;
 
-        if (inactiveDuration > INACTIVITY_TIMEOUT_MS) {
-          // Session has been inactive for > 2 hours — invalidate it
-          console.warn(`[AUTH] Session inactivity exceeded 2h for user ${decoded.id}. Invalidating session.`);
-          await prisma.session.deleteMany({ where: { userId: decoded.id } });
-          return res.status(401).json({ error: "InactivityExpired", message: "Your session has expired due to inactivity. Please log in again." });
+          if (inactiveDuration > INACTIVITY_TIMEOUT_MS) {
+            console.warn(`[AUTH] Session inactivity exceeded 2h for user ${decoded.id}. Invalidating session.`);
+            await prisma.session.deleteMany({ where: { userId: decoded.id } });
+            return res.status(401).json({ error: "InactivityExpired", message: "Your session has expired due to inactivity. Please log in again." });
+          }
+
+          if (inactiveDuration > LAST_ACTIVE_UPDATE_THROTTLE_MS) {
+            await prisma.session.update({
+              where: { id: session.id },
+              data: { lastActiveAt: new Date() }
+            }).catch(() => {});
+          }
+
+          req.sessionId = session.id;
+          req.sessionRefreshToken = session.refreshToken;
         }
-
-        // Throttle lastActiveAt updates (max once per 30s per session) to avoid excessive DB writes
-        if (inactiveDuration > LAST_ACTIVE_UPDATE_THROTTLE_MS) {
-          await prisma.session.update({
-            where: { id: session.id },
-            data: { lastActiveAt: new Date() }
-          }).catch(() => {}); // Non-blocking; don't fail the request if update fails
-        }
-
-        // Attach sessionId for use in activity/logout endpoints
-        req.sessionId = session.id;
-        req.sessionRefreshToken = session.refreshToken;
       } catch (dbErr) {
-        // Non-blocking: if session DB check fails, allow request to proceed
         console.warn("[AUTH] Session inactivity check DB error (proceeding):", dbErr);
       }
     }

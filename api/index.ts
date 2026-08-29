@@ -38,16 +38,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
   }
 
-  try {
-    const app = await getServerApp();
-    return app(req, res);
-  } catch (err: any) {
-    console.error('[API SERVERLESS GATEWAY ERROR]', err);
-    res.setHeader('Content-Type', 'application/json');
-    res.statusCode = 500;
-    res.end(JSON.stringify({
-      error: 'Internal Server Error',
-      message: err?.message || 'Serverless application handler encountered an error.'
-    }));
-  }
+  return new Promise<void>((resolve, reject) => {
+    // Keep Vercel serverless function alive until response is finished
+    res.on('finish', () => resolve());
+    res.on('close', () => resolve());
+    res.on('error', (err) => reject(err));
+
+    getServerApp()
+      .then((app) => {
+        app(req, res, (err: any) => {
+          if (err) {
+            console.error('[API SERVERLESS ROUTE ERROR]', err);
+            if (!res.headersSent) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({
+                error: 'Internal Server Error',
+                message: err?.message || 'Route execution error'
+              }));
+            }
+            resolve();
+          }
+        });
+      })
+      .catch((err: any) => {
+        console.error('[API SERVERLESS GATEWAY ERROR]', err);
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({
+            error: 'Internal Server Error',
+            message: err?.message || 'Serverless application handler encountered an error.'
+          }));
+        }
+        resolve();
+      });
+  });
 }
+
