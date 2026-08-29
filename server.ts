@@ -8048,8 +8048,9 @@ export async function createServerApp() {
 
   app.get("/api/auth/me", authenticate, syncRouteMiddleware(['user', 'branch']), async (req: any, res) => {
     try {
-      const user = await prisma.user.findUnique({
-        where: { id: req.user.id, deletedAt: null },
+      const userId = req.user?.id || req.user?.userId;
+      const user = await prisma.user.findFirst({
+        where: { id: userId, deletedAt: null },
         select: {
           id: true,
           email: true,
@@ -8068,8 +8069,13 @@ export async function createServerApp() {
       if (!user || !user.isActive || (user.accountStatus !== "ACTIVE" && user.accountStatus !== "APPROVED")) {
         return res.status(401).json({ success: false, message: "Account is inactive or unapproved" });
       }
-      res.json({ success: true, user });
+      res.json({
+        success: true,
+        user,
+        ...user
+      });
     } catch (err: any) {
+      console.error("[AUTH ME ERROR]", err);
       res.status(500).json({ success: false, message: "Failed to fetch user profile" });
     }
   });
