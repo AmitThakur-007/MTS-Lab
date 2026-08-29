@@ -97,7 +97,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ error: error.message || 'Failed to fetch battery warranties.' });
     }
 
-    // Fetch claims safely
+    // Fetch claims safely without breaking if foreign key joins are not established
     const { data: allClaims } = await supabaseAdmin.from('BatteryWarrantyClaim').select('*');
 
     const combined = (warranties || []).map((w: any) => ({
@@ -338,7 +338,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // 8. PUT / PATCH /api/battery-warranties/:id (Edit Warranty)
-router.all('/:id/edit', authenticate, async (req: AuthRequest, res: Response) => {
+const handleWarrantyUpdate = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body, updatedAt: new Date().toISOString() };
@@ -360,7 +360,11 @@ router.all('/:id/edit', authenticate, async (req: AuthRequest, res: Response) =>
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to update warranty.' });
   }
-});
+};
+
+router.put('/:id', authenticate, handleWarrantyUpdate);
+router.patch('/:id', authenticate, handleWarrantyUpdate);
+router.all('/:id/edit', authenticate, handleWarrantyUpdate);
 
 // 9. POST /api/battery-warranties/:id/claim
 router.post('/:id/claim', authenticate, async (req: AuthRequest, res: Response) => {

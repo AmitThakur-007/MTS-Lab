@@ -2836,7 +2836,7 @@ router7.post("/", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to register battery warranty." });
   }
 });
-router7.all("/:id/edit", authenticate, async (req, res) => {
+var handleWarrantyUpdate = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
@@ -2850,7 +2850,10 @@ router7.all("/:id/edit", authenticate, async (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: "Failed to update warranty." });
   }
-});
+};
+router7.put("/:id", authenticate, handleWarrantyUpdate);
+router7.patch("/:id", authenticate, handleWarrantyUpdate);
+router7.all("/:id/edit", authenticate, handleWarrantyUpdate);
 router7.post("/:id/claim", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
