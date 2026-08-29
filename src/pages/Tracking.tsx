@@ -1,24 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Search, 
-  Package, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle, 
-  Smartphone, 
-  MapPin, 
-  ShieldCheck, 
-  Phone, 
-  PhoneCall, 
-  History, 
-  Hash, 
-  Copy, 
-  Check, 
-  Wrench, 
-  Info, 
-  UserCheck, 
+import {
+  Search,
+  Package,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Smartphone,
+  MapPin,
+  ShieldCheck,
+  Phone,
+  PhoneCall,
+  History,
+  Hash,
+  Copy,
+  Check,
+  Wrench,
+  Info,
+  UserCheck,
   Layers,
   Truck,
   ExternalLink,
@@ -35,68 +35,68 @@ import { cn } from '@/lib/utils';
 import { useRealtimeSync } from '@/services/realtime';
 
 const statusConfig: Record<string, { label: string; color: string; bgSoft: string; textColor: string; icon: any; progress: number; desc: string }> = {
-  RECEIVED: { 
-    label: 'Device Received', 
-    color: 'bg-amber-500', 
-    bgSoft: 'bg-amber-50 text-amber-900 border-amber-200', 
+  RECEIVED: {
+    label: 'Device Received',
+    color: 'bg-amber-500',
+    bgSoft: 'bg-amber-50 text-amber-900 border-amber-200',
     textColor: 'text-amber-600',
-    icon: Clock, 
-    progress: 15, 
-    desc: 'Your device has been safely cataloged and inspected into the MTS Lab inventory.' 
+    icon: Clock,
+    progress: 15,
+    desc: 'Your device has been safely cataloged and inspected into the MTS Lab inventory.'
   },
-  DIAGNOSING: { 
-    label: 'Diagnosis In Progress', 
-    color: 'bg-blue-600', 
-    bgSoft: 'bg-blue-50 text-blue-900 border-blue-200', 
+  DIAGNOSING: {
+    label: 'Diagnosis In Progress',
+    color: 'bg-blue-600',
+    bgSoft: 'bg-blue-50 text-blue-900 border-blue-200',
     textColor: 'text-blue-600',
-    icon: Search, 
-    progress: 35, 
-    desc: 'Certified micro-engineers are diagnosing motherboards, IC circuits, and display assemblies.' 
+    icon: Search,
+    progress: 35,
+    desc: 'Certified micro-engineers are diagnosing motherboards, IC circuits, and display assemblies.'
   },
-  IN_PROCESS: { 
-    label: 'Restoration In Progress', 
-    color: 'bg-indigo-600', 
-    bgSoft: 'bg-indigo-50 text-indigo-900 border-indigo-200', 
+  IN_PROCESS: {
+    label: 'Restoration In Progress',
+    color: 'bg-indigo-600',
+    bgSoft: 'bg-indigo-50 text-indigo-900 border-indigo-200',
     textColor: 'text-indigo-600',
-    icon: Wrench, 
-    progress: 55, 
-    desc: 'Active hardware repair, micro-soldering, and OEM component replacement in progress.' 
+    icon: Wrench,
+    progress: 55,
+    desc: 'Active hardware repair, micro-soldering, and OEM component replacement in progress.'
   },
-  WAITING_FOR_PARTS: { 
-    label: 'Waiting For Parts', 
-    color: 'bg-purple-600', 
-    bgSoft: 'bg-purple-50 text-purple-900 border-purple-200', 
+  WAITING_FOR_PARTS: {
+    label: 'Waiting For Parts',
+    color: 'bg-purple-600',
+    bgSoft: 'bg-purple-50 text-purple-900 border-purple-200',
     textColor: 'text-purple-600',
-    icon: Package, 
-    progress: 65, 
-    desc: 'Sourcing genuine Grade-A replacement components from our logistics inventory.' 
+    icon: Package,
+    progress: 65,
+    desc: 'Sourcing genuine Grade-A replacement components from our logistics inventory.'
   },
-  TESTING: { 
-    label: 'Testing & QA Diagnostics', 
-    color: 'bg-orange-500', 
-    bgSoft: 'bg-orange-50 text-orange-900 border-orange-200', 
+  TESTING: {
+    label: 'Testing & QA Diagnostics',
+    color: 'bg-orange-500',
+    bgSoft: 'bg-orange-50 text-orange-900 border-orange-200',
     textColor: 'text-orange-600',
-    icon: ShieldCheck, 
-    progress: 80, 
-    desc: 'Performing comprehensive 36-point diagnostic inspection and display touch calibration.' 
+    icon: ShieldCheck,
+    progress: 80,
+    desc: 'Performing comprehensive 36-point diagnostic inspection and display touch calibration.'
   },
-  REPAIRED: { 
-    label: 'Device Repaired', 
-    color: 'bg-cyan-600', 
-    bgSoft: 'bg-cyan-50 text-cyan-900 border-cyan-200', 
+  REPAIRED: {
+    label: 'Device Repaired',
+    color: 'bg-cyan-600',
+    bgSoft: 'bg-cyan-50 text-cyan-900 border-cyan-200',
     textColor: 'text-cyan-600',
-    icon: CheckCircle2, 
-    progress: 90, 
-    desc: 'Technical repair completed successfully and passed quality verification standards.' 
+    icon: CheckCircle2,
+    progress: 90,
+    desc: 'Technical repair completed successfully and passed quality verification standards.'
   },
-  READY_FOR_PICKUP: { 
-    label: 'Ready For Collection / Dispatch', 
-    color: 'bg-emerald-600', 
-    bgSoft: 'bg-emerald-50 text-emerald-900 border-emerald-200', 
+  READY_FOR_PICKUP: {
+    label: 'Ready For Collection / Dispatch',
+    color: 'bg-emerald-600',
+    bgSoft: 'bg-emerald-50 text-emerald-900 border-emerald-200',
     textColor: 'text-emerald-600',
-    icon: MapPin, 
-    progress: 92, 
-    desc: 'Restoration verified. Your device is sanitized and packaged ready for counter pickup or return courier dispatch.' 
+    icon: MapPin,
+    progress: 92,
+    desc: 'Restoration verified. Your device is sanitized and packaged ready for counter pickup or return courier dispatch.'
   },
   COURIER_DISPATCHED: {
     label: 'Return Courier Dispatched',
@@ -107,41 +107,41 @@ const statusConfig: Record<string, { label: string; color: string; bgSoft: strin
     progress: 96,
     desc: 'Repaired device has been safely packed and dispatched via courier logistics back to your destination district.'
   },
-  DELIVERED: { 
-    label: 'Delivered & Handed Over', 
-    color: 'bg-slate-900', 
-    bgSoft: 'bg-slate-100 text-slate-900 border-slate-300', 
+  DELIVERED: {
+    label: 'Delivered & Handed Over',
+    color: 'bg-slate-900',
+    bgSoft: 'bg-slate-100 text-slate-900 border-slate-300',
     textColor: 'text-slate-900',
-    icon: CheckCircle2, 
-    progress: 100, 
-    desc: 'Device has been collected / delivered to the customer.' 
+    icon: CheckCircle2,
+    progress: 100,
+    desc: 'Device has been collected / delivered to the customer.'
   },
-  RE_PROBLEM: { 
-    label: 'Re-Problem (Warranty Intake)', 
-    color: 'bg-rose-600', 
-    bgSoft: 'bg-rose-50 text-rose-900 border-rose-300 ring-2 ring-rose-500/20', 
+  RE_PROBLEM: {
+    label: 'Re-Problem (Warranty Intake)',
+    color: 'bg-rose-600',
+    bgSoft: 'bg-rose-50 text-rose-900 border-rose-300 ring-2 ring-rose-500/20',
     textColor: 'text-rose-600',
-    icon: AlertCircle, 
-    progress: 40, 
-    desc: 'Device has been reopened for priority post-delivery warranty inspection and diagnosis.' 
+    icon: AlertCircle,
+    progress: 40,
+    desc: 'Device has been reopened for priority post-delivery warranty inspection and diagnosis.'
   },
-  REPROBLEM: { 
-    label: 'Re-Problem (Warranty Intake)', 
-    color: 'bg-rose-600', 
-    bgSoft: 'bg-rose-50 text-rose-900 border-rose-300 ring-2 ring-rose-500/20', 
+  REPROBLEM: {
+    label: 'Re-Problem (Warranty Intake)',
+    color: 'bg-rose-600',
+    bgSoft: 'bg-rose-50 text-rose-900 border-rose-300 ring-2 ring-rose-500/20',
     textColor: 'text-rose-600',
-    icon: AlertCircle, 
-    progress: 40, 
-    desc: 'Device has been reopened for priority post-delivery warranty inspection and diagnosis.' 
+    icon: AlertCircle,
+    progress: 40,
+    desc: 'Device has been reopened for priority post-delivery warranty inspection and diagnosis.'
   },
-  CANNOT_REPAIR: { 
-    label: 'Cannot Repair', 
-    color: 'bg-rose-600', 
-    bgSoft: 'bg-rose-50 text-rose-900 border-rose-200', 
+  CANNOT_REPAIR: {
+    label: 'Cannot Repair',
+    color: 'bg-rose-600',
+    bgSoft: 'bg-rose-50 text-rose-900 border-rose-200',
     textColor: 'text-rose-600',
-    icon: AlertCircle, 
-    progress: 100, 
-    desc: 'Catastrophic circuit damage exceeds viable safe restoration standards.' 
+    icon: AlertCircle,
+    progress: 100,
+    desc: 'Catastrophic circuit damage exceeds viable safe restoration standards.'
   }
 };
 
@@ -164,33 +164,23 @@ const COURIER_TIMELINE_STEPS = [
   { key: 'DELIVERED', label: 'Delivered', icon: CheckCircle2 }
 ];
 
-// Sanitize any staff names or specialist references to generic 'Technician'
 function sanitizeLogMessage(msg: string): string {
   if (!msg || typeof msg !== 'string') return '';
   let sanitized = msg;
 
-  // 1. Strip emails
   sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, 'Technician');
-
-  // 2. Replace "by [Name] (ROLE)" or "by [ROLE]" e.g. SUPER_ADMIN, ADMIN, MANAGER, RECEPTIONIST, TECHNICIAN, MTS Admin, MTS Manager
   sanitized = sanitized.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)\s*\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, 'by Technician');
   sanitized = sanitized.replace(/\bby\s+(?:MTS\s+)?(?:super\s*admin|admin|manager|receptionist|staff|specialist)\b/gi, 'by Technician');
   sanitized = sanitized.replace(/\bby\s+specialist\s+[^,\.\n]+/gi, 'by Technician');
-
-  // 3. Replace action verbs followed by "by [Name]"
   sanitized = sanitized.replace(/\b(handled|updated|diagnosed|logged|received|repaired|inspected|completed|verified|transitioned)\s+by\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, '$1 by Technician');
-
-  // 4. Replace "Assigned to/by [Name]"
   sanitized = sanitized.replace(/\bassigned\s+(?:to|by)\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, 'Assigned to Technician');
-
-  // 5. Replace any remaining "by [Words]" before punctuation or end of line
   sanitized = sanitized.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, 'by Technician');
-
-  // 6. Clean duplicate "by Technician"
   sanitized = sanitized.replace(/\bby\s+Technician(?:\s+by\s+Technician)+/gi, 'by Technician');
 
   return sanitized.trim();
 }
+
+const TRACKING_REALTIME_ENTITIES = ['repair', 'repairLog'];
 
 export default function Tracking() {
   const [searchParams] = useSearchParams();
@@ -201,39 +191,39 @@ export default function Tracking() {
   const [selectedDeviceIndex, setSelectedDeviceIndex] = useState(0);
   const [copied, setCopied] = useState(false);
 
-  // Auto-fetch if query param is present on page load (for example from WhatsApp link)
-  useEffect(() => {
-    const urlRepairNo = searchParams.get('repairNumber')?.trim();
-    const urlPhone = searchParams.get('phone')?.trim();
+  const executeTracking = useCallback(async (repNo: string, phone: string) => {
+    // Strip leading hash (#) and non-numeric phone chars
+    const cleanRepNo = (repNo || '').trim().replace(/^#+/, '').trim();
+    const cleanPhone = (phone || '').trim().replace(/\D/g, '');
 
-    if (urlRepairNo) {
-      setRepairNumber(urlRepairNo);
-      executeTracking(urlRepairNo, urlPhone || '');
-    } else if (urlPhone) {
-      setPhoneNumber(urlPhone);
-      executeTracking('', urlPhone);
-    }
-  }, [searchParams]);
-
-  const executeTracking = async (repNo: string, phone: string) => {
-    if (!repNo && !phone) {
+    if (!cleanRepNo && !cleanPhone) {
       toast.error('Please enter your Repair Job Number or Registered Phone Number.');
       return;
     }
 
     setLoading(true);
     try {
-      let query = '';
-      if (repNo && phone) {
-        query = `repairNumber=${encodeURIComponent(repNo)}&phone=${encodeURIComponent(phone)}`;
-      } else if (repNo) {
-        query = `repairNumber=${encodeURIComponent(repNo)}`;
+      const params = new URLSearchParams();
+      if (cleanRepNo) params.set('repairNumber', cleanRepNo);
+      if (cleanPhone) params.set('phone', cleanPhone);
+
+      const res: any = await api.get(`/track?${params.toString()}`);
+
+      // Robustly normalize data shape whether API returns an array or an object
+      let normalizedData: any = null;
+
+      if (Array.isArray(res)) {
+        if (res.length === 0) throw new Error('No repair records found.');
+        normalizedData = res.length === 1 ? res[0] : { devices: res, customer: { name: res[0]?.customerName } };
+      } else if (res?.repair) {
+        normalizedData = res.repair;
+      } else if (res?.repairs && Array.isArray(res.repairs)) {
+        normalizedData = res.repairs.length === 1 ? res.repairs[0] : { devices: res.repairs, customer: { name: res.repairs[0]?.customerName } };
       } else {
-        query = `phone=${encodeURIComponent(phone)}`;
+        normalizedData = res;
       }
 
-      const data: any = await api.get(`/track?${query}`);
-      setTrackingData(data);
+      setTrackingData(normalizedData);
       setSelectedDeviceIndex(0);
       toast.success('Live repair records retrieved successfully.');
     } catch (err: any) {
@@ -245,32 +235,58 @@ export default function Tracking() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Auto-fetch if query param is present on page load (e.g. from WhatsApp/SMS notification link)
+  useEffect(() => {
+    const urlRepairNo = searchParams.get('repairNumber')?.trim() || searchParams.get('job')?.trim() || searchParams.get('ticket')?.trim();
+    const urlPhone = searchParams.get('phone')?.trim();
+
+    if (urlRepairNo) {
+      setRepairNumber(urlRepairNo);
+      if (urlPhone) setPhoneNumber(urlPhone);
+      executeTracking(urlRepairNo, urlPhone || '');
+    } else if (urlPhone) {
+      setPhoneNumber(urlPhone);
+      executeTracking('', urlPhone);
+    }
+  }, [searchParams, executeTracking]);
 
   const handleTrackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    executeTracking(repairNumber.trim(), phoneNumber.trim());
+    executeTracking(repairNumber, phoneNumber);
   };
 
   // Real-time synchronization
-  useRealtimeSync(['repair', 'repairLog', 'sync'], (event) => {
+  const handleRealtimeEvent = useCallback((event: any) => {
     if (trackingData) {
       const activeRep = trackingData.devices?.[selectedDeviceIndex] || trackingData;
       if (!event.id || event.id === activeRep.id || event.data?.id === activeRep.id) {
-        const repNo = repairNumber.trim() || activeRep.repairNumber;
-        const phone = phoneNumber.trim() || activeRep.customerPhone;
-        api.get(`/track?${repNo ? `repairNumber=${encodeURIComponent(repNo)}` : `phone=${encodeURIComponent(phone)}`}`)
-          .then((refreshed: any) => setTrackingData(refreshed))
-          .catch(() => {});
+        const cleanRepNo = (repairNumber || activeRep.repairNumber || '').trim().replace(/^#+/, '');
+        const cleanPhone = (phoneNumber || activeRep.customerPhone || '').trim().replace(/\D/g, '');
+
+        const params = new URLSearchParams();
+        if (cleanRepNo) params.set('repairNumber', cleanRepNo);
+        if (cleanPhone) params.set('phone', cleanPhone);
+
+        api.get(`/track?${params.toString()}`)
+          .then((refreshed: any) => {
+            const normalized = Array.isArray(refreshed)
+              ? (refreshed.length === 1 ? refreshed[0] : { devices: refreshed, customer: { name: refreshed[0]?.customerName } })
+              : (refreshed?.repair || refreshed);
+            setTrackingData(normalized);
+          })
+          .catch(() => { });
       }
     }
-  });
+  }, [trackingData, selectedDeviceIndex, repairNumber, phoneNumber]);
+
+  useRealtimeSync(TRACKING_REALTIME_ENTITIES, handleRealtimeEvent);
 
   const activeRepair = trackingData?.devices?.[selectedDeviceIndex] || trackingData;
   const isCourierDevice = activeRepair?.receivingMethod === 'COURIER' || activeRepair?.isCourierIn === true || Boolean(activeRepair?.isReturnCourierDispatched);
   const timelineSteps = isCourierDevice ? COURIER_TIMELINE_STEPS : WALK_IN_TIMELINE_STEPS;
 
-  // Determine current active status configuration
   let currentStatusKey = activeRepair?.status || 'RECEIVED';
   if (activeRepair?.courierStatus === 'COURIER_DISPATCHED' || activeRepair?.isReturnCourierDispatched) {
     if (activeRepair?.status !== 'DELIVERED') {
@@ -281,9 +297,9 @@ export default function Tracking() {
 
   const copyRepairNumber = (num: string) => {
     if (!num) return;
-    navigator.clipboard.writeText(num);
+    navigator.clipboard.writeText(num.replace(/^#+/, ''));
     setCopied(true);
-    toast.success(`Copied Repair #${num}`);
+    toast.success(`Copied Repair #${num.replace(/^#+/, '')}`);
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -316,7 +332,7 @@ export default function Tracking() {
 
       <main className="flex-1 pt-28 sm:pt-32 md:pt-36 pb-12 sm:pb-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
-          
+
           {/* Header Banner */}
           <div className="text-center space-y-2.5 max-w-2xl mx-auto">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/80 border border-slate-300 text-slate-800 text-[11px] font-bold uppercase tracking-wider">
@@ -336,10 +352,10 @@ export default function Tracking() {
             <CardContent className="p-5 sm:p-7 md:p-8">
               <form onSubmit={handleTrackSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  
+
                   {/* Repair Number Input */}
                   <div className="space-y-1.5">
-                    <label 
+                    <label
                       htmlFor="tracking-repair-number-input"
                       className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5"
                     >
@@ -349,7 +365,7 @@ export default function Tracking() {
                     <div className="relative">
                       <Input
                         id="tracking-repair-number-input"
-                        placeholder="Repair Job Number"
+                        placeholder="e.g. MTS-2026-0001"
                         value={repairNumber}
                         onChange={(e) => setRepairNumber(e.target.value)}
                         className="h-11 sm:h-12 rounded-xl bg-slate-50 border-slate-200 font-mono font-medium text-slate-900 focus:bg-white transition-all text-xs sm:text-sm pl-3.5"
@@ -359,7 +375,7 @@ export default function Tracking() {
 
                   {/* Customer Phone Input */}
                   <div className="space-y-1.5">
-                    <label 
+                    <label
                       htmlFor="tracking-phone-number-input"
                       className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5"
                     >
@@ -369,7 +385,7 @@ export default function Tracking() {
                     <div className="relative">
                       <Input
                         id="tracking-phone-number-input"
-                        placeholder="Registered Phone Number"
+                        placeholder="e.g. 9801234567"
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
                         className="h-11 sm:h-12 rounded-xl bg-slate-50 border-slate-200 font-medium text-slate-900 focus:bg-white transition-all text-xs sm:text-sm pl-3.5"
@@ -443,8 +459,8 @@ export default function Tracking() {
                             onClick={() => setSelectedDeviceIndex(idx)}
                             className={cn(
                               "flex items-center gap-2.5 px-3.5 py-2 rounded-xl border text-left transition-all shrink-0 font-medium text-xs cursor-pointer",
-                              isSelected 
-                                ? "bg-slate-900 text-white border-slate-900 shadow-sm" 
+                              isSelected
+                                ? "bg-slate-900 text-white border-slate-900 shadow-sm"
                                 : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                             )}
                           >
@@ -507,10 +523,10 @@ export default function Tracking() {
                     {/* Stepper Timeline */}
                     <div className="overflow-x-auto pb-3 pt-2 scrollbar-thin">
                       <div className={cn("flex items-center justify-between relative px-4", isCourierDevice ? "min-w-[680px]" : "min-w-[560px]")}>
-                        
+
                         {/* Connecting Line */}
                         <div className="absolute top-5 left-10 right-10 h-1 bg-slate-200 -z-0" />
-                        
+
                         {timelineSteps.map((step) => {
                           const status = getStepStatus(step.key, activeRepair.status, activeRepair);
                           const StepIcon = step.icon;
@@ -521,10 +537,10 @@ export default function Tracking() {
                             <div key={step.key} className="flex flex-col items-center gap-2 relative z-10 w-24 text-center">
                               <div className={cn(
                                 "w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs transition-all shadow-sm border-2",
-                                isCompleted 
-                                  ? "bg-slate-900 text-white border-slate-900" 
-                                  : isCurrent 
-                                    ? "bg-indigo-600 text-white border-indigo-600 ring-4 ring-indigo-100 scale-105" 
+                                isCompleted
+                                  ? "bg-slate-900 text-white border-slate-900"
+                                  : isCurrent
+                                    ? "bg-indigo-600 text-white border-indigo-600 ring-4 ring-indigo-100 scale-105"
                                     : "bg-white text-slate-400 border-slate-300"
                               )}>
                                 {isCompleted ? <Check className="w-4 h-4" /> : <StepIcon className="w-4 h-4" />}
@@ -572,10 +588,10 @@ export default function Tracking() {
                   </CardContent>
                 </Card>
 
-                {/* COURIER LOGISTICS CARDS (Rendered if courier details present) */}
+                {/* COURIER LOGISTICS CARDS */}
                 {isCourierDevice && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                    
+
                     {/* Inbound Courier */}
                     {activeRepair.courierCompany && (
                       <Card className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 space-y-3.5 shadow-2xs">
@@ -600,7 +616,7 @@ export default function Tracking() {
                           <div>
                             <span className="text-amber-800/80 font-bold block text-[11px]">Lab Received Date:</span>
                             <span className="text-slate-900 font-semibold">
-                              {activeRepair.courierReceivedDate 
+                              {activeRepair.courierReceivedDate
                                 ? new Date(activeRepair.courierReceivedDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
                                 : 'Received'}
                             </span>
@@ -648,7 +664,7 @@ export default function Tracking() {
                           <div>
                             <span className="text-blue-800/80 font-bold block text-[11px]">Dispatched Date:</span>
                             <span className="text-slate-900 font-semibold">
-                              {activeRepair.returnCourierDispatchDate 
+                              {activeRepair.returnCourierDispatchDate
                                 ? new Date(activeRepair.returnCourierDispatchDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
                                 : 'Dispatched'}
                             </span>
@@ -785,7 +801,7 @@ export default function Tracking() {
                                   </span>
                                 </div>
                                 <p className="text-xs text-slate-700 font-medium">
-                                  {sanitizeLogMessage(log.message)}
+                                  {sanitizeLogMessage(log.notes || log.message)}
                                 </p>
                               </div>
                             </div>
@@ -806,20 +822,20 @@ export default function Tracking() {
           {!trackingData && !loading && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
               {[
-                { 
-                  icon: Wrench, 
-                  title: 'Real-Time Diagnostics', 
-                  desc: 'Track live progress from motherboard circuit inspection to component restoration and 36-point QA testing.' 
+                {
+                  icon: Wrench,
+                  title: 'Real-Time Diagnostics',
+                  desc: 'Track live progress from motherboard circuit inspection to component restoration and 36-point QA testing.'
                 },
-                { 
-                  icon: ShieldCheck, 
-                  title: 'Secure Ticket Verification', 
-                  desc: 'Every repair is verified against authentic job records with encrypted logs and tamper-proof history.' 
+                {
+                  icon: ShieldCheck,
+                  title: 'Secure Ticket Verification',
+                  desc: 'Every repair is verified against authentic job records with encrypted logs and tamper-proof history.'
                 },
-                { 
-                  icon: Truck, 
-                  title: '77 Districts Courier Support', 
-                  desc: 'Full visibility on inbound parcels and outgoing courier consignments across all districts in Nepal.' 
+                {
+                  icon: Truck,
+                  title: '77 Districts Courier Support',
+                  desc: 'Full visibility on inbound parcels and outgoing courier consignments across all districts in Nepal.'
                 }
               ].map((item, i) => (
                 <Card key={i} className="rounded-2xl border border-slate-200/80 bg-white p-5 space-y-2.5 shadow-2xs hover:shadow-sm transition-shadow">
@@ -855,8 +871,8 @@ export default function Tracking() {
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto shrink-0">
               <div className="text-center sm:text-right hidden md:block pr-2">
                 <span className="text-[10px] text-slate-400 block font-semibold uppercase tracking-wider">Landline</span>
-                <a 
-                  href="tel:015364307" 
+                <a
+                  href="tel:015364307"
                   className="text-base font-black text-white hover:text-indigo-400 transition-colors font-mono tracking-tight"
                 >
                   015364307

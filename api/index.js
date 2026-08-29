@@ -3926,79 +3926,176 @@ var upload_default = router15;
 // api/_server/routes/public.ts
 import { Router as Router16 } from "express";
 var router16 = Router16();
-router16.get("/track", async (req, res) => {
+var handlePublicTrack = async (req, res) => {
   try {
-    const { repairNumber, phone } = req.query;
-    if (!repairNumber && !phone) {
-      return res.status(400).json({ error: "Please provide a repair ticket number or registered phone number." });
+    const rawRepairNumber = req.body?.repairNumber || req.query?.repairNumber || req.body?.ticketNumber || req.query?.ticketNumber || "";
+    const rawPhone = req.body?.phone || req.query?.phone || req.body?.customerPhone || req.query?.customerPhone || "";
+    const cleanRepairNumber = String(rawRepairNumber).trim().replace(/^#+/, "").trim();
+    const cleanPhone = String(rawPhone).trim().replace(/\D/g, "");
+    if (!cleanRepairNumber && !cleanPhone) {
+      return res.status(400).json({ error: "Please enter a Repair Job Number or Registered Phone Number." });
     }
-    let query = supabaseAdmin.from("Repair").select("repairNumber, customerName, deviceBrand, deviceModel, problemDescription, status, priority, expectedCompletionDate, estimatedCost, advancePaid, totalPaid, paymentStatus, isCourierIn, isCourierOut, courierStatus, courierCompany, returnCourierCompany, returnCourierTrackingNumber, createdAt, updatedAt, logs:RepairLog(action, status, notes, createdAt)");
-    if (repairNumber) {
-      query = query.eq("repairNumber", String(repairNumber).trim());
-    } else if (phone) {
-      query = query.eq("customerPhone", String(phone).trim());
+    const selectFields = `
+      id,
+      repairNumber,
+      customerId,
+      customerName,
+      customerPhone,
+      deviceBrand,
+      deviceModel,
+      problemDescription,
+      status,
+      priority,
+      expectedCompletionDate,
+      estimatedCost,
+      advancePaid,
+      totalPaid,
+      paymentStatus,
+      isCourierIn,
+      isCourierOut,
+      courierStatus,
+      courierCompany,
+      returnCourierCompany,
+      returnCourierTrackingNumber,
+      hasBatteryWarranty,
+      batteryWarrantyPeriod,
+      batteryType,
+      createdAt,
+      updatedAt,
+      completedAt,
+      deliveredAt,
+      logs:RepairLog(action, status, notes, createdAt)
+    `;
+    let repairRecord = null;
+    if (cleanRepairNumber) {
+      const { data } = await supabaseAdmin.from("Repair").select(selectFields).or(`repairNumber.eq.${cleanRepairNumber},repairNumber.ilike.%${cleanRepairNumber}%`).order("createdAt", { ascending: false }).limit(1).maybeSingle();
+      if (data) {
+        repairRecord = data;
+      }
     }
-    const { data: repairs, error } = await query.order("createdAt", { ascending: false }).limit(5);
-    if (error || !repairs || repairs.length === 0) {
+    if (!repairRecord && cleanPhone) {
+      const { data: directMatch } = await supabaseAdmin.from("Repair").select(selectFields).ilike("customerPhone", `%${cleanPhone}%`).order("createdAt", { ascending: false }).limit(1).maybeSingle();
+      if (directMatch) {
+        repairRecord = directMatch;
+      } else {
+        const { data: customerData } = await supabaseAdmin.from("Customer").select("id").ilike("phone", `%${cleanPhone}%`).limit(1).maybeSingle();
+        if (customerData) {
+          const { data: customerRepair } = await supabaseAdmin.from("Repair").select(selectFields).eq("customerId", customerData.id).order("createdAt", { ascending: false }).limit(1).maybeSingle();
+          if (customerRepair) {
+            repairRecord = customerRepair;
+          }
+        }
+      }
+    }
+    if (!repairRecord) {
       return res.status(404).json({ error: "No repair records found matching your tracking information." });
     }
-    const sanitized = repairs.map((r) => ({
-      ...r,
-      customerName: r.customerName ? `${r.customerName.charAt(0)}*** ${r.customerName.split(" ").slice(-1)[0] || ""}` : "Customer"
-    }));
-    return res.json(sanitized.length === 1 ? sanitized[0] : sanitized);
+    const sanitizedName = repairRecord.customerName ? `${repairRecord.customerName.charAt(0)}*** ${repairRecord.customerName.split(" ").slice(-1)[0] || ""}`.trim() : "Customer";
+    const sanitizedRecord = {
+      ...repairRecord,
+      customerName: sanitizedName,
+      customerPhone: cleanPhone ? `${cleanPhone.slice(0, 3)}****${cleanPhone.slice(-3)}` : void 0
+    };
+    return res.json({
+      success: true,
+      repair: sanitizedRecord,
+      ...sanitizedRecord
+    });
   } catch (err) {
+    console.error("[PUBLIC TRACK EXCEPTION]", err);
     return res.status(500).json({ error: "Failed to retrieve tracking details." });
   }
-});
+};
+router16.get("/track", handlePublicTrack);
+router16.post("/track", handlePublicTrack);
 router16.get("/manager/stats", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
   try {
-    const { data: repairs } = await supabaseAdmin.from("Repair").select("status, priority, estimatedCost, advancePaid, totalPaid");
+    const { data: repairs } = await supabaseAdmin.from("Repair").select("technicianId, status, priority, estimatedCost, advancePaid, totalPaid");
     let totalRepairs = 0;
-    let pendingRepairs = 0;
-    let inProgressRepairs = 0;
-    let completedRepairs = 0;
-    let urgentRepairs = 0;
+    let pending = 0;
+    let assigned = 0;
+    let inProgress = 0;
+    let repaired = 0;
+    let ready = 0;
+    let delivered = 0;
+    let reproblem = 0;
+    let unassigned = 0;
+    let urgentCount = 0;
+    let highCount = 0;
     let totalRevenue = 0;
     (repairs || []).forEach((r) => {
       totalRepairs++;
       totalRevenue += Number(r.totalPaid || r.advancePaid || 0);
-      if (r.priority === "URGENT") urgentRepairs++;
-      if (["RECEIVED", "DIAGNOSING", "PENDING_PARTS"].includes(r.status)) pendingRepairs++;
-      if (["IN_PROGRESS", "REPAIRING"].includes(r.status)) inProgressRepairs++;
-      if (["COMPLETED", "DELIVERED", "READY_FOR_DELIVERY"].includes(r.status)) completedRepairs++;
+      const s = (r.status || "").toUpperCase();
+      if (!r.technicianId && s !== "DELIVERED" && s !== "CANCELLED") unassigned++;
+      if (r.technicianId && s !== "DELIVERED" && s !== "CANCELLED") assigned++;
+      if (["PENDING", "RECEIVED"].includes(s)) pending++;
+      if (["IN_PROCESS", "DIAGNOSING", "TESTING", "WAITING_FOR_PARTS", "IN_PROGRESS", "REPAIRING"].includes(s)) inProgress++;
+      if (["REPAIRED"].includes(s)) repaired++;
+      if (["READY_FOR_PICKUP", "READY_FOR_DELIVERY"].includes(s)) ready++;
+      if (["DELIVERED", "COMPLETED"].includes(s)) delivered++;
+      if (["RE_PROBLEM", "REPROBLEM"].includes(s)) reproblem++;
+      if (r.priority === "URGENT") urgentCount++;
+      if (r.priority === "HIGH") highCount++;
     });
     return res.json({
       totalRepairs,
-      pendingRepairs,
-      inProgressRepairs,
-      completedRepairs,
-      urgentRepairs,
+      pending,
+      assigned,
+      inProgress,
+      repaired,
+      ready,
+      delivered,
+      reproblem,
+      unassigned,
+      urgentCount,
+      highCount,
       totalRevenue
     });
   } catch (err) {
+    console.error("[MANAGER STATS ERROR]", err);
     return res.status(500).json({ error: "Failed to compute manager stats." });
   }
 });
 router16.get("/manager/workload", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
   try {
     const { data: staff } = await supabaseAdmin.from("User").select("id, name, role, department").in("role", ["TECHNICIAN", "LEAD_TECHNICIAN", "HEAD_TECHNICIAN", "TECHNICAL_ASSISTANT"]).is("deletedAt", null);
-    const { data: repairs } = await supabaseAdmin.from("Repair").select("technicianId, status").not("status", "in", '("COMPLETED","DELIVERED","CANCELLED")');
+    const { data: repairs } = await supabaseAdmin.from("Repair").select("technicianId, status, priority").not("status", "in", '("COMPLETED","DELIVERED","CANCELLED")');
     const workloadMap = {};
+    (staff || []).forEach((s) => {
+      workloadMap[s.id] = {
+        pendingCount: 0,
+        inProgressCount: 0,
+        repairedCount: 0,
+        readyCount: 0,
+        urgentCount: 0,
+        totalActive: 0
+      };
+    });
     (repairs || []).forEach((r) => {
-      if (r.technicianId) {
-        workloadMap[r.technicianId] = (workloadMap[r.technicianId] || 0) + 1;
+      if (r.technicianId && workloadMap[r.technicianId]) {
+        const item = workloadMap[r.technicianId];
+        const s = (r.status || "").toUpperCase();
+        item.totalActive++;
+        if (["PENDING", "RECEIVED"].includes(s)) item.pendingCount++;
+        if (["IN_PROCESS", "DIAGNOSING", "TESTING", "WAITING_FOR_PARTS", "IN_PROGRESS"].includes(s)) item.inProgressCount++;
+        if (s === "REPAIRED") item.repairedCount++;
+        if (s === "READY_FOR_PICKUP") item.readyCount++;
+        if (r.priority === "URGENT") item.urgentCount++;
       }
     });
     const workload = (staff || []).map((s) => ({
-      technicianId: s.id,
-      name: s.name,
-      role: s.role,
-      department: s.department,
-      activeRepairs: workloadMap[s.id] || 0
+      technician: {
+        id: s.id,
+        name: s.name,
+        role: s.role,
+        department: s.department
+      },
+      ...workloadMap[s.id]
     }));
     return res.json(workload);
   } catch (err) {
+    console.error("[MANAGER WORKLOAD ERROR]", err);
     return res.status(500).json({ error: "Failed to calculate technician workloads." });
   }
 });
@@ -4012,7 +4109,7 @@ router16.get("/dashboard/stats", authenticate, async (req, res) => {
     let totalRevenue = 0;
     (repairs || []).forEach((r) => {
       totalRevenue += Number(r.totalPaid || r.advancePaid || 0);
-      if (["COMPLETED", "DELIVERED"].includes(r.status)) {
+      if (["COMPLETED", "DELIVERED"].includes((r.status || "").toUpperCase())) {
         completedRepairs++;
       } else {
         activeRepairs++;
@@ -4026,6 +4123,7 @@ router16.get("/dashboard/stats", authenticate, async (req, res) => {
       totalRevenue
     });
   } catch (err) {
+    console.error("[DASHBOARD STATS ERROR]", err);
     return res.status(500).json({ error: "Failed to retrieve dashboard overview." });
   }
 });
