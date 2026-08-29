@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx api/_server/dev.ts",
-    "build": "vite build && esbuild api/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=api/index.js --packages=external",
+    "build": "vite build && esbuild api/_server/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=api/index.js --packages=external",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
