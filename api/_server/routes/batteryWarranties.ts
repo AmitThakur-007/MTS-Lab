@@ -105,6 +105,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       claims: (allClaims || []).filter((c: any) => c.warrantyId === w.id),
     }));
 
+    // Return the direct array so frontend state table renders seamlessly
     return res.json(combined);
   } catch (err: any) {
     console.error('[BATTERY WARRANTIES EXCEPTION]', err);
