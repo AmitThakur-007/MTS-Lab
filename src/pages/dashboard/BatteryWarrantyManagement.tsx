@@ -1,24 +1,24 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ShieldCheck, 
-  ShieldAlert, 
-  BatteryCharging, 
-  Search, 
-  Filter, 
-  Download, 
-  Mail, 
-  Share2, 
-  Clock, 
-  AlertTriangle, 
-  CheckCircle2, 
-  RotateCcw, 
-  Plus, 
-  History, 
-  Phone, 
-  Smartphone, 
-  FileText, 
-  Calendar, 
+import {
+  ShieldCheck,
+  ShieldAlert,
+  BatteryCharging,
+  Search,
+  Filter,
+  Download,
+  Mail,
+  Share2,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  RotateCcw,
+  Plus,
+  History,
+  Phone,
+  Smartphone,
+  FileText,
+  Calendar,
   ExternalLink,
   ChevronRight,
   Loader2,
@@ -51,12 +51,12 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -66,8 +66,8 @@ import { format, formatDistanceToNow, isPast, isFuture, addDays } from 'date-fns
 import { useAuthStore } from '@/store/authStore';
 import { useRealtimeSync } from '@/services/realtime';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
-import { 
-  downloadWarrantyCertificatePdf, 
+import {
+  downloadWarrantyCertificatePdf,
   getWarrantyWhatsAppShareUrl,
   BatteryWarrantyData
 } from '@/services/warrantyCertificateService';
@@ -148,12 +148,48 @@ export default function BatteryWarrantyManagement() {
       if (statusFilter !== 'ALL') params.append('status', statusFilter);
       if (periodFilter !== 'ALL') params.append('period', periodFilter);
 
-      const res = await api.get(`/battery-warranties?${params.toString()}`);
-      if (res?.warranties) {
-        setWarranties(res.warranties);
-        if (res.summary) {
-          setSummary(res.summary);
-        }
+      const res: any = await api.get(`/battery-warranties?${params.toString()}`);
+
+      // Parse array from raw list or nested payload
+      const list: any[] = Array.isArray(res)
+        ? res
+        : (res?.warranties || res?.data || []);
+
+      setWarranties(list);
+
+      // Dynamically calculate metrics for KPI cards
+      const now = new Date();
+      const thirtyDaysLater = addDays(now, 30);
+
+      const activeCount = list.filter(w => {
+        const exp = new Date(w.expiryDate);
+        return w.status === 'ACTIVE' && exp >= now;
+      }).length;
+
+      const expiringSoonCount = list.filter(w => {
+        const exp = new Date(w.expiryDate);
+        return exp >= now && exp <= thirtyDaysLater;
+      }).length;
+
+      const expiredCount = list.filter(w => {
+        const exp = new Date(w.expiryDate);
+        return exp < now || w.status === 'EXPIRED';
+      }).length;
+
+      const claimsCount = list.reduce((acc, w) => {
+        return acc + (w.claimCount || (Array.isArray(w.claims) ? w.claims.length : 0));
+      }, 0);
+
+      if (res?.summary) {
+        setSummary(res.summary);
+      } else {
+        setSummary({
+          total: list.length,
+          active: activeCount,
+          expiringSoon: expiringSoonCount,
+          expired: expiredCount,
+          claims: claimsCount
+        });
       }
     } catch (err: any) {
       console.error('Error fetching battery warranties:', err);
@@ -335,7 +371,7 @@ export default function BatteryWarrantyManagement() {
   };
 
   const handleToggleSelectWarranty = (id: string) => {
-    setSelectedWarrantyIds(prev => 
+    setSelectedWarrantyIds(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   };
@@ -345,10 +381,10 @@ export default function BatteryWarrantyManagement() {
       toast.error("Only Super Admin can permanently delete records.");
       return;
     }
-    const targets = warrantyToDel 
-      ? [warrantyToDel] 
+    const targets = warrantyToDel
+      ? [warrantyToDel]
       : warranties.filter(w => selectedWarrantyIds.includes(w.id));
-    
+
     if (targets.length === 0) {
       toast.error("Please select at least one warranty record to delete.");
       return;
@@ -598,7 +634,7 @@ export default function BatteryWarrantyManagement() {
 
   return (
     <div className="w-full max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 space-y-8 pb-24">
-      
+
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6 pt-2">
         <div>
@@ -692,7 +728,7 @@ export default function BatteryWarrantyManagement() {
 
       {/* Metric Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        
+
         {/* Total Warranties */}
         <Card className="rounded-2xl border-slate-200 shadow-xs bg-white hover:shadow-md transition-shadow">
           <CardContent className="p-4 flex items-center gap-3">
@@ -764,7 +800,7 @@ export default function BatteryWarrantyManagement() {
       <Card className="rounded-2xl border border-slate-200 shadow-xs bg-white overflow-hidden">
         <CardContent className="p-4 sm:p-5 space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            
+
             {/* Search Box */}
             <form onSubmit={handleSearchSubmit} className="flex-1 max-w-xl relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -774,8 +810,8 @@ export default function BatteryWarrantyManagement() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-24 h-11 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white text-xs sm:text-sm font-medium"
               />
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 size="sm"
                 className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 px-3 rounded-lg bg-slate-900 text-white font-bold text-xs"
               >
@@ -785,7 +821,7 @@ export default function BatteryWarrantyManagement() {
 
             {/* Filter Dropdowns */}
             <div className="flex items-center gap-2.5 flex-wrap">
-              
+
               {/* Period Filter */}
               <div className="flex items-center gap-1.5">
                 <Label className="text-xs font-bold text-slate-500 shrink-0">Period:</Label>
@@ -969,8 +1005,8 @@ export default function BatteryWarrantyManagement() {
                     const isSelected = selectedWarrantyIds.includes(item.id);
 
                     return (
-                      <tr 
-                        key={item.id} 
+                      <tr
+                        key={item.id}
                         className={cn(
                           "transition-colors group",
                           isSelected ? "bg-rose-50/60" : "hover:bg-slate-50/60"
@@ -1025,7 +1061,7 @@ export default function BatteryWarrantyManagement() {
                         <td className="py-4 px-4">
                           <div className="flex flex-col">
                             <span className="font-bold text-slate-800 text-xs">
-                              {item.deviceBrand.toUpperCase()} {item.deviceModel}
+                              {(item.deviceBrand || '').toUpperCase()} {item.deviceModel}
                             </span>
                             {item.batteryType && (
                               <span className="text-[10px] text-slate-400 truncate max-w-[140px]">
@@ -1041,9 +1077,9 @@ export default function BatteryWarrantyManagement() {
                             <div className="flex items-center gap-1.5">
                               <Badge variant="outline" className={cn(
                                 "text-[10px] font-bold px-1.5 py-0",
-                                item.warrantyPeriod === '1_YEAR' ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                item.warrantyPeriod === '1_YEAR' || item.warrantyPeriod === '12 Months' ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"
                               )}>
-                                {item.warrantyPeriod === '1_YEAR' ? '1 Year' : '6 Months'}
+                                {item.warrantyPeriod === '1_YEAR' || item.warrantyPeriod === '12 Months' ? '1 Year' : '6 Months'}
                               </Badge>
                               <span className="text-[11px] text-slate-600 font-medium">
                                 Exp: {format(exp, 'dd MMM yyyy')}
@@ -1078,7 +1114,7 @@ export default function BatteryWarrantyManagement() {
                         {/* Action Buttons */}
                         <td className="py-4 px-4 sm:px-6 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            
+
                             {/* Certificate / View */}
                             <Button
                               variant="outline"
@@ -1174,7 +1210,7 @@ export default function BatteryWarrantyManagement() {
 
           {selectedWarranty && (
             <div className="space-y-5 py-2">
-              
+
               {/* Certificate Preview Card */}
               <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/80 space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -1200,7 +1236,7 @@ export default function BatteryWarrantyManagement() {
                   </div>
                   <div>
                     <span className="text-slate-400 text-[11px] block">Device / Model</span>
-                    <span className="font-bold text-slate-900">{selectedWarranty.deviceBrand.toUpperCase()} {selectedWarranty.deviceModel}</span>
+                    <span className="font-bold text-slate-900">{(selectedWarranty.deviceBrand || '').toUpperCase()} {selectedWarranty.deviceModel}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 text-[11px] block">Registration Date</span>
@@ -1214,7 +1250,7 @@ export default function BatteryWarrantyManagement() {
 
                 <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-500">
                   <span className="font-bold text-slate-700">Specification: </span>
-                  {selectedWarranty.batteryType || 'Original Replacement Battery'} ({selectedWarranty.warrantyPeriod === '1_YEAR' ? '1 Year Plan' : '6 Months Plan'})
+                  {selectedWarranty.batteryType || 'Original Replacement Battery'} ({selectedWarranty.warrantyPeriod === '1_YEAR' || selectedWarranty.warrantyPeriod === '12 Months' ? '1 Year Plan' : '6 Months Plan'})
                 </div>
               </div>
 
@@ -1302,13 +1338,13 @@ export default function BatteryWarrantyManagement() {
 
           {selectedWarranty && (
             <div className="space-y-4 py-2">
-              
+
               {/* Warranty Summary Box */}
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between text-xs">
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Customer & Device</span>
                   <div className="font-bold text-slate-900 mt-0.5">{selectedWarranty.customerName} ({selectedWarranty.customerPhone})</div>
-                  <div className="text-slate-600">{selectedWarranty.deviceBrand.toUpperCase()} {selectedWarranty.deviceModel} • Job #{selectedWarranty.repairNumber}</div>
+                  <div className="text-slate-600">{(selectedWarranty.deviceBrand || '').toUpperCase()} {selectedWarranty.deviceModel} • Job #{selectedWarranty.repairNumber}</div>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Expiry Status</span>
@@ -1431,7 +1467,7 @@ export default function BatteryWarrantyManagement() {
               <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-xs flex items-center justify-between">
                 <div>
                   <span className="font-bold text-slate-900">{selectedWarranty.customerName}</span>
-                  <div className="text-slate-500 text-[11px]">{selectedWarranty.deviceBrand.toUpperCase()} {selectedWarranty.deviceModel}</div>
+                  <div className="text-slate-500 text-[11px]">{(selectedWarranty.deviceBrand || '').toUpperCase()} {selectedWarranty.deviceModel}</div>
                 </div>
                 <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 font-bold">
                   {selectedWarranty.claims?.length || selectedWarranty.claimCount || 0} Total Claims
@@ -1508,7 +1544,7 @@ export default function BatteryWarrantyManagement() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            
+
             {/* Select Repair */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">Select Repair Job</Label>
@@ -1608,7 +1644,7 @@ export default function BatteryWarrantyManagement() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            
+
             {/* Warning Message */}
             <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-900 space-y-1.5">
               <p className="font-bold flex items-center gap-1.5 text-rose-950">
@@ -1643,8 +1679,8 @@ export default function BatteryWarrantyManagement() {
               </div>
 
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                {maskedEmail 
-                  ? `Enter the 6-digit verification code sent to your registered email (${maskedEmail}):` 
+                {maskedEmail
+                  ? `Enter the 6-digit verification code sent to your registered email (${maskedEmail}):`
                   : "A 6-digit security code has been sent to your Super Admin email address."}
               </p>
 
@@ -1657,7 +1693,7 @@ export default function BatteryWarrantyManagement() {
                   onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   className="text-center font-mono text-xl tracking-[0.4em] font-black h-12 bg-slate-800 border-slate-700 text-white rounded-xl focus:border-rose-500"
                 />
-                
+
                 <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
                   <span>Code expires in 5 minutes</span>
                   <button
@@ -1712,8 +1748,8 @@ export default function BatteryWarrantyManagement() {
       </Dialog>
 
       {/* Excel Import & Preview Dialog */}
-      <Dialog 
-        open={isImportModalOpen} 
+      <Dialog
+        open={isImportModalOpen}
         onOpenChange={(open) => {
           if (!confirmingImport) {
             setIsImportModalOpen(open);
@@ -1856,13 +1892,13 @@ export default function BatteryWarrantyManagement() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {previewData.items.map((item: any) => (
-                        <tr 
+                        <tr
                           key={item.rowNumber}
                           className={
-                            item.status === 'INVALID' 
-                              ? 'bg-rose-50/40' 
-                              : item.status === 'DUPLICATE' 
-                                ? 'bg-amber-50/30' 
+                            item.status === 'INVALID'
+                              ? 'bg-rose-50/40'
+                              : item.status === 'DUPLICATE'
+                                ? 'bg-amber-50/30'
                                 : 'hover:bg-slate-50/60'
                           }
                         >
