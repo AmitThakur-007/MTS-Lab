@@ -21,10 +21,11 @@ class RealtimeService {
   private sseConnected = false;
   private reconnectTimer: any = null;
   private reconnectAttempts = 0;
-  private maxReconnectDelay = 60000; // Cap at 60s — on Vercel, SSE closes every ~20s by design
+  private maxReconnectDelay = 60000;
   private lastActivityTime = Date.now();
   private healthCheckInterval: any = null;
   private supabaseChannel: any = null;
+  private isConnecting = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -53,35 +54,38 @@ class RealtimeService {
         }
       });
 
-      // Listen for all broadcast events from Supabase
       this.supabaseChannel
         .on('broadcast', { event: 'db_event' }, ({ payload }: { payload: RealtimeEvent }) => {
-          if (payload) {
+          if (payload && payload.entity) {
             this.handleIncomingEvent(payload);
           }
         })
         .on('broadcast', { event: 'repair_sync' }, ({ payload }: { payload: any }) => {
-          this.handleIncomingEvent({
-            entity: 'repair',
-            action: 'UPDATE',
-            id: payload?.id,
-            data: payload,
-            timestamp: Date.now()
-          });
+          if (payload?.id) {
+            this.handleIncomingEvent({
+              entity: 'repair',
+              action: 'UPDATE',
+              id: payload.id,
+              data: payload,
+              timestamp: Date.now()
+            });
+          }
         })
         .on('broadcast', { event: 'repair_delete' }, ({ payload }: { payload: any }) => {
-          this.handleIncomingEvent({
-            entity: 'repair',
-            action: 'DELETE',
-            id: payload?.id,
-            timestamp: Date.now()
-          });
+          if (payload?.id) {
+            this.handleIncomingEvent({
+              entity: 'repair',
+              action: 'DELETE',
+              id: payload.id,
+              timestamp: Date.now()
+            });
+          }
         })
         .subscribe((status: string) => {
           if (status === 'SUBSCRIBED') {
             this.supabaseConnected = true;
             this.updateAggregateStatus();
-            console.log('[REALTIME] Connected to Supabase Realtime Channel (mts_app_realtime)');
+            console.log('[REALTIME] Connected to Supabase Realtime Channel');
           } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
             this.supabaseConnected = false;
             this.updateAggregateStatus();
@@ -95,52 +99,45 @@ class RealtimeService {
   private getAuthToken(): string | null {
     if (typeof window === 'undefined') return null;
     try {
-      // 1. Check primary mts-auth-storage
       const mtsStorage = localStorage.getItem('mts-auth-storage');
       if (mtsStorage) {
         const parsed = JSON.parse(mtsStorage);
         if (parsed?.state?.token) return parsed.state.token;
       }
-      // 2. Check fallback auth-storage
       const authStorage = localStorage.getItem('auth-storage');
       if (authStorage) {
         const parsed = JSON.parse(authStorage);
         if (parsed?.state?.token) return parsed.state.token;
       }
-      // 3. Check direct token keys
       const directToken = localStorage.getItem('token') || localStorage.getItem('auth_token');
       if (directToken) return directToken;
     } catch (e) {
-      // ignore
+      // ignore parsing errors
     }
     return null;
   }
 
   private initNetworkListeners() {
     window.addEventListener('online', () => {
-      console.log('[REALTIME] Network restored (online). Re-establishing central stream...');
       this.reconnectAttempts = 0;
       this.connect();
     });
 
     window.addEventListener('offline', () => {
-      console.log('[REALTIME] Network offline');
       this.setStatus('disconnected');
     });
 
-    // Mobile sleep/wake and tab focus listeners
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        const isStale = Date.now() - this.lastActivityTime > 30000;
+        const isStale = Date.now() - this.lastActivityTime > 120000;
         if (!this.eventSource || this.eventSource.readyState === EventSource.CLOSED || isStale) {
-          console.log('[REALTIME] App became visible / foreground. Syncing with central database...');
           this.connect();
         }
       }
     });
 
     window.addEventListener('focus', () => {
-      const isStale = Date.now() - this.lastActivityTime > 30000;
+      const isStale = Date.now() - this.lastActivityTime > 120000;
       if (!this.eventSource || this.eventSource.readyState === EventSource.CLOSED || isStale) {
         this.connect();
       }
@@ -150,12 +147,10 @@ class RealtimeService {
   private startHealthCheck() {
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
     this.healthCheckInterval = setInterval(() => {
-      // If connected but no activity or ping for 60s, reconnect stream
-      if (this.currentStatus === 'connected' && Date.now() - this.lastActivityTime > 60000) {
-        console.log('[REALTIME] Heartbeat timeout detected. Reconnecting stream...');
+      if (this.currentStatus === 'connected' && Date.now() - this.lastActivityTime > 90000) {
         this.connect();
       }
-    }, 20000);
+    }, 30000);
   }
 
   public getStatus() {
@@ -184,7 +179,7 @@ class RealtimeService {
   }
 
   public connect() {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || this.isConnecting) return;
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -200,6 +195,7 @@ class RealtimeService {
       this.eventSource = null;
     }
 
+    this.isConnecting = true;
     this.setStatus('connecting');
 
     try {
@@ -212,21 +208,11 @@ class RealtimeService {
       this.lastActivityTime = Date.now();
 
       es.addEventListener('connected', () => {
-        const wasReconnecting = this.reconnectAttempts > 0;
+        this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.lastActivityTime = Date.now();
         this.sseConnected = true;
         this.updateAggregateStatus();
-        console.log('[REALTIME] Connected to MTS Central Real-Time Event Hub');
-        
-        // Only broadcast sync if recovering from a dropped connection
-        if (wasReconnecting) {
-          this.handleIncomingEvent({
-            entity: 'sync',
-            action: 'SYNC',
-            timestamp: Date.now()
-          });
-        }
       });
 
       es.addEventListener('ping', () => {
@@ -237,13 +223,17 @@ class RealtimeService {
         this.lastActivityTime = Date.now();
         try {
           const parsed: RealtimeEvent = JSON.parse(event.data);
-          this.handleIncomingEvent(parsed);
+          // Prevent connection handshake events from triggering component refetches
+          if (parsed && parsed.entity && parsed.action !== 'SYNC') {
+            this.handleIncomingEvent(parsed);
+          }
         } catch (err) {
-          console.warn('[REALTIME PARSE ERROR]', err, event.data);
+          // ignore non-JSON keep-alives
         }
       });
 
       es.onerror = () => {
+        this.isConnecting = false;
         this.sseConnected = false;
         this.updateAggregateStatus();
         try {
@@ -255,7 +245,7 @@ class RealtimeService {
         this.scheduleReconnect();
       };
     } catch (err) {
-      console.warn('[REALTIME INIT ERROR]', err);
+      this.isConnecting = false;
       this.sseConnected = false;
       this.updateAggregateStatus();
       this.scheduleReconnect();
@@ -265,9 +255,7 @@ class RealtimeService {
   private scheduleReconnect() {
     if (this.reconnectTimer) return;
     this.reconnectAttempts++;
-    // Exponential backoff: 1.4^n * 1000ms, capped at maxReconnectDelay (60s on Vercel)
-    // Supabase Realtime WebSocket handles live events while SSE reconnects
-    const delay = Math.min(1000 * Math.pow(1.4, this.reconnectAttempts), this.maxReconnectDelay);
+    const delay = Math.min(2000 * Math.pow(1.3, this.reconnectAttempts), this.maxReconnectDelay);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
@@ -275,29 +263,27 @@ class RealtimeService {
   }
 
   private handleIncomingEvent(event: RealtimeEvent) {
+    // Ignore internal transport events
+    if (!event || !event.entity || event.entity === 'sync' || event.entity === 'ping') {
+      return;
+    }
+
     const rawEntity = (event.entity || '').toLowerCase();
 
-    // Broadcast on window for any global listener
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: event }));
     }
 
-    // Determine target entity buckets (including relational aliases)
     const targetEntities = new Set<string>();
     targetEntities.add(rawEntity);
-    targetEntities.add('*');
 
-    // Cross-entity cascading for relational data consistency:
-    // If a repairLog or technicianNote or payment occurs, also notify 'repair' subscribers
     if (['techniciannote', 'repairlog', 'payment'].includes(rawEntity)) {
       targetEntities.add('repair');
     }
-    // If accessRequest, approvedDevice or session occurs, also notify 'user' subscribers
     if (['accessrequest', 'approveddevice', 'session'].includes(rawEntity)) {
       targetEntities.add('user');
       targetEntities.add('accessrequest');
     }
-    // If batteryWarranty or batteryWarrantyClaim occurs, notify battery warranty subscribers
     if (['batterywarranty', 'batterywarrantyclaim'].includes(rawEntity)) {
       targetEntities.add('batterywarranty');
       targetEntities.add('batterywarrantyclaim');
@@ -316,7 +302,6 @@ class RealtimeService {
       }
     });
 
-    // Global listeners
     this.globalListeners.forEach((listener) => {
       try {
         listener(event);
@@ -362,19 +347,19 @@ export const realtimeService = new RealtimeService();
 
 /**
  * Custom React Hook for Real-time Database Synchronization.
- * Automatically triggers the callback whenever any matching database entity is created, updated, or deleted.
- * Also provides the live real-time connection status across desktop, tablet, and mobile devices.
+ * Debounces incoming entity updates so rapid successive mutations don't trigger cascading refetches.
  */
 export function useRealtimeSync(
   entities: string | string[],
   onEventOrRefetch?: (event: RealtimeEvent) => void,
-  options: { enabled?: boolean; pollingFallbackInterval?: number } = {}
+  options: { enabled?: boolean } = {}
 ) {
-  const { enabled = true, pollingFallbackInterval = 25000 } = options;
+  const { enabled = true } = options;
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>(
     realtimeService.getStatus()
   );
   const callbackRef = useRef(onEventOrRefetch);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     callbackRef.current = onEventOrRefetch;
@@ -386,35 +371,31 @@ export function useRealtimeSync(
     if (!enabled) return;
 
     const unsubscribeStatus = realtimeService.onStatusChange((newStatus) => {
-      setConnectionStatus(prev => prev !== newStatus ? newStatus : prev);
+      setConnectionStatus(prev => (prev !== newStatus ? newStatus : prev));
     });
 
     const unsubscribeEvents = realtimeService.subscribe(entities, (event) => {
-      if (callbackRef.current) {
-        callbackRef.current(event);
-      }
-    });
+      if (!callbackRef.current) return;
 
-    // Background resilience fallback: if disconnected or in sleep state, poll periodically
-    let interval: any = null;
-    if (pollingFallbackInterval > 0) {
-      interval = setInterval(() => {
-        if (realtimeService.getStatus() !== 'connected' && callbackRef.current) {
-          callbackRef.current({
-            entity: 'polling',
-            action: 'UPDATE',
-            timestamp: Date.now()
-          });
+      // Debounce rapid bursts across identical tables
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        if (callbackRef.current) {
+          callbackRef.current(event);
         }
-      }, pollingFallbackInterval);
-    }
+      }, 300);
+    });
 
     return () => {
       unsubscribeStatus();
       unsubscribeEvents();
-      if (interval) clearInterval(interval);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
     };
-  }, [entityKey, enabled, pollingFallbackInterval]);
+  }, [entityKey, enabled]);
 
   return { connectionStatus };
 }
