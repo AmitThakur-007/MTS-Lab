@@ -1027,7 +1027,14 @@ var ALLOWED_REPAIR_COLUMNS = /* @__PURE__ */ new Set([
   "returnCourierDispatchedByName",
   "assignedAt",
   "assignedById",
-  "assignedByName"
+  "assignedByName",
+  "hasBatteryWarranty",
+  "batteryWarrantyPeriod",
+  "batteryType",
+  "batteryHealth",
+  "batterySerial",
+  "batteryWarrantyExpiry",
+  "warrantyTerms"
 ]);
 async function generateRepairNumber() {
   const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
@@ -1047,6 +1054,80 @@ async function generateRepairNumber() {
   }
   const nextNum = maxNum + 1;
   return `MTS-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
+}
+async function generateWarrantyNumber() {
+  const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
+  const { data: records } = await supabaseAdmin.from("BatteryWarranty").select("warrantyNumber").ilike("warrantyNumber", `BW-${currentYear}-%`).order("warrantyNumber", { ascending: false }).limit(10);
+  let maxNum = 0;
+  if (records && records.length > 0) {
+    for (const r of records) {
+      if (!r.warrantyNumber) continue;
+      const match = r.warrantyNumber.match(/(\d+)$/);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    }
+  }
+  const nextNum = maxNum + 1;
+  return `BW-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
+}
+async function syncBatteryWarrantyFromRepair(repairData, reqUser) {
+  try {
+    const isWarrantyActive = repairData.hasBatteryWarranty === true || repairData.hasBatteryWarranty === "true" || Boolean(repairData.batteryWarrantyPeriod);
+    if (!isWarrantyActive) return;
+    const { data: existing } = await supabaseAdmin.from("BatteryWarranty").select("id").eq("repairId", repairData.id).limit(1);
+    const rawPeriod = String(repairData.batteryWarrantyPeriod || "6_MONTHS");
+    const months = rawPeriod.includes("12") ? 12 : rawPeriod.includes("3") ? 3 : 6;
+    const regDate = new Date(repairData.createdAt || Date.now());
+    const expDate = new Date(regDate);
+    expDate.setMonth(expDate.getMonth() + months);
+    if (existing && existing.length > 0) {
+      await supabaseAdmin.from("BatteryWarranty").update({
+        customerName: repairData.customerName,
+        customerPhone: repairData.customerPhone,
+        customerEmail: repairData.customerEmail || null,
+        customerAddress: repairData.customerAddress || null,
+        deviceBrand: repairData.deviceBrand,
+        deviceModel: repairData.deviceModel,
+        imeiNumber: repairData.imeiNumber ? String(repairData.imeiNumber).trim() : null,
+        batteryType: repairData.batteryType || "Original Replacement Battery",
+        warrantyPeriod: `${months} Months`,
+        expiryDate: expDate.toISOString(),
+        status: "ACTIVE",
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      }).eq("id", existing[0].id);
+    } else {
+      const warrantyNumber = await generateWarrantyNumber();
+      await supabaseAdmin.from("BatteryWarranty").insert([
+        {
+          id: uuidv44(),
+          warrantyNumber,
+          repairId: repairData.id,
+          repairNumber: repairData.repairNumber,
+          customerId: repairData.customerId || null,
+          customerName: repairData.customerName,
+          customerPhone: repairData.customerPhone,
+          customerEmail: repairData.customerEmail || null,
+          customerAddress: repairData.customerAddress || null,
+          deviceBrand: repairData.deviceBrand,
+          deviceModel: repairData.deviceModel,
+          imeiNumber: repairData.imeiNumber ? String(repairData.imeiNumber).trim() : null,
+          batteryType: repairData.batteryType || "Original Replacement Battery",
+          warrantyPeriod: `${months} Months`,
+          registrationDate: regDate.toISOString(),
+          expiryDate: expDate.toISOString(),
+          status: "ACTIVE",
+          claimCount: 0,
+          createdById: reqUser?.id || null,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+    }
+  } catch (syncErr) {
+    console.error("[SYNC BATTERY WARRANTY EXCEPTION]", syncErr);
+  }
 }
 router3.get("/", authenticate, async (req, res) => {
   try {
@@ -1288,7 +1369,12 @@ router3.post("/", authenticate, async (req, res) => {
       senderName,
       senderPhone,
       originDistrict,
-      originAddress
+      originAddress,
+      hasBatteryWarranty = false,
+      batteryWarrantyPeriod,
+      batteryType,
+      batteryHealth,
+      batterySerial
     } = req.body;
     if (!customerName || !customerPhone || !deviceModel) {
       return res.status(400).json({ error: "Customer name, phone, and device model are required." });
@@ -1354,6 +1440,11 @@ router3.post("/", authenticate, async (req, res) => {
       senderPhone: senderPhone || null,
       originDistrict: originDistrict || null,
       originAddress: originAddress || null,
+      hasBatteryWarranty: Boolean(hasBatteryWarranty),
+      batteryWarrantyPeriod: batteryWarrantyPeriod || null,
+      batteryType: batteryType || null,
+      batteryHealth: batteryHealth || null,
+      batterySerial: batterySerial || null,
       createdById: req.user.id,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -1362,6 +1453,9 @@ router3.post("/", authenticate, async (req, res) => {
     if (error) {
       console.error("[REPAIR CREATE ERROR]", error);
       return res.status(500).json({ error: "Failed to create repair ticket." });
+    }
+    if (hasBatteryWarranty || batteryWarrantyPeriod) {
+      await syncBatteryWarrantyFromRepair(created, req.user);
     }
     await supabaseAdmin.from("RepairLog").insert([
       {
@@ -1405,6 +1499,9 @@ var handleRepairUpdate = async (req, res) => {
     if (error) {
       console.error("[REPAIR UPDATE ERROR]", error);
       return res.status(400).json({ error: error.message });
+    }
+    if (rawBody.hasBatteryWarranty || rawBody.batteryWarrantyPeriod || updated.hasBatteryWarranty || updated.batteryWarrantyPeriod) {
+      await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody }, req.user);
     }
     if (rawBody.status) {
       await supabaseAdmin.from("RepairLog").insert([
@@ -2483,7 +2580,7 @@ import { v4 as uuidv48 } from "uuid";
 import multer2 from "multer";
 var router7 = Router7();
 var upload2 = multer2({ storage: multer2.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-async function generateWarrantyNumber() {
+async function generateWarrantyNumber2() {
   const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
   const { data: records } = await supabaseAdmin.from("BatteryWarranty").select("warrantyNumber").ilike("warrantyNumber", `BW-${currentYear}-%`).order("warrantyNumber", { ascending: false }).limit(10);
   let maxNum = 0;
@@ -2636,7 +2733,7 @@ router7.post("/import/confirm", authenticate, async (req, res) => {
     const imported = [];
     for (const item of items) {
       if (!item.customerName || !item.customerPhone || !item.deviceModel) continue;
-      const warrantyNumber = await generateWarrantyNumber();
+      const warrantyNumber = await generateWarrantyNumber2();
       const regDate = /* @__PURE__ */ new Date();
       const expDate = /* @__PURE__ */ new Date();
       expDate.setMonth(expDate.getMonth() + 6);
@@ -2701,7 +2798,7 @@ router7.post("/", authenticate, async (req, res) => {
     if (!customerName || !customerPhone || !deviceModel) {
       return res.status(400).json({ error: "Customer name, phone, and device model are required." });
     }
-    const warrantyNumber = await generateWarrantyNumber();
+    const warrantyNumber = await generateWarrantyNumber2();
     const regDate = /* @__PURE__ */ new Date();
     const expDate = /* @__PURE__ */ new Date();
     expDate.setMonth(expDate.getMonth() + parseInt(String(warrantyMonths), 10));

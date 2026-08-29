@@ -58,6 +58,13 @@ const ALLOWED_REPAIR_COLUMNS = new Set([
   'assignedAt',
   'assignedById',
   'assignedByName',
+  'hasBatteryWarranty',
+  'batteryWarrantyPeriod',
+  'batteryType',
+  'batteryHealth',
+  'batterySerial',
+  'batteryWarrantyExpiry',
+  'warrantyTerms'
 ]);
 
 // Helper to generate next unique sequential repair number (e.g. MTS-2026-0001)
@@ -86,6 +93,107 @@ async function generateRepairNumber(): Promise<string> {
 
   const nextNum = maxNum + 1;
   return `MTS-${currentYear}-${nextNum.toString().padStart(4, '0')}`;
+}
+
+// Helper to generate unique warranty number (BW-YYYY-XXXX)
+async function generateWarrantyNumber(): Promise<string> {
+  const currentYear = new Date().getFullYear();
+  const { data: records } = await supabaseAdmin
+    .from('BatteryWarranty')
+    .select('warrantyNumber')
+    .ilike('warrantyNumber', `BW-${currentYear}-%`)
+    .order('warrantyNumber', { ascending: false })
+    .limit(10);
+
+  let maxNum = 0;
+  if (records && records.length > 0) {
+    for (const r of records) {
+      if (!r.warrantyNumber) continue;
+      const match = r.warrantyNumber.match(/(\d+)$/);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    }
+  }
+
+  const nextNum = maxNum + 1;
+  return `BW-${currentYear}-${nextNum.toString().padStart(4, '0')}`;
+}
+
+// Automatic synchronization between Repair and BatteryWarranty
+async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
+  try {
+    const isWarrantyActive =
+      repairData.hasBatteryWarranty === true ||
+      repairData.hasBatteryWarranty === 'true' ||
+      Boolean(repairData.batteryWarrantyPeriod);
+
+    if (!isWarrantyActive) return;
+
+    // Check if warranty record already exists
+    const { data: existing } = await supabaseAdmin
+      .from('BatteryWarranty')
+      .select('id')
+      .eq('repairId', repairData.id)
+      .limit(1);
+
+    const rawPeriod = String(repairData.batteryWarrantyPeriod || '6_MONTHS');
+    const months = rawPeriod.includes('12') ? 12 : (rawPeriod.includes('3') ? 3 : 6);
+
+    const regDate = new Date(repairData.createdAt || Date.now());
+    const expDate = new Date(regDate);
+    expDate.setMonth(expDate.getMonth() + months);
+
+    if (existing && existing.length > 0) {
+      await supabaseAdmin
+        .from('BatteryWarranty')
+        .update({
+          customerName: repairData.customerName,
+          customerPhone: repairData.customerPhone,
+          customerEmail: repairData.customerEmail || null,
+          customerAddress: repairData.customerAddress || null,
+          deviceBrand: repairData.deviceBrand,
+          deviceModel: repairData.deviceModel,
+          imeiNumber: repairData.imeiNumber ? String(repairData.imeiNumber).trim() : null,
+          batteryType: repairData.batteryType || 'Original Replacement Battery',
+          warrantyPeriod: `${months} Months`,
+          expiryDate: expDate.toISOString(),
+          status: 'ACTIVE',
+          updatedAt: new Date().toISOString(),
+        })
+        .eq('id', existing[0].id);
+    } else {
+      const warrantyNumber = await generateWarrantyNumber();
+      await supabaseAdmin.from('BatteryWarranty').insert([
+        {
+          id: uuidv4(),
+          warrantyNumber,
+          repairId: repairData.id,
+          repairNumber: repairData.repairNumber,
+          customerId: repairData.customerId || null,
+          customerName: repairData.customerName,
+          customerPhone: repairData.customerPhone,
+          customerEmail: repairData.customerEmail || null,
+          customerAddress: repairData.customerAddress || null,
+          deviceBrand: repairData.deviceBrand,
+          deviceModel: repairData.deviceModel,
+          imeiNumber: repairData.imeiNumber ? String(repairData.imeiNumber).trim() : null,
+          batteryType: repairData.batteryType || 'Original Replacement Battery',
+          warrantyPeriod: `${months} Months`,
+          registrationDate: regDate.toISOString(),
+          expiryDate: expDate.toISOString(),
+          status: 'ACTIVE',
+          claimCount: 0,
+          createdById: reqUser?.id || null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ]);
+    }
+  } catch (syncErr) {
+    console.error('[SYNC BATTERY WARRANTY EXCEPTION]', syncErr);
+  }
 }
 
 // 1. GET /api/repairs
@@ -378,6 +486,11 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       senderPhone,
       originDistrict,
       originAddress,
+      hasBatteryWarranty = false,
+      batteryWarrantyPeriod,
+      batteryType,
+      batteryHealth,
+      batterySerial,
     } = req.body;
 
     if (!customerName || !customerPhone || !deviceModel) {
@@ -457,6 +570,11 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       senderPhone: senderPhone || null,
       originDistrict: originDistrict || null,
       originAddress: originAddress || null,
+      hasBatteryWarranty: Boolean(hasBatteryWarranty),
+      batteryWarrantyPeriod: batteryWarrantyPeriod || null,
+      batteryType: batteryType || null,
+      batteryHealth: batteryHealth || null,
+      batterySerial: batterySerial || null,
       createdById: req.user!.id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -467,6 +585,11 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     if (error) {
       console.error('[REPAIR CREATE ERROR]', error);
       return res.status(500).json({ error: 'Failed to create repair ticket.' });
+    }
+
+    // Auto-sync into BatteryWarranty table if warranty was selected
+    if (hasBatteryWarranty || batteryWarrantyPeriod) {
+      await syncBatteryWarrantyFromRepair(created, req.user);
     }
 
     await supabaseAdmin.from('RepairLog').insert([
@@ -496,7 +619,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 8. PUT & PATCH /api/repairs/:id (Unified update handler with strict column allowlist)
+// 8. PUT & PATCH /api/repairs/:id (Unified update handler with strict column allowlist & warranty sync)
 const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -527,6 +650,11 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
     if (error) {
       console.error('[REPAIR UPDATE ERROR]', error);
       return res.status(400).json({ error: error.message });
+    }
+
+    // Auto-sync into BatteryWarranty table if battery warranty was toggled or present
+    if (rawBody.hasBatteryWarranty || rawBody.batteryWarrantyPeriod || updated.hasBatteryWarranty || updated.batteryWarrantyPeriod) {
+      await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody }, req.user);
     }
 
     if (rawBody.status) {
