@@ -10,17 +10,15 @@
     "postinstall": "prisma generate",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit",
-    "db:migrate": "prisma db push",
-    "db:seed": "node scripts/migrate_to_postgres.cjs"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
-    "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "@fontsource-variable/geist": "^5.2.8",
     "@google/genai": "^1.29.0",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.2.1",
+    "@supabase/supabase-js": "^2.49.1",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-table": "^8.21.3",
     "@types/bcryptjs": "^2.4.6",
@@ -42,8 +40,6 @@
     "esbuild": "^0.28.0",
     "express": "^4.21.2",
     "express-rate-limit": "^8.5.1",
-    "firebase": "^12.13.0",
-    "firebase-admin": "^13.10.0",
     "jsonwebtoken": "^9.0.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",

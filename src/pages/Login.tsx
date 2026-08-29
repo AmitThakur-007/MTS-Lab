@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   Lock,
@@ -7,12 +7,12 @@ import {
   Eye,
   EyeOff,
   ArrowLeft,
+  KeyRound,
   RefreshCw,
   AlertCircle,
   CheckCircle2,
   Clock,
-  ShieldCheck,
-  KeyRound
+  ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,14 +20,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { getDeviceDetails } from '@/lib/device';
 import mtsLogo from '@/assets/images/mts-logo.jpg';
-import { auth } from '@/lib/firebase';
-import { signInWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { normalizeRole } from '@/lib/rbac';
 
 export default function Login() {
+  const [stage, setStage] = useState<'CREDENTIALS' | '2FA'>('CREDENTIALS');
   const [identity, setIdentity] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -41,51 +39,51 @@ export default function Login() {
   const [emailVerificationSuccess, setEmailVerificationSuccess] = useState(false);
   const [emailVerificationError, setEmailVerificationError] = useState<string | null>(null);
 
-  // MFA 2FA state
-  const [mfaTicket, setMfaTicket] = useState<string | null>(null);
-  const [mfaCode, setMfaCode] = useState('');
-  const [emailMasked, setEmailMasked] = useState<string | null>(null);
-  const [resendingMfa, setResendingMfa] = useState(false);
-  const [resendMfaCooldown, setResendMfaCooldown] = useState(0);
+  // 2FA state
+  const [mfaTicket, setMfaTicket] = useState('');
+  const [emailMasked, setEmailMasked] = useState('');
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const [resendCooldown, setResendCooldown] = useState(60);
+  const [canResend, setCanResend] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [otpExpirySeconds, setOtpExpirySeconds] = useState(300); // 5 minutes expiration
 
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const setAuth = useAuthStore((state) => state.setAuth);
-
-  // Shown when user is redirected here after inactivity session expiration
+  // Shown when user is redirected here after 2-hour inactivity session expiration
   const [inactivityBanner, setInactivityBanner] = useState(false);
 
+  // Check for email verification query params or token on mount
   useEffect(() => {
-    const mode = searchParams.get('mode');
-    const oobCode = searchParams.get('oobCode');
+    // 1. Direct Email Verification Token (e.g. /login?token=... or /login?mode=verifyEmail&token=...)
+    const token = searchParams.get('token') || searchParams.get('oobCode');
+    const email = searchParams.get('email');
 
-    if (mode === 'verifyEmail' && oobCode) {
-      api.post('/auth/verify-email-status', { oobCode })
+    if (token) {
+      api.post('/auth/verify-email-status', { token, email: email || undefined })
         .then((syncRes: any) => {
-          if (syncRes?.success && syncRes?.emailVerified) {
-            setIdentity(syncRes.user?.email || '');
+          if (syncRes.emailVerified) {
             setEmailVerificationSuccess(true);
             setEmailVerificationError(null);
             setUnverifiedEmail(null);
-            toast.success('Your email has been verified successfully. You can now log in.');
+            toast.success('Email verified successfully in database. You can now log in.');
           } else {
-            setEmailVerificationSuccess(false);
-            setEmailVerificationError('We could not verify your email. The verification link may be invalid or expired.');
-            toast.error('We could not verify your email. The verification link may be invalid or expired.');
+            setEmailVerificationError('Database status could not be confirmed. Please log in to complete.');
           }
+          navigate('/login', { replace: true });
         })
-        .catch((err: any) => {
-          console.warn('[VERIFY SYNC ERROR]', err);
-          setEmailVerificationSuccess(false);
-          setEmailVerificationError('We could not verify your email. The verification link may be invalid or expired.');
-          toast.error('We could not verify your email. The verification link may be invalid or expired.');
-        })
-        .finally(() => {
+        .catch((err) => {
+          console.warn('[AUTH] Email verification error:', err?.message || err);
+          setEmailVerificationError('Verification link is invalid or has expired.');
+          toast.error('Email verification link is invalid or has expired.');
           navigate('/login', { replace: true });
         });
       return;
     }
 
+    // 2. Email verification query parameter (e.g. /login?emailVerified=true)
     const emailVerifiedParam = searchParams.get('emailVerified');
     if (emailVerifiedParam !== null) {
       const cleanVal = emailVerifiedParam.trim().toLowerCase();
@@ -93,17 +91,20 @@ export default function Login() {
       const isFailed = ['false', '0', 'no', 'failed', 'error', 'expired'].includes(cleanVal);
 
       if (isSuccess) {
-        setEmailVerificationSuccess(false);
-        setEmailVerificationError('Your verification link was processed. Enter your email and password to confirm current account status.');
+        setEmailVerificationSuccess(true);
+        setEmailVerificationError(null);
+        setUnverifiedEmail(null);
+        toast.success('Email verified successfully. You can now log in.');
       } else if (isFailed) {
-        setEmailVerificationSuccess(false);
-        setEmailVerificationError('Email verification was not completed. Please request a new verification email.');
-        toast.error('Email verification was not completed. Please request a new verification email.');
+        setEmailVerificationError('Email verification was not completed. Please try again.');
+        toast.error('Email verification was not completed. Please try again.');
       }
 
+      // Safely remove the query parameter from the URL to prevent re-triggering on page refresh
       navigate('/login', { replace: true });
     }
 
+    // 3. Inactivity session expiry redirect (e.g. /login?reason=inactivity)
     const reason = searchParams.get('reason');
     if (reason === 'inactivity') {
       setInactivityBanner(true);
@@ -111,20 +112,53 @@ export default function Login() {
     }
   }, [searchParams, navigate]);
 
-  // Countdown timers for Email Verification and MFA resends
+  // Countdown timer for 2FA resend
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (resendVerifCooldown > 0 || resendMfaCooldown > 0) {
+    if (stage === '2FA' && resendCooldown > 0) {
       timer = setInterval(() => {
-        setResendVerifCooldown((prev) => Math.max(0, prev - 1));
-        setResendMfaCooldown((prev) => Math.max(0, prev - 1));
+        setResendCooldown((prev) => {
+          if (prev <= 1) {
+            setCanResend(true);
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [resendVerifCooldown, resendMfaCooldown]);
+  }, [stage, resendCooldown]);
 
-  // Handle credentials submission via Firebase Authentication + MTS Backend
-  const handleLoginSubmit = async (e: React.FormEvent) => {
+  // 5-minute countdown timer for OTP Expiration
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (stage === '2FA' && otpExpirySeconds > 0) {
+      timer = setInterval(() => {
+        setOtpExpirySeconds((prev) => Math.max(0, prev - 1));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [stage, otpExpirySeconds]);
+
+  // Countdown timer for Email Verification resend
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (resendVerifCooldown > 0) {
+      timer = setInterval(() => {
+        setResendVerifCooldown((prev) => Math.max(0, prev - 1));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [resendVerifCooldown]);
+
+  const formatExpiryTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Handle stage 1 credentials submission
+  const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identity.trim() || !password) {
       toast.error('Please enter your work email and password');
@@ -133,186 +167,57 @@ export default function Login() {
 
     setLoading(true);
     setUnverifiedEmail(null);
-    setEmailVerificationSuccess(false);
     setEmailVerificationError(null);
 
     try {
       const trimmedEmail = identity.trim().toLowerCase();
-      let firebaseIdToken: string | undefined;
-      let userCred: any = null;
-
-      // 1. Authoritative Firebase Authentication Client Sign-In
-      try {
-        const signInRes = await signInWithEmailAndPassword(auth, trimmedEmail, password);
-        userCred = signInRes.user;
-      } catch (fbErr: any) {
-        userCred = null;
-        if (fbErr?.code === 'auth/user-disabled') {
-          toast.error('Your account has been disabled. Please contact MTS Lab administration.');
-          setLoading(false);
-          return;
-        } else if (fbErr?.code === 'auth/too-many-requests') {
-          toast.error('Too many failed login attempts. Please try again later.');
-          setLoading(false);
-          return;
-        }
-      }
-
-      if (userCred) {
-        try {
-          await userCred.reload();
-        } catch {}
-        try {
-          firebaseIdToken = await userCred.getIdToken(true);
-        } catch {}
-      }
-
-      // 2. Authenticate session with MTS Lab Backend
-      const isClientVerified = Boolean(userCred?.emailVerified || auth.currentUser?.emailVerified);
       const device = getDeviceDetails();
       const res: any = await api.post('/auth/login', {
         identity: trimmedEmail,
         password,
-        device,
-        firebaseIdToken,
-        isClientVerified
-      });
-
-      if (res?.mfaRequired && res?.mfaTicket) {
-        setMfaTicket(res.mfaTicket);
-        setEmailMasked(res.emailMasked || 'registered staff email');
-        setMfaCode('');
-        toast.info(res.message || 'Please enter the 6-digit verification code sent to your email.');
-        return;
-      }
-
-
-      if (res?.token && res?.user) {
-        const canonicalRole = normalizeRole(res.user.role);
-        if (!canonicalRole) {
-          toast.error('Access Denied: Invalid account role. Please contact an administrator.');
-          return;
-        }
-        const validatedUser = { ...res.user, role: canonicalRole };
-        setAuth(validatedUser, res.token, res.refreshToken);
-        toast.success(`Welcome back, ${validatedUser.name}!`);
-        navigate('/dashboard');
-      } else {
-        throw new Error(res?.message || 'Unable to sign in with these credentials.');
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Unable to sign in with these credentials.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle MFA 2FA verification submission
-  const handleMfaSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!mfaTicket || !mfaCode.trim() || mfaCode.trim().length !== 6) {
-      toast.error('Please enter a valid 6-digit verification code');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const device = getDeviceDetails();
-      const res: any = await api.post('/auth/2fa/verify', {
-        mfaTicket,
-        otp: mfaCode.trim(),
         device
       });
 
-      if (res?.token && res?.user) {
-        const canonicalRole = normalizeRole(res.user.role);
-        if (!canonicalRole) {
-          toast.error('Access Denied: Invalid account role. Please contact an administrator.');
-          return;
-        }
-        const validatedUser = { ...res.user, role: canonicalRole };
-        setAuth(validatedUser, res.token, res.refreshToken);
-        toast.success(`Welcome back, ${validatedUser.name}!`);
+      if (res.mfaRequired && res.mfaTicket) {
+        setMfaTicket(res.mfaTicket);
+        setEmailMasked(res.emailMasked || 'your registered email');
+        setStage('2FA');
+        setOtpDigits(['', '', '', '', '', '']);
+        setOtpExpirySeconds(300); // 5 minutes expiration
+        setResendCooldown(60);
+        setCanResend(false);
+        toast.info('Verification code sent to your email.');
+        setTimeout(() => {
+          otpInputRefs.current[0]?.focus();
+        }, 150);
+      } else if (res.token && res.user) {
+        setAuth(res.user, res.token, res.refreshToken);
+        toast.success(`Welcome back, ${res.user.name}!`);
         navigate('/dashboard');
-      } else {
-        throw new Error(res?.message || 'Verification failed. Please try again.');
       }
     } catch (err: any) {
-      const msg = err?.message || 'Invalid verification code.';
-      toast.error(msg);
-      if (msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('log in again') || msg.toLowerCase().includes('invalidated')) {
-        setMfaTicket(null);
-        setMfaCode('');
+      if (err?.emailNotVerified || err?.message?.toLowerCase().includes('verify your email')) {
+        setUnverifiedEmail(err.email || identity.trim());
+        toast.error('Please verify your email address before continuing.');
+      } else {
+        toast.error(err.message || 'Unable to sign in with these credentials. Please check your email and password or contact MTS Lab administration.');
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Resend MFA 2FA Code
-  const handleResendMfa = async () => {
-    if (!mfaTicket || resendingMfa || resendMfaCooldown > 0) return;
-    setResendingMfa(true);
-    try {
-      const res: any = await api.post('/auth/2fa/resend', { mfaTicket });
-      if (res?.success && res?.mfaTicket) {
-        setMfaTicket(res.mfaTicket);
-        if (res.emailMasked) setEmailMasked(res.emailMasked);
-        setResendMfaCooldown(60);
-        toast.success(res.message || 'A new verification code has been sent to your email.');
-      } else {
-        toast.error(res?.message || 'Failed to resend verification code.');
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to resend verification code.');
-    } finally {
-      setResendingMfa(false);
-    }
-  };
-
-  // Handle Resend Firebase Verification Email
+  // Handle Resend Verification Email
   const handleResendVerificationEmail = async () => {
     if (!unverifiedEmail || resendingVerif || resendVerifCooldown > 0) return;
     setResendingVerif(true);
-    setEmailVerificationError(null);
-
     try {
-      if (auth.currentUser && auth.currentUser.email?.toLowerCase() === unverifiedEmail.toLowerCase()) {
-        try {
-          await auth.currentUser.reload();
-        } catch {}
-
-        if (auth.currentUser.emailVerified) {
-          setEmailVerificationSuccess(true);
-          setUnverifiedEmail(null);
-          toast.success('Your email is already verified. You can now sign in.');
-          return;
-        }
-
-        await sendEmailVerification(auth.currentUser);
-        toast.success('Verification email sent through Firebase. Please check your inbox.');
-        setResendVerifCooldown(60);
-        return;
-      }
-
-      const res: any = await api.post('/auth/resend-verification', {
-        email: unverifiedEmail,
-        password
-      });
-
-      if (res.emailVerified) {
-        setEmailVerificationSuccess(true);
-        setUnverifiedEmail(null);
-        toast.success('Your email is verified. You can now sign in.');
-        return;
-      }
-
-      toast.success(res.message || 'Verification email sent. Please check your inbox.');
+      // Dispatch official verification email from backend
+      const res: any = await api.post('/auth/resend-verification', { email: unverifiedEmail });
+      toast.success(res.message || 'Verification email sent. Please check your Gmail inbox and spam folder.');
       setResendVerifCooldown(60);
     } catch (err: any) {
-      const errMsg = err.message || 'Failed to resend verification email.';
-      setEmailVerificationError(errMsg);
-      toast.error(errMsg);
+      toast.error(err.message || 'Failed to resend verification email.');
     } finally {
       setResendingVerif(false);
     }
@@ -323,28 +228,17 @@ export default function Login() {
     if (!unverifiedEmail || checkingVerif) return;
     setCheckingVerif(true);
     try {
-      if (auth.currentUser) {
-        await auth.currentUser.reload();
-        if (auth.currentUser.emailVerified) {
-          toast.success('Your email is verified! Please enter your password to sign in.');
-          setEmailVerificationSuccess(true);
-          setUnverifiedEmail(null);
-          setCheckingVerif(false);
-          return;
-        }
-      }
-
       const res: any = await api.post('/auth/verify-email-status', {
         email: unverifiedEmail,
         password: password || undefined
       });
 
       if (res.emailVerified) {
-        toast.success('Your email is verified! Please sign in.');
+        toast.success('Your email is verified! Please enter your password to continue.');
         setEmailVerificationSuccess(true);
         setUnverifiedEmail(null);
       } else {
-        toast.info('Email is not yet verified. Please click the link sent to your email inbox.');
+        toast.info('Email is not yet verified. Please click the link sent to your Gmail inbox.');
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to check verification status.');
@@ -353,249 +247,415 @@ export default function Login() {
     }
   };
 
+  // Handle OTP digit box input
+  const handleOtpChange = (index: number, value: string) => {
+    const cleanValue = value.replace(/\D/g, '');
+    const newDigits = [...otpDigits];
+
+    if (cleanValue.length > 1) {
+      const pastedCodes = cleanValue.slice(0, 6).split('');
+      for (let i = 0; i < 6; i++) {
+        newDigits[i] = pastedCodes[i] || '';
+      }
+      setOtpDigits(newDigits);
+      const nextIndex = Math.min(pastedCodes.length, 5);
+      otpInputRefs.current[nextIndex]?.focus();
+      return;
+    }
+
+    newDigits[index] = cleanValue;
+    setOtpDigits(newDigits);
+
+    if (cleanValue && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pastedData) {
+      const newDigits = [...otpDigits];
+      for (let i = 0; i < 6; i++) {
+        newDigits[i] = pastedData[i] || '';
+      }
+      setOtpDigits(newDigits);
+      const targetFocus = Math.min(pastedData.length, 5);
+      otpInputRefs.current[targetFocus]?.focus();
+    }
+  };
+
+  // Handle Stage 2 OTP Verification
+  const handleVerify2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otpExpirySeconds <= 0) {
+      toast.error('Verification code expired. Please request a new code.');
+      return;
+    }
+
+    const code = otpDigits.join('').trim();
+    if (code.length !== 6) {
+      toast.error('Please enter all 6 digits of the verification code');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const device = getDeviceDetails();
+      const res: any = await api.post('/auth/2fa/verify', {
+        mfaTicket,
+        code,
+        device
+      });
+
+      if (res.success && res.token && res.user) {
+        setAuth(res.user, res.token, res.refreshToken);
+        toast.success(`Welcome back, ${res.user.name}!`);
+        navigate('/dashboard');
+      } else {
+        throw new Error(res.message || 'Verification failed');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Invalid or expired verification code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Resend OTP Code
+  const handleResendCode = async () => {
+    if (!canResend || resending) return;
+    setResending(true);
+    try {
+      const res: any = await api.post('/auth/2fa/resend', { mfaTicket });
+      toast.success(res.message || 'A new verification code has been sent to your email.');
+      setResendCooldown(60);
+      setCanResend(false);
+      setOtpExpirySeconds(300); // Reset 5-minute expiration timer
+      setOtpDigits(['', '', '', '', '', '']);
+      otpInputRefs.current[0]?.focus();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to resend verification code');
+    } finally {
+      setResending(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50/70 px-4 py-10 selection:bg-slate-900 selection:text-white font-sans antialiased">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50/60 px-4 py-8 selection:bg-slate-900 selection:text-white font-sans antialiased">
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: 'easeOut' }}
-        className="w-full max-w-[440px]"
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className="w-full max-w-[420px]"
       >
         {/* MTS Lab Official Logo & Header */}
-        <div className="flex flex-col items-center mb-7 text-center space-y-2.5">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl p-1.5 bg-white shadow-xl shadow-slate-900/10 border border-slate-200/90 flex items-center justify-center overflow-hidden transition-transform duration-300 hover:scale-105">
+        <div className="flex flex-col items-center mb-6 text-center space-y-2">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full p-1 bg-white shadow-xl shadow-slate-900/10 border border-slate-200/90 flex items-center justify-center overflow-hidden transition-transform duration-300 hover:scale-105">
             <img
               src={mtsLogo}
               alt="MTS Lab Logo"
-              className="w-full h-full object-contain rounded-2xl"
+              className="w-full h-full object-contain rounded-full"
             />
           </div>
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950 flex items-center justify-center gap-2">
-              MTS Lab Portal
-            </h1>
-            <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed max-w-[340px]">
-              Authorized Staff Authentication & Service Operations
+          <div className="space-y-0.5">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950">MTS Lab</h1>
+            <p className="text-slate-500 text-xs sm:text-sm font-medium">
+              Professional Smartphone Repair & Technical Services
             </p>
           </div>
         </div>
 
         {/* Main Card Container */}
-        <Card className="border border-slate-200/90 shadow-xl shadow-slate-200/60 rounded-[28px] bg-white overflow-hidden">
-          {mfaTicket ? (
-            <form onSubmit={handleMfaSubmit}>
-              <CardHeader className="pt-7 pb-3 text-center space-y-1">
-                <div className="mx-auto w-11 h-11 bg-indigo-100 text-indigo-900 rounded-2xl flex items-center justify-center mb-1 border border-indigo-200/60 shadow-xs">
-                  <KeyRound className="h-5 w-5" />
-                </div>
-                <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
-                  Two-Factor Authentication
-                </CardTitle>
-                <CardDescription className="text-xs sm:text-sm font-medium text-slate-500">
-                  Enter the 6-digit code sent to <b className="text-slate-900">{emailMasked || 'your registered email'}</b>
-                </CardDescription>
-              </CardHeader>
+        <Card className="border border-slate-200/90 shadow-xl shadow-slate-200/50 rounded-[28px] bg-white overflow-hidden">
+          <AnimatePresence mode="wait">
+            {stage === 'CREDENTIALS' ? (
+              <motion.div
+                key="stage-credentials"
+                initial={{ opacity: 0, x: -15 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 15 }}
+                transition={{ duration: 0.2 }}
+              >
+                <CardHeader className="pt-7 pb-3 text-center space-y-1">
+                  <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
+                    Welcome Back
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm font-medium text-slate-500">
+                    Sign in to your MTS Lab account
+                  </CardDescription>
+                </CardHeader>
 
-              <CardContent className="space-y-4 px-6 sm:px-8 pt-2">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 ml-1">
-                    Security Code (OTP)
-                  </label>
-                  <div className="relative">
-                    <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      placeholder="123456"
-                      value={mfaCode}
-                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
-                      className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-base sm:text-lg font-mono font-bold tracking-[0.3em] text-center"
-                      required
-                      autoFocus
-                      autoComplete="one-time-code"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <span className="text-slate-500 font-medium">Didn't receive the code?</span>
-                  <button
-                    type="button"
-                    onClick={handleResendMfa}
-                    disabled={resendingMfa || resendMfaCooldown > 0}
-                    className="font-bold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    {resendingMfa ? <Loader2 className="h-3 w-3 animate-spin inline" /> : <RefreshCw className="h-3 w-3 inline" />}
-                    {resendMfaCooldown > 0 ? `Resend in ${resendMfaCooldown}s` : 'Resend Code'}
-                  </button>
-                </div>
-              </CardContent>
-
-              <CardFooter className="px-6 sm:px-8 pb-7 pt-3 flex flex-col gap-2.5">
-                <Button
-                  type="submit"
-                  className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-850 text-white font-bold text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 shadow-md shadow-slate-950/15 cursor-pointer"
-                  disabled={loading || mfaCode.trim().length !== 6}
-                >
-                  {loading ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Verifying Code...</span>
-                    </div>
-                  ) : (
-                    'Verify Code & Sign In'
-                  )}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setMfaTicket(null);
-                    setMfaCode('');
-                  }}
-                  className="w-full h-10 rounded-xl text-slate-500 hover:text-slate-900 font-semibold text-xs transition-all cursor-pointer"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5 mr-1" />
-                  Back to Password Login
-                </Button>
-              </CardFooter>
-            </form>
-          ) : (
-            <div>
-              <CardHeader className="pt-7 pb-3 text-center space-y-1">
-                <div className="mx-auto w-11 h-11 bg-slate-100 text-slate-900 rounded-2xl flex items-center justify-center mb-1 border border-slate-200/60 shadow-xs">
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-                <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
-                  Staff Sign In
-                </CardTitle>
-                <CardDescription className="text-xs sm:text-sm font-medium text-slate-500">
-                  Enter your work credentials to access your dashboard
-                </CardDescription>
-              </CardHeader>
-
-              {/* Email Verification Success Alert */}
-              {emailVerificationSuccess && (
-                <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex items-start gap-2.5 shadow-sm">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-emerald-900">Email Verified Successfully!</p>
-                    <p className="text-emerald-700 leading-relaxed text-[11px]">
-                      Your email address is verified. Enter your password to sign in.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Email Verification Error Alert */}
-              {emailVerificationError && (
-                <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 text-xs flex items-start gap-2.5 shadow-sm">
-                  <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-rose-900">Verification Notice</p>
-                    <p className="text-rose-700 leading-relaxed text-[11px]">
-                      {emailVerificationError}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Session Inactivity Expiry Banner */}
-              {inactivityBanner && (
-                <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start gap-2.5 shadow-sm">
-                  <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-amber-900">Session Expired Due to Inactivity</p>
-                    <p className="text-amber-700 leading-relaxed text-[11px]">
-                      Your session ended after inactivity. Please sign in again.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-
-
-              <form onSubmit={handleLoginSubmit}>
-                <CardContent className="space-y-4 px-6 sm:px-8 pt-2">
-                  {/* Work Email Field */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 ml-1">
-                      Work Email
-                    </label>
-                    <div className="relative">
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        type="email"
-                        placeholder="staff@mtslab.com"
-                        value={identity}
-                        onChange={(e) => setIdentity(e.target.value)}
-                        className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
-                        required
-                        autoFocus
-                        autoComplete="email"
-                      />
+                {/* Email Verification Success Alert */}
+                {emailVerificationSuccess && (
+                  <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex items-start gap-2.5 shadow-sm">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-emerald-900">Email Verified Successfully!</p>
+                      <p className="text-emerald-700 leading-relaxed text-[11px]">
+                        Your email address is verified. You can now enter your password to sign in.
+                      </p>
                     </div>
                   </div>
+                )}
 
-                  {/* Password Field with Toggle */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between ml-1">
-                      <label className="text-xs font-bold text-slate-700">Password</label>
-                      <Link
-                        to="/forgot-password"
-                        className="text-[11px] sm:text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                {/* Email Verification Error Alert */}
+                {emailVerificationError && (
+                  <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 text-xs flex items-start gap-2.5 shadow-sm">
+                    <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-rose-900">Verification Notice</p>
+                      <p className="text-rose-700 leading-relaxed text-[11px]">
+                        {emailVerificationError}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Session Inactivity Expiry Banner */}
+                {inactivityBanner && (
+                  <div className="mx-6 sm:mx-8 mb-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start gap-2.5 shadow-sm">
+                    <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-amber-900">Session Expired Due to Inactivity</p>
+                      <p className="text-amber-700 leading-relaxed text-[11px]">
+                        Your session was automatically ended after 2 hours of inactivity. Please sign in again to continue.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Email Verification Required Alert (If applicable) */}
+                {unverifiedEmail && (
+                  <div className="mx-6 sm:mx-8 mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-3">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                      <div className="space-y-1">
+                        <p className="font-bold">Email Verification Required</p>
+                        <p className="text-amber-800 leading-relaxed">
+                          Please verify your email address (<b>{unverifiedEmail}</b>) before continuing.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleResendVerificationEmail}
+                        disabled={resendingVerif || resendVerifCooldown > 0}
+                        className="h-8 text-xs font-bold rounded-xl bg-white border-amber-300 text-amber-900 hover:bg-amber-100"
                       >
-                        Forgot Password?
-                      </Link>
+                        {resendingVerif ? (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                        ) : (
+                          <RefreshCw className="h-3 w-3 mr-1.5" />
+                        )}
+                        {resendVerifCooldown > 0 ? `Resend (${resendVerifCooldown}s)` : 'Resend Email'}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleCheckVerificationStatus}
+                        disabled={checkingVerif}
+                        className="h-8 text-xs font-bold rounded-xl text-amber-900 hover:bg-amber-100/60"
+                      >
+                        {checkingVerif ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
+                        Check Status
+                      </Button>
                     </div>
-                    <div className="relative">
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Enter password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
-                        required
-                        autoComplete="current-password"
-                      />
+                  </div>
+                )}
+
+                <form onSubmit={handleCredentialsSubmit}>
+                  <CardContent className="space-y-4 px-6 sm:px-8 pt-2">
+                    {/* Work Email Field */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 ml-1">
+                        Work Email
+                      </label>
+                      <div className="relative">
+                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                          type="email"
+                          placeholder="Work Email"
+                          value={identity}
+                          onChange={(e) => setIdentity(e.target.value)}
+                          className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
+                          required
+                          autoFocus
+                          autoComplete="email"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Password Field with Toggle */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between ml-1">
+                        <label className="text-xs font-bold text-slate-700">Password</label>
+                        <Link
+                          to="/forgot-password"
+                          className="text-[11px] sm:text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                        >
+                          Forgot Password?
+                        </Link>
+                      </div>
+                      <div className="relative">
+                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
+                          required
+                          autoComplete="current-password"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors p-1 cursor-pointer"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </CardContent>
+
+                  <CardFooter className="px-6 sm:px-8 pb-7 pt-3 flex flex-col gap-3">
+                    <Button
+                      type="submit"
+                      className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-850 text-white font-bold text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 shadow-md shadow-slate-950/15 cursor-pointer"
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Signing In...</span>
+                        </div>
+                      ) : (
+                        'Sign In'
+                      )}
+                    </Button>
+                  </CardFooter>
+                </form>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="stage-2fa"
+                initial={{ opacity: 0, x: 15 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -15 }}
+                transition={{ duration: 0.2 }}
+              >
+                <CardHeader className="pt-7 pb-3 text-center space-y-1">
+                  <div className="mx-auto w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-1 border border-indigo-100/60 shadow-xs">
+                    <ShieldCheck className="h-6 w-6" />
+                  </div>
+                  <CardTitle className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
+                    Verify Your Identity
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm font-medium text-slate-500 max-w-[320px] mx-auto leading-relaxed">
+                    Enter the verification code sent to your registered email address.
+                    {emailMasked && (
+                      <span className="block font-bold text-slate-800 mt-1">{emailMasked}</span>
+                    )}
+                  </CardDescription>
+                </CardHeader>
+
+                <form onSubmit={handleVerify2FA}>
+                  <CardContent className="space-y-4 px-6 sm:px-8 pt-2">
+                    {/* 6-box OTP input */}
+                    <div className="flex justify-between gap-1.5 sm:gap-2">
+                      {otpDigits.map((digit, index) => (
+                        <input
+                          key={index}
+                          ref={(el) => {
+                            otpInputRefs.current[index] = el;
+                          }}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={1}
+                          disabled={otpExpirySeconds <= 0}
+                          value={digit}
+                          onChange={(e) => handleOtpChange(index, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                          onPaste={index === 0 ? handleOtpPaste : undefined}
+                          className="w-10 h-12 sm:w-12 sm:h-14 text-center text-lg sm:text-xl font-black rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10 transition-all outline-none disabled:opacity-50 disabled:bg-slate-100"
+                        />
+                      ))}
+                    </div>
+
+                    {/* Expiration Countdown & Expiry Notice */}
+                    <div className="flex items-center justify-center pt-1 pb-0.5">
+                      {otpExpirySeconds > 0 ? (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100/90 text-slate-600 text-xs font-semibold">
+                          <Clock className="h-3.5 w-3.5 text-slate-400" />
+                          <span>Code expires in <span className="font-mono font-bold text-slate-900">{formatExpiryTime(otpExpirySeconds)}</span></span>
+                        </div>
+                      ) : (
+                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center justify-center gap-1.5 w-full">
+                          <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                          <span>Verification code expired. Please request a new code.</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Resend code controls */}
+                    <div className="flex items-center justify-between text-xs px-1 pt-1">
                       <button
                         type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors p-1 cursor-pointer"
-                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        onClick={handleResendCode}
+                        disabled={!canResend || resending}
+                        className="inline-flex items-center gap-1.5 font-bold text-indigo-600 hover:text-indigo-800 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors cursor-pointer"
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        <RefreshCw className={`h-3.5 w-3.5 ${resending ? 'animate-spin' : ''}`} />
+                        <span>{canResend ? 'Resend Code' : `Resend in ${resendCooldown}s`}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setStage('CREDENTIALS')}
+                        className="inline-flex items-center gap-1 font-bold text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                        <span>Back</span>
                       </button>
                     </div>
-                  </div>
-                </CardContent>
+                  </CardContent>
 
-                <CardFooter className="px-6 sm:px-8 pb-7 pt-3 flex flex-col gap-3">
-                  <Button
-                    type="submit"
-                    className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-850 text-white font-bold text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 shadow-md shadow-slate-950/15 cursor-pointer"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Authenticating Staff...</span>
-                      </div>
-                    ) : (
-                      'Sign In to Dashboard'
-                    )}
-                  </Button>
-                </CardFooter>
-              </form>
-            </div>
-          )}
+                  <CardFooter className="px-6 sm:px-8 pb-7 pt-2 flex flex-col gap-3">
+                    <Button
+                      type="submit"
+                      className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-850 text-white font-bold text-xs sm:text-sm transition-all active:scale-[0.98] disabled:opacity-50 shadow-md shadow-slate-950/15 cursor-pointer"
+                      disabled={loading || otpDigits.join('').length !== 6 || otpExpirySeconds <= 0}
+                    >
+                      {loading ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Verifying...</span>
+                        </div>
+                      ) : (
+                        'Verify'
+                      )}
+                    </Button>
+                  </CardFooter>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </Card>
 
-        {/* Clean Footer Link */}
+        {/* Clean, Non-Technical Footer */}
         <div className="mt-6 text-center">
           <Link
             to="/"

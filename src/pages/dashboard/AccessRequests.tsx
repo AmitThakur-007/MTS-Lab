@@ -61,12 +61,9 @@ import { useRealtimeSync } from '@/services/realtime';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 
 const ASSIGNABLE_ROLES = [
-  { value: 'SUPERADMIN', label: 'Super Admin (Restricted)' },
-  { value: 'ADMIN', label: 'Administrator' },
-  { value: 'MANAGER', label: 'Repair Operations Manager' },
-  { value: 'HEAD_TECHNICIAN', label: 'Head Technician' },
-  { value: 'TECHNICIAN', label: 'Technician' },
   { value: 'RECEPTIONIST', label: 'Receptionist' },
+  { value: 'TECHNICIAN', label: 'Technician' },
+  { value: 'SUPER_ADMIN', label: 'Super Admin (Restricted)' },
 ];
 
 export default function AccessRequests() {
@@ -298,6 +295,10 @@ export default function AccessRequests() {
               <ShieldCheck className="h-8 w-8 text-slate-800" />
               ACCESS & DEVICE CONTROL
             </h2>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold uppercase tracking-wider">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+              Live Sync
+            </span>
           </div>
           <p className="text-slate-500 font-bold mt-1">
             Authorize new smartphones, laptops, tablets, and Google Sign-In access requests in real time.
@@ -307,7 +308,7 @@ export default function AccessRequests() {
           <DashboardRefreshButton
             onRefresh={handleManualRefresh}
             size="default"
-            label="Refresh Requests"
+            label="Sync Requests"
           />
           <Button
             onClick={handleSystemRepair}

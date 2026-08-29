@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useRef } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import {
   User,
@@ -56,7 +55,6 @@ import { formatNPR } from '@/lib/format';
 import { useRealtimeSync } from '@/services/realtime';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { motion, AnimatePresence } from 'motion/react';
-import { normalizeRole } from '@/lib/rbac';
 
 const NEPAL_DISTRICTS = [
   'Kathmandu', 'Lalitpur', 'Bhaktapur', 'Morang', 'Sunsari', 'Jhapa', 'Kaski',
@@ -120,14 +118,10 @@ export default function CustomerProfile() {
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
-  const editReturnPathRef = useRef<string | null>(null);
-  const editAutoOpenedRef = useRef(false);
-  const editCloseInProgressRef = useRef(false);
 
-  const canonicalRole = normalizeRole(user?.role) || 'RECEPTIONIST';
-  const canEdit = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(canonicalRole) || ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '');
-  const canCreateRepair = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(canonicalRole) || ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(user?.role || '');
-  const canHardDelete = canonicalRole === 'SUPERADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
+  const canEdit = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '');
+  const canCreateRepair = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(user?.role || '');
+  const canHardDelete = user?.role === 'SUPER_ADMIN';
 
   const editDirty = JSON.stringify(editForm) !== JSON.stringify(editInitial);
 
@@ -136,42 +130,12 @@ export default function CustomerProfile() {
     setIsEditOpen(true);
   };
 
-  const returnFromEdit = () => {
-    const returnPath = editReturnPathRef.current;
-    editReturnPathRef.current = null;
-    setIsEditOpen(false);
-    setIsDiscardOpen(false);
-    if (returnPath && returnPath !== location.pathname) {
-      navigate(returnPath);
-    }
-  };
-
   const requestCloseEdit = () => {
-    if (editCloseInProgressRef.current) return;
-    editCloseInProgressRef.current = true;
-
     if (editDirty) {
-      // Close the edit surface first, then show the discard decision above it.
-      // Keeping both dialogs open caused the cross and Cancel controls to appear unresponsive.
-      setIsEditOpen(false);
       setIsDiscardOpen(true);
     } else {
-      returnFromEdit();
+      setIsEditOpen(false);
     }
-
-    window.setTimeout(() => {
-      editCloseInProgressRef.current = false;
-    }, 0);
-  };
-
-  const discardEditChanges = () => {
-    setEditForm(JSON.parse(JSON.stringify(editInitial)));
-    returnFromEdit();
-  };
-
-  const continueEditing = () => {
-    setIsDiscardOpen(false);
-    setIsEditOpen(true);
   };
 
   const fetchCustomer = useCallback(async () => {
@@ -246,14 +210,11 @@ export default function CustomerProfile() {
 
   // Auto-open the edit dialog when navigated from the Customer Hub "Edit" action
   useEffect(() => {
-    const editState = location.state as { openEdit?: boolean; returnTo?: string } | null;
-    if (editState?.openEdit && !editAutoOpenedRef.current && canEdit && customer && !loading) {
-      editAutoOpenedRef.current = true;
-      editReturnPathRef.current = editState.returnTo || null;
+    if ((location.state as any)?.openEdit && canEdit && customer && !loading) {
       openEdit();
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, canEdit, customer, loading, openEdit, navigate, location.pathname]);
+  }, [location.state, canEdit, customer, loading, openEdit]);
 
   useRealtimeSync(['repair', 'customer'], () => {
     fetchCustomer();
@@ -301,7 +262,7 @@ export default function CustomerProfile() {
       setCustomer((prev: any) => ({ ...prev, ...updated }));
       setEditInitial(JSON.parse(JSON.stringify(editForm)));
       toast.success('Customer details updated successfully.');
-      returnFromEdit();
+      setIsEditOpen(false);
     } catch (err: any) {
       toast.error(err.message || 'Failed to update customer');
     } finally {
@@ -395,7 +356,7 @@ export default function CustomerProfile() {
     : 'Never';
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-5 lg:px-8 pb-24 space-y-6 overflow-x-hidden">
+    <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-5 lg:px-8 pb-24 space-y-6">
 
       {/* Top Nav */}
       <div className="flex items-center gap-2 sm:gap-3 pt-2 flex-wrap">
@@ -458,7 +419,7 @@ export default function CustomerProfile() {
                     {customer.name?.charAt(0)?.toUpperCase() || 'C'}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h2 className="text-lg sm:text-xl font-extrabold tracking-tight break-words [overflow-wrap:anywhere] leading-snug" title={customer.name}>{customer.name}</h2>
+                    <h2 className="text-lg sm:text-xl font-extrabold tracking-tight break-words" title={customer.name}>{customer.name}</h2>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-xs font-mono text-white/60">{customer.customerId}</span>
                       {isReturning && (
@@ -523,7 +484,7 @@ export default function CustomerProfile() {
                     </div>
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Location</p>
-                      <p className="text-sm font-bold text-slate-700 break-words [overflow-wrap:anywhere]">
+                      <p className="text-sm font-bold text-slate-700">
                         {[customer.address, customer.municipality, customer.district].filter(Boolean).join(', ')}
                       </p>
                       {customer.landmark && (
@@ -712,10 +673,10 @@ export default function CustomerProfile() {
                                   <Badge className="text-[9px] px-1.5 py-0.5 bg-amber-500 text-white font-bold">HIGH</Badge>
                                 )}
                               </div>
-                              <h4 className="font-extrabold text-slate-900 mt-1 break-words [overflow-wrap:anywhere] leading-snug">
+                              <h4 className="font-extrabold text-slate-900 mt-1">
                                 {repair.deviceBrand} {repair.deviceModel}
                               </h4>
-                              <p className="text-xs text-slate-500 font-medium mt-0.5 line-clamp-2 break-words [overflow-wrap:anywhere]">
+                              <p className="text-xs text-slate-500 font-medium mt-0.5 line-clamp-1">
                                 {repair.problemDescription}
                               </p>
                             </div>
@@ -749,7 +710,7 @@ export default function CustomerProfile() {
                             <div className="mt-2.5 flex flex-wrap gap-1.5">
                               {repair.batteryWarranty && (
                                 <div className={cn(
-                                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border max-w-full min-w-0',
+                                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border max-w-full',
                                   repair.batteryWarranty.status === 'ACTIVE'
                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                     : repair.batteryWarranty.status === 'EXPIRED'
@@ -767,7 +728,7 @@ export default function CustomerProfile() {
                                 </div>
                               )}
                               {(repair.isCourierIn || repair.isReturnCourierDispatched) && (
-                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 max-w-full min-w-0">
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                                   <Truck className="w-3 h-3 shrink-0" />
                                   Courier
                                   {repair.courierCompany && <span className="truncate max-w-[80px]">· {repair.courierCompany}</span>}
@@ -822,13 +783,7 @@ export default function CustomerProfile() {
       */}
       <DialogPrimitive.Root
         open={isEditOpen}
-        onOpenChange={(open: boolean) => {
-          if (open) {
-            setIsEditOpen(true);
-          } else if (!editCloseInProgressRef.current) {
-            requestCloseEdit();
-          }
-        }}
+        onOpenChange={(open: boolean) => { if (open) setIsEditOpen(true); else requestCloseEdit(); }}
       >
         <DialogPrimitive.Portal>
           {/* Backdrop */}
@@ -840,8 +795,8 @@ export default function CustomerProfile() {
               // Positioning
               'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50',
               // Sizing — responsive
-              'w-[calc(100vw-1rem)] sm:w-[min(92vw,36rem)] md:w-[min(88vw,40rem)] lg:w-[min(78vw,42rem)] max-w-[42rem]',
-              'max-h-[calc(100svh-1rem)] sm:max-h-[calc(100svh-2rem)]',
+              'w-[calc(100vw-1.5rem)] sm:w-[min(90vw,32rem)] max-w-[32rem]',
+              'max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]',
               // Layout — flex column so header/footer are fixed, body scrolls
               'flex flex-col',
               // Appearance
@@ -853,14 +808,14 @@ export default function CustomerProfile() {
             )}
           >
             {/* ── HEADER — never scrolls ── */}
-            <div className="flex items-start sm:items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b border-slate-100 shrink-0">
+            <div className="flex items-center gap-3 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-slate-100 shrink-0">
               {/* Icon */}
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-950 text-white flex items-center justify-center shrink-0">
                 <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               {/* Title + description */}
               <div className="min-w-0 flex-1">
-                <DialogPrimitive.Title className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight break-words [overflow-wrap:anywhere]">
+                <DialogPrimitive.Title className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight">
                   Edit Customer Profile
                 </DialogPrimitive.Title>
                 <DialogPrimitive.Description className="text-[11px] sm:text-xs text-slate-500 mt-0.5 leading-snug">
@@ -868,28 +823,22 @@ export default function CustomerProfile() {
                 </DialogPrimitive.Description>
               </div>
               {/* X Close button — explicit, always visible, touch-friendly */}
-              <button
-                type="button"
+              <DialogPrimitive.Close
                 aria-label="Close Edit Customer Profile"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  requestCloseEdit();
-                }}
                 className={cn(
                   'shrink-0 flex items-center justify-center',
-                  'min-w-10 min-h-10 w-10 h-10 rounded-xl',
+                  'w-8 h-8 sm:w-9 sm:h-9 rounded-xl',
                   'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
                   'transition-colors cursor-pointer outline-none',
                   'focus-visible:ring-2 focus-visible:ring-slate-300',
                 )}
               >
                 <X className="w-4 h-4" />
-              </button>
+              </DialogPrimitive.Close>
             </div>
 
             {/* ── SCROLLABLE BODY ── */}
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 sm:py-5">
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-6 py-4 sm:py-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
 
                 {/* Full Name */}
@@ -1007,25 +956,19 @@ export default function CustomerProfile() {
             </div>
 
             {/* ── FOOTER — never scrolls ── */}
-            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-100 shrink-0 bg-white">
+            <div className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-t border-slate-100 shrink-0 bg-white">
               <Button
                 variant="ghost"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  requestCloseEdit();
-                }}
+                onClick={requestCloseEdit}
                 disabled={editSaving}
-                type="button"
-                className="w-full sm:w-auto rounded-xl text-xs font-bold text-slate-500 hover:text-slate-700 cursor-pointer min-h-10"
+                className="rounded-xl text-xs font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleSaveEdit}
                 disabled={editSaving}
-                type="button"
-                className="w-full sm:w-auto h-11 sm:h-10 px-5 sm:px-6 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs shadow-sm cursor-pointer min-w-[120px] justify-center"
+                className="h-10 px-5 sm:px-6 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs shadow-sm cursor-pointer min-w-[120px] justify-center"
               >
                 {editSaving ? (
                   <><Loader2 className="h-4 w-4 animate-spin mr-1.5 shrink-0" />Saving...</>
@@ -1126,13 +1069,13 @@ export default function CustomerProfile() {
           <div className="mt-5 sm:mt-6 flex items-center justify-end gap-2 flex-wrap">
             <Button
               variant="ghost"
-              onClick={continueEditing}
-              className="rounded-xl text-xs font-bold text-slate-600 cursor-pointer min-h-10"
+              onClick={() => setIsDiscardOpen(false)}
+              className="rounded-xl text-xs font-bold text-slate-600 cursor-pointer"
             >
               Continue Editing
             </Button>
             <Button
-              onClick={discardEditChanges}
+              onClick={() => { setIsDiscardOpen(false); setIsEditOpen(false); }}
               className="rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white cursor-pointer"
             >
               Discard Changes

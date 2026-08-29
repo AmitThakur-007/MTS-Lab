@@ -37,7 +37,7 @@ import {
   BatteryCharging
 } from 'lucide-react';
 import { api } from '@/services/api';
-import { syncRepairToRtdb } from '@/lib/firebase';
+import { syncRepairToSupabase as syncRepairToRtdb, syncRepairToSupabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { formatNepalPhone } from '@/lib/format';
 import { cn } from '@/lib/utils';

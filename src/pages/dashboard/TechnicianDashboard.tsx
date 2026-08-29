@@ -38,7 +38,6 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog';
-import PendingTransfersBanner from '@/components/repairs/PendingTransfersBanner';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -52,7 +51,7 @@ import {
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { useRealtimeSync } from '@/services/realtime';
-import { syncRepairToRtdb } from '@/lib/firebase';
+import { syncRepairToSupabase as syncRepairToRtdb, syncRepairToSupabase } from '@/lib/supabase';
 import { formatTimeAgo, formatShortTimeAgo } from '@/lib/timeUtils';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -588,6 +587,10 @@ export default function TechnicianDashboard() {
               <Wrench className="h-7 w-7 text-indigo-600 shrink-0" />
               <span>Technician Workspace</span>
             </h1>
+            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-bold text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shrink-0">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Sync
+            </Badge>
           </div>
           <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed break-words">
             Welcome back, <span className="font-bold text-slate-800">{user?.name}</span>. You have <span className="font-bold text-indigo-600">{stats.activeCount} active repairs</span> requiring technical action.
@@ -614,6 +617,7 @@ export default function TechnicianDashboard() {
           {/* Quick Dashboard Refresh Button */}
           <DashboardRefreshButton
             onRefresh={fetchDashboardData}
+            showLiveBadge={false}
             showLastUpdated={false}
             size="sm"
             label="Refresh"
@@ -622,11 +626,6 @@ export default function TechnicianDashboard() {
           />
         </div>
       </div>
-
-      {/* ========================================================================= */}
-      {/* 🔄 INCOMING REPAIR TRANSFER REQUESTS BANNER                                */}
-      {/* ========================================================================= */}
-      <PendingTransfersBanner onTransferResolved={fetchDashboardData} />
 
       {/* ========================================================================= */}
       {/* 🚨 HIGH PRIORITY & PRIORITY REPAIRS ACTION QUEUE BANNER                    */}

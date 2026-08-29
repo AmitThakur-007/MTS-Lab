@@ -40,7 +40,7 @@ import { formatNPR } from '@/lib/format';
 import { motion } from 'motion/react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRealtimeSync } from '@/services/realtime';
-import { syncRepairToRtdb } from '@/lib/firebase';
+import { syncRepairToSupabase as syncRepairToRtdb, syncRepairToSupabase } from '@/lib/supabase';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { useAuthStore } from '@/store/authStore';
 import { 
@@ -53,8 +53,6 @@ import {
 } from '@/components/ui/dialog';
 import ServiceSlipModal from '@/components/repair/ServiceSlipModal';
 import EditRepairModal from '@/components/repair/EditRepairModal';
-import TransferRepairModal from '@/components/repairs/TransferRepairModal';
-import RepairTransferHistoryTimeline from '@/components/repairs/RepairTransferHistoryTimeline';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -109,40 +107,29 @@ export default function RepairDetails() {
   const [newNote, setNewNote] = useState('');
   const [submittingNote, setSubmittingNote] = useState(false);
 
-  const fetchData = async (silent = false) => {
-    if (!silent && !repair) {
-      setLoading(true);
-    }
+  const fetchData = async () => {
     try {
       const [repairData, staffData, notesData] = await Promise.all([
         api.get(`/repairs/${id}`),
-        api.get('/staff').catch(() => []),
+        api.get('/staff'),
         api.get(`/repairs/${id}/notes`).catch(() => [])
       ]);
-      if (repairData) {
-        setRepair(repairData);
-      }
-      if (Array.isArray(staffData)) {
-        setTechnicians(staffData.filter((s: any) => ['TECHNICIAN', 'LEAD_TECHNICIAN'].includes(s.role) && s.isActive !== false));
-      }
+      setRepair(repairData);
+      setTechnicians(staffData.filter((s: any) => ['TECHNICIAN', 'LEAD_TECHNICIAN'].includes(s.role) && s.isActive !== false));
       setNotes(Array.isArray(notesData) ? notesData : []);
     } catch (err: any) {
-      if (!silent && !repair) {
-        toast.error(err.message || 'Failed to load repair details');
-        navigate('/dashboard/repairs');
-      }
+      toast.error(err.message || 'Failed to load repair details');
+      navigate('/dashboard/repairs');
     } finally {
-      if (!silent) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData(false);
+    fetchData();
   }, [id]);
 
-  // Real-time synchronization for instant status, payment, and technician assignment updates across all devices (silent background update)
+  // Real-time synchronization for instant status, payment, and technician assignment updates across all devices
   useRealtimeSync(['repair', 'technicianNote', 'repairLog', 'notification', 'repairTransfer', 'payment', 'user', 'sync'], (event) => {
     if (
       !event.id || 
@@ -151,7 +138,7 @@ export default function RepairDetails() {
       event.data?.repairId === id ||
       ['user', 'payment', 'technicianNote', 'repairLog', 'repair', 'sync', 'notification', 'repairTransfer'].includes(event.entity)
     ) {
-      fetchData(true);
+      fetchData();
     }
   });
 
@@ -751,25 +738,9 @@ export default function RepairDetails() {
           <Card className="rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white">
              <CardHeader className="bg-slate-950 text-white p-8">
                 <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-xl font-bold flex items-center gap-2 min-w-0">
-                   <User className="h-5 w-5 shrink-0" />
-                   <span className="truncate">Client Information</span>
+                <CardTitle className="text-xl font-bold flex items-center gap-2">
+                   <User className="h-5 w-5" /> Client Information
                 </CardTitle>
-                {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && repair.customer?.id && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Edit Customer Profile"
-                    title="Edit Customer Profile"
-                    onClick={() => navigate(`/dashboard/customers/${repair.customer.id}`, {
-                      state: { openEdit: true, returnTo: `/dashboard/repairs/${id}` },
-                    })}
-                    className="shrink-0 h-9 w-9 p-0 rounded-xl text-white/70 hover:text-white hover:bg-white/10 cursor-pointer"
-                  >
-                    <Edit3 className="h-4 w-4" />
-                  </Button>
-                )}
                 </div>
              </CardHeader>
              <CardContent className="p-8 space-y-8">
@@ -868,7 +839,7 @@ export default function RepairDetails() {
                     </div>
 
                     {/* Quick Transfer Button */}
-                    {['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'TECHNICIAN'].includes(user?.role || '') && (
+                    {['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LEAD_TECHNICIAN', 'TECHNICIAN'].includes(user?.role || '') && (
                       <Button
                         type="button"
                         variant="outline"
@@ -883,9 +854,6 @@ export default function RepairDetails() {
                 )}
               </CardContent>
           </Card>
-
-          {/* Chronological Assignment & Transfer Audit History */}
-          <RepairTransferHistoryTimeline repairId={repair.id} />
         </div>
       </div>
 
@@ -1005,14 +973,69 @@ export default function RepairDetails() {
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* 3. STANDARDIZED REPAIR TRANSFER & ASSIGNMENT MODAL                         */}
+      {/* 3. REPAIR TRANSFER MODAL                                                  */}
       {/* ========================================================================= */}
-      <TransferRepairModal
-        isOpen={isTransferDialogOpen}
-        onClose={() => setIsTransferDialogOpen(false)}
-        repair={repair}
-        onTransferComplete={() => fetchData()}
-      />
+      <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}>
+        <DialogContent className="max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
+          <DialogHeader>
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 border border-amber-100">
+              <ArrowRightLeft className="h-5 w-5" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-slate-900">Transfer Repair Case</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Transfer Job <b>#{repair?.repairNumber}</b> to another lab technician
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700">Target Specialist *</Label>
+              <Select value={transferTargetId} onValueChange={setTransferTargetId}>
+                <SelectTrigger className="rounded-xl h-11 border-slate-200 text-xs font-bold">
+                  <SelectValue placeholder="Select target technician..." />
+                </SelectTrigger>
+                <SelectContent className="rounded-2xl max-h-56">
+                  {technicians.filter(t => t.id !== repair?.technicianId).map((t) => (
+                    <SelectItem key={t.id} value={t.id} className="text-xs font-bold py-2.5">
+                      {t.name} ({t.role.replace(/_/g, ' ')})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700">Reason for Transfer *</Label>
+              <Textarea
+                placeholder="e.g. Requires specialized microscope setup for CPU reballing..."
+                value={transferReason}
+                onChange={e => setTransferReason(e.target.value)}
+                className="rounded-xl border-slate-200 min-h-[90px] text-xs font-medium"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2 flex items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsTransferDialogOpen(false)}
+              className="rounded-xl text-xs font-bold text-slate-500"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={sendingTransfer || !transferTargetId || !transferReason.trim()}
+              onClick={handleSendTransfer}
+              className="rounded-xl h-10 px-5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-600/20"
+            >
+              {sendingTransfer ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <ArrowRightLeft className="h-4 w-4 mr-1.5" />}
+              Submit Transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ========================================================================= */}
       {/* 4. COURIER RETURN DISPATCH DIALOG                                         */}

@@ -68,6 +68,21 @@ async function main() {
     },
   });
 
+  // Create Products
+  const products = [
+    { name: 'OLED Display for iPhone 15', price: 150, category: 'Mobile Displays', isFeatured: true, imageUrl: 'https://images.unsplash.com/photo-1556656793-062ff98782a1?auto=format&fit=crop&q=80&w=400' },
+    { name: 'Fast Charger 45W', price: 35, discountPrice: 25, category: 'Chargers', isFeatured: true, imageUrl: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&q=80&w=400' },
+    { name: 'Wireless Earphones', price: 120, discountPrice: 99, category: 'Earphones', isBestSeller: true, imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=400' },
+    { name: 'Super Charging USB-C Cable', price: 15, category: 'USB Cables', imageUrl: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=400' },
+    { name: 'Protective Case', price: 20, category: 'Phone Accessories', isBestSeller: true, imageUrl: 'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&q=80&w=400' },
+    { name: 'iPhone Battery 3500mAh', price: 45, category: 'Batteries', imageUrl: 'https://images.unsplash.com/photo-1591808229473-35667376c9e0?auto=format&fit=crop&q=80&w=400' },
+    { name: 'Apple Watch Series 9', price: 399, discountPrice: 349, category: 'Smart Watches', isFeatured: true, imageUrl: 'https://images.unsplash.com/photo-1544117518-2b462fca5631?auto=format&fit=crop&q=80&w=400' },
+  ];
+
+  for (const p of products) {
+    await prisma.product.create({ data: { ...p, stockQuantity: 50 } });
+  }
+
   // Create Repair
   const repair = await prisma.repair.create({
     data: {

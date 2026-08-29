@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
-import { api, registerInactivityExpiredHandler } from '@/services/api';
+import { registerInactivityExpiredHandler } from '@/services/api';
 
 // Configuration
 const INACTIVITY_TIMEOUT_MS    = 2 * 60 * 60 * 1000;   // 2 hours
@@ -68,7 +68,12 @@ export default function InactivityGuard({ children }: InactivityGuardProps) {
 
     try {
       const { refreshToken } = useAuthStore.getState();
-      await api.post('/auth/logout', { refreshToken });
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+        credentials: 'include'
+      });
     } catch {}
 
     logout();
@@ -87,7 +92,15 @@ export default function InactivityGuard({ children }: InactivityGuardProps) {
     lastThrottleRef.current = now;
 
     try {
-      await api.post('/auth/activity', {});
+      const { token: currentToken } = useAuthStore.getState();
+      await fetch('/api/auth/activity', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {})
+        },
+        credentials: 'include'
+      });
     } catch {}
   }, []);
 

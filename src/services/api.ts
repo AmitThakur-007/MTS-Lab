@@ -1,42 +1,6 @@
 import { useAuthStore } from '@/store/authStore';
 
-const getApiBase = (): string => {
-  const envUrl = (
-    (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL)) ||
-    ''
-  ).trim();
-
-  if (!envUrl) {
-    return '/api';
-  }
-  const cleanUrl = envUrl.replace(/\/+$/, '');
-  return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
-};
-
-export const API_BASE = getApiBase();
-
-export function normalizeEndpoint(endpoint: string): string {
-  const clean = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  if (clean.startsWith('/api/')) {
-    return clean.slice(4);
-  }
-  if (clean === '/api') {
-    return '';
-  }
-  return clean;
-}
-
-function isServerAuthoritativeEndpoint(cleanEndpoint: string): boolean {
-  return (
-    cleanEndpoint.startsWith('/auth') ||
-    cleanEndpoint.startsWith('/users') ||
-    cleanEndpoint.startsWith('/admin') ||
-    cleanEndpoint.startsWith('/system') ||
-    cleanEndpoint.startsWith('/access-requests') ||
-    cleanEndpoint.startsWith('/wipe') ||
-    cleanEndpoint.startsWith('/backup')
-  );
-}
+const API_BASE = '/api';
 
 // Global callback to trigger InactivityGuard logout flow from api.ts (set by InactivityGuard on mount)
 let _onInactivityExpired: (() => void) | null = null;
@@ -128,165 +92,127 @@ async function doRefreshToken(): Promise<string | null> {
 }
 
 
-import { 
-  handleFirebaseGet, 
-  handleFirebasePost, 
-  handleFirebaseUpdate, 
-  handleFirebaseDelete 
-} from './firebasePersistence';
-
 async function request(endpoint: string, options: any = {}) {
   const { token } = useAuthStore.getState();
-  const cleanEndpoint = normalizeEndpoint(endpoint);
-  const method = (options.method || 'GET').toUpperCase();
   
-  let headers = {
+  const headers = {
     ...options.headers,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
-  let res: any;
-  let serverData: any = null;
-  let serverHandled = false;
-
+  let res;
   try {
-    res = await fetch(`${API_BASE}${cleanEndpoint}`, { 
+    res = await fetch(`${API_BASE}${endpoint}`, { 
       ...options, 
       headers,
       credentials: 'include'
     });
+  } catch (netErr: any) {
+    console.error("[NETWORK ERROR]", netErr);
+    throw new Error("Unable to connect to the API server. Please check your internet connection or verify the server is online.");
+  }
 
-    // Handle token expiration & automatic seamless renewal on 401
-    if (res && res.status === 401 && token && !cleanEndpoint.includes('/auth/refresh') && !cleanEndpoint.includes('/auth/login')) {
-      const newToken = await doRefreshToken();
-      if (newToken) {
-        headers = {
-          ...options.headers,
-          Authorization: `Bearer ${newToken}`
-        };
-        res = await fetch(`${API_BASE}${cleanEndpoint}`, {
-          ...options,
-          headers,
+  // Handle 401 - try synchronized refresh if token exists and endpoint is not auth/refresh or auth/login
+  if (res.status === 401 && token && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login')) {
+    // Peek at the error body to detect InactivityExpired — if so, skip refresh and logout immediately
+    const errClone = res.clone();
+    try {
+      const errData = await errClone.json() as any;
+      if (errData?.error === 'InactivityExpired') {
+        const { logout } = useAuthStore.getState();
+        if (_onInactivityExpired) {
+          _onInactivityExpired();
+        } else {
+          logout();
+          window.location.href = '/login?reason=inactivity';
+        }
+        const errObj = new Error(errData.message || 'Session expired due to inactivity.') as any;
+        errObj.status = 401;
+        errObj.code = 401;
+        throw errObj;
+      }
+    } catch (peekErr: any) {
+      // If the error has already been thrown (InactivityExpired), re-throw it
+      if (peekErr?.status === 401 && peekErr?.code === 401 && peekErr?.message?.includes('inactivity')) {
+        throw peekErr;
+      }
+      // Otherwise parse failure is OK — proceed to refresh
+    }
+
+    const newToken = await doRefreshToken();
+    if (newToken) {
+      // Retry original request with fresh token
+      const retryHeaders = {
+        ...options.headers,
+        Authorization: `Bearer ${newToken}`,
+      };
+      try {
+        res = await fetch(`${API_BASE}${endpoint}`, { 
+          ...options, 
+          headers: retryHeaders,
           credentials: 'include'
         });
+      } catch {
+        throw new Error("Unable to connect to the API server on request retry.");
       }
-    }
-
-    if (res && res.ok) {
-      const rawSuccessText = await res.text();
-      if (rawSuccessText && rawSuccessText.trim()) {
-        try {
-          serverData = JSON.parse(rawSuccessText);
-        } catch {
-          serverData = rawSuccessText;
-        }
-      }
-      // If server returned a dummy serverless fallback on a data route, trigger Firebase persistence
-      if (serverData && serverData.service === 'MTS Lab Serverless API' && !isServerAuthoritativeEndpoint(cleanEndpoint)) {
-        serverHandled = false;
-      } else {
-        serverHandled = true;
-        return serverData;
-      }
-    }
-  } catch (netErr: any) {
-    serverHandled = false;
-  }
-
-  // Handle Firebase Direct Cloud Persistence Fallback ONLY if server was completely unreachable (offline/network error)
-  // and NEVER on server-authoritative endpoints (users, admin, auth, system, access-requests, wipe)
-  if (!serverHandled && !res && !isServerAuthoritativeEndpoint(cleanEndpoint)) {
-    try {
-      if (method === 'GET') {
-        const fbResult = await handleFirebaseGet(cleanEndpoint);
-        if (fbResult !== null) return fbResult;
-      } else if (method === 'POST') {
-        const parsedBody = options.body 
-          ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body)
-          : {};
-        const fbResult = await handleFirebasePost(cleanEndpoint, parsedBody);
-        if (fbResult !== null) return fbResult;
-      } else if (method === 'PATCH' || method === 'PUT') {
-        const parsedBody = options.body 
-          ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body)
-          : {};
-        const fbResult = await handleFirebaseUpdate(cleanEndpoint, parsedBody);
-        if (fbResult !== null) return fbResult;
-      } else if (method === 'DELETE') {
-        const fbResult = await handleFirebaseDelete(cleanEndpoint);
-        if (fbResult !== null) return fbResult;
-      }
-    } catch (fbErr) {
-      console.warn('[FIREBASE CLOUD PERSISTENCE]', fbErr);
+    } else {
+      throw new Error('Session expired. Please login again.');
     }
   }
 
-  if (serverData !== null) {
-    return serverData;
-  }
-
-  if (res && !res.ok) {
+  if (!res.ok) {
     let errorData: any = {};
-    const rawText = await res.text().catch(() => '');
-    const isHtmlOrEdgeError = rawText && (
-      rawText.includes('<!DOCTYPE') || 
-      rawText.includes('<html') || 
-      rawText.includes('NOT_FOUND') ||
-      rawText.includes('could not be found')
-    );
-
+    const rawText = await res.text();
     try {
-      errorData = (!isHtmlOrEdgeError && rawText) ? JSON.parse(rawText) : {};
+      errorData = rawText ? JSON.parse(rawText) : {};
     } catch {
-      errorData = {};
+      // Server or reverse proxy returned plain text (e.g. "Rate exceeded.", "Bad Gateway")
+      errorData = { 
+        message: rawText && rawText.length < 300 ? rawText : `Server returned status ${res.status}: ${res.statusText}` 
+      };
     }
 
-    let errorMessage = errorData.message || errorData.error;
-    if (!errorMessage) {
-      if (res.status === 404) {
-        errorMessage = 'Requested record or endpoint not found.';
-      } else if (res.status === 429) {
-        errorMessage = 'Too many requests. Please wait before trying again.';
-      } else if (res.status === 502 || res.status === 503 || res.status === 504) {
-        errorMessage = 'Server is temporarily busy. Please try again.';
-      } else {
-        errorMessage = `Request failed with status ${res.status}`;
-      }
+    let errorMessage = errorData.message || errorData.error || rawText || `Request failed with status ${res.status}`;
+    if (res.status === 429 || (typeof errorMessage === 'string' && errorMessage.toLowerCase().includes('rate'))) {
+      errorMessage = 'Rate limit exceeded. Please wait a moment before trying again.';
     }
 
-    const retryAfter = res.headers.get('retry-after');
     const errObj = new Error(errorMessage) as any;
-    errObj.status = res.status;
-    errObj.code = errorData.code || res.status;
-    errObj.emailNotVerified = errorData.emailNotVerified;
-    errObj.data = errorData;
-    if (retryAfter) {
-      errObj.retryAfter = parseInt(retryAfter, 10) || 60;
-    }
+    errObj.status = errorData.status || res.status;
+    errObj.requestCount = errorData.requestCount;
+    errObj.requestLimitReached = errorData.requestLimitReached;
+    errObj.code = res.status;
     throw errObj;
   }
 
-  return null;
+  const rawSuccessText = await res.text();
+  if (!rawSuccessText || !rawSuccessText.trim()) {
+    return null;
+  }
+  try {
+    return JSON.parse(rawSuccessText);
+  } catch {
+    return rawSuccessText;
+  }
 }
 
 export const api = {
   get: (endpoint: string) => request(endpoint),
   getBlob: async (endpoint: string, options: any = {}) => {
     const { token } = useAuthStore.getState();
-    const cleanEndpoint = normalizeEndpoint(endpoint);
     const headers = {
       ...options.headers,
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     };
-    let res = await fetch(`${API_BASE}${cleanEndpoint}`, {
+    let res = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
       headers,
       credentials: 'include'
     });
-    if (res.status === 401 && token && !cleanEndpoint.includes('/auth/refresh')) {
+    if (res.status === 401 && token && !endpoint.includes('/auth/refresh')) {
       const newToken = await doRefreshToken();
       if (newToken) {
-        res = await fetch(`${API_BASE}${cleanEndpoint}`, {
+        res = await fetch(`${API_BASE}${endpoint}`, {
           ...options,
           headers: {
             ...options.headers,
@@ -311,19 +237,18 @@ export const api = {
   },
   download: async (endpoint: string, fallbackFilename?: string) => {
     const { token } = useAuthStore.getState();
-    const cleanEndpoint = normalizeEndpoint(endpoint);
     const headers: any = {
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     };
-    let res = await fetch(`${API_BASE}${cleanEndpoint}`, {
+    let res = await fetch(`${API_BASE}${endpoint}`, {
       method: 'GET',
       headers,
       credentials: 'include'
     });
-    if (res.status === 401 && token && !cleanEndpoint.includes('/auth/refresh')) {
+    if (res.status === 401 && token && !endpoint.includes('/auth/refresh')) {
       const newToken = await doRefreshToken();
       if (newToken) {
-        res = await fetch(`${API_BASE}${cleanEndpoint}`, {
+        res = await fetch(`${API_BASE}${endpoint}`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${newToken}`

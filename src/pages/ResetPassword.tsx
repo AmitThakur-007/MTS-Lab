@@ -9,10 +9,6 @@ import { toast } from 'sonner';
 import { motion } from 'motion/react';
 import mtsLogo from '@/assets/images/mts-logo.jpg';
 
-import { confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { validateStrongPassword } from '@/lib/passwordPolicy';
-
 export default function ResetPassword() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -23,18 +19,18 @@ export default function ResetPassword() {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const resetToken = location.state?.resetToken;
 
-  const searchParams = new URLSearchParams(location.search);
-  const oobCode = searchParams.get('oobCode') || searchParams.get('token');
-  const resetToken = location.state?.resetToken || oobCode;
+  if (!resetToken) {
+    return <Navigate to="/forgot-password" replace />;
+  }
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    const valResult = validateStrongPassword(newPassword);
-    if (!valResult.valid) {
-      const msg = valResult.message;
+    if (newPassword.length < 8) {
+      const msg = 'Password must be at least 8 characters long';
       setErrorMsg(msg);
       toast.error(msg);
       return;
@@ -47,28 +43,13 @@ export default function ResetPassword() {
       return;
     }
 
-    if (!resetToken) {
-      const msg = 'This password reset link is invalid or has expired. Please request a new one.';
-      setErrorMsg(msg);
-      toast.error(msg);
-      return;
-    }
-
     setLoading(true);
     try {
-      if (oobCode) {
-        // Authoritative Firebase Authentication Reset Confirmation
-        await confirmPasswordReset(auth, oobCode, newPassword);
-      }
-      
-      // Update local database password hash
       const res: any = await api.post('/auth/reset-password', { resetToken, newPassword });
       toast.success(res.message || 'Password reset successfully. Please sign in with your new password.');
       navigate('/login');
     } catch (err: any) {
-      const msg = err?.code === 'auth/invalid-action-code' || err?.code === 'auth/expired-action-code'
-        ? 'This password reset link is invalid or has expired. Please request a new one.'
-        : err.error || err.message || 'Failed to reset password';
+      const msg = err.error || err.message || 'Failed to reset password';
       setErrorMsg(msg);
       toast.error(msg);
     } finally {
@@ -111,7 +92,7 @@ export default function ResetPassword() {
               Create New Password
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm font-medium text-slate-500 max-w-[320px] mx-auto leading-relaxed">
-              Choose a strong, secure password with at least 12 characters.
+              Choose a strong, secure password with at least 8 characters.
             </CardDescription>
           </CardHeader>
 
@@ -136,7 +117,7 @@ export default function ResetPassword() {
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
                     type={showPassword ? "text" : "password"}
-                    placeholder="New password (min 12 chars)"
+                    placeholder="New password (min 8 chars)"
                     value={newPassword}
                     onChange={(e) => {
                       setNewPassword(e.target.value);

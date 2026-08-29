@@ -1,20 +1,17 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { StaffRole, normalizeRole } from '@/lib/rbac';
-import { auth } from '@/lib/firebase';
 
-export interface User {
+interface User {
   id: string;
   email: string;
   name: string;
   username?: string;
-  role: StaffRole | string;
+  role: 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'LEAD_TECHNICIAN' | 'TECHNICIAN' | 'TECHNICAL_ASSISTANT' | 'RECEPTIONIST' | 'INVENTORY_MANAGER' | 'ACCOUNTANT' | 'CUSTOMER' | string;
   branchId?: string;
   profileImage?: string;
   phoneNumber?: string;
   department?: string;
   address?: string;
-  emailVerified?: boolean;
 }
 
 interface AuthState {
@@ -34,28 +31,17 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       refreshToken: null,
-      setAuth: (user, token, refreshToken) => {
-        const normalized = user?.role ? (normalizeRole(user.role) || user.role) : null;
-        const cleanUser = user ? { ...user, role: normalized || user.role } : null;
-        set((state) => ({ 
-          user: cleanUser, 
-          token, 
-          refreshToken: refreshToken !== undefined ? refreshToken : state.refreshToken 
-        }));
-      },
-      updateUser: (partialUser) => set((state) => {
-        if (!state.user) return { user: null };
-        const updatedRole = partialUser.role ? (normalizeRole(partialUser.role) || state.user.role) : state.user.role;
-        return { user: { ...state.user, ...partialUser, role: updatedRole } };
-      }),
+      setAuth: (user, token, refreshToken) => set((state) => ({ 
+        user, 
+        token, 
+        refreshToken: refreshToken !== undefined ? refreshToken : state.refreshToken 
+      })),
+      updateUser: (partialUser) => set((state) => ({ 
+        user: state.user ? { ...state.user, ...partialUser } : null 
+      })),
       setToken: (token) => set({ token }),
       setRefreshToken: (refreshToken) => set({ refreshToken }),
-      logout: () => {
-        try {
-          auth.signOut().catch(() => {});
-        } catch {}
-        set({ user: null, token: null, refreshToken: null });
-      },
+      logout: () => set({ user: null, token: null, refreshToken: null }),
     }),
     {
       name: 'mts-auth-storage',

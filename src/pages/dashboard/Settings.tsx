@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Component, ErrorInfo } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Shield, 
   Lock, 
@@ -25,15 +25,12 @@ import {
   Save,
   Loader2,
   ChevronRight,
-  Trash2,
-  RefreshCw,
-  ShieldCheck
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { validateStrongPassword } from '@/lib/passwordPolicy';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
@@ -42,92 +39,14 @@ import { motion } from 'motion/react';
 import { ImageUpload } from '@/components/ImageUpload';
 import { Label } from '@/components/ui/label';
 import { useRealtimeSync } from '@/services/realtime';
-import { normalizeRole, getRoleDisplayName } from '@/lib/rbac';
-import { format, isValid } from 'date-fns';
 
-function safeFormatDate(dateVal: any, formatStr: string = 'MMM dd, yyyy · hh:mm a'): string {
-  if (!dateVal) return '—';
-  try {
-    const d = new Date(dateVal);
-    if (!isValid(d)) return '—';
-    return format(d, formatStr);
-  } catch {
-    return '—';
-  }
-}
-
-// Error boundary specifically for Settings page
-interface SettingsErrorBoundaryProps {
-  children: React.ReactNode;
-}
-interface SettingsErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
-
-class SettingsErrorBoundary extends Component<SettingsErrorBoundaryProps, SettingsErrorBoundaryState> {
-  constructor(props: SettingsErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: Error): SettingsErrorBoundaryState {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[SETTINGS ERROR BOUNDARY CAUGHT ERROR]', error, errorInfo);
-  }
-
-  handleRetry = () => {
-    this.setState({ hasError: false, error: null });
-  };
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="p-8 max-w-2xl mx-auto text-center space-y-6 animate-in fade-in duration-300">
-          <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto border border-red-100 shadow-sm">
-            <AlertCircle className="w-8 h-8" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Settings Unavailable</h2>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-md mx-auto leading-relaxed">
-              An unexpected error occurred while loading your profile and security credentials.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <Button 
-              onClick={this.handleRetry} 
-              className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs h-10 px-5 gap-2"
-            >
-              <RefreshCw className="w-4 h-4" /> Try Again
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => window.location.href = '/dashboard'} 
-              className="rounded-xl border-slate-200 text-slate-700 font-bold text-xs h-10 px-5"
-            >
-              Back to Dashboard
-            </Button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-function SettingsContent() {
+export default function Settings() {
   const { user, logout, updateUser } = useAuthStore();
   const [activities, setActivities] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  const canonicalRole = normalizeRole(user?.role) || 'RECEPTIONIST';
-  const isSuperAdmin = canonicalRole === 'SUPERADMIN';
 
   // Profile Form
   const [profileForm, setProfileForm] = useState({
@@ -139,21 +58,6 @@ function SettingsContent() {
     address: user?.address || '',
     profileImage: user?.profileImage || ''
   });
-
-  // Sync profile form if user store updates
-  useEffect(() => {
-    if (user) {
-      setProfileForm({
-        name: user.name || '',
-        email: user.email || '',
-        username: user.username || '',
-        phoneNumber: user.phoneNumber || '',
-        department: user.department || '',
-        address: user.address || '',
-        profileImage: user.profileImage || ''
-      });
-    }
-  }, [user]);
 
   // Password change state
   const [passForm, setPassForm] = useState({
@@ -180,15 +84,13 @@ function SettingsContent() {
   const fetchData = async () => {
     try {
       const [actData, sessData] = await Promise.all([
-        api.get('/auth/activity').catch(() => []),
-        api.get('/auth/sessions').catch(() => [])
+        api.get('/auth/activity'),
+        api.get('/auth/sessions')
       ]);
-      setActivities(Array.isArray(actData) ? actData : []);
-      setSessions(Array.isArray(sessData) ? sessData : []);
+      setActivities(actData);
+      setSessions(sessData);
     } catch (err) {
-      console.warn('[SETTINGS LOAD NOTICE]', err);
-      setActivities([]);
-      setSessions([]);
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -198,7 +100,8 @@ function SettingsContent() {
     fetchData();
   }, []);
 
-  useRealtimeSync(['session', 'user', 'sync'], () => {
+  // Multi-device real-time sync for sessions and security activity
+  useRealtimeSync(['session', 'user'], () => {
     fetchData();
   });
 
@@ -206,7 +109,7 @@ function SettingsContent() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const updatedUser = await api.patch('/profile', profileForm);
+      const updatedUser = await api.patch('/api/profile', profileForm);
       updateUser(updatedUser);
       toast.success('Profile updated successfully');
       setIsEditing(false);
@@ -217,26 +120,52 @@ function SettingsContent() {
     }
   };
 
-  const handleDirectPasswordChange = async (e: React.FormEvent) => {
+  // Step 1: Request Password Change OTP
+  const handleRequestPasswordOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passForm.newPassword !== passForm.confirmPassword) {
       return toast.error('New passwords do not match');
     }
-    const val = validateStrongPassword(passForm.newPassword);
-    if (!val.valid) {
-      return toast.error(val.message || 'Password does not meet security requirements.');
+    if (passForm.newPassword.length < 8) {
+      return toast.error('Password must be at least 8 characters long');
     }
 
     setPwdLoading(true);
     try {
-      await api.post('/auth/password-change/request', {
+      const res: any = await api.post('/auth/password-change/request', {
         currentPassword: passForm.currentPassword,
         newPassword: passForm.newPassword
       });
-      toast.success('Password updated successfully!');
-      setPassForm({ currentPassword: '', newPassword: '', confirmPassword: '', code: '' });
+      setPwdTicket(res.pwdTicket);
+      setPwdEmailMasked(res.emailMasked || user?.email || '');
+      setPwdStep('OTP');
+      toast.success('Verification code dispatched to your registered email.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to update password');
+      toast.error(err.message || 'Failed to initiate password change');
+    } finally {
+      setPwdLoading(false);
+    }
+  };
+
+  // Step 2: Confirm Password Change OTP
+  const handleConfirmPasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passForm.code || passForm.code.trim().length !== 6) {
+      return toast.error('Please enter the 6-digit verification code');
+    }
+
+    setPwdLoading(true);
+    try {
+      await api.post('/auth/password-change/confirm', {
+        pwdTicket,
+        code: passForm.code.trim()
+      });
+      toast.success('Password updated successfully! Logging out for security...');
+      setTimeout(() => {
+        logout();
+      }, 1500);
+    } catch (err: any) {
+      toast.error(err.message || 'Invalid or expired verification code');
     } finally {
       setPwdLoading(false);
     }
@@ -254,7 +183,7 @@ function SettingsContent() {
       const res: any = await api.post('/admin/change-email/request', {
         currentPassword: emailChangeCurrentPass
       });
-      setEmailChangeCurrentTicket(res.currentTicket || 'em_ticket');
+      setEmailChangeCurrentTicket(res.currentTicket);
       setEmailChangeStep('STEP1_OTP');
       toast.success(`Step 1: Verification code sent to ${res.emailMasked || user?.email}`);
     } catch (err: any) {
@@ -281,9 +210,9 @@ function SettingsContent() {
         code: emailChangeCurrentOtp.trim(),
         newEmail: emailChangeNewEmail.trim()
       });
-      setEmailChangeNewTicket(res.newEmailTicket || 'emnew_ticket');
+      setEmailChangeNewTicket(res.newEmailTicket);
       setEmailChangeStep('STEP3_CONFIRM_OTP');
-      toast.success(`Step 2: Verification code sent to ${res.newEmail || emailChangeNewEmail}`);
+      toast.success(`Step 2: Verification code sent to ${res.newEmail}`);
     } catch (err: any) {
       toast.error(err.message || 'Failed to verify current email code');
     } finally {
@@ -319,7 +248,7 @@ function SettingsContent() {
     try {
       await api.delete(`/auth/sessions/${sessionId}`);
       toast.success('Session terminated successfully');
-      setSessions(prev => (Array.isArray(prev) ? prev.filter(s => s.id !== sessionId) : []));
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
     } catch (err: any) {
       toast.error(err.message || 'Failed to terminate session');
     }
@@ -346,320 +275,356 @@ function SettingsContent() {
   };
 
   if (loading) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center p-20 space-y-3">
-        <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
-        <p className="text-xs font-bold text-slate-400">Loading personal vault & security...</p>
-      </div>
-    );
+     return (
+       <div className="h-full flex items-center justify-center p-20">
+         <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
+       </div>
+     );
   }
 
-  const roleTitle = getRoleDisplayName(canonicalRole);
-  const handleName = user?.username || (user?.name ? user.name.toLowerCase().replace(/\s+/g, '') : 'staff');
-
   return (
-    <div className="space-y-8 pb-20 max-w-7xl mx-auto px-2 sm:px-4">
+    <div className="space-y-8 pb-20">
       <div className="flex flex-col gap-1">
-        <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">Personal Vault & Security</h2>
+        <h2 className="text-4xl font-black tracking-tight text-slate-900">Personal Vault</h2>
         <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Manage your profile and security credentials</p>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="bg-slate-100/70 p-1.5 rounded-2xl h-auto flex flex-wrap sm:inline-flex border border-slate-200/60">
-          <TabsTrigger value="profile" className="rounded-xl py-2.5 px-5 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm">
+        <TabsList className="bg-slate-100/50 p-1.5 rounded-2xl h-auto flex flex-wrap sm:inline-flex border border-slate-100">
+          <TabsTrigger value="profile" className="rounded-xl py-3 px-6 font-bold data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50">
             <UserIcon className="h-4 w-4 mr-2" /> Identity
           </TabsTrigger>
-          <TabsTrigger value="security" className="rounded-xl py-2.5 px-5 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm">
+          <TabsTrigger value="security" className="rounded-xl py-3 px-6 font-bold data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50">
             <Lock className="h-4 w-4 mr-2" /> Security
           </TabsTrigger>
-          <TabsTrigger value="sessions" className="rounded-xl py-2.5 px-5 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm">
+          <TabsTrigger value="sessions" className="rounded-xl py-3 px-6 font-bold data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50">
             <Monitor className="h-4 w-4 mr-2" /> Sessions
           </TabsTrigger>
-          <TabsTrigger value="activity" className="rounded-xl py-2.5 px-5 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm">
+          <TabsTrigger value="activity" className="rounded-xl py-3 px-6 font-bold data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50">
             <History className="h-4 w-4 mr-2" /> Logs
           </TabsTrigger>
         </TabsList>
 
-        {/* 1. IDENTITY TAB */}
         <TabsContent value="profile" className="space-y-6">
-          <Card className="rounded-[32px] sm:rounded-[40px] border border-slate-200/80 shadow-sm overflow-hidden bg-white">
-            {/* Profile Banner */}
-            <div className="h-36 sm:h-48 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 relative">
-              <div className="absolute -bottom-10 sm:-bottom-12 left-6 sm:left-10">
-                <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-[28px] sm:rounded-[32px] bg-white p-1.5 shadow-xl">
-                  <div className="w-full h-full rounded-[22px] sm:rounded-[26px] bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden font-black text-3xl">
-                    {user?.profileImage ? (
-                      <img src={user.profileImage} className="w-full h-full object-cover" alt={user?.name || 'Staff'} />
-                    ) : (
-                      user?.name?.charAt(0)?.toUpperCase() || <UserIcon className="h-10 w-10 sm:h-12 sm:w-12" />
-                    )}
-                  </div>
+          <Card className="rounded-[40px] border-none shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+             {/* Profile Header */}
+             <div className="h-48 bg-slate-100 relative group">
+                {user?.profileImage && (
+                  <img src={user.profileImage} className="w-full h-full object-cover blur-sm opacity-20" alt="" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent" />
+                <div className="absolute -bottom-12 left-10">
+                   <div className="w-32 h-32 rounded-[32px] bg-white p-1.5 shadow-2xl shadow-slate-300">
+                      <div className="w-full h-full rounded-[26px] bg-slate-50 flex items-center justify-center text-slate-300 overflow-hidden">
+                         {user?.profileImage ? (
+                           <img src={user.profileImage} className="w-full h-full object-cover" alt={user.name} />
+                         ) : (
+                           <UserIcon className="h-12 w-12" />
+                         )}
+                      </div>
+                   </div>
                 </div>
-              </div>
-            </div>
+             </div>
 
-            <div className="pt-16 sm:pt-20 pb-8 px-6 sm:px-10">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{user?.name || 'Staff Member'}</h3>
-                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                    <Badge className="bg-indigo-600 text-white font-bold px-3 py-0.5 rounded-full text-[10px] tracking-wider">
-                      {roleTitle}
-                    </Badge>
-                    <span className="text-slate-400 font-medium flex items-center gap-1 text-xs">
-                      <MapPin className="h-3 w-3" /> {user?.address || 'Location Not Set'}
-                    </span>
-                  </div>
+             <div className="pt-20 pb-10 px-10">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+                   <div>
+                      <h3 className="text-4xl font-black text-slate-900 tracking-tight">{user?.name}</h3>
+                      <div className="flex items-center gap-2 mt-2">
+                         <Badge className="bg-indigo-600 text-white font-black px-4 py-1 rounded-full text-[10px] tracking-widest shadow-lg shadow-indigo-100">
+                            {user?.role.replace('_', ' ')}
+                         </Badge>
+                         <span className="text-slate-400 font-bold flex items-center gap-1.5 text-xs">
+                           <MapPin className="h-3 w-3" /> {user?.address || 'Location Not Set'}
+                         </span>
+                      </div>
+                   </div>
+                   {!isEditing ? (
+                     <Button 
+                       onClick={() => setIsEditing(true)}
+                       className="rounded-[20px] h-14 px-8 font-black bg-black hover:bg-slate-800 shadow-xl shadow-slate-200"
+                     >
+                        <Edit2 className="h-5 w-5 mr-3" /> Update Profile
+                     </Button>
+                   ) : (
+                     <div className="flex gap-3">
+                       <Button 
+                         variant="outline" 
+                         onClick={() => setIsEditing(false)}
+                         className="rounded-[20px] h-14 px-8 font-bold border-slate-200"
+                       >
+                          Cancel
+                       </Button>
+                       <Button 
+                         onClick={handleProfileUpdate}
+                         className="rounded-[20px] h-14 px-8 font-black bg-black shadow-xl shadow-slate-200"
+                         disabled={submitting}
+                       >
+                          {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Save className="h-5 w-5 mr-3" /> Save Changes</>}
+                       </Button>
+                     </div>
+                   )}
                 </div>
+             </div>
 
-                {!isEditing ? (
-                  <Button 
-                    onClick={() => setIsEditing(true)}
-                    className="rounded-2xl h-11 sm:h-12 px-6 font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-sm text-xs sm:text-sm"
-                  >
-                    <Edit2 className="h-4 w-4 mr-2" /> Update Profile
-                  </Button>
+             <CardContent className="px-10 pb-12 pt-4">
+                {isEditing ? (
+                  <form onSubmit={handleProfileUpdate} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="grid md:grid-cols-2 gap-8">
+                       <div className="space-y-6">
+                          <div className="space-y-2">
+                             <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">Full Identity</Label>
+                             <Input 
+                               className="h-14 rounded-2xl bg-slate-50 border-none font-bold placeholder:text-slate-300"
+                               value={profileForm.name}
+                               onChange={e => setProfileForm({...profileForm, name: e.target.value})}
+                             />
+                          </div>
+                          <div className="space-y-2">
+                             <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">System Username</Label>
+                             <Input 
+                               className="h-14 rounded-2xl bg-slate-50 border-none font-bold placeholder:text-slate-300"
+                               value={profileForm.username}
+                               onChange={e => setProfileForm({...profileForm, username: e.target.value})}
+                             />
+                          </div>
+                          <div className="space-y-2">
+                             <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">Electronic Mail</Label>
+                             <Input 
+                               type="email"
+                               className="h-14 rounded-2xl bg-slate-50 border-none font-bold placeholder:text-slate-300"
+                               value={profileForm.email}
+                               onChange={e => setProfileForm({...profileForm, email: e.target.value})}
+                             />
+                          </div>
+                       </div>
+                       <div className="space-y-6">
+                          <div className="space-y-2">
+                             <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">Communication Line</Label>
+                             <Input 
+                               className="h-14 rounded-2xl bg-slate-50 border-none font-bold placeholder:text-slate-300"
+                               placeholder="e.g. 98XXXXXXXX"
+                               value={profileForm.phoneNumber}
+                               onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})}
+                             />
+                          </div>
+                          <div className="space-y-2">
+                             <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">Department</Label>
+                             <Input 
+                               className="h-14 rounded-2xl bg-slate-50 border-none font-bold placeholder:text-slate-300"
+                               value={profileForm.department}
+                               onChange={e => setProfileForm({...profileForm, department: e.target.value})}
+                             />
+                          </div>
+                          <div className="space-y-2">
+                             <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">Coordinates (Address)</Label>
+                             <Input 
+                               className="h-14 rounded-2xl bg-slate-50 border-none font-bold placeholder:text-slate-300"
+                               value={profileForm.address}
+                               onChange={e => setProfileForm({...profileForm, address: e.target.value})}
+                             />
+                          </div>
+                       </div>
+                    </div>
+                    <div className="space-y-4">
+                      <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">Appearance Profile</Label>
+                      <ImageUpload 
+                        value={profileForm.profileImage}
+                        onChange={(url) => setProfileForm({...profileForm, profileImage: url})}
+                        onRemove={() => setProfileForm({...profileForm, profileImage: ''})}
+                      />
+                    </div>
+                  </form>
                 ) : (
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setIsEditing(false)}
-                      className="rounded-2xl h-11 sm:h-12 px-5 font-bold border-slate-200 text-xs sm:text-sm"
-                    >
-                      Cancel
-                    </Button>
-                    <Button 
-                      onClick={handleProfileUpdate}
-                      className="rounded-2xl h-11 sm:h-12 px-6 font-bold bg-slate-900 text-white text-xs sm:text-sm"
-                      disabled={submitting}
-                    >
-                      {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 mr-2" /> Save</>}
-                    </Button>
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 flex items-start gap-4">
+                       <div className="h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-indigo-500">
+                          <Mail className="h-6 w-6" />
+                       </div>
+                       <div>
+                          <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest mb-1">Electronic Mail</p>
+                          <p className="font-black text-slate-900">{user?.email}</p>
+                       </div>
+                    </div>
+                    <div className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 flex items-start gap-4">
+                       <div className="h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-emerald-500">
+                          <Phone className="h-6 w-6" />
+                       </div>
+                       <div>
+                          <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest mb-1">Communication Line</p>
+                          <p className="font-black text-slate-900">{user?.phoneNumber || 'Unlinked'}</p>
+                       </div>
+                    </div>
+                    <div className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 flex items-start gap-4">
+                       <div className="h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-amber-500">
+                          <AtSign className="h-6 w-6" />
+                       </div>
+                       <div>
+                          <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest mb-1">System Handle</p>
+                          <p className="font-black text-slate-900">@{user?.username || user?.name.toLowerCase().replace(' ', '')}</p>
+                       </div>
+                    </div>
+                    <div className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 flex items-start gap-4">
+                       <div className="h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-rose-500">
+                          <Building2 className="h-6 w-6" />
+                       </div>
+                       <div>
+                          <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest mb-1">Assignment Unit</p>
+                          <p className="font-black text-slate-900">{user?.department || 'Operations'}</p>
+                       </div>
+                    </div>
+                    <div className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 flex items-start gap-4">
+                       <div className="h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-slate-600">
+                          <BadgeCheck className="h-6 w-6" />
+                       </div>
+                       <div>
+                          <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest mb-1">Personnel ID</p>
+                          <p className="font-mono text-xs font-black text-slate-900 truncate max-w-[120px]">{user?.id}</p>
+                       </div>
+                    </div>
+                    <div className="bg-indigo-600 p-8 rounded-[40px] text-white flex flex-col justify-between shadow-2xl shadow-indigo-200">
+                       <Shield className="h-10 w-10 opacity-70" />
+                       <div>
+                         <h4 className="text-xl font-black mb-2 tracking-tight">Access Clearance</h4>
+                         <p className="text-indigo-100/70 text-[10px] font-bold uppercase tracking-widest">Authorized for {user?.role.replace('_', ' ')} operations</p>
+                       </div>
+                    </div>
                   </div>
                 )}
-              </div>
-            </div>
-
-            <CardContent className="px-6 sm:px-10 pb-10 pt-2">
-              {isEditing ? (
-                <form onSubmit={handleProfileUpdate} className="space-y-6 animate-in fade-in duration-300">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div className="space-y-1.5">
-                        <Label className="font-bold text-xs text-slate-700">Full Name</Label>
-                        <Input 
-                          className="h-12 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                          value={profileForm.name}
-                          onChange={e => setProfileForm({...profileForm, name: e.target.value})}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="font-bold text-xs text-slate-700">System Username</Label>
-                        <Input 
-                          className="h-12 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                          value={profileForm.username}
-                          onChange={e => setProfileForm({...profileForm, username: e.target.value})}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="font-bold text-xs text-slate-700">Email Address</Label>
-                        <Input 
-                          type="email"
-                          className="h-12 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                          value={profileForm.email}
-                          onChange={e => setProfileForm({...profileForm, email: e.target.value})}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <div className="space-y-1.5">
-                        <Label className="font-bold text-xs text-slate-700">Phone Number</Label>
-                        <Input 
-                          className="h-12 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                          placeholder="e.g. 98XXXXXXXX"
-                          value={profileForm.phoneNumber}
-                          onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="font-bold text-xs text-slate-700">Department / Unit</Label>
-                        <Input 
-                          className="h-12 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                          value={profileForm.department}
-                          onChange={e => setProfileForm({...profileForm, department: e.target.value})}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="font-bold text-xs text-slate-700">Location / Address</Label>
-                        <Input 
-                          className="h-12 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                          value={profileForm.address}
-                          onChange={e => setProfileForm({...profileForm, address: e.target.value})}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-bold text-xs text-slate-700">Profile Picture</Label>
-                    <ImageUpload 
-                      value={profileForm.profileImage}
-                      onChange={(url) => setProfileForm({...profileForm, profileImage: url})}
-                      onRemove={() => setProfileForm({...profileForm, profileImage: ''})}
-                    />
-                  </div>
-                </form>
-              ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-3.5">
-                    <div className="h-10 w-10 rounded-xl bg-white shadow-xs flex items-center justify-center text-indigo-600 shrink-0">
-                      <Mail className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Email Address</p>
-                      <p className="font-bold text-slate-900 text-xs sm:text-sm truncate">{user?.email || '—'}</p>
-                    </div>
-                  </div>
-
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-3.5">
-                    <div className="h-10 w-10 rounded-xl bg-white shadow-xs flex items-center justify-center text-emerald-600 shrink-0">
-                      <Phone className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Phone Number</p>
-                      <p className="font-bold text-slate-900 text-xs sm:text-sm">{user?.phoneNumber || 'Unlinked'}</p>
-                    </div>
-                  </div>
-
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-3.5">
-                    <div className="h-10 w-10 rounded-xl bg-white shadow-xs flex items-center justify-center text-amber-600 shrink-0">
-                      <AtSign className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">System Handle</p>
-                      <p className="font-bold text-slate-900 text-xs sm:text-sm">@{handleName}</p>
-                    </div>
-                  </div>
-
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-3.5">
-                    <div className="h-10 w-10 rounded-xl bg-white shadow-xs flex items-center justify-center text-rose-600 shrink-0">
-                      <Building2 className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Unit / Department</p>
-                      <p className="font-bold text-slate-900 text-xs sm:text-sm">{user?.department || 'Operations'}</p>
-                    </div>
-                  </div>
-
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-3.5">
-                    <div className="h-10 w-10 rounded-xl bg-white shadow-xs flex items-center justify-center text-slate-700 shrink-0">
-                      <BadgeCheck className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Staff ID</p>
-                      <p className="font-mono text-xs font-bold text-slate-900 truncate">{user?.id || '—'}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-indigo-600 p-6 rounded-2xl text-white flex flex-col justify-between shadow-sm">
-                    <Shield className="h-7 w-7 text-indigo-200" />
-                    <div>
-                      <h4 className="text-base font-bold mb-0.5">Access Clearance</h4>
-                      <p className="text-indigo-200 text-[10px] font-bold uppercase tracking-wider">Authorized for {roleTitle}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
+             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* 2. SECURITY TAB */}
         <TabsContent value="security" className="space-y-6">
-          <Card className="rounded-[32px] sm:rounded-[40px] border border-slate-200/80 shadow-sm overflow-hidden bg-white">
-            <CardHeader className="p-6 sm:p-10 pb-4">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-xs">
-                  <Key className="h-6 w-6 text-indigo-400" />
+          {/* Password Change Card with Mandatory Email OTP */}
+          <Card className="rounded-[40px] border-none shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+            <CardHeader className="p-10 pb-4">
+              <div className="flex items-center gap-5">
+                <div className="h-16 w-16 bg-black rounded-[24px] flex items-center justify-center text-white shadow-2xl shadow-black/20">
+                  <Key className="h-8 w-8 text-indigo-400" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl sm:text-2xl font-bold">Password Management</CardTitle>
-                  <CardDescription className="text-xs text-slate-500 font-medium">Update your account password securely using Firebase Authentication.</CardDescription>
+                  <CardTitle className="text-2xl font-black">Re-Encrypt Credentials (2FA)</CardTitle>
+                  <CardDescription className="font-bold text-slate-400">Password changes require current password and email OTP confirmation.</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-6 sm:p-10 pt-2">
-              <form onSubmit={handleDirectPasswordChange} className="max-w-md space-y-4">
-                <div className="space-y-1.5">
-                  <Label className="font-bold text-xs text-slate-700">Current Password</Label>
-                  <Input 
-                    type="password" 
-                    placeholder="Existing password"
-                    className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                    value={passForm.currentPassword}
-                    onChange={e => setPassForm({...passForm, currentPassword: e.target.value})}
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="font-bold text-xs text-slate-700">New Password</Label>
-                  <Input 
-                    type="password" 
-                    placeholder="Minimum 8 characters"
-                    className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                    value={passForm.newPassword}
-                    onChange={e => setPassForm({...passForm, newPassword: e.target.value})}
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="font-bold text-xs text-slate-700">Confirm New Password</Label>
-                  <Input 
-                    type="password" 
-                    placeholder="Re-enter new password"
-                    className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
-                    value={passForm.confirmPassword}
-                    onChange={e => setPassForm({...passForm, confirmPassword: e.target.value})}
-                    required
-                  />
-                </div>
-                <Button 
-                  type="submit" 
-                  disabled={pwdLoading}
-                  className="h-11 w-full sm:w-auto px-6 rounded-xl bg-slate-900 text-white font-bold text-xs shadow-sm gap-2 cursor-pointer"
-                >
-                  {pwdLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
-                  Update Password
-                </Button>
-              </form>
+            <CardContent className="p-10">
+              {pwdStep === 'INPUT' ? (
+                <form onSubmit={handleRequestPasswordOtp} className="max-w-md space-y-6">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">Current Password</Label>
+                      <Input 
+                        type="password" 
+                        placeholder="Existing password"
+                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold"
+                        value={passForm.currentPassword}
+                        onChange={e => setPassForm({...passForm, currentPassword: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">New Password</Label>
+                      <Input 
+                        type="password" 
+                        placeholder="Min 8 chars, uppercase, lowercase, numbers"
+                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold"
+                        value={passForm.newPassword}
+                        onChange={e => setPassForm({...passForm, newPassword: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">Confirm New Password</Label>
+                      <Input 
+                        type="password" 
+                        placeholder="Re-enter new password"
+                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold"
+                        value={passForm.confirmPassword}
+                        onChange={e => setPassForm({...passForm, confirmPassword: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={pwdLoading}
+                    className="h-14 w-full sm:w-auto px-10 rounded-2xl bg-black font-black text-sm transition-all active:scale-95 shadow-xl shadow-slate-200"
+                  >
+                    {pwdLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
+                    Send Verification Code
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleConfirmPasswordChange} className="max-w-md space-y-6">
+                  <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs font-semibold">
+                    A 6-digit verification code was dispatched to: <b>{pwdEmailMasked}</b>. Enter it below to authorize this password change.
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">6-Digit Email Code</Label>
+                    <Input 
+                      type="text" 
+                      maxLength={6}
+                      placeholder="000000"
+                      className="h-14 rounded-2xl bg-slate-50 border-none font-bold text-center text-xl tracking-widest"
+                      value={passForm.code}
+                      onChange={e => setPassForm({...passForm, code: e.target.value.replace(/\D/g, '')})}
+                      required
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button 
+                      type="submit" 
+                      disabled={pwdLoading || passForm.code.length !== 6}
+                      className="h-14 flex-1 rounded-2xl bg-emerald-600 hover:bg-emerald-700 font-black text-sm transition-all shadow-xl shadow-emerald-200 text-white"
+                    >
+                      {pwdLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                      Confirm Password Change
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      onClick={() => setPwdStep('INPUT')}
+                      className="h-14 rounded-2xl font-bold px-5"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              )}
             </CardContent>
           </Card>
 
-          {/* Super Admin Email Change Section (Exclusive to SUPERADMIN) */}
-          {isSuperAdmin && (
-            <Card className="rounded-[32px] sm:rounded-[40px] border border-slate-200/80 shadow-sm overflow-hidden bg-white">
-              <CardHeader className="p-6 sm:p-10 pb-4">
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 bg-amber-500 rounded-2xl flex items-center justify-center text-white shadow-xs">
-                    <Mail className="h-6 w-6" />
+          {/* Super Admin Email Change Section (Exclusive to SUPER_ADMIN) */}
+          {user?.role === 'SUPER_ADMIN' && (
+            <Card className="rounded-[40px] border-none shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+              <CardHeader className="p-10 pb-4">
+                <div className="flex items-center gap-5">
+                  <div className="h-16 w-16 bg-slate-900 rounded-[24px] flex items-center justify-center text-amber-400 shadow-2xl shadow-slate-900/20">
+                    <Mail className="h-8 w-8" />
                   </div>
                   <div>
-                    <CardTitle className="text-xl sm:text-2xl font-bold">Primary Super Admin Email</CardTitle>
-                    <CardDescription className="text-xs text-slate-500 font-medium">Current Primary: <span className="font-bold text-slate-800">{user?.email}</span></CardDescription>
+                    <CardTitle className="text-2xl font-black">Primary Super Admin Email</CardTitle>
+                    <CardDescription className="font-bold text-slate-400">Current Primary: <span className="font-bold text-slate-800">{user.email}</span></CardDescription>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="p-6 sm:p-10 pt-2">
+              <CardContent className="p-10">
                 {emailChangeStep === 'IDLE' && (
                   <form onSubmit={handleEmailChangeRequest} className="max-w-md space-y-4">
                     <p className="text-xs text-slate-500 font-medium">
-                      Changing the primary Super Admin email requires two-step verification on both your current and new email addresses.
+                      Changing the primary Super Admin email requires two-step cryptographic verification on both your current and new email addresses.
                     </p>
-                    <div className="space-y-1.5">
-                      <Label className="font-bold text-xs text-slate-700">Verify Super Admin Password</Label>
+                    <div className="space-y-2">
+                      <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">Verify Super Admin Password</Label>
                       <Input 
                         type="password" 
                         placeholder="Current password"
-                        className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
+                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold"
                         value={emailChangeCurrentPass}
                         onChange={e => setEmailChangeCurrentPass(e.target.value)}
                         required
@@ -668,9 +633,9 @@ function SettingsContent() {
                     <Button 
                       type="submit" 
                       disabled={emailChangeLoading || !emailChangeCurrentPass}
-                      className="h-11 w-full sm:w-auto px-6 rounded-xl bg-slate-900 text-white font-bold text-xs shadow-sm gap-2"
+                      className="h-14 w-full sm:w-auto px-8 rounded-2xl bg-slate-900 text-white font-black text-sm"
                     >
-                      {emailChangeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+                      {emailChangeLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
                       Begin Step 1 (Verify Current Email)
                     </Button>
                   </form>
@@ -678,17 +643,17 @@ function SettingsContent() {
 
                 {emailChangeStep === 'STEP1_OTP' && (
                   <form onSubmit={handleEmailChangeVerifyCurrent} className="max-w-md space-y-4">
-                    <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium">
-                      Step 1 of 2: Enter the 6-digit code sent to <b>{user?.email}</b> and enter your new email address.
+                    <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
+                      Step 1 of 2: Enter the 6-digit verification code dispatched to <b>{user.email}</b> and provide your new email address.
                     </div>
 
-                    <div className="space-y-1.5">
-                      <Label className="font-bold text-xs text-slate-700">Current Email Code</Label>
+                    <div className="space-y-2">
+                      <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">Current Email Code</Label>
                       <Input 
                         type="text" 
                         maxLength={6}
                         placeholder="000000"
-                        className="h-12 rounded-xl bg-slate-50 border-slate-200 font-bold text-center text-lg tracking-widest"
+                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold text-center text-xl tracking-widest"
                         value={emailChangeCurrentOtp}
                         onChange={e => setEmailChangeCurrentOtp(e.target.value.replace(/\D/g, ''))}
                         required
@@ -696,32 +661,32 @@ function SettingsContent() {
                       />
                     </div>
 
-                    <div className="space-y-1.5">
-                      <Label className="font-bold text-xs text-slate-700">New Super Admin Email Address</Label>
+                    <div className="space-y-2">
+                      <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">New Super Admin Email Address</Label>
                       <Input 
                         type="email" 
-                        placeholder="e.g. admin@mtslab.com"
-                        className="h-11 rounded-xl bg-slate-50 border-slate-200 font-bold text-xs"
+                        placeholder="e.g. newadmin@mtslab.com"
+                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold text-sm"
                         value={emailChangeNewEmail}
                         onChange={e => setEmailChangeNewEmail(e.target.value)}
                         required
                       />
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
                       <Button 
                         type="submit" 
                         disabled={emailChangeLoading || emailChangeCurrentOtp.length !== 6 || !emailChangeNewEmail}
-                        className="h-11 flex-1 rounded-xl bg-slate-900 text-white font-bold text-xs"
+                        className="h-14 flex-1 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm"
                       >
-                        {emailChangeLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ChevronRight className="h-4 w-4 mr-2" />}
+                        {emailChangeLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <ChevronRight className="h-4 w-4 mr-2" />}
                         Continue to Step 2
                       </Button>
                       <Button 
                         type="button" 
                         variant="outline"
                         onClick={() => setEmailChangeStep('IDLE')}
-                        className="h-11 rounded-xl font-bold px-4 text-xs"
+                        className="h-14 rounded-2xl font-bold px-5"
                       >
                         Cancel
                       </Button>
@@ -731,17 +696,17 @@ function SettingsContent() {
 
                 {emailChangeStep === 'STEP3_CONFIRM_OTP' && (
                   <form onSubmit={handleEmailChangeConfirm} className="max-w-md space-y-4">
-                    <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium">
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold">
                       Step 2 of 2: Enter the 6-digit confirmation code dispatched to <b>{emailChangeNewEmail}</b>.
                     </div>
 
-                    <div className="space-y-1.5">
-                      <Label className="font-bold text-xs text-slate-700">New Email Confirmation Code</Label>
+                    <div className="space-y-2">
+                      <Label className="font-black text-[10px] uppercase tracking-widest text-slate-400 pl-1">New Email Confirmation Code</Label>
                       <Input 
                         type="text" 
                         maxLength={6}
                         placeholder="000000"
-                        className="h-12 rounded-xl bg-slate-50 border-slate-200 font-bold text-center text-lg tracking-widest"
+                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold text-center text-xl tracking-widest"
                         value={emailChangeNewOtp}
                         onChange={e => setEmailChangeNewOtp(e.target.value.replace(/\D/g, ''))}
                         required
@@ -749,20 +714,20 @@ function SettingsContent() {
                       />
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
                       <Button 
                         type="submit" 
                         disabled={emailChangeLoading || emailChangeNewOtp.length !== 6}
-                        className="h-11 flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                        className="h-14 flex-1 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-xl shadow-emerald-200"
                       >
-                        {emailChangeLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                        Finalize Email Change
+                        {emailChangeLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                        Finalize Super Admin Email Change
                       </Button>
                       <Button 
                         type="button" 
                         variant="outline"
                         onClick={() => setEmailChangeStep('IDLE')}
-                        className="h-11 rounded-xl font-bold px-4 text-xs"
+                        className="h-14 rounded-2xl font-bold px-5"
                       >
                         Cancel
                       </Button>
@@ -773,179 +738,167 @@ function SettingsContent() {
             </Card>
           )}
 
-          {/* Session Termination Card */}
-          <Card className="rounded-[32px] sm:rounded-[40px] border border-rose-200 bg-rose-50/20 p-6 sm:p-10 shadow-xs">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div className="space-y-2 max-w-xl">
-                <div className="p-2.5 bg-rose-600 rounded-xl text-white w-fit shadow-xs">
-                  <ShieldAlert className="h-5 w-5" />
+          <Card className="rounded-[40px] border-none bg-rose-50/10 shadow-2xl shadow-rose-100/50 p-10">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+              <div className="space-y-4 max-w-xl">
+                <div className="p-3 bg-rose-600 rounded-2xl text-white w-fit shadow-xl shadow-rose-200">
+                  <ShieldAlert className="h-6 w-6" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-900">Total System Isolation</h3>
-                <p className="text-slate-500 font-medium text-xs leading-relaxed">
-                  Terminate all active sessions and terminals across all devices linked to this staff account.
-                </p>
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900">Total System Isolation</h3>
+                  <CardDescription className="mt-2 text-slate-500 font-bold leading-relaxed">
+                    Detected unauthorized pattern? This will instantly terminate all active sessions across all devices linked to this personnel ID.
+                  </CardDescription>
+                </div>
               </div>
               <Button 
                 variant="destructive" 
-                className="rounded-2xl font-bold h-11 px-6 text-xs uppercase tracking-wider shrink-0"
+                className="rounded-3xl font-black h-20 px-10 text-lg shadow-2xl shadow-rose-200 uppercase tracking-widest"
                 onClick={handleLogoutAll}
               >
-                Terminate All Sessions
+                Terminate Cross-Hub Access
               </Button>
             </div>
           </Card>
         </TabsContent>
 
-        {/* 3. SESSIONS TAB */}
         <TabsContent value="sessions" className="space-y-6">
-          <Card className="rounded-[32px] sm:rounded-[40px] border border-slate-200/80 shadow-sm overflow-hidden bg-white">
-            <CardHeader className="p-6 sm:p-10 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <Card className="rounded-[40px] border-none shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+            <CardHeader className="p-10 pb-6 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-xl sm:text-2xl font-bold">Active Access Hubs</CardTitle>
-                <CardDescription className="text-xs text-slate-500 font-medium">Authorized terminals and devices currently interfacing with your credentials.</CardDescription>
+                <CardTitle className="text-2xl font-black">Active Access Hubs</CardTitle>
+                <CardDescription className="font-bold">Terminals currently interfacing with your staff credentials.</CardDescription>
               </div>
               {sessions.length > 1 && (
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={handleRevokeOtherSessions}
-                  className="rounded-xl font-bold border-rose-200 text-rose-700 hover:bg-rose-50 text-xs h-9"
+                  className="rounded-xl font-bold border-rose-200 text-rose-700 hover:bg-rose-50"
                 >
                   Revoke Other Devices
                 </Button>
               )}
             </CardHeader>
-            <CardContent className="p-6 sm:p-10 pt-2 space-y-3">
-              {sessions.length === 0 ? (
-                <div className="p-10 text-center space-y-2">
-                  <Monitor className="w-10 h-10 text-slate-300 mx-auto" />
-                  <p className="text-sm font-bold text-slate-700">No active session records found</p>
-                  <p className="text-xs text-slate-400 font-medium">Your current session is active and secure.</p>
-                </div>
-              ) : (
-                sessions.map((sess) => (
-                  <div key={sess.id || Math.random()} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-sm transition-all gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-xs text-indigo-600 shrink-0">
-                        {sess.deviceType === 'SMARTPHONE' || sess.userAgent?.includes('Mobile') ? (
-                          <Smartphone className="h-5 w-5" />
-                        ) : sess.deviceType === 'TABLET' ? (
-                          <Tablet className="h-5 w-5" />
-                        ) : sess.deviceType === 'LAPTOP' ? (
-                          <Laptop className="h-5 w-5" />
-                        ) : (
-                          <Monitor className="h-5 w-5" />
+            <CardContent className="px-10 pb-10 space-y-4">
+              {sessions.map((sess) => (
+                <div key={sess.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 rounded-[28px] bg-slate-50 border border-slate-100 group hover:bg-white hover:shadow-xl hover:shadow-slate-100 transition-all gap-4">
+                  <div className="flex items-center gap-5">
+                    <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform shrink-0">
+                      {sess.deviceType === 'SMARTPHONE' || sess.userAgent?.includes('Mobile') ? (
+                        <Smartphone className="h-6 w-6 text-indigo-500" />
+                      ) : sess.deviceType === 'TABLET' ? (
+                        <Tablet className="h-6 w-6 text-indigo-500" />
+                      ) : sess.deviceType === 'LAPTOP' ? (
+                        <Laptop className="h-6 w-6 text-indigo-500" />
+                      ) : (
+                        <Monitor className="h-6 w-6 text-slate-400" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <p className="font-black text-slate-900 text-lg">
+                          {sess.deviceName || (sess.browser ? `${sess.browser} on ${sess.os}` : 'Work Terminal')}
+                        </p>
+                        {sess.isCurrent && (
+                          <Badge className="bg-emerald-500 text-white border-none font-black text-[10px] px-3 py-0.5 rounded-full shadow-lg shadow-emerald-100 tracking-wider">
+                            THIS DEVICE
+                          </Badge>
                         )}
                       </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-bold text-slate-900 text-sm">
-                            {sess.deviceName || (sess.browser ? `${sess.browser} on ${sess.os}` : 'Work Terminal')}
-                          </p>
-                          {sess.isCurrent && (
-                            <Badge className="bg-emerald-500 text-white border-none font-bold text-[9px] px-2 py-0.5 rounded-full">
-                              THIS DEVICE
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-slate-400 font-medium">
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" /> {sess.ipAddress || 'Internal Network'}
+                      <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                        {sess.deviceType && (
+                          <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                            {sess.deviceType}
                           </span>
-                          <span>•</span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> {safeFormatDate(sess.lastActiveAt || sess.createdAt)}
-                          </span>
-                        </div>
+                        )}
+                        <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
+                          <MapPin className="h-3 w-3 text-slate-400" /> {sess.ipAddress || 'Internal Network'}
+                        </span>
+                        <span className="text-slate-200">•</span>
+                        <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
+                          <Clock className="h-3 w-3 text-slate-400" /> {new Date(sess.lastActiveAt || sess.createdAt).toLocaleString()}
+                        </span>
                       </div>
                     </div>
-
-                    {!sess.isCurrent && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleRevokeSession(sess.id)}
-                        className="rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 self-end sm:self-center font-bold text-xs h-8"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" /> End Session
-                      </Button>
-                    )}
                   </div>
-                ))
-              )}
+
+                  {!sess.isCurrent && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleRevokeSession(sess.id)}
+                      className="rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 self-end sm:self-center font-bold text-xs"
+                    >
+                      <Trash2 className="h-4 w-4 mr-1.5" /> End Session
+                    </Button>
+                  )}
+                </div>
+              ))}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* 4. ACTIVITY LOGS TAB */}
         <TabsContent value="activity">
-          <Card className="rounded-[32px] sm:rounded-[40px] border border-slate-200/80 shadow-sm overflow-hidden bg-white">
-            <CardHeader className="p-6 sm:p-10 pb-4">
-              <CardTitle className="text-xl sm:text-2xl font-bold">Authentication Activity Matrix</CardTitle>
-              <CardDescription className="text-xs text-slate-500 font-medium">Review chronological access attempts, IP addresses, and outcome vectors.</CardDescription>
+          <Card className="rounded-[40px] border-none shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+            <CardHeader className="p-10">
+              <CardTitle className="text-2xl font-black">Authentication Matrix</CardTitle>
+              <CardDescription className="font-bold">Review chronological access attempts and outcome vectors.</CardDescription>
             </CardHeader>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                    <th className="px-6 sm:px-10 py-4">Time-Stamp</th>
-                    <th className="px-6 sm:px-10 py-4">Authorization</th>
-                    <th className="px-6 sm:px-10 py-4">Terminal</th>
-                    <th className="px-6 sm:px-10 py-4">IP Address</th>
+                  <tr className="bg-slate-50/50">
+                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400">Time-Stamp</th>
+                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400">Authorization Status</th>
+                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400">Device / Terminal</th>
+                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400">IP Address</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {activities.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-10 py-8 text-center text-slate-400 font-bold">
-                        No recent activity logs recorded.
+                <tbody className="divide-y divide-slate-50">
+                  {activities.map((act) => (
+                    <tr key={act.id} className="hover:bg-slate-50/30 transition-colors">
+                      <td className="px-10 py-6">
+                        <div className="flex flex-col">
+                           <span className="font-black text-slate-900 text-sm">{new Date(act.createdAt).toLocaleDateString()}</span>
+                           <span className="text-[10px] font-bold text-slate-400">{new Date(act.createdAt).toLocaleTimeString()}</span>
+                        </div>
+                      </td>
+                      <td className="px-10 py-6">
+                        {act.status === 'SUCCESS' ? (
+                          <div className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-widest">
+                             <CheckCircle2 className="h-4 w-4" /> Cleared
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-rose-600 font-black text-[10px] uppercase tracking-widest">
+                             <AlertCircle className="h-4 w-4" /> Breach/Denied
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-10 py-6">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-800">
+                            {act.deviceName || (act.browser ? `${act.browser} on ${act.os}` : 'Device')}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-medium">
+                            {act.deviceType || 'DESKTOP'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-10 py-6">
+                        <span className="font-mono text-[10px] font-black text-slate-500 bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200">
+                          {act.ipAddress || 'LOCAL'}
+                        </span>
                       </td>
                     </tr>
-                  ) : (
-                    activities.map((act) => (
-                      <tr key={act.id || Math.random()} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 sm:px-10 py-4 font-mono text-slate-600">
-                          {safeFormatDate(act.createdAt)}
-                        </td>
-                        <td className="px-6 sm:px-10 py-4">
-                          {act.status === 'SUCCESS' ? (
-                            <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[10px] px-2 py-0.5">
-                              <CheckCircle2 className="h-3 w-3 mr-1" /> Cleared
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-rose-50 text-rose-700 border border-rose-200 font-bold text-[10px] px-2 py-0.5">
-                              <AlertCircle className="h-3 w-3 mr-1" /> Denied
-                            </Badge>
-                          )}
-                        </td>
-                        <td className="px-6 sm:px-10 py-4 text-slate-800 font-bold">
-                          {act.deviceName || (act.browser ? `${act.browser} on ${act.os}` : 'Device')}
-                        </td>
-                        <td className="px-6 sm:px-10 py-4">
-                          <span className="font-mono text-[10px] text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
-                            {act.ipAddress || '127.0.0.1'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                  ))}
                 </tbody>
               </table>
             </div>
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Confirmation Modal for Disabling Super Admin 2FA */}
-
     </div>
   );
 }
 
-export default function Settings() {
-  return (
-    <SettingsErrorBoundary>
-      <SettingsContent />
-    </SettingsErrorBoundary>
-  );
-}

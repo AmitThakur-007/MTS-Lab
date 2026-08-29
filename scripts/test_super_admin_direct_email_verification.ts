@@ -5,7 +5,6 @@ import jwt from 'jsonwebtoken';
 const prisma = new PrismaClient();
 const BASE_URL = 'http://localhost:3000';
 const JWT_SECRET = process.env.JWT_SECRET || 'mts-lab-super-secret-key';
-const RTDB_BASE_URL = 'https://mts-lab-eb8d2-default-rtdb.firebaseio.com';
 
 async function runSuperAdminDirectEmailVerificationTests() {
   console.log('================================================================================');
@@ -43,26 +42,12 @@ async function runSuperAdminDirectEmailVerificationTests() {
           role: 'SUPER_ADMIN',
           isActive: true,
           emailVerified: true,
-          accountStatus: 'ACTIVE'
+          accountStatus: 'ACTIVE',
+          twoFactorEnabled: false
         }
       });
     }
 
-    async function createTestSession(userId: string) {
-      const refreshToken = `test-verify-refresh-${userId}`;
-      await prisma.session.upsert({
-        where: { refreshToken },
-        update: { lastActiveAt: new Date(), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
-        create: {
-          userId,
-          refreshToken,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          lastActiveAt: new Date()
-        }
-      });
-    }
-
-    await createTestSession(superAdmin.id);
     const superAdminToken = jwt.sign(
       { id: superAdmin.id, userId: superAdmin.id, email: superAdmin.email, role: superAdmin.role, name: superAdmin.name },
       JWT_SECRET,
@@ -81,12 +66,12 @@ async function runSuperAdminDirectEmailVerificationTests() {
           role: 'ADMIN',
           isActive: true,
           emailVerified: true,
-          accountStatus: 'ACTIVE'
+          accountStatus: 'ACTIVE',
+          twoFactorEnabled: false
         }
       });
     }
 
-    await createTestSession(normalAdmin.id);
     const normalAdminToken = jwt.sign(
       { id: normalAdmin.id, userId: normalAdmin.id, email: normalAdmin.email, role: normalAdmin.role, name: normalAdmin.name },
       JWT_SECRET,
@@ -104,12 +89,12 @@ async function runSuperAdminDirectEmailVerificationTests() {
           role: 'RECEPTIONIST',
           isActive: true,
           emailVerified: true,
-          accountStatus: 'ACTIVE'
+          accountStatus: 'ACTIVE',
+          twoFactorEnabled: false
         }
       });
     }
 
-    await createTestSession(receptionist.id);
     const receptionistToken = jwt.sign(
       { id: receptionist.id, userId: receptionist.id, email: receptionist.email, role: receptionist.role, name: receptionist.name },
       JWT_SECRET,
@@ -127,12 +112,12 @@ async function runSuperAdminDirectEmailVerificationTests() {
           role: 'TECHNICIAN',
           isActive: true,
           emailVerified: true,
-          accountStatus: 'ACTIVE'
+          accountStatus: 'ACTIVE',
+          twoFactorEnabled: false
         }
       });
     }
 
-    await createTestSession(technician.id);
     const technicianToken = jwt.sign(
       { id: technician.id, userId: technician.id, email: technician.email, role: technician.role, name: technician.name },
       JWT_SECRET,
@@ -160,6 +145,7 @@ async function runSuperAdminDirectEmailVerificationTests() {
             password: passwordHash,
             role: r.role,
             emailVerified: false,
+            twoFactorEnabled: true,
             isActive: true,
             accountStatus: 'ACTIVE'
           }
@@ -173,6 +159,7 @@ async function runSuperAdminDirectEmailVerificationTests() {
             password: passwordHash,
             role: r.role,
             emailVerified: false,
+            twoFactorEnabled: true,
             isActive: true,
             accountStatus: 'ACTIVE'
           }
@@ -264,19 +251,6 @@ async function runSuperAdminDirectEmailVerificationTests() {
     const updatedDbUser = await prisma.user.findUnique({ where: { id: primaryTarget.id } });
     assert(updatedDbUser?.emailVerified === true, 'Prisma/SQLite database updated to emailVerified: true');
 
-    // Check Firebase RTDB
-    try {
-      const rtdbRes = await fetch(`${RTDB_BASE_URL}/users/${primaryTarget.id}.json`);
-      if (rtdbRes.ok) {
-        const rtdbUser: any = await rtdbRes.json();
-        if (rtdbUser) {
-          assert(rtdbUser.emailVerified === true, 'Firebase Realtime Database synchronized with emailVerified: true');
-        }
-      }
-    } catch (rtdbErr) {
-      console.log('  (RTDB network fetch skipped or offline; server sync triggered)');
-    }
-
     // Check GET /api/users listing
     const usersListRes = await fetch(`${BASE_URL}/api/users`, {
       headers: { 'Authorization': `Bearer ${superAdminToken}` }
@@ -325,23 +299,20 @@ async function runSuperAdminDirectEmailVerificationTests() {
       })
     });
     const verifiedLoginData: any = await verifiedLoginRes.json();
-    if (verifiedLoginRes.status !== 200) {
-      console.log(`Diagnostic verifiedLoginRes status=${verifiedLoginRes.status}, body=`, JSON.stringify(verifiedLoginData));
-    }
     assert(verifiedLoginRes.status === 200, 'Verified staff member login succeeds with HTTP 200');
     assert(verifiedLoginData.emailNotVerified !== true, 'System does NOT request email verification');
-    assert(verifiedLoginData.success === true, 'Staff member login returns success: true');
-    assert(Boolean(verifiedLoginData.token), 'Authenticated session JWT token returned on login');
+    assert(verifiedLoginData.mfaRequired === true, '2FA OTP is still required because user has 2FA enabled (2FA not bypassed)');
+    assert(!!verifiedLoginData.mfaTicket, 'MFA Ticket challenge is returned for 2FA step');
 
     console.log('\n--- GROUP 8: Audit Log Record Verification ---');
     const auditLog = await prisma.auditLog.findFirst({
       where: {
-        action: { in: ['STAFF_EMAIL_MANUALLY_VERIFIED', 'EMAIL_VERIFIED_BY_SUPER_ADMIN'] },
+        action: 'EMAIL_VERIFIED_BY_SUPER_ADMIN',
         resourceId: primaryTarget.id
       },
       orderBy: { createdAt: 'desc' }
     });
-    assert(!!auditLog, 'Audit log entry created for staff email verification');
+    assert(!!auditLog, 'Audit log entry created for EMAIL_VERIFIED_BY_SUPER_ADMIN');
     assert(auditLog?.userId === superAdmin.id, 'Audit log recorded Super Admin user ID');
     assert(auditLog?.status === 'SUCCESS', 'Audit log recorded status SUCCESS');
     assert(auditLog?.details?.includes(primaryTarget.email), 'Audit log details include target user email');

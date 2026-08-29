@@ -23,8 +23,6 @@ export interface BatteryWarrantyData {
   claimCount?: number;
   lastClaimDate?: string | Date | null;
   terms?: string | null;
-  pdfUrl?: string | null;
-  cloudinaryPublicId?: string | null;
 }
 
 /**
@@ -318,36 +316,4 @@ export function getWarrantyWhatsAppShareUrl(warranty: BatteryWarrantyData): stri
     `📍 New Road, Kathmandu, Nepal • 📞 Ph/Tel: 986927668, 015364307`;
 
   return `https://wa.me/${waPhone}?text=${message}`;
-}
-
-/**
- * Generates and uploads the warranty certificate PDF directly to Cloudinary via backend API
- */
-export async function uploadWarrantyCertificateToCloudinary(warranty: BatteryWarrantyData): Promise<{ success: boolean; pdfUrl?: string; cloudinaryPublicId?: string; message?: string }> {
-  const blob = getWarrantyCertificateBlob(warranty);
-  const cleanName = (warranty.customerName || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
-  const filename = `MTS_Warranty_Certificate_${warranty.warrantyNumber}_${cleanName}.pdf`;
-  const file = new File([blob], filename, { type: 'application/pdf' });
-
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const token = localStorage.getItem('token');
-  const headers: HeadersInit = {};
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const res = await fetch(`/api/battery-warranties/${warranty.id}/upload-certificate`, {
-    method: 'POST',
-    headers,
-    body: formData
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || data.message || 'Failed to upload warranty certificate to Cloudinary');
-  }
-
-  return data;
 }

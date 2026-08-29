@@ -1,29 +1,3 @@
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
-
-# Production build outputs
-dist/
-dist-ssr/
-build/
-*.local
-
-# Environment variables & secrets
-.env
-.env.*
-!.env.example
-
-# SQLite & local databases
-prisma/*.db
-prisma/*.db-journal
-prisma/*.backup
-prisma/*.json
-*.sqlite
-*.sqlite3
-*.db
-*.db-journal
-
 # Logs
 logs
 *.log
@@ -33,13 +7,35 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Editor & OS files
+# Diagnostic / temporary outputs
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
 .DS_Store
-Thumbs.db
-.idea/
-.vscode/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Environment & local keys
+.env
+.env*.local
+*.pem
+*.key
+
+# Database
+prisma/*.db
+prisma/*.db-journal
+*.sqlite
+*.sqlite3
+
+# Scratch & Temporary
+scratch/
+.system_generated/

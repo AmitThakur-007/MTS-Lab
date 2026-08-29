@@ -1,19 +1,18 @@
-import React, { useState, useEffect, useMemo, Component, ErrorInfo } from 'react';
+import { useState, useEffect } from 'react';
 import { 
+  CreditCard, 
   TrendingUp, 
   ArrowUpRight, 
+  ArrowDownRight, 
   Download,
   Calendar as CalendarIcon,
   Filter,
   Search,
+  DollarSign,
+  PieChart as PieChartIcon,
   Clock,
   FileText,
-  AlertCircle,
-  ShieldAlert,
-  ArrowLeft,
-  RefreshCw,
-  Receipt,
-  CheckCircle2
+  AlertCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,7 +26,19 @@ import {
   CartesianGrid, 
   Tooltip, 
   ResponsiveContainer,
+  BarChart,
+  Bar,
+  Legend
 } from 'recharts';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuGroup
+} from '@/components/ui/dropdown-menu';
 import { 
   Dialog, 
   DialogContent, 
@@ -45,134 +56,41 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { api } from '@/services/api';
-import { format, isValid } from 'date-fns';
+import { format, subDays, isAfter, startOfMonth, startOfWeek } from 'date-fns';
 import { generateRepairReport } from '@/services/reportService';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { toast } from 'sonner';
 import { formatNPR } from '@/lib/format';
 import { useRealtimeSync } from '@/services/realtime';
-import { useAuthStore } from '@/store/authStore';
-import { canViewRevenue } from '@/lib/rbac';
-import { useNavigate } from 'react-router-dom';
 
-// Custom Safe Date Formatter
-function safeFormatDate(dateVal: any, formatStr: string = 'MMM dd, yyyy'): string {
-  if (!dateVal) return '—';
-  try {
-    const d = new Date(dateVal);
-    if (!isValid(d)) return '—';
-    return format(d, formatStr);
-  } catch {
-    return '—';
-  }
-}
-
-// Error Boundary for Revenue Component
-interface RevenueErrorBoundaryProps {
-  children: React.ReactNode;
-}
-interface RevenueErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
-
-class RevenueErrorBoundary extends Component<RevenueErrorBoundaryProps, RevenueErrorBoundaryState> {
-  constructor(props: RevenueErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: Error): RevenueErrorBoundaryState {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[REVENUE ERROR BOUNDARY]', error, errorInfo);
-  }
-
-  handleRetry = () => {
-    this.setState({ hasError: false, error: null });
-  };
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="p-8 max-w-2xl mx-auto text-center space-y-6">
-          <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto border border-red-100 shadow-sm">
-            <AlertCircle className="w-8 h-8" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold text-slate-900">Unable to load revenue data</h2>
-            <p className="text-sm text-slate-500 font-medium">
-              An unexpected error occurred while calculating financial records.
-            </p>
-          </div>
-          <div className="flex items-center justify-center gap-3">
-            <Button onClick={this.handleRetry} className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl gap-2">
-              <RefreshCw className="w-4 h-4" /> Try Again
-            </Button>
-            <Button variant="outline" onClick={() => window.location.href = '/dashboard'} className="rounded-xl border-slate-200 font-bold">
-              Back to Dashboard
-            </Button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-function RevenueContent() {
-  const { user } = useAuthStore();
-  const navigate = useNavigate();
+export default function Revenue() {
   const [repairs, setRepairs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PAID' | 'PARTIAL' | 'UNPAID'>('ALL');
-
-  // RBAC Permission Guard
-  const isAuthorized = canViewRevenue(user?.role);
 
   const fetchData = async () => {
-    if (!isAuthorized) return;
-    setLoading(true);
-    setError(null);
     try {
       const data = await api.get('/repairs');
-      if (Array.isArray(data)) {
-        setRepairs(data);
-      } else {
-        setRepairs([]);
-      }
-    } catch (err: any) {
-      console.error('[REVENUE FETCH ERROR]', err);
-      setError(err?.message || 'Unable to load revenue data. Please try again.');
-      setRepairs([]);
+      setRepairs(data);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (isAuthorized) {
-      fetchData();
-    } else {
-      setLoading(false);
-    }
-  }, [isAuthorized]);
+    fetchData();
+  }, []);
 
-  // Real-time sync for financial revenue and repair billing
+  // Multi-device real-time sync for financial revenue and repair billing
   useRealtimeSync(['repair', 'payment'], () => {
-    if (isAuthorized) {
-      fetchData();
-    }
+    fetchData();
   });
 
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [reportFilters, setReportFilters] = useState({
     status: 'ALL',
-    month: safeFormatDate(new Date(), 'yyyy-MM'),
+    month: format(new Date(), 'yyyy-MM'),
     startDate: '',
     endDate: ''
   });
@@ -189,525 +107,342 @@ function RevenueContent() {
       const end = new Date(reportFilters.endDate);
       filtered = filtered.filter(r => {
         const d = new Date(r.createdAt);
-        return isValid(d) && d >= start && d <= end;
+        return d >= start && d <= end;
       });
     } else if (reportFilters.month) {
-      filtered = filtered.filter(r => safeFormatDate(r.createdAt, 'yyyy-MM') === reportFilters.month);
+      filtered = filtered.filter(r => format(new Date(r.createdAt), 'yyyy-MM') === reportFilters.month);
     }
 
     if (filtered.length === 0) {
-      return toast.error('No matching records found for these export filters.');
+      return toast.error('No matching records for these filters');
     }
 
-    generateRepairReport(filtered, `FINANCIAL REVENUE REPORT - ${reportFilters.status}`);
+    generateRepairReport(filtered, `ADVANCED FILTERED REPORT - ${reportFilters.status}`);
     setIsFilterModalOpen(false);
-    toast.success('Professional Financial Report generated.');
+    toast.success('Professional report generated');
   };
 
-  // Safe Financial Calculations
-  const { totalRevenue, pendingRevenue, totalCostSum, paidCount, partialCount, chartData } = useMemo(() => {
-    let rev = 0;
-    let pending = 0;
-    let costSum = 0;
-    let paid = 0;
-    let partial = 0;
+  const totalRevenue = repairs.reduce((acc, curr) => acc + (curr.totalPaid || 0), 0);
+  const pendingRevenue = repairs.reduce((acc, curr) => acc + ((curr.totalCost || 0) - (curr.totalPaid || 0)), 0);
 
-    const monthlyMap: Record<string, number> = {};
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const currentYear = new Date().getFullYear();
-
-    // Initialize months for current year
-    months.forEach((m) => {
-      monthlyMap[m] = 0;
-    });
-
-    repairs.forEach((r) => {
-      const paidAmt = Number(r.totalPaid || r.advancePaid || 0);
-      const costAmt = Number(r.totalCost || r.estimatedCost || 0);
-
-      rev += paidAmt;
-      costSum += costAmt;
-
-      if (costAmt > paidAmt) {
-        pending += (costAmt - paidAmt);
-      }
-
-      if (paidAmt > 0 && paidAmt >= costAmt && costAmt > 0) {
-        paid++;
-      } else if (paidAmt > 0 && paidAmt < costAmt) {
-        partial++;
-      }
-
-      // Monthly aggregation
-      if (r.createdAt) {
-        const d = new Date(r.createdAt);
-        if (isValid(d) && d.getFullYear() === currentYear) {
-          const mName = months[d.getMonth()];
-          if (mName) {
-            monthlyMap[mName] = (monthlyMap[mName] || 0) + paidAmt;
-          }
-        }
-      }
-    });
-
-    const cData = months.slice(0, new Date().getMonth() + 1).map((m) => ({
-      month: m,
-      revenue: monthlyMap[m] || 0,
-      expenses: Math.round((monthlyMap[m] || 0) * 0.32)
-    }));
-
-    return {
-      totalRevenue: rev,
-      pendingRevenue: pending,
-      totalCostSum: costSum,
-      paidCount: paid,
-      partialCount: partial,
-      chartData: cData.length > 0 ? cData : [{ month: 'Current', revenue: rev, expenses: Math.round(rev * 0.32) }]
-    };
-  }, [repairs]);
-
-  // Filtered Payments Table List
-  const filteredRepairs = useMemo(() => {
-    return repairs.filter((r) => {
-      const matchesSearch = !searchQuery.trim() || 
-        (r.repairNumber && r.repairNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (r.customerName && r.customerName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (r.customerPhone && r.customerPhone.includes(searchQuery));
-
-      const paidAmt = Number(r.totalPaid || r.advancePaid || 0);
-      const costAmt = Number(r.totalCost || r.estimatedCost || 0);
-
-      let matchesStatus = true;
-      if (statusFilter === 'PAID') {
-        matchesStatus = paidAmt > 0 && paidAmt >= costAmt && costAmt > 0;
-      } else if (statusFilter === 'PARTIAL') {
-        matchesStatus = paidAmt > 0 && paidAmt < costAmt;
-      } else if (statusFilter === 'UNPAID') {
-        matchesStatus = paidAmt === 0 && costAmt > 0;
-      }
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [repairs, searchQuery, statusFilter]);
-
-  // Unauthorized Access Guard UI
-  if (!isAuthorized) {
-    return (
-      <div className="p-8 sm:p-12 max-w-2xl mx-auto text-center space-y-6">
-        <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 shadow-sm">
-          <ShieldAlert className="w-8 h-8" />
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-2xl font-bold text-slate-900">Access Denied</h2>
-          <p className="text-sm text-slate-500 font-medium max-w-md mx-auto">
-            You do not have authorization to view financial accounts and revenue analytics. This section is restricted to Super Admins, Administrators, and Operations Managers.
-          </p>
-        </div>
-        <Button onClick={() => navigate('/dashboard')} className="rounded-xl bg-slate-900 text-white font-bold gap-2">
-          <ArrowLeft className="w-4 h-4" /> Return to Dashboard
-        </Button>
-      </div>
-    );
-  }
+  const chartData = [
+    { month: 'Jan', revenue: 4500, expenses: 2100 },
+    { month: 'Feb', revenue: 5200, expenses: 2300 },
+    { month: 'Mar', revenue: 4800, expenses: 2400 },
+    { month: 'Apr', revenue: 6100, expenses: 2800 },
+    { month: 'May', revenue: totalRevenue || 5500, expenses: 2500 },
+  ];
 
   return (
     <div className="space-y-8 pb-20">
-      {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Accounts & Revenue Hub</h2>
-          <p className="text-slate-500 font-medium text-xs sm:text-sm mt-0.5">
-            Real-time financial performance, cash inflow, and repair settlement tracking.
-          </p>
+          <h2 className="text-3xl font-bold tracking-tight">Accounts & Revenue</h2>
+          <p className="text-muted-foreground font-medium">Financial overview and revenue tracking for your lab.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <DashboardRefreshButton
             onRefresh={fetchData}
             size="default"
             label="Refresh Revenue"
           />
-          <Button
-            variant="outline"
-            onClick={() => setIsFilterModalOpen(true)}
-            className="rounded-xl border-slate-200 text-slate-700 font-bold text-xs sm:text-sm h-10 px-4 gap-2 hover:bg-slate-50"
-          >
-            <Filter className="h-4 w-4 text-slate-600" /> Export Reports
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" className="rounded-xl border-slate-200" />}>
+              <Download className="mr-2 h-4 w-4" /> Export Report
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="rounded-xl w-64 p-2 shadow-2xl">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="px-3 py-2 text-xs font-black uppercase tracking-widest text-slate-500">Professional Reports</DropdownMenuLabel>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => { setReportFilters({...reportFilters, status: 'ALL', month: format(new Date(), 'yyyy-MM')}); handleAdvancedExport(); }} className="h-12 rounded-xl gap-3 font-bold px-4">
+                <FileText className="h-4 w-4 text-indigo-600" /> Current Month (All)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsFilterModalOpen(true)} className="h-12 rounded-xl gap-3 font-bold px-4">
+                <Filter className="h-4 w-4 text-emerald-600" /> Advanced Filters
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button className="rounded-xl bg-black hover:bg-slate-800 font-bold">
+            <CalendarIcon className="mr-2 h-4 w-4" /> This Month
           </Button>
         </div>
       </div>
 
-      {/* Loading State */}
-      {loading && (
-        <div className="p-12 text-center space-y-4">
-          <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-slate-500 font-bold text-sm">Loading financial accounts & revenue data...</p>
-        </div>
-      )}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="rounded-[24px] border-none shadow-sm bg-gradient-to-br from-indigo-600 to-indigo-700 text-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-indigo-100 uppercase tracking-wider">Total Revenue</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold font-mono">{formatNPR(totalRevenue)}</div>
+            <div className="flex items-center text-xs mt-2 text-indigo-200">
+              <ArrowUpRight className="h-3 w-3 mr-1" />
+              <span>+14.2% from last month</span>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Error State */}
-      {!loading && error && (
-        <div className="p-8 bg-red-50/70 border border-red-200 rounded-2xl text-center space-y-4 max-w-xl mx-auto">
-          <AlertCircle className="w-8 h-8 text-red-600 mx-auto" />
-          <div className="space-y-1">
-            <h3 className="text-base font-bold text-red-900">Unable to load revenue records</h3>
-            <p className="text-xs text-red-700 font-medium">{error}</p>
-          </div>
-          <Button onClick={fetchData} className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs h-9 px-4 gap-2">
-            <RefreshCw className="w-3.5 h-3.5" /> Retry
-          </Button>
-        </div>
-      )}
+        <Card className="rounded-[24px] border-none shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Outstanding Payments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-slate-900 font-mono">{formatNPR(pendingRevenue)}</div>
+            <div className="flex items-center text-xs mt-2 text-amber-600 font-bold">
+              <Clock className="h-3 w-3 mr-1" />
+              <span>Pending from {repairs.filter(r => r.totalPaid < r.totalCost).length} repairs</span>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Main Content */}
-      {!loading && !error && (
-        <>
-          {/* Key Metrics Cards */}
-          <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-            <Card className="rounded-2xl border-none shadow-md bg-gradient-to-br from-indigo-600 to-indigo-700 text-white p-5">
-              <CardHeader className="p-0 pb-2">
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-indigo-200 flex items-center justify-between">
-                  <span>Total Collected</span>
-                  <Receipt className="w-4 h-4 text-indigo-300" />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="text-2xl sm:text-3xl font-black font-mono tracking-tight">{formatNPR(totalRevenue)}</div>
-                <div className="flex items-center text-xs mt-2 text-indigo-200 font-medium">
-                  <ArrowUpRight className="h-3.5 w-3.5 mr-1 text-emerald-300" />
-                  <span>Realized cash inflow</span>
-                </div>
-              </CardContent>
-            </Card>
+        <Card className="rounded-[24px] border-none shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Average Ticket</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-slate-900 font-mono">{formatNPR(totalRevenue / (repairs.length || 1))}</div>
+            <div className="flex items-center text-xs mt-2 text-emerald-600 font-bold">
+              <ArrowUpRight className="h-3 w-3 mr-1" />
+              <span>+5.1% efficiency</span>
+            </div>
+          </CardContent>
+        </Card>
 
-            <Card className="rounded-2xl border-slate-200/80 shadow-sm p-5 bg-white">
-              <CardHeader className="p-0 pb-2">
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
-                  <span>Pending Balances</span>
-                  <Clock className="w-4 h-4 text-amber-500" />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="text-2xl sm:text-3xl font-black text-amber-600 font-mono tracking-tight">{formatNPR(pendingRevenue)}</div>
-                <div className="flex items-center text-xs mt-2 text-slate-500 font-medium">
-                  <span>Across {repairs.filter(r => (Number(r.totalCost || r.estimatedCost || 0) > Number(r.totalPaid || r.advancePaid || 0))).length} active repairs</span>
-                </div>
-              </CardContent>
-            </Card>
+        <Card className="rounded-[24px] border-none shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Profit Margin</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-slate-900 font-mono">68.4%</div>
+            <div className="flex items-center text-xs mt-2 text-slate-400 font-medium">
+              <span>After components cost</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-            <Card className="rounded-2xl border-slate-200/80 shadow-sm p-5 bg-white">
-              <CardHeader className="p-0 pb-2">
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
-                  <span>Average Ticket Value</span>
-                  <TrendingUp className="w-4 h-4 text-indigo-500" />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight">
-                  {formatNPR(repairs.length > 0 ? Math.round(totalRevenue / repairs.length) : 0)}
-                </div>
-                <div className="flex items-center text-xs mt-2 text-emerald-600 font-bold">
-                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                  <span>{repairs.length} total repair orders</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-2xl border-slate-200/80 shadow-sm p-5 bg-white">
-              <CardHeader className="p-0 pb-2">
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
-                  <span>Settlement Rate</span>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight">
-                  {totalCostSum > 0 ? `${Math.round((totalRevenue / totalCostSum) * 100)}%` : '100%'}
-                </div>
-                <div className="flex items-center text-xs mt-2 text-slate-500 font-medium">
-                  <span>{paidCount} fully paid · {partialCount} partial</span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Chart Section */}
-          <div className="grid gap-6 grid-cols-1 lg:grid-cols-7">
-            <Card className="lg:col-span-5 rounded-2xl border-slate-200/80 shadow-sm overflow-hidden bg-white">
-              <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-base font-bold text-slate-900">Revenue Flow & Trend</CardTitle>
-                    <CardDescription className="text-xs text-slate-500">Monthly realized billing vs estimated workshop overhead.</CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="bg-indigo-50 border-indigo-200 text-indigo-700 font-bold text-[11px] px-2.5 py-0.5">Collected Inflow</Badge>
-                    <Badge variant="outline" className="bg-slate-50 border-slate-200 text-slate-500 font-bold text-[11px] px-2.5 py-0.5">Estimated Overhead</Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-5 pt-8">
-                <div className="h-[280px] sm:h-[340px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
-                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} tickFormatter={(val) => `₹${val >= 1000 ? `${Math.round(val / 1000)}k` : val}`} />
-                      <Tooltip 
-                        formatter={(val: any) => [formatNPR(Number(val)), 'Amount']}
-                        contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.08)' }}
-                      />
-                      <Area type="monotone" dataKey="revenue" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
-                      <Area type="monotone" dataKey="expenses" stroke="#94a3b8" strokeWidth={2} strokeDasharray="4 4" fill="transparent" name="Expenses" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Revenue Distribution Card */}
-            <Card className="lg:col-span-2 rounded-2xl border-slate-200/80 shadow-sm bg-white p-5 flex flex-col justify-between">
+      <div className="grid gap-6 lg:grid-cols-7">
+        <Card className="lg:col-span-5 rounded-[24px] border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="bg-slate-50/50 border-b">
+            <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base font-bold text-slate-900">Settlement Breakdown</CardTitle>
-                <CardDescription className="text-xs text-slate-500 mb-4">Payment status distribution across workshop.</CardDescription>
-                
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex justify-between text-xs font-bold mb-1">
-                      <span className="text-slate-700">Fully Settled</span>
-                      <span className="text-emerald-700 font-mono">{paidCount} ({repairs.length > 0 ? Math.round((paidCount / repairs.length) * 100) : 0}%)</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${repairs.length > 0 ? (paidCount / repairs.length) * 100 : 0}%` }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-xs font-bold mb-1">
-                      <span className="text-slate-700">Partial Payments</span>
-                      <span className="text-amber-700 font-mono">{partialCount} ({repairs.length > 0 ? Math.round((partialCount / repairs.length) * 100) : 0}%)</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-500 rounded-full" style={{ width: `${repairs.length > 0 ? (partialCount / repairs.length) * 100 : 0}%` }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-xs font-bold mb-1">
-                      <span className="text-slate-700">Unpaid / In Intake</span>
-                      <span className="text-slate-700 font-mono">
-                        {repairs.length - paidCount - partialCount} ({repairs.length > 0 ? Math.round(((repairs.length - paidCount - partialCount) / repairs.length) * 100) : 0}%)
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className="h-full bg-slate-400 rounded-full" style={{ width: `${repairs.length > 0 ? ((repairs.length - paidCount - partialCount) / repairs.length) * 100 : 0}%` }} />
-                    </div>
-                  </div>
-                </div>
+                <CardTitle>Revenue Analytics</CardTitle>
+                <CardDescription>Monthly revenue vs operational expenses.</CardDescription>
               </div>
-
-              <div className="mt-6 p-3.5 bg-indigo-50/60 rounded-xl border border-indigo-100 flex items-center gap-3">
-                <TrendingUp className="w-5 h-5 text-indigo-600 shrink-0" />
-                <div className="text-xs">
-                  <p className="font-bold text-indigo-950">Settlement Health</p>
-                  <p className="text-indigo-800 font-medium">Automatic two-way sync maintains invoice alignment.</p>
-                </div>
+              <div className="flex gap-2">
+                 <Badge variant="outline" className="bg-white border-slate-200 text-indigo-600 font-bold px-3 py-1">Revenue</Badge>
+                 <Badge variant="outline" className="bg-white border-slate-200 text-slate-400 font-bold px-3 py-1">Expenses</Badge>
               </div>
-            </Card>
+            </div>
+          </CardHeader>
+          <CardContent className="h-[400px] pt-8">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} />
+                <Tooltip 
+                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
+                />
+                <Area type="monotone" dataKey="revenue" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                <Area type="monotone" dataKey="expenses" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fill="transparent" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2 rounded-[24px] border-slate-200 shadow-sm flex flex-col">
+          <CardHeader>
+            <CardTitle>Repair Categories</CardTitle>
+            <CardDescription>Revenue by service type.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 space-y-6">
+             <div className="space-y-4">
+               {[
+                 { label: 'Screen Repair', count: '45%', color: 'bg-indigo-600' },
+                 { label: 'Battery Swap', count: '28%', color: 'bg-blue-500' },
+                 { label: 'Motherboard', count: '15%', color: 'bg-emerald-500' },
+                 { label: 'Accessories', count: '12%', color: 'bg-slate-400' },
+               ].map((item, i) => (
+                 <div key={i} className="space-y-1.5">
+                   <div className="flex justify-between text-xs font-bold">
+                     <span className="text-slate-600">{item.label}</span>
+                     <span>{item.count}</span>
+                   </div>
+                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                     <div className={`h-full ${item.color}`} style={{ width: item.count }} />
+                   </div>
+                 </div>
+               ))}
+             </div>
+             <div className="mt-8 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+               <div className="flex items-start gap-4">
+                 <div className="p-2 bg-indigo-100 rounded-xl text-indigo-600">
+                   <TrendingUp className="h-5 w-5" />
+                 </div>
+                 <div>
+                   <p className="text-sm font-bold text-slate-900">Highest Earner</p>
+                   <p className="text-xs text-slate-500">iPhone 15 Pro Display replacements generated ₹85k this week.</p>
+                 </div>
+               </div>
+             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="rounded-[24px] border-slate-200 shadow-sm overflow-hidden">
+        <CardHeader className="bg-slate-50/50 border-b">
+           <div className="flex flex-col sm:flex-row justify-between gap-4">
+             <div>
+               <CardTitle>Recent Payments</CardTitle>
+               <CardDescription>Monitor inflow from customers.</CardDescription>
+             </div>
+             <div className="relative">
+               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+               <Input placeholder="Search invoice..." className="pl-10 h-10 w-full sm:w-64 rounded-xl text-sm" />
+             </div>
+           </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+               <thead>
+                 <tr className="border-b bg-slate-50/50 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                   <th className="px-6 py-4">Receipt #</th>
+                   <th className="px-6 py-4">Customer</th>
+                   <th className="px-6 py-4">Status</th>
+                   <th className="px-6 py-4">Date</th>
+                   <th className="px-6 py-4 text-right">Amount</th>
+                 </tr>
+               </thead>
+               <tbody className="text-sm">
+                 {repairs.slice(0, 8).map((r) => (
+                   <tr key={r.id} className="border-b last:border-0 hover:bg-slate-50/50 transition-colors">
+                     <td className="px-6 py-4 font-mono font-bold text-slate-900">{r.repairNumber}</td>
+                     <td className="px-6 py-4">
+                       <div className="font-bold text-slate-900">{r.customerName}</div>
+                       <div className="text-xs text-slate-500 font-medium">{r.customerPhone}</div>
+                     </td>
+                     <td className="px-6 py-4">
+                       <Badge className={r.totalPaid >= r.totalCost ? "bg-emerald-100 text-emerald-700 border-none font-bold" : "bg-amber-100 text-amber-700 border-none font-bold"}>
+                         {r.totalPaid >= r.totalCost ? "PAID" : "PARTIAL"}
+                       </Badge>
+                     </td>
+                     <td className="px-6 py-4 text-slate-500 font-medium">
+                       {format(new Date(r.createdAt), 'MMM dd, yyyy')}
+                     </td>
+                     <td className="px-6 py-4 text-right font-bold text-slate-900">
+                        ₹{r.totalPaid.toLocaleString()}
+                     </td>
+                   </tr>
+                 ))}
+               </tbody>
+            </table>
           </div>
-
-          {/* Recent Payments Table Card */}
-          <Card className="rounded-2xl border-slate-200/80 shadow-sm overflow-hidden bg-white">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-4 sm:p-5">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                <div>
-                  <CardTitle className="text-base font-bold text-slate-900">Repair Settlements & Payments</CardTitle>
-                  <CardDescription className="text-xs text-slate-500">Chronological view of customer payments and balances.</CardDescription>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative flex-1 sm:w-60">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <Input 
-                      placeholder="Search repair / customer..." 
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 h-9 text-xs rounded-xl bg-white border-slate-200" 
-                    />
-                  </div>
-
-                  <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val)}>
-                    <SelectTrigger className="h-9 text-xs rounded-xl border-slate-200 bg-white font-bold w-28">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="ALL">All Statuses</SelectItem>
-                      <SelectItem value="PAID">Fully Paid</SelectItem>
-                      <SelectItem value="PARTIAL">Partial</SelectItem>
-                      <SelectItem value="UNPAID">Unpaid</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {filteredRepairs.length === 0 ? (
-                <div className="p-12 text-center space-y-3">
-                  <Receipt className="w-10 h-10 text-slate-300 mx-auto" />
-                  <p className="text-sm font-bold text-slate-700">No payment records found</p>
-                  <p className="text-xs text-slate-400 font-medium">Try adjusting your search query or filter selection.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50/50 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
-                        <th className="px-5 py-3.5">Repair #</th>
-                        <th className="px-5 py-3.5">Customer</th>
-                        <th className="px-5 py-3.5">Device</th>
-                        <th className="px-5 py-3.5">Date</th>
-                        <th className="px-5 py-3.5 text-right">Total Cost</th>
-                        <th className="px-5 py-3.5 text-right">Amount Paid</th>
-                        <th className="px-5 py-3.5 text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-xs divide-y divide-slate-100">
-                      {filteredRepairs.slice(0, 15).map((r) => {
-                        const paidAmt = Number(r.totalPaid || r.advancePaid || 0);
-                        const costAmt = Number(r.totalCost || r.estimatedCost || 0);
-                        const isFullyPaid = paidAmt > 0 && paidAmt >= costAmt && costAmt > 0;
-                        const isPartial = paidAmt > 0 && paidAmt < costAmt;
-
-                        return (
-                          <tr key={r.id || r.repairNumber} className="hover:bg-slate-50/60 transition-colors">
-                            <td className="px-5 py-3.5 font-mono font-bold text-slate-900">{r.repairNumber || '—'}</td>
-                            <td className="px-5 py-3.5">
-                              <div className="font-bold text-slate-900">{r.customerName || 'Walk-in Customer'}</div>
-                              <div className="text-[11px] text-slate-500 font-mono">{r.customerPhone || '—'}</div>
-                            </td>
-                            <td className="px-5 py-3.5 font-medium text-slate-700">
-                              {r.deviceBrand || ''} {r.deviceModel || 'Device'}
-                            </td>
-                            <td className="px-5 py-3.5 text-slate-500 font-medium">
-                              {safeFormatDate(r.createdAt)}
-                            </td>
-                            <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-700">
-                              {formatNPR(costAmt)}
-                            </td>
-                            <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-900">
-                              {formatNPR(paidAmt)}
-                            </td>
-                            <td className="px-5 py-3.5 text-center">
-                              {isFullyPaid ? (
-                                <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[10px] px-2 py-0.5">
-                                  PAID
-                                </Badge>
-                              ) : isPartial ? (
-                                <Badge className="bg-amber-50 text-amber-700 border border-amber-200 font-bold text-[10px] px-2 py-0.5">
-                                  PARTIAL
-                                </Badge>
-                              ) : (
-                                <Badge className="bg-slate-100 text-slate-600 border-none font-bold text-[10px] px-2 py-0.5">
-                                  UNPAID
-                                </Badge>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
-
-      {/* Advanced Filter Export Dialog */}
+        </CardContent>
+      </Card>
       <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-900">Export Financial Report</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Select date ranges and status filters to generate a professional PDF report.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Filter by Month</Label>
-              <Input
-                type="month"
-                value={reportFilters.month}
-                onChange={(e) => setReportFilters({ ...reportFilters, month: e.target.value, startDate: '', endDate: '' })}
-                className="h-10 text-xs rounded-xl border-slate-200 font-mono"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">From Date</Label>
-                <Input
-                  type="date"
-                  value={reportFilters.startDate}
-                  onChange={(e) => setReportFilters({ ...reportFilters, startDate: e.target.value, month: '' })}
-                  className="h-10 text-xs rounded-xl border-slate-200 font-mono"
-                />
+        <DialogContent className="rounded-[40px] sm:max-w-lg p-0 overflow-hidden border-none shadow-2xl">
+           <DialogHeader className="bg-slate-900 text-white p-10">
+              <div className="flex items-center gap-4">
+                 <div className="p-3 bg-indigo-600 rounded-2xl">
+                   <Filter className="h-6 w-6" />
+                 </div>
+                 <div>
+                    <DialogTitle className="text-2xl font-black">Report Architect</DialogTitle>
+                    <DialogDescription className="text-slate-400 font-bold">Configure granular PDF export parameters.</DialogDescription>
+                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">To Date</Label>
-                <Input
-                  type="date"
-                  value={reportFilters.endDate}
-                  onChange={(e) => setReportFilters({ ...reportFilters, endDate: e.target.value, month: '' })}
-                  className="h-10 text-xs rounded-xl border-slate-200 font-mono"
-                />
+           </DialogHeader>
+           <div className="p-10 space-y-8 bg-white">
+              <div className="grid grid-cols-2 gap-6">
+                 <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Repair Status</Label>
+                    <Select value={reportFilters.status} onValueChange={(v) => setReportFilters({...reportFilters, status: v})}>
+                       <SelectTrigger className="h-12 rounded-2xl border-slate-200 bg-slate-50 font-bold">
+                          <SelectValue placeholder="All Statuses" />
+                       </SelectTrigger>
+                       <SelectContent className="rounded-xl">
+                          <SelectItem value="ALL">All Statuses</SelectItem>
+                          <SelectItem value="RECEIVED">Received</SelectItem>
+                          <SelectItem value="DIAGNOSING">Diagnosing</SelectItem>
+                          <SelectItem value="IN_PROCESS">In Progress</SelectItem>
+                          <SelectItem value="TESTING">Testing</SelectItem>
+                          <SelectItem value="READY_FOR_PICKUP">Ready for Pickup</SelectItem>
+                          <SelectItem value="DELIVERED">Returned</SelectItem>
+                          <SelectItem value="REPROBLEM_FIXED">Re-problem Fixed</SelectItem>
+                       </SelectContent>
+                    </Select>
+                 </div>
+                 <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Select Month</Label>
+                    <Input 
+                      type="month" 
+                      value={reportFilters.month} 
+                      onChange={(e) => setReportFilters({...reportFilters, month: e.target.value})}
+                      className="h-12 rounded-2xl border-slate-200 bg-slate-50 font-bold"
+                    />
+                 </div>
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Repair Status Filter</Label>
-              <Select
-                value={reportFilters.status}
-                onValueChange={(val) => setReportFilters({ ...reportFilters, status: val })}
+              <div className="relative">
+                 <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-slate-100" />
+                 </div>
+                 <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white px-4 text-slate-300 font-bold">OR Specific Range</span>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                 <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Start Date</Label>
+                    <Input 
+                      type="date" 
+                      value={reportFilters.startDate} 
+                      onChange={(e) => setReportFilters({...reportFilters, startDate: e.target.value})}
+                      className="h-12 rounded-2xl border-slate-200 bg-slate-50 font-bold"
+                    />
+                 </div>
+                 <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">End Date</Label>
+                    <Input 
+                      type="date" 
+                      value={reportFilters.endDate} 
+                      onChange={(e) => setReportFilters({...reportFilters, endDate: e.target.value})}
+                      className="h-12 rounded-2xl border-slate-200 bg-slate-50 font-bold"
+                    />
+                 </div>
+              </div>
+
+              <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex gap-3">
+                 <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                 <p className="text-xs text-amber-700 font-medium leading-relaxed">
+                   Generating multi-page reports may take a few seconds. Do not close this window during the rendering process.
+                 </p>
+              </div>
+           </div>
+           <DialogFooter className="p-10 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row gap-4">
+              <Button variant="ghost" className="h-14 rounded-2xl font-bold flex-1" onClick={() => setIsFilterModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                className="h-14 rounded-[20px] bg-black hover:bg-slate-800 text-white font-black flex-1 gap-2 shadow-2xl shadow-black/20"
+                onClick={handleAdvancedExport}
               >
-                <SelectTrigger className="h-10 text-xs rounded-xl border-slate-200 font-bold">
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="ALL">All Repair Statuses</SelectItem>
-                  <SelectItem value="REPAIRED">Repaired Only</SelectItem>
-                  <SelectItem value="DELIVERED">Delivered Only</SelectItem>
-                  <SelectItem value="IN_PROCESS">In Progress Only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setIsFilterModalOpen(false)} className="rounded-xl border-slate-200 text-xs font-bold">
-              Cancel
-            </Button>
-            <Button onClick={handleAdvancedExport} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold gap-2">
-              <Download className="w-3.5 h-3.5" /> Export PDF
-            </Button>
-          </DialogFooter>
+                <FileText className="h-5 w-5" /> Generate PDF Report
+              </Button>
+           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-export default function Revenue() {
-  return (
-    <RevenueErrorBoundary>
-      <RevenueContent />
-    </RevenueErrorBoundary>
   );
 }

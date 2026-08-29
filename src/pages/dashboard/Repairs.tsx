@@ -93,9 +93,8 @@ import {
 import { generateRepairReport } from '@/services/reportService';
 import { formatNPR, formatRepairCost, formatNepalPhone } from '@/lib/format';
 import { useRealtimeSync } from '@/services/realtime';
-import { syncRepairToRtdb, deleteRepairFromRtdb } from '@/lib/firebase';
+import { syncRepairToSupabase as syncRepairToRtdb, deleteRepairFromSupabase as deleteRepairFromRtdb, syncRepairToSupabase, deleteRepairFromSupabase } from '@/lib/supabase';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
-import { normalizeRole } from '@/lib/rbac';
 import ServiceSlipModal from '@/components/repair/ServiceSlipModal';
 import EditRepairModal from '@/components/repair/EditRepairModal';
 
@@ -181,16 +180,16 @@ export default function Repairs() {
   const [reProblemDescription, setReProblemDescription] = useState('');
   const [reProblemLoading, setReProblemLoading] = useState(false);
 
-  const normRole = normalizeRole(user?.role);
-  const isSuperAdmin = normRole === 'SUPERADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
-  const isAdmin = isSuperAdmin || normRole === 'ADMIN' || user?.role === 'ADMIN';
-  const isManager = normRole === 'MANAGER' || user?.role === 'MANAGER';
-  const isReceptionist = normRole === 'RECEPTIONIST' || user?.role === 'RECEPTIONIST';
+  // Role permissions - Permanent deletion strictly restricted to SUPER_ADMIN ONLY
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isAdmin = user?.role === 'ADMIN' || isSuperAdmin;
+  const isManager = user?.role === 'MANAGER';
+  const isReceptionist = user?.role === 'RECEPTIONIST';
   const canDelete = isSuperAdmin;
   const canAssign = isSuperAdmin || isAdmin || isManager || isReceptionist;
   const canEdit = isSuperAdmin || isAdmin || isManager || isReceptionist;
   const canCreate = isSuperAdmin || isAdmin || isManager || isReceptionist;
-  const canManageExcel = isSuperAdmin || ['SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(normRole || '');
+  const canManageExcel = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(user?.role || '');
 
   // Excel Import / Export state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -319,10 +318,7 @@ export default function Repairs() {
   };
 
   // Fetch all repair records and staff from the real database
-  const fetchData = async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-    }
+  const fetchData = async () => {
     try {
       const [repairRes, staffRes] = await Promise.all([
         api.get('/repairs'),
@@ -331,27 +327,23 @@ export default function Repairs() {
       setRepairs(Array.isArray(repairRes) ? repairRes : []);
       setStaffList(Array.isArray(staffRes) ? staffRes : []);
     } catch (err: any) {
-      if (!silent) {
-        toast.error(err.message || 'Failed to fetch repair records');
-      }
+      toast.error(err.message || 'Failed to fetch repair records');
       console.error(err);
     } finally {
-      if (!silent) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData(false);
+    fetchData();
   }, []);
 
-  // Real-Time Event Sync across Super Admin, Admin, and Receptionist (silent background update)
+  // Real-Time Event Sync across Super Admin, Admin, and Receptionist
   useRealtimeSync(
     ['repair', 'repairLog', 'technicianNote', 'payment', 'user', 'sync'],
-    () => {
-      // Refresh current dataset silently without UI flashing
-      fetchData(true);
+    (event) => {
+      // Refresh current dataset immediately on any server-side database change
+      fetchData();
     }
   );
 

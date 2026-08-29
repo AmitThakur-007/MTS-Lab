@@ -64,11 +64,9 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
-import { api } from '@/services/api';
 import { Link } from 'react-router-dom';
 import { useRealtimeSync } from '@/services/realtime';
-import { syncEntityToRtdb, deleteEntityFromRtdb } from '@/lib/firebase';
-import { normalizeRole } from '@/lib/rbac';
+import { syncEntityToSupabase as syncEntityToRtdb, deleteEntityFromSupabase as deleteEntityFromRtdb, syncEntityToSupabase, deleteEntityFromSupabase } from '@/lib/supabase';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 
 export interface RepairPriceRecord {
@@ -184,9 +182,7 @@ function getCategoryVisuals(categoryName: string) {
 
 export default function RepairPrices() {
   const { token, user } = useAuthStore();
-  const normRole = normalizeRole(user?.role);
-  const isSuperAdmin = normRole === 'SUPERADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
-  const isAdmin = isSuperAdmin || normRole === 'ADMIN' || user?.role === 'ADMIN';
+  const isAdmin = user && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN');
 
   // Main Data States
   const [records, setRecords] = useState<RepairPriceRecord[]>([]);
@@ -258,13 +254,23 @@ export default function RepairPrices() {
     if (!token) return;
     try {
       setLoading(true);
-      const [pricesData, foldersData] = await Promise.all([
-        api.get('/repair-prices'),
-        api.get('/repair-prices/folders')
+      const [pricesRes, foldersRes] = await Promise.all([
+        fetch('/api/repair-prices', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch('/api/repair-prices/folders', { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
-      setRecords(Array.isArray(pricesData) ? pricesData : []);
-      setCustomFolders(Array.isArray(foldersData) ? foldersData : []);
+      if (pricesRes.status === 403 || foldersRes.status === 403) {
+        throw new Error('403 Forbidden: Only authorized administrators can manage repair services.');
+      }
+
+      if (pricesRes.ok) {
+        const pricesData = await pricesRes.json();
+        setRecords(Array.isArray(pricesData) ? pricesData : []);
+      }
+      if (foldersRes.ok) {
+        const foldersData = await foldersRes.json();
+        setCustomFolders(Array.isArray(foldersData) ? foldersData : []);
+      }
     } catch (err: any) {
       toast.error(err.message || 'Error loading services catalog');
     } finally {
@@ -593,7 +599,21 @@ export default function RepairPrices() {
         category: currentLevelDepth === 2 ? trimmed : (currentCategory || null)
       };
 
-      const created = await api.post('/repair-prices/folders', payload);
+      const res = await fetch('/api/repair-prices/folders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to create folder');
+      }
+
+      const created = await res.json();
       setCustomFolders(prev => [...prev, created]);
       toast.success(`✓ Folder "${trimmed}" created successfully.`);
       setIsFolderModalOpen(false);
@@ -622,13 +642,25 @@ export default function RepairPrices() {
 
     try {
       setIsRenaming(true);
-      await api.post('/repair-prices/rename-folder', {
-        level: folderToRename.level,
-        oldValue: folderToRename.oldName,
-        newValue: renameValue.trim(),
-        brand: currentBrand || undefined,
-        model: currentModel || undefined
+      const res = await fetch('/api/repair-prices/rename-folder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          level: folderToRename.level,
+          oldValue: folderToRename.oldName,
+          newValue: renameValue.trim(),
+          brand: currentBrand || undefined,
+          model: currentModel || undefined
+        })
       });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to rename folder');
+      }
 
       toast.success(`✓ Renamed to "${renameValue.trim()}".`);
       setIsRenameModalOpen(false);
@@ -729,10 +761,24 @@ export default function RepairPrices() {
         estimatedTime: serviceFormData.estimatedTime?.trim() || null
       };
 
-      const savedRecord: RepairPriceRecord = editingService
-        ? await api.put(`/repair-prices/${editingService.id}`, payload)
-        : await api.post('/repair-prices', payload);
+      const url = editingService ? `/api/repair-prices/${editingService.id}` : '/api/repair-prices';
+      const method = editingService ? 'PUT' : 'POST';
 
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to save service record');
+      }
+
+      const savedRecord: RepairPriceRecord = await res.json();
       if (savedRecord && savedRecord.id) {
         await syncEntityToRtdb('repairPrices', savedRecord.id, savedRecord);
       }
@@ -770,7 +816,12 @@ export default function RepairPrices() {
   // Toggle Single Service Status
   const handleToggleServiceStatus = async (item: RepairPriceRecord) => {
     try {
-      const updated: RepairPriceRecord = await api.patch(`/repair-prices/${item.id}/toggle-status`, {});
+      const res = await fetch(`/api/repair-prices/${item.id}/toggle-status`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to toggle status');
+      const updated = await res.json();
       if (updated && updated.id) {
         await syncEntityToRtdb('repairPrices', updated.id, updated);
       }
@@ -786,7 +837,11 @@ export default function RepairPrices() {
     if (!serviceToDelete) return;
     try {
       setIsDeletingService(true);
-      await api.delete(`/repair-prices/${serviceToDelete.id}`);
+      const res = await fetch(`/api/repair-prices/${serviceToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to delete service');
       await deleteEntityFromRtdb('repairPrices', serviceToDelete.id);
       toast.success('✓ Repair service deleted.');
       setRecords(prev => prev.filter(r => r.id !== serviceToDelete.id));
@@ -836,12 +891,25 @@ export default function RepairPrices() {
     if (!folderToDelete) return;
     try {
       setIsDeletingFolder(true);
-      const result: any = await api.post('/repair-prices/delete-folder', {
-        brand: folderToDelete.level === 'brand' ? folderToDelete.name : folderToDelete.brand,
-        model: folderToDelete.level === 'model' ? folderToDelete.name : folderToDelete.model,
-        category: folderToDelete.level === 'category' ? folderToDelete.name : folderToDelete.category
+      const res = await fetch('/api/repair-prices/delete-folder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          brand: folderToDelete.level === 'brand' ? folderToDelete.name : folderToDelete.brand,
+          model: folderToDelete.level === 'model' ? folderToDelete.name : folderToDelete.model,
+          category: folderToDelete.level === 'category' ? folderToDelete.name : folderToDelete.category
+        })
       });
 
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete folder');
+      }
+
+      const result = await res.json();
       toast.success(`✓ Folder and ${result.deletedCount || 0} nested services permanently deleted.`);
       setFolderToDelete(null);
       fetchData();
@@ -896,7 +964,19 @@ export default function RepairPrices() {
         };
       }
 
-      await api.post('/repair-prices/move', payload);
+      const res = await fetch('/api/repair-prices/move', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to move items');
+      }
 
       toast.success('✓ Items relocated successfully.');
       setIsMoveModalOpen(false);
@@ -915,7 +995,19 @@ export default function RepairPrices() {
     try {
       setIsBulkDeleting(true);
       const ids = Array.from(selectedServiceIds);
-      await api.post('/repair-prices/bulk-delete', { ids });
+      const res = await fetch('/api/repair-prices/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ ids })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Bulk delete failed');
+      }
 
       for (const id of ids) {
         await deleteEntityFromRtdb('repairPrices', id).catch(() => {});

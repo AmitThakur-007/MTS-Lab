@@ -14,13 +14,13 @@ export function parseSafeDate(dateInput: any): Date | null {
       return isNaN(dateInput.getTime()) ? null : dateInput;
     }
 
-    // Firestore / Firebase timestamp object with toDate() method
+    // Database timestamp object with toDate() method
     if (typeof dateInput === 'object' && typeof dateInput.toDate === 'function') {
       const d = dateInput.toDate();
       return isNaN(d.getTime()) ? null : d;
     }
 
-    // Firestore serialized object with seconds / _seconds
+    // Serialized object with seconds / _seconds
     if (typeof dateInput === 'object') {
       const secs = dateInput.seconds ?? dateInput._seconds;
       if (typeof secs === 'number') {

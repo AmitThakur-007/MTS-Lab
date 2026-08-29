@@ -50,7 +50,6 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog';
-import PendingTransfersBanner from '@/components/repairs/PendingTransfersBanner';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -502,10 +501,23 @@ export default function ManagerDashboard() {
         if (customEndDate) queryParams.set('endDate', customEndDate);
       }
 
-      await api.download(
-        `/repairs/export?${queryParams.toString()}`,
-        `MTS_Lab_Manager_Repairs_${format(new Date(), 'yyyy-MM-dd')}.xlsx`
-      );
+      const res = await fetch(`/api/repairs/export?${queryParams.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        }
+      });
+
+      if (!res.ok) throw new Error("Export failed");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `MTS_Lab_Manager_Repairs_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
       toast.success("Repair records exported successfully.");
     } catch (err: any) {
       toast.error(err.message || "Failed to export Excel.");
@@ -524,6 +536,10 @@ export default function ManagerDashboard() {
             <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200 font-bold px-3 py-1 rounded-xl text-xs flex items-center gap-1.5">
               <Briefcase className="h-3.5 w-3.5 text-blue-600" />
               Repair Operations Hub
+            </Badge>
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold px-2.5 py-1 rounded-xl text-xs flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Sync Active
             </Badge>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
@@ -555,17 +571,15 @@ export default function ManagerDashboard() {
 
           <DashboardRefreshButton
             onRefresh={fetchData}
+            showLiveBadge={false}
             showLastUpdated={false}
             size="sm"
-            label="Refresh"
+            label="Sync"
             variant="outline"
             className="h-10 sm:h-11 rounded-2xl border-slate-200 font-bold text-xs shrink-0"
           />
         </div>
       </div>
-
-      {/* Incoming / Monitored Transfers Banner */}
-      <PendingTransfersBanner onTransferResolved={fetchData} />
 
       {/* Quick Access Hubs for Operations */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">

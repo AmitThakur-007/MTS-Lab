@@ -101,7 +101,7 @@ export default function RepairRelatedDamage() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
 
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdmin = user?.role === 'ADMIN';
   const isManager = user?.role === 'MANAGER';
   const canManage = isSuperAdmin || isAdmin || isManager;

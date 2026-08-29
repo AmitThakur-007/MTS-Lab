@@ -49,7 +49,6 @@ import { cn } from '@/lib/utils';
 import { useRealtimeSync } from '@/services/realtime';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { motion, AnimatePresence } from 'motion/react';
-import { normalizeRole } from '@/lib/rbac';
 
 const NEPAL_DISTRICTS = [
   'Kathmandu', 'Lalitpur', 'Bhaktapur', 'Morang', 'Sunsari', 'Jhapa', 'Kaski',
@@ -114,39 +113,37 @@ function CustomerCard({ customer, onView, onNewRepair, onEdit, onRestore, canEdi
 
           {/* Main Info */}
           <div className="flex-1 min-w-0">
-            <div className="min-w-0">
-              <div className="flex items-start gap-2 min-w-0">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start gap-2 flex-wrap min-w-0">
-                    <h3
-                      className="min-w-0 flex-1 font-extrabold text-slate-900 text-sm sm:text-base break-words [overflow-wrap:anywhere] leading-snug"
-                      title={customer.name}
-                    >
-                      {customer.name}
-                    </h3>
-                    {isReturning && (
-                      <Badge className="text-[9px] px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold rounded-full shrink-0 whitespace-nowrap">
-                        Returning
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap min-w-0">
-                    <span className="text-xs font-mono text-slate-500 flex items-center gap-1 min-w-0 max-w-full" title={customer.phone}>
-                      <Phone className="w-3 h-3 shrink-0" />
-                      <span className="truncate max-w-[130px] sm:max-w-none">{customer.phone}</span>
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <h3
+                    className="font-extrabold text-slate-900 text-sm sm:text-base break-words min-w-0"
+                    title={customer.name}
+                  >
+                    {customer.name}
+                  </h3>
+                  {isReturning && (
+                    <Badge className="text-[9px] px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold rounded-full shrink-0">
+                      Returning
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="text-xs font-mono text-slate-500 flex items-center gap-1 min-w-0" title={customer.phone}>
+                    <Phone className="w-3 h-3 shrink-0" />
+                    <span className="truncate max-w-[130px] sm:max-w-none">{customer.phone}</span>
+                  </span>
+                  {customer.district && (
+                    <span className="text-xs text-slate-400 flex items-center gap-1 shrink-0">
+                      <MapPin className="w-3 h-3" />
+                      <span className="truncate max-w-[80px] sm:max-w-none">{customer.district}</span>
                     </span>
-                    {customer.district && (
-                      <span className="text-xs text-slate-400 flex items-center gap-1 shrink-0 max-w-full">
-                        <MapPin className="w-3 h-3 shrink-0" />
-                        <span className="truncate max-w-[80px] sm:max-w-none">{customer.district}</span>
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
-              {/* Keep the identifier on its own line so long names cannot collapse the content column. */}
+              {/* customerId badge — capped width prevents layout displacement */}
               <span
-                className="inline-flex max-w-full mt-2 truncate text-[10px] font-mono text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full font-bold"
+                className="truncate text-[10px] font-mono text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full font-bold shrink-0 max-w-[110px] sm:max-w-[140px]"
                 title={customer.customerId}
               >
                 {customer.customerId}
@@ -199,14 +196,14 @@ function CustomerCard({ customer, onView, onNewRepair, onEdit, onRestore, canEdi
 
       {/* Action Buttons */}
       <div className="mt-auto px-4 sm:px-5 pb-4 sm:pb-5 flex items-center gap-2">
-          <Button
+        <Button
           variant="outline"
           size="sm"
           onClick={onView}
-          className="flex-[0.85] h-9 rounded-xl text-xs font-bold border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer min-w-0 px-2"
+          className="flex-1 h-9 rounded-xl text-xs font-bold border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer min-w-0"
         >
           <History className="w-3.5 h-3.5 mr-1.5 text-slate-500 shrink-0" />
-          <span className="truncate whitespace-nowrap">View</span>
+          <span className="truncate">View</span>
         </Button>
 
         {archived ? (
@@ -227,19 +224,19 @@ function CustomerCard({ customer, onView, onNewRepair, onEdit, onRestore, canEdi
                 variant="outline"
                 size="sm"
                 onClick={onEdit}
-                className="flex-[0.85] h-9 rounded-xl text-xs font-bold border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer min-w-0 px-2"
+                className="flex-1 h-9 rounded-xl text-xs font-bold border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer min-w-0"
               >
                 <Edit3 className="w-3.5 h-3.5 mr-1.5 text-slate-500 shrink-0" />
-                <span className="truncate whitespace-nowrap">Edit</span>
+                <span className="truncate">Edit</span>
               </Button>
             )}
             <Button
               size="sm"
               onClick={onNewRepair}
-              className="flex-[1.3] h-9 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-sm transition-all cursor-pointer min-w-0 px-2"
+              className="flex-1 h-9 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-sm transition-all cursor-pointer min-w-0"
             >
               <Plus className="w-3.5 h-3.5 mr-1 shrink-0" />
-              <span className="truncate whitespace-nowrap">New Repair</span>
+              <span className="truncate">New Repair</span>
             </Button>
           </>
         )}
@@ -297,18 +294,15 @@ export default function CustomerHub() {
   });
   const [createSaving, setCreateSaving] = useState(false);
 
-  const canonicalRole = normalizeRole(user?.role) || 'RECEPTIONIST';
-  const canCreateRepair = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(canonicalRole) || ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(user?.role || '');
-  const canCreateCustomer = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(canonicalRole) || ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '');
+  const canCreateRepair = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(user?.role || '');
+  const canCreateCustomer = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '');
   const canEdit = canCreateCustomer;
   // Results are already one server page; keeping this alias avoids applying a
   // second client-side slice to a paginated response.
   const pagedCustomers = customers;
 
-  const fetchCustomers = useCallback(async (query = '', sort = sortBy, order = sortOrder, requestedPage = page, silent = false) => {
-    if (!silent) {
-      setLoading(true);
-    }
+  const fetchCustomers = useCallback(async (query = '', sort = sortBy, order = sortOrder, requestedPage = page) => {
+    setLoading(true);
     try {
       const params = new URLSearchParams();
       if (query) params.set('search', query);
@@ -323,18 +317,14 @@ export default function CustomerHub() {
       setTotalCount(Array.isArray(data) ? list.length : (data?.pagination?.total ?? list.length));
       setTotalPages(Array.isArray(data) ? 1 : Math.max(1, data?.pagination?.totalPages ?? 1));
     } catch (err: any) {
-      if (!silent) {
-        toast.error(err.message || 'Failed to load customers');
-      }
+      toast.error(err.message || 'Failed to load customers');
     } finally {
-      if (!silent) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   }, [page, sortBy, sortOrder]);
 
   useEffect(() => {
-    fetchCustomers(searchQuery, sortBy, sortOrder, page, false);
+    fetchCustomers();
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
@@ -345,9 +335,9 @@ export default function CustomerHub() {
     if (page > totalPages) setPage(1);
   }, [page, totalPages]);
 
-  // Real-time sync — preserves current page and updates silently without flickering
+  // Real-time sync — preserves current page
   useRealtimeSync(['repair', 'customer', 'user'], () => {
-    fetchCustomers(searchQuery, sortBy, sortOrder, page, true);
+    fetchCustomers(searchQuery, sortBy, sortOrder);
   });
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -385,12 +375,7 @@ export default function CustomerHub() {
   };
 
   const handleEditCustomer = (customer: any) => {
-    navigate(`/dashboard/customers/${customer.id}`, {
-      state: {
-        openEdit: true,
-        returnTo: '/dashboard/customers',
-      },
-    });
+    navigate(`/dashboard/customers/${customer.id}`, { state: { openEdit: true } });
   };
 
   const handleRestoreCustomer = async (customer: any) => {
@@ -487,7 +472,7 @@ export default function CustomerHub() {
   const activeCount = customers.filter(c => (c.activeRepairs || 0) > 0).length;
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 space-y-6 pb-20 overflow-x-hidden">
+    <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 space-y-6 pb-20">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">

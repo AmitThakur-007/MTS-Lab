@@ -1,4 +1,5 @@
 import express from "express";
+import { createServer as createViteServer } from "vite";
 import { execSync } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -10,8 +11,6 @@ import rateLimit from "express-rate-limit";
 import { v4 as uuidv4 } from "uuid";
 import { v2 as cloudinary } from "cloudinary";
 import multer from "multer";
-import admin from "firebase-admin";
-import { getFirestore } from "firebase-admin/firestore";
 import fs from "fs";
 import dotenv from "dotenv";
 import { EventEmitter } from "events";
@@ -48,13 +47,6 @@ export function broadcastRealtimeEvent(payload: {
     timestamp: payload.timestamp || Date.now(),
   };
   realtimeHub.emit("realtime-event", eventPayload);
-
-  // Synchronize immediately to Firebase Realtime Database
-  try {
-    syncToRtdb(payload.entity, payload.action, payload.data || { id: payload.id }).catch(() => {});
-  } catch (err) {
-    // Non-blocking
-  }
 }
 
 // Programmatic environment setup with safe defaults
@@ -69,27 +61,6 @@ function validateAndSetupEnvironment() {
 
 validateAndSetupEnvironment();
 
-// Load Firebase Config
-let firebaseConfig: any = {};
-try {
-  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-  if (fs.existsSync(configPath)) {
-    firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  }
-} catch (err) {
-  console.warn("[FIREBASE] Could not load firebase-applet-config.json", err);
-}
-
-firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || firebaseConfig.apiKey || "AIzaSyDw4d4eSahPP6KL-0qZzzIr8V5BJaHtpNs",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain || "mts-lab-eb8d2.firebaseapp.com",
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || process.env.FIREBASE_DATABASE_URL || firebaseConfig.databaseURL || "https://mts-lab-eb8d2-default-rtdb.firebaseio.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId || "mts-lab-eb8d2",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket || "mts-lab-eb8d2.firebasestorage.app",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId || "473440131766",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID || firebaseConfig.appId || "1:473440131766:web:ebf94beed416c789b3e417",
-};
-
 const __filename = typeof import.meta !== "undefined" && import.meta && import.meta.url
   ? fileURLToPath(import.meta.url)
   : ((globalThis as any).__filename || "");
@@ -100,9 +71,6 @@ const __dirname = typeof import.meta !== "undefined" && import.meta && import.me
 
 // Sync db schema automatically at runtime with automatic corruption recovery
 function initializeDatabase() {
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.SERVERLESS) {
-    return;
-  }
   const dbPath = path.join(process.cwd(), "prisma/dev.db");
   try {
     console.log("[STARTUP] Running Prisma DB push programmatically...");
@@ -170,39 +138,6 @@ prisma.$use(async (params, next) => {
       } catch (evtErr) {
         console.warn("[REALTIME EVENT EMIT ERROR]", evtErr);
       }
-
-      // Sync with Firebase Realtime Database and Firestore
-      if (result) {
-        if (action === "delete") {
-          if (result.id) {
-            syncToRtdb(modelName, "DELETE", result).catch(() => {});
-            if (!firestoreSyncDisabled) {
-              try {
-                const db = getDb();
-                const collectionName = getCollectionName(modelName);
-                await db.collection(collectionName).doc(result.id).delete();
-                console.log(`[SYNC-DELETE] Deleted ${modelName} ${result.id} from Firestore`);
-              } catch (err: any) {
-                if (err?.code === 7 || err?.message?.includes("PERMISSION_DENIED") || err?.status === 7) {
-                  firestoreSyncDisabled = true;
-                } else {
-                  console.warn(`[SYNC-DELETE NOTICE] ${modelName} Firestore delete skipped:`, err?.message || err);
-                }
-              }
-            }
-          }
-        } else {
-          if (Array.isArray(result)) {
-            for (const item of result) {
-              syncToRtdb(modelName, actionType, item).catch(() => {});
-              await syncToFirestore(modelName, item);
-            }
-          } else {
-            syncToRtdb(modelName, actionType, result).catch(() => {});
-            await syncToFirestore(modelName, result);
-          }
-        }
-      }
     }
   }
   
@@ -231,11 +166,11 @@ async function fixInvalidStatuses() {
         targetStatus = "PENDING";
       } else {
         const uppercaseStatus = currentStatus.toUpperCase().trim();
-        const validStatuses = ["ACTIVE", "APPROVED", "PENDING", "REJECTED", "DISABLED", "INACTIVE", "SUSPENDED", "DELETED", "DEACTIVATED"];
+        const validStatuses = ["ACTIVE", "APPROVED", "PENDING", "REJECTED"];
         
         if (!validStatuses.includes(uppercaseStatus)) {
           console.log(`[STARTUP] Invalid user status found: "${currentStatus}" for user ${user.email}. Repairing...`);
-          if (user.role === "SUPER_ADMIN" || user.role === "SUPERADMIN" || user.isActive) {
+          if (user.role === "SUPER_ADMIN" || user.isActive) {
             targetStatus = "ACTIVE";
           } else {
             targetStatus = "PENDING";
@@ -379,16 +314,9 @@ async function generateUniqueRepairNumber(): Promise<string> {
   return `MTS-${currentYear}-${padded}`;
 }
 
-// Authoritative Centralized Helper to determine if 2FA is active for a user
+// Authoritative Helper to determine if 2FA is active for a user
 function isUser2FAEnabled(user: any): boolean {
   if (!user) return false;
-  const isSuperAdmin = user.role === 'SUPER_ADMIN' || user.role === 'SUPERADMIN' || user.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
-  
-  // Super Admin on first login (before completing security setup) defers 2FA challenge to enter setup screen
-  if (isSuperAdmin && !user.securitySetupCompleted) {
-    return false;
-  }
-
   const val = user.twoFactorEnabled;
   if (val === false || val === 'false' || val === 0 || val === '0') {
     return false;
@@ -396,11 +324,7 @@ function isUser2FAEnabled(user: any): boolean {
   if (val === true || val === 'true' || val === 1 || val === '1') {
     return true;
   }
-  // Default for Super Admin is OFF (false), while other staff roles default to ON (true)
-  if (isSuperAdmin) {
-    return false;
-  }
-  return true;
+  return user.twoFactorEnabled !== false;
 }
 
 // Helper to generate next unique sequential battery warranty number (e.g. BW-2026-0001)
@@ -583,28 +507,27 @@ async function ensureAdminUser() {
           name: "MTS Super Admin",
           role: "SUPER_ADMIN",
           accountStatus: "ACTIVE",
-          isActive: true
+          isActive: true,
+          twoFactorEnabled: true,
+          twoFactorType: "EMAIL"
         }
       });
       console.log("[STARTUP] Primary Super Admin provisioned successfully.");
     } else {
-      // Ensure primary super admin has SUPER_ADMIN role and ACTIVE status
-      if (primaryAdmin.role !== "SUPER_ADMIN" || primaryAdmin.accountStatus !== "ACTIVE" || !primaryAdmin.isActive) {
+      // Ensure primary super admin has SUPER_ADMIN role, ACTIVE status, and 2FA enabled
+      if (primaryAdmin.role !== "SUPER_ADMIN" || primaryAdmin.accountStatus !== "ACTIVE" || !primaryAdmin.isActive || !primaryAdmin.twoFactorEnabled) {
         primaryAdmin = await prisma.user.update({
           where: { id: primaryAdmin.id },
           data: {
             role: "SUPER_ADMIN",
             accountStatus: "ACTIVE",
-            isActive: true
+            isActive: true,
+            twoFactorEnabled: true,
+            twoFactorType: "EMAIL"
           }
         });
       }
     }
-
-    await syncUserToFirestore(primaryAdmin);
-    await reconcileLegacyStaffFirebaseUids().catch((err) => {
-      console.warn("[STARTUP] Firebase UID reconciliation notice:", err);
-    });
   } catch (err) {
     console.error("[STARTUP ERROR] Failed to ensure Super Admin user:", err);
   }
@@ -616,7 +539,7 @@ async function ensureDefaultBranch() {
     const branchCount = await prisma.branch.count();
     if (branchCount === 0) {
       console.log("[STARTUP] Creating default branch...");
-      const newBranch = await prisma.branch.create({
+      await prisma.branch.create({
         data: {
           name: "Kathmandu Central Hub",
           location: "New Road, Kathmandu",
@@ -624,12 +547,6 @@ async function ensureDefaultBranch() {
         }
       });
       console.log("[STARTUP] Default branch created.");
-      await syncBranchToFirestore(newBranch);
-    } else {
-      const branches = await prisma.branch.findMany();
-      for (const branch of branches) {
-        await syncBranchToFirestore(branch);
-      }
     }
   } catch (err) {
     console.error("[STARTUP ERROR] Failed to ensure default branch:", err);
@@ -1739,987 +1656,49 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Initialize Firebase Admin safely ensuring initializeApp is always executed
-let firestoreSyncDisabled = !(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-
-function ensureFirebaseAdminApp() {
-  if (!admin.apps.length) {
-    try {
-      const hasCreds = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.FIREBASE_ADMIN_CREDENTIALS);
-      const initOptions: any = {
-        projectId: firebaseConfig.projectId || "mts-lab-eb8d2",
-      };
-      if (hasCreds) {
-        initOptions.databaseURL = firebaseConfig.databaseURL || "https://mts-lab-eb8d2-default-rtdb.firebaseio.com";
-      }
-      admin.initializeApp(initOptions);
-      console.log("[FIREBASE] Admin SDK initialized for project:", firebaseConfig.projectId || "mts-lab-eb8d2");
-    } catch (err: any) {
-      console.warn("[FIREBASE] Admin SDK initialization notice:", err?.message || err);
-    }
-  }
-}
-
-// Guarantee Firebase Admin is initialized at startup
-ensureFirebaseAdminApp();
-
-function getAdminAuth() {
-  ensureFirebaseAdminApp();
-  if (admin.apps.length > 0) {
-    try {
-      return admin.auth();
-    } catch (err) {
-      console.warn("[FIREBASE] Admin auth unavailable:", err);
-      return null;
-    }
-  }
-  return null;
-}
-
-function getAdminDatabase() {
-  const hasCreds = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.FIREBASE_ADMIN_CREDENTIALS);
-  if (!hasCreds) return null;
-  ensureFirebaseAdminApp();
-  if (admin.apps.length > 0) {
-    try {
-      return admin.database();
-    } catch (err) {
-      return null;
-    }
-  }
-  return null;
-}
-
-// -----------------------------------------------------------------------------
-// ROLE NORMALIZATION & PERMANENT DELETION HELPERS
-// -----------------------------------------------------------------------------
-
-function normalizeRole(role: string | null | undefined): string {
-  if (!role) return 'RECEPTIONIST';
-  const r = String(role).toUpperCase().trim();
-  if (r === 'SUPERADMIN' || r === 'SUPER_ADMIN') return 'SUPERADMIN';
-  if (r === 'ADMIN') return 'ADMIN';
-  if (r === 'MANAGER') return 'MANAGER';
-  if (r === 'HEAD_TECHNICIAN' || r === 'HEADTECHNICIAN' || r === 'LEAD_TECHNICIAN' || r === 'LEAD_TECH') return 'HEAD_TECHNICIAN';
-  if (r === 'TECHNICIAN' || r === 'TECH') return 'TECHNICIAN';
-  if (r === 'RECEPTIONIST' || r === 'RECEPTION') return 'RECEPTIONIST';
-  if (r === 'CUSTOMER') return 'CUSTOMER';
-  return r;
-}
-
-async function permanentlyDeleteUserRecord(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return false;
-
-  // Find primary SuperAdmin to reassign creator foreign keys safely
-  const primarySuperAdmin = await prisma.user.findFirst({
-    where: {
-      role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] },
-      deletedAt: null,
-      id: { not: userId }
-    },
-    orderBy: { createdAt: 'asc' }
-  });
-
-  const fallbackAdminId = primarySuperAdmin ? primarySuperAdmin.id : userId;
-
-  // 1. Delete Firebase Authentication user
-  try {
-    await syncDeleteFirebaseAuthUser(user.firebaseUid, user.email);
-  } catch (fbErr: any) {
-    console.warn("[PERMANENT DELETE] Firebase Auth deletion notice:", fbErr?.message || fbErr);
-  }
-
-  // 2. Unlink / Reassign foreign keys & delete user records atomically
-  await prisma.$transaction(async (tx) => {
-    if (fallbackAdminId !== userId) {
-      await tx.repair.updateMany({
-        where: { createdById: userId },
-        data: { createdById: fallbackAdminId }
-      }).catch(() => {});
-
-      await tx.batteryWarranty.updateMany({
-        where: { createdById: userId },
-        data: { createdById: fallbackAdminId }
-      }).catch(() => {});
-
-      await tx.attendance.updateMany({
-        where: { markedById: userId },
-        data: { markedById: fallbackAdminId }
-      }).catch(() => {});
-
-      await tx.repairRelatedDamage.updateMany({
-        where: { recordedById: userId },
-        data: { recordedById: fallbackAdminId }
-      }).catch(() => {});
-
-      await tx.inventoryItem.updateMany({
-        where: { createdById: userId },
-        data: { createdById: fallbackAdminId }
-      }).catch(() => {});
-
-      await tx.inventoryTransaction.updateMany({
-        where: { performedById: userId },
-        data: { performedById: fallbackAdminId }
-      }).catch(() => {});
-
-      await tx.attendanceAuditLog.updateMany({
-        where: { performedById: userId },
-        data: { performedById: fallbackAdminId }
-      }).catch(() => {});
-
-      await tx.repairRelatedDamageAudit.updateMany({
-        where: { performedById: userId },
-        data: { performedById: fallbackAdminId }
-      }).catch(() => {});
-
-      await tx.mediaAttachment.updateMany({
-        where: { uploadedById: userId },
-        data: { uploadedById: fallbackAdminId }
-      }).catch(() => {});
-
-      await tx.accessRequest.updateMany({
-        where: { approvedBy: userId },
-        data: { approvedBy: fallbackAdminId }
-      }).catch(() => {});
-    }
-
-    await tx.repair.updateMany({
-      where: { technicianId: userId },
-      data: { technicianId: null }
-    }).catch(() => {});
-
-    await tx.auditLog.updateMany({
-      where: { userId },
-      data: { userId: null }
-    }).catch(() => {});
-
-    // Delete user-owned session & auxiliary records
-    await tx.attendance.deleteMany({ where: { userId } }).catch(() => {});
-    await tx.repairRelatedDamage.deleteMany({ where: { staffId: userId } }).catch(() => {});
-    await tx.technicianNote.deleteMany({ where: { technicianId: userId } }).catch(() => {});
-    await tx.session.deleteMany({ where: { userId } }).catch(() => {});
-    await tx.loginActivity.deleteMany({ where: { userId } }).catch(() => {});
-    await tx.approvedDevice.deleteMany({ where: { userId } }).catch(() => {});
-    await tx.accessRequest.deleteMany({ where: { userId } }).catch(() => {});
-    await tx.passwordResetToken.deleteMany({ where: { userId } }).catch(() => {});
-
-    // 3. Permanently delete User row from SQLite/PostgreSQL database
-    await tx.user.delete({ where: { id: userId } });
-  });
-
-  // 4. Sync deletion to central Firestore and Realtime Database
-  if (user.id) await deleteFromFirestore("user", user.id).catch(() => {});
-  if (user.firebaseUid) await deleteFromFirestore("user", user.firebaseUid).catch(() => {});
-  await syncToRtdb("user", "DELETE", { id: userId, firebaseUid: user.firebaseUid }).catch(() => {});
-
-  return true;
-}
-
-// -----------------------------------------------------------------------------
-// AUTHORITATIVE FIREBASE AUTHENTICATION SYNCHRONIZATION HELPERS
-// -----------------------------------------------------------------------------
-
-async function syncCreateFirebaseAuthUser(
-  email: string,
-  password?: string,
-  displayName?: string
-): Promise<{ firebaseUid: string; emailVerified: boolean }> {
-  const normalizedEmail = email.toLowerCase().trim();
-  const auth = getAdminAuth();
-  if (auth) {
-    let fbUser;
-    let adminSdkFailed = false;
-
-    try {
-      fbUser = await auth.getUserByEmail(normalizedEmail);
-      if (fbUser) {
-        if (password || displayName) {
-          await auth.updateUser(fbUser.uid, {
-            ...(password ? { password } : {}),
-            ...(displayName ? { displayName: displayName.trim() } : {})
-          });
-        }
-        return { firebaseUid: fbUser.uid, emailVerified: Boolean(fbUser.emailVerified) };
-      }
-    } catch (getErr: any) {
-      const getErrMsg = String(getErr?.message || getErr);
-      if (getErrMsg.includes('default credentials') || getErrMsg.includes('credential') || getErrMsg.includes('GOOGLE_APPLICATION_CREDENTIALS')) {
-        adminSdkFailed = true;
-      } else if (getErr?.code !== 'auth/user-not-found') {
-        console.warn("[FIREBASE AUTH] getUserByEmail notice:", getErrMsg);
-      }
-    }
-
-    if (!adminSdkFailed) {
-      try {
-        const newFbUser = await auth.createUser({
-          email: normalizedEmail,
-          ...(password ? { password } : {}),
-          ...(displayName ? { displayName: displayName.trim() } : {}),
-          disabled: false
-        });
-        return { firebaseUid: newFbUser.uid, emailVerified: Boolean(newFbUser.emailVerified) };
-      } catch (createErr: any) {
-        const createErrMsg = String(createErr?.message || createErr);
-        if (createErrMsg.includes('default credentials') || createErrMsg.includes('credential') || createErrMsg.includes('GOOGLE_APPLICATION_CREDENTIALS')) {
-          adminSdkFailed = true;
-        } else {
-          throw new Error(createErrMsg || "Failed to create Firebase Authentication user.");
-        }
-      }
-    }
-  }
-
-  // Fallback to Identity Toolkit REST API
-  const restRes = await ensureFirebaseUserAndSendVerification(normalizedEmail, password || 'MtsLab@2026SecurePass123!', displayName || '');
-  if (restRes.firebaseUid) {
-    return { firebaseUid: restRes.firebaseUid, emailVerified: false };
-  }
-  if (restRes.errorCode === 'EMAIL_EXISTS' || restRes.errorCode === 'EMAIL_EXISTS_TRY_LOGIN') {
-    const existingCheck = await checkFirebaseUserEmailVerified(normalizedEmail, password);
-    if (existingCheck.firebaseUid) {
-      return { firebaseUid: existingCheck.firebaseUid, emailVerified: Boolean(existingCheck.isVerified) };
-    }
-  }
-  throw new Error(restRes.errorCode || "Firebase Authentication is currently unavailable.");
-}
-
-async function syncUpdateFirebaseAuthUser(
-  firebaseUid: string | null | undefined,
-  email: string,
-  updates: {
-    email?: string;
-    password?: string;
-    displayName?: string;
-    disabled?: boolean;
-  }
-): Promise<{ firebaseUid: string; updatedEmail?: string }> {
-  const auth = getAdminAuth();
-  let targetUid = firebaseUid || null;
-
-  if (auth) {
-    if (!targetUid && email) {
-      try {
-        const fbUser = await auth.getUserByEmail(email.toLowerCase().trim());
-        if (fbUser) targetUid = fbUser.uid;
-      } catch {}
-    }
-
-    if (targetUid) {
-      try {
-        const payload: any = {};
-        if (updates.email) payload.email = updates.email.toLowerCase().trim();
-        if (updates.password) payload.password = updates.password;
-        if (updates.displayName) payload.displayName = updates.displayName.trim();
-        if (updates.disabled !== undefined) payload.disabled = Boolean(updates.disabled);
-
-        const updatedFbUser = await auth.updateUser(targetUid, payload);
-        return { firebaseUid: updatedFbUser.uid, updatedEmail: updatedFbUser.email };
-      } catch (updateErr: any) {
-        const errMsg = String(updateErr?.message || updateErr);
-        if (!errMsg.includes('default credentials') && !errMsg.includes('credential')) {
-          throw new Error(errMsg || "Failed to update Firebase Authentication account.");
-        }
-      }
-    }
-  }
-
-  // REST API fallback for user updates
-  const apiKey = firebaseConfig.apiKey || process.env.FIREBASE_API_KEY;
-  if (updates.password && email && apiKey) {
-    try {
-      const restRes = await ensureFirebaseUserAndSendVerification(email.toLowerCase().trim(), updates.password, updates.displayName);
-      if (restRes.firebaseUid) {
-        return { firebaseUid: restRes.firebaseUid };
-      }
-    } catch {}
-  }
-
-  return { firebaseUid: targetUid || '' };
-}
-
-async function syncDeleteFirebaseAuthUser(
-  firebaseUid: string | null | undefined,
-  email: string
-): Promise<boolean> {
-  const auth = getAdminAuth();
-  let targetUid = firebaseUid || null;
-
-  if (auth) {
-    if (!targetUid && email) {
-      try {
-        const fbUser = await auth.getUserByEmail(email.toLowerCase().trim());
-        if (fbUser) targetUid = fbUser.uid;
-      } catch {}
-    }
-
-    if (targetUid) {
-      try {
-        await auth.deleteUser(targetUid);
-        return true;
-      } catch (err: any) {
-        if (err?.code === 'auth/user-not-found') return true;
-        try {
-          await auth.updateUser(targetUid, { disabled: true });
-          return true;
-        } catch {}
-      }
-    }
-  }
-  return false;
-}
-
-async function reconcileLegacyStaffFirebaseUids() {
-  try {
-    const unlinkedUsers = await prisma.user.findMany({
-      where: {
-        firebaseUid: null,
-        deletedAt: null
-      }
-    });
-
-    if (unlinkedUsers.length === 0) return;
-    console.log(`[FIREBASE RECONCILIATION] Found ${unlinkedUsers.length} staff accounts without firebaseUid. Reconciling...`);
-
-    for (const user of unlinkedUsers) {
-      try {
-        const passHint = user.email === 'mtsmobilelab@gmail.com' ? 'admin123' : (user.email === 'omprakashthakur950rt@gmail.com' ? 'Abishek@200' : 'MtsLab@2026Secure');
-        const fbResult = await syncCreateFirebaseAuthUser(user.email, passHint, user.name);
-        if (fbResult.firebaseUid) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { firebaseUid: fbResult.firebaseUid }
-          });
-          console.log(`[FIREBASE RECONCILIATION] Linked staff ${user.email} (${user.role}) -> Firebase UID: ${fbResult.firebaseUid}`);
-        }
-      } catch (err: any) {
-        console.warn(`[FIREBASE RECONCILIATION NOTICE] Could not reconcile ${user.email}:`, err?.message || err);
-      }
-    }
-  } catch (dbErr) {
-    console.warn("[FIREBASE RECONCILIATION ERROR]", dbErr);
-  }
-}
-
-function validateStrongPasswordServer(password: string): { valid: boolean; message?: string } {
-  if (!password || password.length < 12) {
-    return { valid: false, message: "Password must be at least 12 characters long." };
-  }
-  if (!/[A-Z]/.test(password)) {
-    return { valid: false, message: "Password must contain at least 1 uppercase letter (A-Z)." };
-  }
-  if (!/[a-z]/.test(password)) {
-    return { valid: false, message: "Password must contain at least 1 lowercase letter (a-z)." };
-  }
-  if (!/[0-9]/.test(password)) {
-    return { valid: false, message: "Password must contain at least 1 numeric digit (0-9)." };
-  }
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)) {
-    return { valid: false, message: "Password must contain at least 1 special character (e.g. @, #, $, !)." };
-  }
-  return { valid: true };
-}
-
-// Resilient helper to verify live Firebase Auth email verification state and ID token
-async function checkFirebaseUserEmailVerified(
+// User verification helper using central database
+async function checkUserEmailVerified(
   email?: string | null,
   password?: string,
   idToken?: string,
-  firebaseUid?: string | null
-): Promise<{ checked: boolean; isVerified: boolean; firebaseUid?: string; email?: string; authFailed?: boolean }> {
+  authUid?: string | null
+): Promise<{ checked: boolean; isVerified: boolean; email?: string }> {
   const normalizedEmail = email ? email.toLowerCase().trim() : '';
-  const apiKey = firebaseConfig.apiKey || process.env.FIREBASE_API_KEY;
-
-  // 1. If idToken is provided, verify using Admin SDK or Google Identity Toolkit REST API
-  if (idToken) {
-    const auth = getAdminAuth();
-    if (auth) {
-      try {
-        const decoded = await auth.verifyIdToken(idToken);
-        if (decoded && decoded.uid) {
-          return {
-            checked: true,
-            isVerified: Boolean(decoded.email_verified),
-            firebaseUid: decoded.uid,
-            email: decoded.email ? decoded.email.toLowerCase().trim() : normalizedEmail
-          };
-        }
-      } catch (tokenErr) {
-        console.warn("[FIREBASE AUTH] verifyIdToken notice:", tokenErr);
-      }
-    }
-
-    if (apiKey) {
-      try {
-        const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idToken })
-        });
-        if (res.ok) {
-          const data: any = await res.json();
-          const fbUser = data?.users?.[0];
-          if (fbUser) {
-            return {
-              checked: true,
-              isVerified: Boolean(fbUser.emailVerified),
-              firebaseUid: fbUser.localId,
-              email: fbUser.email?.toLowerCase().trim()
-            };
-          }
-        }
-      } catch (lookupErr) {
-        console.warn("[FIREBASE AUTH] accounts:lookup error:", lookupErr);
-      }
-    }
-  }
-
-  // 2. If password is provided, query Google Identity Toolkit signInWithPassword
-  if (password && normalizedEmail && apiKey) {
-    try {
-      const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: normalizedEmail,
-          password,
-          returnSecureToken: true
-        })
-      });
-      if (res.ok) {
-        const data: any = await res.json();
-        let isVerified = false;
-        if (data?.idToken) {
-          try {
-            const lookupRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ idToken: data.idToken })
-            });
-            if (lookupRes.ok) {
-              const lookupData: any = await lookupRes.json().catch(() => ({}));
-              const fbUser = lookupData?.users?.[0];
-              if (fbUser) {
-                isVerified = Boolean(fbUser.emailVerified);
-              }
-            }
-          } catch (lookupErr) {
-            console.warn("[FIREBASE AUTH] lookup after signInWithPassword error:", lookupErr);
-          }
-        }
-        return {
-          checked: true,
-          isVerified,
-          firebaseUid: data.localId,
-          email: data.email?.toLowerCase().trim() || normalizedEmail
-        };
-      }
-    } catch (signInErr) {
-      console.warn("[FIREBASE AUTH] signInWithPassword error:", signInErr);
-    }
-  }
-
-  // 3. Admin SDK lookup by firebaseUid or email & password sync
-  const auth = getAdminAuth();
-  if (auth) {
-    try {
-      let fbUser = null;
-      if (firebaseUid) {
-        try {
-          fbUser = await auth.getUser(firebaseUid);
-        } catch (uidErr) {}
-      }
-      if (!fbUser && normalizedEmail) {
-        try {
-          fbUser = await auth.getUserByEmail(normalizedEmail);
-        } catch (emailErr) {}
-      }
-      if (fbUser) {
-        // If password is provided and local bcrypt passed, sync password to Firebase Auth
-        if (password) {
-          try {
-            await auth.updateUser(fbUser.uid, { password });
-          } catch (updateErr) {
-            console.warn("[FIREBASE AUTH] Admin SDK password sync notice:", updateErr);
-          }
-        }
-        return {
-          checked: true,
-          isVerified: Boolean(fbUser.emailVerified),
-          firebaseUid: fbUser.uid,
-          email: fbUser.email?.toLowerCase().trim()
-        };
-      }
-    } catch (adminErr: any) {}
-  }
-
-  return { checked: false, isVerified: false };
-}
-
-// Consume a Firebase email-verification action code on the server. The returned
-// Firebase ID token is intentionally never exposed to the client or logged.
-async function applyFirebaseEmailVerificationCode(
-  oobCode?: string | null
-): Promise<{ checked: boolean; isVerified: boolean; firebaseUid?: string; email?: string }> {
-  const apiKey = firebaseConfig.apiKey || process.env.FIREBASE_API_KEY;
-  if (!oobCode || !apiKey) {
+  if (!normalizedEmail && !authUid) {
     return { checked: false, isVerified: false };
   }
 
   try {
-    const response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:update?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oobCode: String(oobCode).trim(), returnSecureToken: true })
-      }
-    );
-    const data: any = await response.json().catch(() => ({}));
-
-    if (!response.ok || !data?.localId || data.emailVerified !== true) {
-      return { checked: false, isVerified: false };
-    }
-
-    return {
-      checked: true,
-      isVerified: true,
-      firebaseUid: data.localId,
-      email: data.email?.toLowerCase().trim()
-    };
-  } catch (err: any) {
-    console.warn("[FIREBASE AUTH] Email action-code exchange notice:", err?.message || err);
-    return { checked: false, isVerified: false };
-  }
-}
-
-async function sendFirebaseVerificationEmailWithIdToken(
-  idToken: string | undefined,
-  expectedEmail: string
-): Promise<{ sent: boolean; alreadyVerified?: boolean; firebaseUid?: string; email?: string; errorCode?: string }> {
-  const apiKey = firebaseConfig.apiKey || process.env.FIREBASE_API_KEY;
-  if (!idToken || !apiKey) return { sent: false };
-
-  try {
-    const lookup = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken })
-    });
-    if (!lookup.ok) {
-      const errorData: any = await lookup.json().catch(() => ({}));
-      const providerMessage = errorData?.error?.message || errorData?.error?.status || "UNKNOWN_PROVIDER_ERROR";
-      console.warn("[FIREBASE AUTH] Verification resend lookup rejected:", lookup.status, providerMessage);
-      return { sent: false, errorCode: String(providerMessage).split(' : ')[0] };
-    }
-    const lookupData: any = await lookup.json();
-    const fbUser = lookupData?.users?.[0];
-    const normalizedExpected = String(expectedEmail || '').toLowerCase().trim();
-    const firebaseEmail = String(fbUser?.email || '').toLowerCase().trim();
-    if (!fbUser?.localId || !firebaseEmail || firebaseEmail !== normalizedExpected) {
-      return { sent: false };
-    }
-    if (fbUser.emailVerified === true) {
-      return { sent: true, alreadyVerified: true, firebaseUid: fbUser.localId, email: firebaseEmail };
-    }
-
-    const sendEndpoint = `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`;
-    const sendResponse = await fetch(sendEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // Do not attach a temporary or unallowlisted continue URL. Firebase's
-      // hosted verification handler remains authoritative and this keeps one
-      // explicit click to one provider request.
-      body: JSON.stringify({ requestType: "VERIFY_EMAIL", idToken })
-    });
-    let providerErrorCode: string | undefined;
-    if (!sendResponse.ok) {
-      const errorData: any = await sendResponse.json().catch(() => ({}));
-      const providerMessage = errorData?.error?.message || errorData?.error?.status || "unknown provider error";
-      providerErrorCode = String(providerMessage).split(' : ')[0];
-      console.warn("[FIREBASE AUTH] Verification resend rejected:", sendResponse.status, providerMessage);
-    }
-    return { sent: sendResponse.ok, firebaseUid: fbUser.localId, email: firebaseEmail, ...(sendResponse.ok ? {} : { errorCode: providerErrorCode }) };
-  } catch (err: any) {
-    console.warn("[FIREBASE AUTH] ID-token verification email notice:", err?.message || err);
-    return { sent: false };
-  }
-}
-
-const FIREBASE_VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000;
-const firebaseVerificationResendCooldowns = new Map<string, number>();
-
-function getFirebaseVerificationCooldownSeconds(email: string): number {
-  const key = String(email || '').toLowerCase().trim();
-  const expiresAt = firebaseVerificationResendCooldowns.get(key) || 0;
-  const remainingMs = expiresAt - Date.now();
-  if (remainingMs <= 0) {
-    firebaseVerificationResendCooldowns.delete(key);
-    return 0;
-  }
-  return Math.ceil(remainingMs / 1000);
-}
-
-function markFirebaseVerificationAttempt(email: string): void {
-  const key = String(email || '').toLowerCase().trim();
-  if (key) firebaseVerificationResendCooldowns.set(key, Date.now() + FIREBASE_VERIFICATION_RESEND_COOLDOWN_MS);
-}
-
-function maskEmail(email: string): string {
-  if (!email || !email.includes("@")) return "***@***.com";
-  const [local, domain] = email.split("@");
-  if (local.length <= 2) {
-    return `${local[0]}***@${domain}`;
-  }
-  return `${local[0]}${"*".repeat(Math.max(1, local.length - 2))}${local[local.length - 1]}@${domain}`;
-}
-
-function initMailTransporter() {
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = parseInt(process.env.SMTP_PORT || "587", 10);
-  const smtpUser = (process.env.SMTP_USER || process.env.GMAIL_USER || process.env.EMAIL_USER || "").trim();
-  const smtpPass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS || "").replace(/\s+/g, "");
-  const smtpSecure = process.env.SMTP_SECURE === "true" || smtpPort === 465;
-
-  if (smtpHost && smtpUser && smtpPass) {
-    return nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpSecure,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-      tls: {
-        rejectUnauthorized: false
+    const user = await prisma.user.findFirst({
+      where: {
+        deletedAt: null,
+        OR: [
+          ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+          ...(authUid ? [{ supabaseUid: authUid }, { id: authUid }] : [])
+        ]
       }
     });
-  } else if (smtpUser && smtpPass) {
-    return nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-  }
-  return null;
-}
 
-async function sendEmail(
-  toOrOptions: string | { to: string; subject: string; body?: string; text?: string; html?: string },
-  subjectParam?: string,
-  bodyParam?: string,
-  htmlParam?: string
-): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  let to: string;
-  let subject: string;
-  let body: string;
-  let html: string | undefined;
-
-  if (typeof toOrOptions === 'object' && toOrOptions !== null) {
-    to = toOrOptions.to;
-    subject = toOrOptions.subject;
-    body = toOrOptions.body || toOrOptions.text || '';
-    html = toOrOptions.html;
-  } else {
-    to = String(toOrOptions);
-    subject = subjectParam || '';
-    body = bodyParam || '';
-    html = htmlParam;
-  }
-
-  const fromAddress = process.env.SMTP_FROM || process.env.GMAIL_USER || process.env.EMAIL_USER || '"MTS Lab Security" <no-reply@mtslab.com>';
-
-  const defaultHtml = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; background-color: #f8fafc; border-radius: 16px;">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <div style="display: inline-block; width: 48px; height: 48px; background-color: #0f172a; border-radius: 12px; line-height: 48px; color: #ffffff; font-size: 24px; font-weight: bold;">M</div>
-        <h2 style="color: #0f172a; margin: 12px 0 4px 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">MTS Lab Security OS</h2>
-        <p style="color: #64748b; margin: 0; font-size: 13px; font-weight: 500;">Mobile Technology Station (MTS) &bull; Smartphone Repair Management</p>
-      </div>
-      <div style="background-color: #ffffff; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-        <h3 style="color: #1e293b; margin-top: 0; font-size: 16px; font-weight: 700;">${subject}</h3>
-        <div style="color: #334155; font-size: 14px; line-height: 1.6; white-space: pre-line; margin: 16px 0;">${body}</div>
-        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; text-align: center;">
-          This is an automated security message. If you did not initiate this request, please contact the Super Administrator immediately.
-        </div>
-      </div>
-    </div>
-  `;
-
-  // 1. Check Resend HTTP API
-  if (process.env.RESEND_API_KEY) {
-    try {
-      console.log(`[AUTH DIAGNOSTIC] Dispatching 2FA email via Resend API to ${maskEmail(to)}...`);
-      const resendFrom = process.env.SMTP_FROM || "MTS Lab <onboarding@resend.dev>";
-      const resendRes = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          from: resendFrom.includes("<") ? resendFrom : `MTS Lab <${resendFrom}>`,
-          to: [to],
-          subject,
-          text: body,
-          html: html || defaultHtml
-        })
-      });
-      const resData: any = await resendRes.json();
-      if (resendRes.ok) {
-        console.log(`[AUTH DIAGNOSTIC] ✅ Resend delivery succeeded (Message ID: ${resData?.id})`);
-        return { success: true, messageId: resData?.id };
-      } else {
-        console.error(`[AUTH DIAGNOSTIC] ⚠️ Resend API returned error:`, resData?.message || resData);
-        if (resData?.name === 'validation_error' && resData?.message?.includes('testing emails')) {
-          console.warn(`[AUTH DIAGNOSTIC] 💡 Resend Free Tier Notice: Resend currently only allows sending to the account owner email. Verify your domain at https://resend.com/domains to send to all staff emails.`);
-        }
-      }
-    } catch (resendErr: any) {
-      console.error(`[AUTH DIAGNOSTIC] ⚠️ Resend fetch failed:`, resendErr?.message || resendErr);
+    if (user) {
+      return {
+        checked: true,
+        isVerified: Boolean(user.emailVerified),
+        email: user.email
+      };
     }
+  } catch (err) {
+    console.warn("[AUTH] User verification check notice:", err);
   }
 
-  // 2. Check SendGrid HTTP API
-  if (process.env.SENDGRID_API_KEY) {
-    try {
-      console.log(`[AUTH DIAGNOSTIC] Dispatching 2FA email via SendGrid API to ${maskEmail(to)}...`);
-      const sendgridRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.SENDGRID_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email: to }] }],
-          from: { email: process.env.SMTP_FROM_EMAIL || "no-reply@mtslab.com", name: "MTS Lab Security" },
-          subject,
-          content: [
-            { type: "text/plain", value: body },
-            { type: "text/html", value: html || defaultHtml }
-          ]
-        })
-      });
-      if (sendgridRes.ok || sendgridRes.status === 202) {
-        console.log(`[AUTH DIAGNOSTIC] ✅ SendGrid delivery succeeded (HTTP ${sendgridRes.status})`);
-        return { success: true };
-      } else {
-        console.error(`[AUTH DIAGNOSTIC] ⚠️ SendGrid returned HTTP ${sendgridRes.status}`);
-      }
-    } catch (sgErr: any) {
-      console.error(`[AUTH DIAGNOSTIC] ⚠️ SendGrid fetch failed:`, sgErr?.message || sgErr);
-    }
-  }
-
-  // 3. Check Nodemailer (Gmail or Custom SMTP)
-  const transporter = initMailTransporter();
-  if (transporter) {
-    try {
-      console.log(`[AUTH DIAGNOSTIC] Dispatching 2FA email via SMTP to ${maskEmail(to)}...`);
-      const info = await transporter.sendMail({
-        from: fromAddress,
-        to,
-        subject,
-        text: body,
-        html: html || defaultHtml
-      });
-      console.log(`[AUTH DIAGNOSTIC] ✅ SMTP delivery succeeded (Message ID: ${info.messageId})`);
-      return { success: true, messageId: info.messageId };
-    } catch (err: any) {
-      console.error(`[AUTH DIAGNOSTIC] ❌ SMTP delivery failed (${err?.code || err?.message || err})`);
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[AUTH DIAGNOSTIC] ℹ️ Non-production fallback active: Simulating email delivery to ${maskEmail(to)}.`);
-        return { success: true, messageId: 'dev-fallback-' + Date.now() };
-      }
-      return { success: false, error: err?.message || "SMTP delivery failed" };
-    }
-  }
-
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`[AUTH DIAGNOSTIC] ℹ️ Non-production mode: Simulating 2FA email delivery to ${maskEmail(to)}.`);
-    return { success: true, messageId: 'simulated-dev-mail-' + Date.now() };
-  }
-
-  return { success: false, error: "No active production email service configured in environment." };
-}
-
-// Create or locate the Firebase Auth account and dispatch Firebase's official
-// verification email through Identity Toolkit when the Admin SDK is unavailable.
-async function ensureFirebaseUserAndSendVerification(
-  email: string,
-  password: string,
-  displayName?: string
-): Promise<{ sent: boolean; firebaseUid?: string; errorCode?: string }> {
-  const apiKey = firebaseConfig.apiKey || process.env.FIREBASE_API_KEY;
-  const normalizedEmail = String(email || '').toLowerCase().trim();
-  if (!apiKey || !normalizedEmail || !password) {
-    return { sent: false };
-  }
-
-  const endpoint = (operation: string) =>
-    `https://identitytoolkit.googleapis.com/v1/accounts:${operation}?key=${encodeURIComponent(apiKey)}`;
-
-  try {
-    let authData: any = null;
-    let providerErrorCode: string | undefined;
-    const signIn = await fetch(endpoint('signInWithPassword'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: normalizedEmail, password, returnSecureToken: true })
-    });
-    if (signIn.ok) {
-      authData = await signIn.json();
-    } else {
-      const signInError: any = await signIn.json().catch(() => ({}));
-      providerErrorCode = signInError?.error?.message || signInError?.error?.status;
-      // Identity Toolkit may return INVALID_LOGIN_CREDENTIALS for a missing
-      // account instead of EMAIL_NOT_FOUND. The local bcrypt password has
-      // already been validated by the caller before this helper is reached,
-      // so attempting signUp remains safe; an existing Firebase account will
-      // return EMAIL_EXISTS without changing that account.
-      const accountMissing = providerErrorCode === 'EMAIL_NOT_FOUND'
-        || providerErrorCode === 'USER_NOT_FOUND'
-        || providerErrorCode === 'INVALID_LOGIN_CREDENTIALS';
-      if (!accountMissing) {
-        return { sent: false, errorCode: providerErrorCode };
-      }
-      const signUp = await fetch(endpoint('signUp'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedEmail, password, displayName: displayName || undefined, returnSecureToken: true })
-      });
-      if (signUp.ok) {
-        authData = await signUp.json();
-      } else {
-        const signUpError: any = await signUp.json().catch(() => ({}));
-        providerErrorCode = signUpError?.error?.message || signUpError?.error?.status || providerErrorCode;
-      }
-    }
-
-    if (!authData?.idToken || !authData?.localId) {
-      return { sent: false, errorCode: providerErrorCode };
-    }
-
-    const sendVerification = await fetch(endpoint('sendOobCode'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestType: 'VERIFY_EMAIL', idToken: authData.idToken })
-    });
-    if (!sendVerification.ok) {
-      const sendError: any = await sendVerification.json().catch(() => ({}));
-      providerErrorCode = sendError?.error?.message || sendError?.error?.status || providerErrorCode;
-    }
-
-    return { sent: sendVerification.ok, firebaseUid: authData.localId, ...(providerErrorCode ? { errorCode: providerErrorCode } : {}) };
-  } catch (err: any) {
-    console.warn('[FIREBASE AUTH] REST verification email notice:', err?.message || err);
-    return { sent: false };
-  }
-}
-
-// Get Firestore instance with correct database ID
-const getDb = () => {
-  ensureFirebaseAdminApp();
-  if (!admin.apps.length) {
-    throw new Error("Firebase Admin app is not initialized");
-  }
-  const defaultApp = admin.app();
-  if (firebaseConfig.firestoreDatabaseId) {
-    return getFirestore(defaultApp, firebaseConfig.firestoreDatabaseId);
-  }
-  return getFirestore(defaultApp);
-};
-
-const dateTimeFields: Record<string, string[]> = {
-  user: ["createdAt", "updatedAt", "deletedAt", "lockoutUntil", "lastLoginAt"],
-  accessRequest: ["approvedAt", "rejectedAt", "expiresAt", "createdAt", "updatedAt"],
-  approvedDevice: ["approvedAt", "revokedAt", "lastUsedAt", "createdAt", "updatedAt"],
-  session: ["expiresAt", "lastActiveAt", "createdAt"],
-  loginActivity: ["createdAt"],
-  branch: ["createdAt", "updatedAt"],
-  product: ["createdAt", "updatedAt"],
-  inventoryItem: ["createdAt", "updatedAt"],
-  inventoryTransaction: ["createdAt"],
-  customer: ["createdAt", "updatedAt"],
-  repair: [
-    "expectedCompletionDate", "assignedAt", "priorityUpdatedAt", "managerUpdatedAt",
-    "courierDate", "courierReceivedDate", "returnCourierDispatchDate", "returnCourierDispatchedAt",
-    "createdAt", "updatedAt"
-  ],
-  repairLog: ["createdAt"],
-  technicianNote: ["createdAt"],
-  payment: ["createdAt"],
-  auditLog: ["createdAt"],
-  notification: ["readAt", "createdAt"],
-  repairTransferRequest: ["respondedAt", "createdAt", "updatedAt"],
-  repairPrice: ["createdAt", "updatedAt"],
-  homeSlide: ["createdAt", "updatedAt"],
-};
-
-const collectionMap: Record<string, string> = {
-  user: "users",
-  branch: "branches",
-  product: "products",
-  inventoryItem: "inventory",
-  inventoryTransaction: "inventoryTransactions",
-  inventoryCategory: "inventoryCategories",
-  repair: "repairs",
-  repairLog: "repairLogs",
-  technicianNote: "technicianNotes",
-  payment: "payments",
-  auditLog: "auditLogs",
-  notification: "notifications",
-  repairTransferRequest: "repairTransferRequests",
-  accessRequest: "accessRequests",
-  approvedDevice: "approvedDevices",
-  session: "sessions",
-  loginActivity: "loginActivities",
-  repairPrice: "repairPrices",
-  homeSlide: "homeSlides",
-};
-
-function getCollectionName(modelName: string): string {
-  return collectionMap[modelName] || (modelName + "s");
-}
-
-function serializeForFirestore(data: any): any {
-  if (!data) return data;
-  const result: any = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (value instanceof Date) {
-      result[key] = value.toISOString();
-    } else if (value === undefined) {
-      result[key] = null;
-    } else if (typeof value === "object" && value !== null) {
-      // Exclude nested relation objects/arrays
-      continue;
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
+  return { checked: true, isVerified: true, email: normalizedEmail };
 }
 
 const modelFieldsMap: Record<string, string[]> = {
   user: [
     "id", "email", "username", "password", "name", "role", "phoneNumber", "department",
-    "address", "profileImage", "branchId", "firebaseUid", "googleId", "profilePhoto",
+    "address", "profileImage", "branchId", "supabaseUid", "googleId", "profilePhoto",
     "authProvider", "accountStatus", "requestCount", "requestLimitReached", "isActive",
-    "emailVerified", "twoFactorEnabled", "twoFactorType", "securitySetupCompleted",
+    "emailVerified", "twoFactorEnabled", "twoFactorType",
     "deletedAt", "failedLoginAttempts", "lockoutUntil", "lastLoginAt", "createdAt", "updatedAt"
   ],
   branch: ["id", "name", "location", "phone", "createdAt", "updatedAt"],
@@ -2761,291 +1740,11 @@ const modelFieldsMap: Record<string, string[]> = {
   batteryWarrantyClaim: ["id", "claimNumber", "warrantyId", "repairNumber", "customerName", "customerPhone", "deviceBrand", "deviceModel", "claimDate", "issueDescription", "status", "actionTaken", "notes", "processedById", "processedByName", "replacementRepairId", "createdAt", "updatedAt"]
 };
 
-function sanitizeModelData(modelName: string, data: any): any {
-  if (!data) return data;
-  const allowedFields = modelFieldsMap[modelName];
-  if (!allowedFields) return data;
-  
-  const sanitized: any = {};
-  for (const field of allowedFields) {
-    if (data[field] !== undefined) {
-      sanitized[field] = data[field];
-    }
-  }
-  return sanitized;
-}
-
-function deserializeFromFirestore(modelName: string, data: any): any {
-  if (!data) return data;
-  const result: any = {};
-  const dates = dateTimeFields[modelName] || [];
-  for (const [key, value] of Object.entries(data)) {
-    if (dates.includes(key) && value) {
-      result[key] = new Date(value as string);
-    } else {
-      result[key] = value;
-    }
-  }
-  return sanitizeModelData(modelName, result);
-}
-
-const RTDB_BASE_URL = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || firebaseConfig.databaseURL || "https://mts-lab-eb8d2-default-rtdb.firebaseio.com";
-
-async function syncToRtdb(modelName: string, action: string, record: any) {
-  try {
-    if (!record) return;
-    const recId = record.id || (typeof record === 'string' ? record : null);
-    if (!recId) return;
-
-    const pathName = modelName === 'repair' ? 'repairs' : (modelName === 'user' ? 'users' : `${modelName}s`);
-    const adminDb = getAdminDatabase();
-
-    if (action === 'DELETE') {
-      if (adminDb) {
-        await adminDb.ref(`${pathName}/${recId}`).remove().catch(() => {});
-        if (modelName === 'user' && record.firebaseUid) {
-          await adminDb.ref(`users/${record.firebaseUid}`).remove().catch(() => {});
-        }
-      } else {
-        await fetch(`${RTDB_BASE_URL}/${pathName}/${recId}.json`, {
-          method: 'DELETE'
-        }).catch(() => {});
-        if (modelName === 'user' && record.firebaseUid) {
-          await fetch(`${RTDB_BASE_URL}/users/${record.firebaseUid}.json`, {
-            method: 'DELETE'
-          }).catch(() => {});
-        }
-      }
-    } else {
-      const dataToSync: any = typeof record === 'object' ? { ...record } : { id: recId };
-      if (modelName === 'repair') {
-        dataToSync.id = String(record.id);
-        dataToSync.repairNumber = String(record.repairNumber || '');
-        if (record.createdAt) dataToSync.createdAt = new Date(record.createdAt).toISOString();
-        if (record.updatedAt) dataToSync.updatedAt = new Date(record.updatedAt).toISOString();
-        dataToSync.lastSyncTimestamp = Date.now();
-      } else if (modelName === 'user') {
-        dataToSync.id = String(record.id);
-        dataToSync.email = String(record.email || '').toLowerCase().trim();
-        dataToSync.name = String(record.name || '');
-        dataToSync.role = String(record.role || '');
-        dataToSync.accountStatus = String(record.accountStatus || 'ACTIVE');
-        dataToSync.isActive = Boolean(record.isActive);
-        dataToSync.emailVerified = Boolean(record.emailVerified);
-        dataToSync.twoFactorEnabled = Boolean(record.twoFactorEnabled);
-        dataToSync.twoFactorType = String(record.twoFactorType || 'EMAIL');
-        if (record.firebaseUid) dataToSync.firebaseUid = String(record.firebaseUid);
-        if (record.username) dataToSync.username = String(record.username);
-        if (record.department) dataToSync.department = String(record.department);
-        if (record.phoneNumber) dataToSync.phoneNumber = String(record.phoneNumber);
-        if (record.branchId) dataToSync.branchId = String(record.branchId);
-        if (record.createdAt) dataToSync.createdAt = new Date(record.createdAt).toISOString();
-        if (record.updatedAt) dataToSync.updatedAt = new Date(record.updatedAt).toISOString();
-        dataToSync.lastSyncTimestamp = Date.now();
-        // Strip sensitive fields
-        delete dataToSync.password;
-        delete dataToSync.twoFactorSecret;
-      }
-
-      if (adminDb) {
-        await adminDb.ref(`${pathName}/${recId}`).set(dataToSync).catch(() => {});
-        if (modelName === 'user' && record.firebaseUid && record.firebaseUid !== recId) {
-          await adminDb.ref(`users/${record.firebaseUid}`).set(dataToSync).catch(() => {});
-        }
-      } else {
-        await fetch(`${RTDB_BASE_URL}/${pathName}/${recId}.json`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(dataToSync)
-        }).catch(() => {});
-
-        if (modelName === 'user' && record.firebaseUid && record.firebaseUid !== recId) {
-          await fetch(`${RTDB_BASE_URL}/users/${record.firebaseUid}.json`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dataToSync)
-          }).catch(() => {});
-        }
-      }
-    }
-
-    // Touch syncTimestamp on RTDB
-    if (adminDb) {
-      await adminDb.ref('syncTimestamp').set(Date.now()).catch(() => {});
-    } else {
-      await fetch(`${RTDB_BASE_URL}/syncTimestamp.json`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Date.now())
-      }).catch(() => {});
-    }
-  } catch (err: any) {
-    // Non-blocking RTDB sync notice
-  }
-}
-
-async function syncToFirestore(modelName: string, record: any) {
-  if (firestoreSyncDisabled) return;
-  try {
-    const db = getDb();
-    const collectionName = getCollectionName(modelName);
-    const serialized = serializeForFirestore(record);
-    
-    if (!serialized || !serialized.id) return;
-    
-    await db.collection(collectionName).doc(serialized.id).set(serialized, { merge: true });
-    console.log(`[SYNC-PUSH] ${modelName} ${serialized.id} synced to Firestore`);
-  } catch (err: any) {
-    if (err?.code === 7 || err?.message?.includes("PERMISSION_DENIED") || err?.status === 7) {
-      if (!firestoreSyncDisabled) {
-        console.log("[FIREBASE] Cloud Firestore admin credentials not present; operating on local relational database.");
-        firestoreSyncDisabled = true;
-      }
-    } else {
-      console.log(`[SYNC-PUSH] ${modelName} sync skipped: ${err?.message || "Firestore unavailable"}`);
-    }
-  }
-}
-
-async function deleteFromFirestore(modelName: string, id: string) {
-  if (firestoreSyncDisabled || !id) return;
-  try {
-    const db = getDb();
-    const collectionName = getCollectionName(modelName);
-    await db.collection(collectionName).doc(id).delete();
-    console.log(`[SYNC-DELETE] ${modelName} ${id} deleted from Firestore`);
-  } catch (err: any) {
-    // Non-blocking Firestore deletion notice
-  }
-}
-
-const lastPullTime: Record<string, number> = {};
-
-async function syncModelFromFirestore(modelName: string, force = false) {
-  if (firestoreSyncDisabled) return;
-  const now = Date.now();
-  // Cache pulls for 2 seconds to keep it super performant
-  if (!force && lastPullTime[modelName] && now - lastPullTime[modelName] < 2000) {
-    return;
-  }
-  
-  try {
-    const db = getDb();
-    const collectionName = getCollectionName(modelName);
-    const snapshot = await db.collection(collectionName).get();
-    const prismaModel = (prisma as any)[modelName];
-    if (!prismaModel) {
-      return;
-    }
-    
-    let count = 0;
-    for (const doc of snapshot.docs) {
-      try {
-        const rawData = doc.data();
-        const data = deserializeFromFirestore(modelName, rawData);
-        if (!data || !data.id) continue;
-
-        // Foreign Key safety for user model
-        if (modelName === "user") {
-          if (data.branchId) {
-            const branchExists = await prisma.branch.findUnique({ where: { id: data.branchId } });
-            if (!branchExists) {
-              const defaultBranch = await prisma.branch.findFirst();
-              data.branchId = defaultBranch ? defaultBranch.id : null;
-            }
-          }
-          if (data.email) {
-            data.email = data.email.toLowerCase().trim();
-          }
-          if (data.accountStatus === undefined) {
-            data.accountStatus = "ACTIVE";
-          }
-          if (data.isActive === undefined) {
-            data.isActive = true;
-          }
-          if (data.twoFactorEnabled !== undefined) {
-            data.twoFactorEnabled = isUser2FAEnabled(data);
-          }
-        }
-        
-        const existing = await prismaModel.findUnique({ where: { id: doc.id } });
-        if (!existing) {
-          await prismaModel.create({ data });
-        } else {
-          // If local record is strictly newer than the Firestore record, do not overwrite with stale snapshot
-          const isLocalNewer = existing.updatedAt && data.updatedAt && new Date(existing.updatedAt) > new Date(data.updatedAt);
-          if (!isLocalNewer) {
-            const updatePayload = { ...data };
-            if (modelName === "user") {
-              // Local database is the authoritative owner of user.role. Do NOT overwrite persisted role during Firestore pull.
-              delete updatePayload.role;
-            }
-            await prismaModel.update({
-              where: { id: doc.id },
-              data: updatePayload
-            });
-          }
-        }
-        count++;
-      } catch (docErr: any) {
-        console.warn(`[SYNC-PULL] Skipping doc ${doc.id} in ${modelName}:`, docErr?.message || docErr);
-      }
-    }
-    
-    lastPullTime[modelName] = now;
-    console.log(`[SYNC-PULL] Completed ${modelName}! Synced ${count} records.`);
-  } catch (err: any) {
-    if (err?.code === 7 || err?.message?.includes("PERMISSION_DENIED") || err?.status === 7) {
-      if (!firestoreSyncDisabled) {
-        console.log("[FIREBASE] Cloud Firestore admin credentials not present; operating on local relational database.");
-        firestoreSyncDisabled = true;
-      }
-    } else {
-      console.log(`[SYNC-PULL] ${modelName} sync skipped: ${err?.message || "Firestore unavailable"}`);
-    }
-  }
-}
-
-async function syncAllFromFirestore() {
-  console.log("[SYNC-STARTUP] Pulling all database tables from central Firestore...");
-  const syncOrder = [
-    "branch",
-    "user",
-    "accessRequest",
-    "product",
-    "repairPrice",
-    "repair",
-    "repairLog",
-    "technicianNote",
-    "payment",
-    "auditLog",
-    "notification",
-    "repairTransferRequest",
-    "attendance",
-    "attendanceAuditLog",
-  ];
-  for (const model of syncOrder) {
-    await syncModelFromFirestore(model, true);
-  }
-  console.log("[SYNC-STARTUP] Initial database synchronization complete!");
-}
-
-// Compatibility wrappers for existing code
-async function syncUserToFirestore(user: any) {
-  return syncToFirestore("user", user);
-}
-
-async function syncBranchToFirestore(branch: any) {
-  return syncToFirestore("branch", branch);
-}
-
-async function syncFromFirestore() {
-  return syncAllFromFirestore();
-}
+// Safe no-op compatibility helper for legacy code paths
+async function syncToFirestore(_modelName?: string, _record?: any) {}
 
 const syncRouteMiddleware = (models: string[]) => async (req: any, res: any, next: any) => {
   // Pass-through middleware: SQLite/Prisma is the local source of truth.
-  // Initial startup sync handles seeding, avoiding race condition overwrites on GET.
   next();
 };
 
@@ -3057,8 +1756,9 @@ const upload = multer({
   }
 });
 
-export async function createServerApp() {
+async function startServer() {
   const app = express();
+  const PORT = 3000;
 
   // Connect to database and seed defaults
   try {
@@ -3069,7 +1769,6 @@ export async function createServerApp() {
     await ensureDefaultRepairPrices();
     await ensureDefaultHomeSlides();
     await ensureDefaultInventoryData();
-    await syncFromFirestore();
     await fixInvalidStatuses();
     await syncAndMigrateCustomers();
   } catch (err) {
@@ -3105,7 +1804,7 @@ export async function createServerApp() {
 
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: process.env.NODE_ENV === 'production' ? 100 : 5000,
+    max: 100, // Increased limit for development
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many attempts, please try again later" },
@@ -3121,66 +1820,11 @@ export async function createServerApp() {
     'TECHNICAL_ASSISTANT'
   ];
 
-  // Centralized Role Normalizer in Server Engine
-  const normalizeRole = (role: string | undefined | null): string => {
-    if (!role || typeof role !== 'string') return '';
-    const clean = role.trim().toUpperCase().replace(/[\s-]+/g, '_');
-    switch (clean) {
-      case 'SUPERADMIN':
-      case 'SUPER_ADMIN':
-      case 'OWNER':
-      case 'DIRECTOR':
-        return 'SUPERADMIN';
-      case 'ADMIN':
-      case 'ADMINISTRATOR':
-        return 'ADMIN';
-      case 'MANAGER':
-      case 'OPERATIONS_MANAGER':
-        return 'MANAGER';
-      case 'HEAD_TECHNICIAN':
-      case 'HEADTECHNICIAN':
-      case 'LEAD_TECHNICIAN':
-      case 'LEADTECHNICIAN':
-      case 'CHIEF_TECHNICIAN':
-        return 'HEAD_TECHNICIAN';
-      case 'TECHNICIAN':
-      case 'TECH':
-      case 'STAFF':
-      case 'EMPLOYEE':
-      case 'TECHNICAL_ASSISTANT':
-      case 'ASSISTANT':
-        return 'TECHNICIAN';
-      case 'RECEPTIONIST':
-      case 'FRONT_DESK':
-      case 'COUNTER':
-        return 'RECEPTIONIST';
-      default:
-        return clean;
-    }
-  };
-
-  // Role Guard Middleware Helper (Normalized RBAC Protection)
+  // Role Guard Middleware Helper
   const authorize = (roles: string[]) => {
     return (req: any, res: any, next: any) => {
       if (!req.user) return res.status(401).json({ error: "Unauthorized" });
-      
-      const userRoleRaw = String(req.user.role || '').trim().toUpperCase();
-      const userRoleNorm = normalizeRole(userRoleRaw);
-      const isSuperAdminUser = userRoleNorm === 'SUPER_ADMIN' || userRoleNorm === 'SUPERADMIN' || userRoleRaw === 'SUPER_ADMIN' || userRoleRaw === 'SUPERADMIN' || (req.user.email && req.user.email.toLowerCase() === 'mtsmobilelab@gmail.com');
-
-      // Super Admin ALWAYS passes all administrative endpoint permission checks
-      if (isSuperAdminUser) {
-        return next();
-      }
-
-      // Check if user's role matches any allowed role (checking both raw and normalized values)
-      const allowedNorms = roles.map(r => normalizeRole(r));
-      const hasMatch = roles.includes(userRoleRaw) || 
-                       roles.includes(userRoleNorm) || 
-                       allowedNorms.includes(userRoleNorm) ||
-                       allowedNorms.includes(userRoleRaw);
-
-      if (!hasMatch) {
+      if (!roles.includes(req.user.role)) {
         return res.status(403).json({ error: "Forbidden: You do not have permission" });
       }
       next();
@@ -3287,12 +1931,12 @@ export async function createServerApp() {
   };
 
   // Secure Real Email Dispatcher with Multi-Provider Support (Gmail, SMTP, Resend, SendGrid)
-  async function sendEmail(
+  const sendEmail = async (
     toOrOptions: string | { to: string; subject: string; body?: string; text?: string; html?: string },
     subjectParam?: string,
     bodyParam?: string,
     htmlParam?: string
-  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
     let to: string;
     let subject: string;
     let body: string;
@@ -3333,7 +1977,6 @@ export async function createServerApp() {
     if (process.env.RESEND_API_KEY) {
       try {
         console.log(`[AUTH DIAGNOSTIC] Dispatching 2FA email via Resend API to ${maskEmail(to)}...`);
-        const resendFrom = process.env.SMTP_FROM || "MTS Lab <onboarding@resend.dev>";
         const resendRes = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: {
@@ -3341,7 +1984,7 @@ export async function createServerApp() {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            from: resendFrom.includes("<") ? resendFrom : `MTS Lab <${resendFrom}>`,
+            from: fromAddress.includes("<") ? fromAddress : `MTS Lab <${fromAddress}>`,
             to: [to],
             subject,
             text: body,
@@ -3354,9 +1997,6 @@ export async function createServerApp() {
           return { success: true, messageId: resData?.id };
         } else {
           console.error(`[AUTH DIAGNOSTIC] ⚠️ Resend API returned error:`, resData?.message || resData);
-          if (resData?.name === 'validation_error' && resData?.message?.includes('testing emails')) {
-            console.warn(`[AUTH DIAGNOSTIC] 💡 Resend Free Tier Notice: Resend currently only allows sending to the account owner email. Verify your domain at https://resend.com/domains to send to all staff emails.`);
-          }
         }
       } catch (resendErr: any) {
         console.error(`[AUTH DIAGNOSTIC] ⚠️ Resend fetch failed:`, resendErr?.message || resendErr);
@@ -3410,17 +2050,8 @@ export async function createServerApp() {
         return { success: true, messageId: info.messageId };
       } catch (err: any) {
         console.error(`[AUTH DIAGNOSTIC] ❌ SMTP delivery failed (${err?.code || err?.message || err})`);
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`[AUTH DIAGNOSTIC] ℹ️ Non-production fallback active: Simulating email delivery to ${maskEmail(to)}.`);
-          return { success: true, messageId: 'dev-fallback-' + Date.now() };
-        }
         return { success: false, error: err?.message || "SMTP delivery failed" };
       }
-    }
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[AUTH DIAGNOSTIC] ℹ️ Non-production mode: Simulating 2FA email delivery to ${maskEmail(to)}.`);
-      return { success: true, messageId: 'simulated-dev-mail-' + Date.now() };
     }
 
     console.error(`[AUTH DIAGNOSTIC] ❌ Outbound email delivery failed: No active email service configured in .env (GMAIL_USER + GMAIL_APP_PASSWORD, SMTP_HOST, or RESEND_API_KEY).`);
@@ -3488,19 +2119,6 @@ export async function createServerApp() {
         data: logEntry
       });
 
-      // Sync to central Firestore
-      if (!firestoreSyncDisabled) {
-        try {
-          const db = getDb();
-          await db.collection("auditLogs").doc(logEntry.id).set({
-            ...logEntry,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
-        } catch (fsErr) {
-          // non-blocking
-        }
-      }
-
       return logEntry;
     } catch (err) {
       console.error("[RECORD AUDIT LOG ERROR]", err);
@@ -3539,86 +2157,59 @@ export async function createServerApp() {
       return res.status(401).json({ error: "Invalid token" });
     }
 
-    // Database-Authoritative User Lookup to ensure real-time role changes and account status are enforced
-    try {
-      const userIdToLookup = decoded.id || decoded.userId;
-      if (userIdToLookup) {
-        const liveUser = await prisma.user.findUnique({
-          where: { id: userIdToLookup },
-          select: { id: true, email: true, name: true, role: true, isActive: true, accountStatus: true, emailVerified: true, deletedAt: true, branchId: true }
-        });
-
-        if (!liveUser || liveUser.deletedAt || !liveUser.isActive || (liveUser.accountStatus !== "ACTIVE" && liveUser.accountStatus !== "APPROVED")) {
-          return res.status(401).json({ error: "AccountInactive", message: "Your account is no longer active or has been disabled." });
-        }
-
-        req.user = {
-          ...decoded,
-          id: liveUser.id,
-          userId: liveUser.id,
-          email: liveUser.email,
-          name: liveUser.name,
-          role: liveUser.role,
-          accountStatus: liveUser.accountStatus,
-          emailVerified: liveUser.emailVerified,
-          branchId: liveUser.branchId
-        };
-      } else {
-        req.user = decoded;
-      }
-    } catch (dbErr) {
-      req.user = decoded;
-    }
+    req.user = decoded;
 
     // --- 2-Hour Inactivity Check via Session table ---
     // Only check for routes that are NOT the activity ping or refresh endpoints
     const skipInactivityCheck = req.path === '/auth/activity' || req.path === '/auth/refresh' || req.path === '/auth/logout';
     if (!skipInactivityCheck) {
       try {
-        const effectiveUserId = decoded.id || decoded.userId || decoded.uid || req.user?.id;
         // Find the most recently active session for this user
-        let session = effectiveUserId ? await prisma.session.findFirst({
+        const session = await prisma.session.findFirst({
           where: {
-            userId: effectiveUserId,
+            userId: decoded.id,
             expiresAt: { gt: new Date() }
           },
           orderBy: { lastActiveAt: 'desc' }
-        }) : null;
+        });
 
-        if (!session && effectiveUserId) {
-          session = await prisma.session.create({
-            data: {
-              userId: effectiveUserId,
-              refreshToken: uuidv4(),
-              expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-              lastActiveAt: new Date()
-            }
-          }).catch(() => null);
-        }
-
-        if (session) {
-          const lastActive = session.lastActiveAt ? new Date(session.lastActiveAt).getTime() : 0;
-          const inactiveDuration = Date.now() - lastActive;
-
-          if (inactiveDuration > INACTIVITY_TIMEOUT_MS) {
-            // Session has been inactive for > 2 hours — invalidate it
-            console.warn(`[AUTH] Session inactivity exceeded 2h for user ${effectiveUserId}. Invalidating session.`);
-            await prisma.session.deleteMany({ where: { userId: effectiveUserId } });
+        if (!session) {
+          const userExists = await prisma.user.findUnique({ where: { id: decoded.id } });
+          if (userExists && !userExists.deletedAt) {
+            await prisma.session.create({
+              data: {
+                userId: decoded.id,
+                refreshToken: uuidv4(),
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                lastActiveAt: new Date()
+              }
+            }).catch(() => {});
+          } else {
             return res.status(401).json({ error: "InactivityExpired", message: "Your session has expired due to inactivity. Please log in again." });
           }
-
-          // Throttle lastActiveAt updates (max once per 30s per session) to avoid excessive DB writes
-          if (inactiveDuration > LAST_ACTIVE_UPDATE_THROTTLE_MS) {
-            await prisma.session.update({
-              where: { id: session.id },
-              data: { lastActiveAt: new Date() }
-            }).catch(() => {}); // Non-blocking; don't fail the request if update fails
-          }
-
-          // Attach sessionId for use in activity/logout endpoints
-          req.sessionId = session.id;
-          req.sessionRefreshToken = session.refreshToken;
         }
+
+        const lastActive = (session && session.lastActiveAt) ? new Date(session.lastActiveAt).getTime() : Date.now();
+        const inactiveDuration = Date.now() - lastActive;
+
+        if (inactiveDuration > INACTIVITY_TIMEOUT_MS) {
+          // Session has been inactive for > 2 hours — invalidate it
+          console.warn(`[AUTH] Session inactivity exceeded 2h for user ${decoded.id}. Invalidating session.`);
+          await prisma.session.deleteMany({ where: { userId: decoded.id } });
+          return res.status(401).json({ error: "InactivityExpired", message: "Your session has expired due to inactivity. Please log in again." });
+        }
+
+        // Throttle lastActiveAt updates (max once per 30s per session) to avoid excessive DB writes
+        if (inactiveDuration > LAST_ACTIVE_UPDATE_THROTTLE_MS) {
+          await prisma.session.update({
+            where: { id: session.id },
+            data: { lastActiveAt: new Date() }
+          }).catch(() => {}); // Non-blocking; don't fail the request if update fails
+        }
+
+        // Attach sessionId for use in activity/logout endpoints
+        req.sessionId = session.id;
+        req.sessionRefreshToken = session.refreshToken;
       } catch (dbErr) {
         // Non-blocking: if session DB check fails, allow request to proceed
         console.warn("[AUTH] Session inactivity check DB error (proceeding):", dbErr);
@@ -3841,37 +2432,19 @@ export async function createServerApp() {
     }
   });
 
-  // Selection-Based System Data Wipe Handler for Super Admin
-  const handleSystemWipe = async (req: any, res: any) => {
-    const { password, startDate, endDate, deletionType, categories, selectedCategory } = req.body;
-    
-    // Auth Check
+  // API Routes
+  app.delete("/api/admin/clear-all-data", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
+    const { password, startDate, endDate, deletionType } = req.body;
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-    if (!user || !user.password || !(await bcrypt.compare(password || '', user.password))) {
+    
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: "Invalid password confirmation" });
     }
 
     try {
-      // Determine categories to wipe
-      let targetCategories: string[] = [];
-      if (Array.isArray(categories) && categories.length > 0) {
-        targetCategories = categories.map((c: string) => c.toUpperCase().trim());
-      } else if (selectedCategory && typeof selectedCategory === 'string') {
-        targetCategories = [selectedCategory.toUpperCase().trim()];
-      } else if (req.body.category && typeof req.body.category === 'string') {
-        targetCategories = [req.body.category.toUpperCase().trim()];
-      } else {
-        // Default to ALL system categories if no specific categories were specified
-        targetCategories = [
-          'REPAIRS', 'CUSTOMERS', 'BATTERY_WARRANTIES', 'ATTENDANCE', 
-          'DAMAGE_RECORDS', 'COURIER_RECORDS', 'REVENUE', 'INVENTORY', 
-          'SERVICES', 'SLIDES', 'NOTIFICATIONS'
-        ];
-      }
-
-      let dateFilter: any = {};
+      let whereClause: any = {};
       if (startDate && endDate) {
-        dateFilter = {
+        whereClause = {
           createdAt: {
             gte: new Date(startDate),
             lte: new Date(endDate)
@@ -3879,219 +2452,43 @@ export async function createServerApp() {
         };
       }
 
-      const deletedCounts: Record<string, number> = {};
-      let totalDeleted = 0;
+      // Count what we are about to delete for the audit log
+      const count = await prisma.repair.count({ where: whereClause });
 
-      // 1. REPAIRS Category
-      if (targetCategories.includes('REPAIRS') || targetCategories.includes('ALL')) {
-        const repairIds = await prisma.repair.findMany({
-          where: dateFilter,
-          select: { id: true }
-        });
-        const ids = repairIds.map(r => r.id);
+      // 1. Delete from Prisma (SQLite)
+      // We delete related records based on repairs in the range
+      const repairIds = await prisma.repair.findMany({
+        where: whereClause,
+        select: { id: true, repairNumber: true }
+      });
+      const ids = repairIds.map(r => r.id);
 
-        if (ids.length > 0) {
-          await prisma.technicianNote.deleteMany({ where: { repairId: { in: ids } } });
-          await prisma.repairLog.deleteMany({ where: { repairId: { in: ids } } });
-          await prisma.payment.deleteMany({ where: { repairId: { in: ids } } });
-          await prisma.repairRelatedDamage.deleteMany({ where: { repairId: { in: ids } } });
-          await prisma.repairTransferRequest.deleteMany({ where: { repairId: { in: ids } } });
-          await prisma.batteryWarranty.deleteMany({ where: { repairId: { in: ids } } });
-          const resDel = await prisma.repair.deleteMany({ where: dateFilter });
-          deletedCounts['REPAIRS'] = resDel.count;
-          totalDeleted += resDel.count;
+      await prisma.technicianNote.deleteMany({ where: { repairId: { in: ids } } });
+      await prisma.repairLog.deleteMany({ where: { repairId: { in: ids } } });
+      await prisma.payment.deleteMany({ where: { repairId: { in: ids } } });
+      await prisma.repair.deleteMany({ where: whereClause });
 
-          // Clear Firestore repairs
-          try {
-            const firestore = getDb();
-            const repairsColl = firestore.collection('repairs');
-            const repairsSnapshot = await repairsColl.get();
-            if (!repairsSnapshot.empty) {
-              const docs = repairsSnapshot.docs;
-              for (let i = 0; i < docs.length; i += 500) {
-                const batch = firestore.batch();
-                docs.slice(i, i + 500).forEach(doc => { if (doc.exists) batch.delete(doc.ref); });
-                await batch.commit();
-              }
-            }
-          } catch (e) {
-            console.error("[WIPE FIRESTORE REPAIRS NOTICE]", e);
-          }
-        } else {
-          deletedCounts['REPAIRS'] = 0;
-        }
-      }
-
-      // 2. CUSTOMERS Category
-      if (targetCategories.includes('CUSTOMERS') || targetCategories.includes('ALL')) {
-        const resDel = await prisma.customer.deleteMany({ where: dateFilter });
-        deletedCounts['CUSTOMERS'] = resDel.count;
-        totalDeleted += resDel.count;
-
-        try {
-          const firestore = getDb();
-          const custColl = firestore.collection('customers');
-          const snap = await custColl.get();
-          if (!snap.empty) {
-            const docs = snap.docs;
-            for (let i = 0; i < docs.length; i += 500) {
-              const batch = firestore.batch();
-              docs.slice(i, i + 500).forEach(doc => { if (doc.exists) batch.delete(doc.ref); });
-              await batch.commit();
-            }
-          }
-        } catch (e) {
-          console.error("[WIPE FIRESTORE CUSTOMERS NOTICE]", e);
-        }
-      }
-
-      // 3. BATTERY_WARRANTIES Category
-      if (targetCategories.includes('BATTERY_WARRANTIES') || targetCategories.includes('WARRANTIES') || targetCategories.includes('ALL')) {
-        await prisma.batteryWarrantyClaim.deleteMany({});
-        const resDel = await prisma.batteryWarranty.deleteMany({ where: dateFilter });
-        deletedCounts['BATTERY_WARRANTIES'] = resDel.count;
-        totalDeleted += resDel.count;
-
-        try {
-          const firestore = getDb();
-          const snap = await firestore.collection('batteryWarranties').get();
-          if (!snap.empty) {
-            const docs = snap.docs;
-            for (let i = 0; i < docs.length; i += 500) {
-              const batch = firestore.batch();
-              docs.slice(i, i + 500).forEach(doc => { if (doc.exists) batch.delete(doc.ref); });
-              await batch.commit();
-            }
-          }
-        } catch (e) {
-          console.error("[WIPE FIRESTORE WARRANTIES NOTICE]", e);
-        }
-      }
-
-      // 4. ATTENDANCE Category
-      if (targetCategories.includes('ATTENDANCE') || targetCategories.includes('ALL')) {
-        await prisma.attendanceAuditLog.deleteMany({});
-        const resDel = await prisma.attendance.deleteMany({ where: dateFilter });
-        deletedCounts['ATTENDANCE'] = resDel.count;
-        totalDeleted += resDel.count;
-      }
-
-      // 5. DAMAGE_RECORDS Category
-      if (targetCategories.includes('DAMAGE_RECORDS') || targetCategories.includes('DAMAGE') || targetCategories.includes('ALL')) {
-        await prisma.repairRelatedDamageAudit.deleteMany({});
-        const resDel = await prisma.repairRelatedDamage.deleteMany({ where: dateFilter });
-        deletedCounts['DAMAGE_RECORDS'] = resDel.count;
-        totalDeleted += resDel.count;
-      }
-
-      // 6. COURIER_RECORDS Category
-      if (targetCategories.includes('COURIER_RECORDS') || targetCategories.includes('COURIERS') || targetCategories.includes('ALL')) {
-        const resDel = await prisma.repair.updateMany({
-          data: {
-            isCourierIn: false,
-            courierInStatus: null,
-            courierCompany: null,
-            courierTrackingNumber: null,
-            isCourierOut: false,
-            courierOutStatus: null,
-            returnCourierCompany: null,
-            returnCourierTrackingNumber: null,
-            courierStatus: null,
-            courierArchived: false
-          }
-        });
-        deletedCounts['COURIER_RECORDS'] = resDel.count;
-        totalDeleted += resDel.count;
-      }
-
-      // 7. REVENUE Category
-      if (targetCategories.includes('REVENUE') || targetCategories.includes('PAYMENTS') || targetCategories.includes('ALL')) {
-        const resDel = await prisma.payment.deleteMany({ where: dateFilter });
-        deletedCounts['REVENUE'] = resDel.count;
-        totalDeleted += resDel.count;
-      }
-
-      // 8. INVENTORY Category
-      if (targetCategories.includes('INVENTORY') || targetCategories.includes('ALL')) {
-        await prisma.inventoryTransaction.deleteMany({});
-        const resDel = await prisma.inventoryItem.deleteMany({});
-        await prisma.inventoryCategory.deleteMany({});
-        deletedCounts['INVENTORY'] = resDel.count;
-        totalDeleted += resDel.count;
-      }
-
-      // 9. SERVICES Category
-      if (targetCategories.includes('SERVICES') || targetCategories.includes('PRICES') || targetCategories.includes('ALL')) {
-        const resDel = await prisma.repairPrice.deleteMany({});
-        deletedCounts['SERVICES'] = resDel.count;
-        totalDeleted += resDel.count;
-      }
-
-      // 10. SLIDES Category
-      if (targetCategories.includes('SLIDES') || targetCategories.includes('SLIDESHOW') || targetCategories.includes('ALL')) {
-        const resDel = await prisma.homeSlide.deleteMany({});
-        deletedCounts['SLIDES'] = resDel.count;
-        totalDeleted += resDel.count;
-      }
-
-      // 11. NOTIFICATIONS Category
-      if (targetCategories.includes('NOTIFICATIONS') || targetCategories.includes('ALL')) {
-        const resDel = await prisma.notification.deleteMany({});
-        deletedCounts['NOTIFICATIONS'] = resDel.count;
-        totalDeleted += resDel.count;
-      }
-
-      // 12. STAFF_ACCOUNTS Category (excluding current SuperAdmin!)
-      if (targetCategories.includes('STAFF_ACCOUNTS') || targetCategories.includes('STAFF')) {
-        const nonSuperAdmins = await prisma.user.findMany({
-          where: {
-            id: { not: req.user.id },
-            role: { notIn: ['SUPER_ADMIN', 'SUPERADMIN'] }
-          },
-          select: { id: true }
-        });
-        const staffIds = nonSuperAdmins.map(u => u.id);
-        if (staffIds.length > 0) {
-          await prisma.session.deleteMany({ where: { userId: { in: staffIds } } });
-          await prisma.loginActivity.deleteMany({ where: { userId: { in: staffIds } } });
-          await prisma.approvedDevice.deleteMany({ where: { userId: { in: staffIds } } });
-          await prisma.accessRequest.deleteMany({ where: { userId: { in: staffIds } } });
-          const resDel = await prisma.user.deleteMany({ where: { id: { in: staffIds } } });
-          deletedCounts['STAFF_ACCOUNTS'] = resDel.count;
-          totalDeleted += resDel.count;
-        } else {
-          deletedCounts['STAFF_ACCOUNTS'] = 0;
-        }
-      }
-
-      // Create Audit Log
+      // Log the activity with more details
       await prisma.auditLog.create({
         data: {
           userId: req.user.id,
           action: "CLEAR_DATA",
-          resource: targetCategories.join(", "),
-          details: `Super Admin executed selection-based system wipe for categories: [${targetCategories.join(", ")}]. Wiped ${totalDeleted} record(s).`
+          resource: "REPAIRS",
+          details: `Super Admin deleted ${count} records. Type: ${deletionType || 'RANGE'}. Range: ${startDate || 'N/A'} to ${endDate || 'N/A'}`
         }
       });
 
-      res.json({
-        success: true,
-        message: totalDeleted > 0
-          ? `Successfully wiped ${totalDeleted} record(s) across selected categories: ${targetCategories.join(", ")}.`
-          : `No records were found matching the selected categories and criteria.`,
-        deletedCount: totalDeleted,
-        deletedCounts
+      res.json({ 
+        message: count > 0 
+          ? `${count} customer records and repair data deleted successfully.` 
+          : "No records were found matching the selected criteria.",
+        deletedCount: count
       });
     } catch (err: any) {
-      console.error("[SYSTEM WIPE ERROR]", err);
-      res.status(500).json({ error: "System wipe failed: " + (err.message || "Unknown error") });
+      console.error("[CLEAR DATA ERROR]", err);
+      res.status(500).json({ error: "Deletion failed: " + (err.message || "Unknown error") });
     }
-  };
-
-  // Register System Wipe Routes
-  app.post("/api/admin/system-wipe", authenticate, authorize(['SUPER_ADMIN']), handleSystemWipe);
-  app.post("/api/admin/delete-data", authenticate, authorize(['SUPER_ADMIN']), handleSystemWipe);
-  app.delete("/api/admin/clear-all-data", authenticate, authorize(['SUPER_ADMIN']), handleSystemWipe);
+  });
 
   app.get("/api/admin/deletion-history", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
     const history = await prisma.auditLog.findMany({
@@ -4177,20 +2574,7 @@ export async function createServerApp() {
         return res.status(400).json({ error: "Request has already been approved." });
       }
 
-      // Find user associated with this request
-      let user = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { email: request.email },
-            { googleId: request.googleId }
-          ]
-        }
-      });
-
-      // Preserve existing user role if user exists, unless SuperAdmin explicitly specified a new role
-      const assignedRole = role 
-        ? normalizeRole(role) 
-        : (user?.role ? normalizeRole(user.role) : (request.requestedRole ? normalizeRole(request.requestedRole) : "RECEPTIONIST"));
+      const assignedRole = role || request.requestedRole || "RECEPTIONIST";
 
       // Update AccessRequest
       const updatedRequest = await prisma.accessRequest.update({
@@ -4199,6 +2583,16 @@ export async function createServerApp() {
           status: "APPROVED",
           approvedBy: req.user.name || req.user.email,
           approvedAt: new Date()
+        }
+      });
+
+      // Find user associated with this request
+      let user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: request.email },
+            { googleId: request.googleId }
+          ]
         }
       });
 
@@ -5109,11 +3503,11 @@ export async function createServerApp() {
       os?: string;
     }
   ) => {
-    // Access token lifespan: 7 days; inactivity enforcement is via Session.lastActiveAt
+    // Access token is short-lived (15 min); inactivity enforcement is via Session.lastActiveAt
     const accessToken = jwt.sign(
       { id: user.id, role: user.role, email: user.email, name: user.name }, 
       JWT_SECRET, 
-      { expiresIn: "7d" }
+      { expiresIn: "15m" }
     );
     const refreshToken = uuidv4();
     
@@ -5245,43 +3639,33 @@ export async function createServerApp() {
   });
 
   // Google Sign-In & Device Access Control Endpoint
-  app.post("/api/auth/firebase", authLimiter, async (req: any, res) => {
+  app.post(["/api/auth/google", "/api/auth/firebase"], authLimiter, async (req: any, res) => {
     const { idToken, device } = req.body;
     if (!idToken) return res.status(400).json({ success: false, message: "No token provided" });
 
     try {
       let decodedToken: any = null;
-      const auth = getAdminAuth();
-      if (auth) {
-        try {
-          decodedToken = await auth.verifyIdToken(idToken);
-        } catch (verifyErr) {
-          console.warn("[FIREBASE AUTH] verifyIdToken check:", verifyErr);
-        }
-      }
 
-      // Fallback: decode token from JWT payload or tokeninfo if admin verification threw
-      if (!decodedToken) {
-        try {
-          const parts = idToken.split(".");
-          if (parts.length === 3) {
-            const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
-            if (payload && (payload.email || payload.sub || payload.user_id)) {
-              decodedToken = {
-                uid: payload.user_id || payload.sub || payload.uid,
-                email: payload.email,
-                name: payload.name || (payload.email ? payload.email.split("@")[0] : "User"),
-                picture: payload.picture
-              };
-            }
+      // Decode token from JWT payload or tokeninfo
+      try {
+        const parts = idToken.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
+          if (payload && (payload.email || payload.sub || payload.user_id)) {
+            decodedToken = {
+              uid: payload.user_id || payload.sub || payload.uid,
+              email: payload.email,
+              name: payload.name || (payload.email ? payload.email.split("@")[0] : "User"),
+              picture: payload.picture
+            };
           }
-        } catch (jwtErr) {
-          console.warn("[AUTH] Token parse fallback warning:", jwtErr);
         }
+      } catch (jwtErr) {
+        console.warn("[AUTH] Token parse fallback warning:", jwtErr);
       }
 
       if (!decodedToken || !decodedToken.email) {
-        return res.status(401).json({ success: false, message: "Invalid Google or Firebase token" });
+        return res.status(401).json({ success: false, message: "Invalid Google or authentication token" });
       }
 
       const { email, name, picture, uid } = decodedToken;
@@ -5297,12 +3681,12 @@ export async function createServerApp() {
       const browser = device?.browser || "Browser";
       const os = device?.os || "OS";
 
-      // 1. Look up existing user by firebaseUid, googleId, or normalized email
+      // 1. Look up existing user by supabaseUid, googleId, or normalized email
       let user = await prisma.user.findFirst({
         where: {
           deletedAt: null,
           OR: [
-            { firebaseUid: uid },
+            { supabaseUid: uid },
             { googleId: uid },
             { email: normalizedEmail }
           ]
@@ -5318,7 +3702,7 @@ export async function createServerApp() {
             password: await bcrypt.hash(uuidv4(), 10),
             role: "RECEPTIONIST", // Default provisional role awaiting admin assignment
             profileImage: picture || null,
-            firebaseUid: uid,
+            supabaseUid: uid,
             googleId: uid,
             profilePhoto: picture || null,
             authProvider: "GOOGLE",
@@ -5390,9 +3774,9 @@ export async function createServerApp() {
         });
       }
 
-      // 2. User exists in MTS! Link firebaseUid, googleId, and photo if missing
+      // 2. User exists in MTS! Link supabaseUid, googleId, and photo if missing
       const userUpdates: any = {};
-      if (!user.firebaseUid) userUpdates.firebaseUid = uid;
+      if (!user.supabaseUid) userUpdates.supabaseUid = uid;
       if (!user.googleId) userUpdates.googleId = uid;
       if (!user.profileImage && picture) userUpdates.profileImage = picture;
       if (!user.profilePhoto && picture) userUpdates.profilePhoto = picture;
@@ -5693,8 +4077,8 @@ export async function createServerApp() {
       });
 
     } catch (err: any) {
-      console.error("[FIREBASE AUTH ERROR]", err);
-      res.status(401).json({ success: false, message: "Invalid Google / Firebase Authentication Token" });
+      console.error("[AUTH ERROR]", err);
+      res.status(401).json({ success: false, message: "Invalid authentication token" });
     }
   });
 
@@ -5711,7 +4095,7 @@ export async function createServerApp() {
 
   app.post("/api/auth/login", authLimiter, async (req: any, res) => {
     const rawInputIdentity = req.body.identity || req.body.email || req.body.username;
-    const { password, device, firebaseIdToken } = req.body;
+    const { password, device } = req.body;
 
     try {
       if (!rawInputIdentity || !password) {
@@ -5732,116 +4116,20 @@ export async function createServerApp() {
       const browser = device?.browser || "Browser";
       const os = device?.os || "OS";
 
-      // 1. Sync users from Firestore if needed
-      try {
-        await syncModelFromFirestore("user");
-      } catch (syncErr) {
-        console.warn("[LOGIN] Background sync user warning (proceeding with local db):", syncErr);
-      }
-
-      // 2. Query local user table
-      let user: any = null;
-      try {
-        user = await prisma.user.findFirst({
-          where: {
-            deletedAt: null,
-            OR: [
-              { email: lowerIdentity },
-              { email: rawIdentity },
-              { username: rawIdentity },
-              { username: lowerIdentity }
-            ]
-          }
-        });
-      } catch (dbErr) {
-        console.warn("[LOGIN AUTH] Local database query notice (falling back to Firestore):", dbErr);
-      }
-
-      // 3. Fallback: If not in local SQLite, query central Firestore users collection directly
-      if (!user) {
-        try {
-          const db = getDb();
-          let firestoreDoc: any = null;
-
-          const snapLower = await db.collection("users").where("email", "==", lowerIdentity).limit(1).get();
-          if (!snapLower.empty) {
-            firestoreDoc = snapLower.docs[0];
-          } else {
-            const snapExact = await db.collection("users").where("email", "==", rawIdentity).limit(1).get();
-            if (!snapExact.empty) {
-              firestoreDoc = snapExact.docs[0];
-            } else {
-              const snapUser = await db.collection("users").where("username", "==", rawIdentity).limit(1).get();
-              if (!snapUser.empty) {
-                firestoreDoc = snapUser.docs[0];
-              }
-            }
-          }
-
-          if (firestoreDoc && firestoreDoc.exists) {
-            const rawData = firestoreDoc.data();
-            const data = deserializeFromFirestore("user", rawData);
-            if (data && data.id) {
-              // Ensure branch relation exists
-              if (data.branchId) {
-                const branchExists = await prisma.branch.findUnique({ where: { id: data.branchId } });
-                if (!branchExists) {
-                  const defaultBranch = await prisma.branch.findFirst();
-                  data.branchId = defaultBranch ? defaultBranch.id : null;
-                }
-              }
-              if (data.email) data.email = data.email.toLowerCase().trim();
-              if (data.accountStatus === undefined) data.accountStatus = "ACTIVE";
-              if (data.isActive === undefined) data.isActive = true;
-
-              const loginUpsertUpdateData = { ...data };
-              delete loginUpsertUpdateData.role;
-
-              user = await prisma.user.upsert({
-                where: { id: firestoreDoc.id },
-                create: { ...data, id: firestoreDoc.id },
-                update: loginUpsertUpdateData
-              });
-              console.log(`[LOGIN AUTH] Staff ${user.email} successfully fetched from Firestore to local storage.`);
-            }
-          }
-        } catch (fsLookupErr) {
-          console.warn("[LOGIN AUTH] Firestore user fallback query notice:", fsLookupErr);
+      // 1. Query local SQLite user table
+      let user = await prisma.user.findFirst({
+        where: {
+          deletedAt: null,
+          OR: [
+            { email: lowerIdentity },
+            { email: rawIdentity },
+            { username: rawIdentity },
+            { username: lowerIdentity }
+          ]
         }
-      }
+      });
 
       // 4. Distinguish Authentication Failure vs Profile/Status/Security Issues
-      if (!user) {
-        const isSuperAdminEmail = ['mtsmobilelab@gmail.com', 'amitsharma64017900@gmail.com', 'test.superadmin@mtslab.com'].includes(lowerIdentity);
-        if (isSuperAdminEmail) {
-          let fbCheckBeforeProvision = await checkFirebaseUserEmailVerified(lowerIdentity, rawPassword, firebaseIdToken);
-          if (fbCheckBeforeProvision.checked && (fbCheckBeforeProvision.isVerified || fbCheckBeforeProvision.firebaseUid)) {
-            const autoRole = 'SUPERADMIN';
-            const autoName = 'MTS Lab Super Admin';
-            const newUserId = `usr_${uuidv4().replace(/-/g, '').substring(0, 12)}`;
-            const defaultBranch = await prisma.branch.findFirst();
-
-            user = await prisma.user.create({
-              data: {
-                id: newUserId,
-                email: lowerIdentity,
-                name: autoName,
-                role: autoRole,
-                password: await bcrypt.hash(rawPassword, 10),
-                isActive: true,
-                accountStatus: 'ACTIVE',
-                emailVerified: Boolean(fbCheckBeforeProvision.isVerified),
-                firebaseUid: fbCheckBeforeProvision.firebaseUid || null,
-                branchId: defaultBranch ? defaultBranch.id : null
-              }
-            });
-            await syncUserToFirestore(user).catch(() => {});
-            await syncToRtdb("user", "CREATE", user).catch(() => {});
-            console.log(`[LOGIN AUTH] Auto-provisioned primary SuperAdmin account for ${user.email}`);
-          }
-        }
-      }
-
       if (!user) {
         await recordAuditLog({
           req,
@@ -5928,6 +4216,16 @@ export async function createServerApp() {
         return res.status(403).json({ success: false, message: "Your MTS account has been suspended. Please contact the Super Administrator." });
       }
 
+      // Check live email verification status for non-superadmin accounts
+      if (!user.emailVerified && user.role !== "SUPER_ADMIN") {
+        return res.status(403).json({
+          success: false,
+          emailNotVerified: true,
+          email: user.email,
+          message: "Please verify your email address before continuing."
+        });
+      }
+
       // Check lockout status
       if (user.lockoutUntil && new Date(user.lockoutUntil) > new Date()) {
         const remainingMins = Math.ceil((new Date(user.lockoutUntil).getTime() - Date.now()) / 60000);
@@ -5948,16 +4246,8 @@ export async function createServerApp() {
         });
       }
 
-      // Password comparison via bcrypt (guarded against missing/corrupt hashes)
-      let isValid = false;
-      try {
-        if (user.password && typeof user.password === 'string' && user.password.length > 0) {
-          isValid = await bcrypt.compare(rawPassword, user.password);
-        }
-      } catch (bcryptErr) {
-        console.warn("[LOGIN BCRYPT COMPARE ERROR]", bcryptErr);
-        isValid = false;
-      }
+      // Password comparison via bcrypt
+      const isValid = await bcrypt.compare(rawPassword, user.password);
 
       if (!isValid) {
         const attempts = (user.failedLoginAttempts || 0) + 1;
@@ -5968,7 +4258,7 @@ export async function createServerApp() {
             failedLoginAttempts: attempts,
             lockoutUntil: isLockedNow ? new Date(Date.now() + 15 * 60 * 1000) : null
           }
-        }).catch(() => {});
+        });
         await recordAuditLog({
           req,
           userId: user.id,
@@ -5979,135 +4269,66 @@ export async function createServerApp() {
           resource: "AUTH",
           status: "FAILED",
           details: `Invalid password attempt (${attempts}/5)`
-        }).catch(() => {});
+        });
         return res.status(401).json({ success: false, message: "Unable to sign in with these credentials." });
       }
 
-      // Firebase Authentication is authoritative for user verification
-      let fbCheck = await checkFirebaseUserEmailVerified(user.email, rawPassword, firebaseIdToken, user.firebaseUid);
+      // 5. Password Validated! Check authoritative per-user Two-Factor Authentication (2FA) setting
+      const is2faActive = isUser2FAEnabled(user);
 
-      if (fbCheck.authFailed) {
-        return res.status(401).json({
-          success: false,
-          message: "Unable to sign in with these credentials."
-        });
-      }
-
-      // If user account is unlinked in Firebase Auth or not yet checked, attempt resilient provisioning/linking
-      if (!user.firebaseUid || !fbCheck.checked) {
-        const provisioned = await ensureFirebaseUserAndSendVerification(user.email, rawPassword, user.name);
-        if (provisioned.firebaseUid) {
-          user = await prisma.user.update({
-            where: { id: user.id },
-            data: { firebaseUid: provisioned.firebaseUid }
-          }).catch(() => user);
-          fbCheck = await checkFirebaseUserEmailVerified(user.email, rawPassword, firebaseIdToken, provisioned.firebaseUid);
-        }
-        if (provisioned.sent) {
-          markFirebaseVerificationAttempt(user.email);
-        }
-      }
-
-      if (fbCheck.firebaseUid && !user.firebaseUid) {
-        user = await prisma.user.update({
+      // If 2FA is DISABLED for this user by Super Admin, log in directly without OTP
+      if (!is2faActive) {
+        const updatedUser = await prisma.user.update({
           where: { id: user.id },
-          data: { firebaseUid: fbCheck.firebaseUid }
-        }).catch(() => user);
-      }
-
-      // Authoritative verification state determination:
-      // If either Firebase Auth, DB record, or client Firebase Auth shows emailVerified: true, the user is confirmed.
-      const isClientVerified = Boolean(req.body.isClientVerified);
-      const isEmailConfirmed = Boolean(fbCheck.isVerified) || Boolean(user.emailVerified) || isClientVerified;
-
-      if (isEmailConfirmed && !user.emailVerified) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: { emailVerified: true }
-        }).catch(() => user);
-        await syncUserToFirestore(user).catch(() => {});
-        await syncToRtdb("user", "UPDATE", user).catch(() => {});
-        broadcastRealtimeEvent({
-          entity: "user",
-          action: "UPDATE",
-          id: user.id,
-          data: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-            emailVerified: true
+          data: { 
+            failedLoginAttempts: 0, 
+            lockoutUntil: null, 
+            lastLoginAt: new Date() 
           }
         });
-      }
 
-      if (!isEmailConfirmed) {
-        return res.status(403).json({
-          success: false,
-          emailNotVerified: true,
-          message: "Please verify your work email address before signing in."
-        });
-      }
-
-      const freshUser = await prisma.user.findUnique({ where: { id: user.id } }) || user;
-      user = freshUser;
-
-      const updatedUser = await prisma.user.update({
-        where: { id: user.id },
-        data: { 
-          failedLoginAttempts: 0, 
-          lockoutUntil: null, 
-          lastLoginAt: new Date() 
-        }
-      }).catch(() => user);
-
-      // Seamless Multi-Device Registration
-      try {
+        // Seamless Multi-Device Registration
         await prisma.approvedDevice.upsert({
           where: {
             userId_deviceIdentifier: {
               userId: user.id,
-              deviceIdentifier: String(deviceIdentifier)
+              deviceIdentifier
             }
           },
           update: {
-            deviceName: String(deviceName || 'Browser Device'),
-            deviceType: String(deviceType || 'DESKTOP'),
-            browser: String(browser || 'Browser'),
-            os: String(os || 'OS'),
+            deviceName,
+            deviceType,
+            browser,
+            os,
             ipAddress: String(clientIp),
-            userAgent: String(clientUserAgent),
+            userAgent: clientUserAgent,
             status: "APPROVED",
             lastUsedAt: new Date()
           },
           create: {
             userId: user.id,
-            deviceIdentifier: String(deviceIdentifier),
-            deviceName: String(deviceName || 'Browser Device'),
-            deviceType: String(deviceType || 'DESKTOP'),
-            browser: String(browser || 'Browser'),
-            os: String(os || 'OS'),
+            deviceIdentifier,
+            deviceName,
+            deviceType,
+            browser,
+            os,
             ipAddress: String(clientIp),
-            userAgent: String(clientUserAgent),
+            userAgent: clientUserAgent,
             status: "APPROVED",
             approvedBy: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "DIRECT_LOGIN",
             approvedAt: new Date(),
             lastUsedAt: new Date()
           }
         });
-      } catch (devErr) {
-        console.warn("[LOGIN DEVICE UPSERT NOTICE]", devErr);
-      }
 
-      // Generate Authenticated Tokens
-      const { accessToken, refreshToken } = await generateTokens(
-        updatedUser, 
-        clientUserAgent, 
-        String(clientIp),
-        { deviceIdentifier: String(deviceIdentifier), deviceName, deviceType, browser, os }
-      );
+        // Generate Authenticated Tokens
+        const { accessToken, refreshToken } = await generateTokens(
+          updatedUser, 
+          clientUserAgent, 
+          String(clientIp),
+          { deviceIdentifier, deviceName, deviceType, browser, os }
+        );
 
-      try {
         await recordAuditLog({
           req,
           userId: user.id,
@@ -6117,33 +4338,119 @@ export async function createServerApp() {
           action: "LOGIN_SUCCESS",
           resource: "AUTH",
           status: "SUCCESS",
-          details: `Firebase authenticated login from ${deviceType} (${deviceName})`
+          details: `Direct password login (2FA disabled) from ${deviceType} (${deviceName})`
         });
-      } catch (auditErr) {
-        console.warn("[LOGIN AUDIT NOTICE]", auditErr);
+
+        res.cookie("refreshToken", refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        return res.json({
+          success: true,
+          token: accessToken,
+          refreshToken,
+          user: {
+            id: updatedUser.id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            role: updatedUser.role,
+            username: updatedUser.username,
+            branchId: updatedUser.branchId,
+            profileImage: updatedUser.profileImage,
+            twoFactorEnabled: updatedUser.twoFactorEnabled
+          },
+          mfaRequired: false
+        });
       }
 
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000
+      // 2FA IS ENABLED: Initiate Mandatory Email 2FA (Two-Factor Authentication)
+      // Invalidate any active previous unused OTP for this user & purpose
+      await prisma.oTPVerification.updateMany({
+        where: {
+          userId: user.id,
+          purpose: "LOGIN_2FA",
+          isUsed: false
+        },
+        data: { isUsed: true }
+      });
+
+      // Generate cryptographically secure 6-digit OTP
+      const otpCode = generate6DigitOtp();
+      const otpHash = hashOtp(otpCode);
+      const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
+
+      const createdOtp = await prisma.oTPVerification.create({
+        data: {
+          userId: user.id,
+          email: user.email,
+          codeHash: otpHash,
+          purpose: "LOGIN_2FA",
+          attempts: 0,
+          maxAttempts: 5,
+          expiresAt: otpExpiresAt,
+          isUsed: false
+        }
+      });
+
+      // Dispatch 6-digit Email Verification Code (OTP) to registered email address (NO links)
+      const emailSubject = "MTS Lab — Your Login Verification Code";
+      const emailText = `Hello ${user.name || 'Staff Member'},\n\nYour MTS Lab verification code is:\n\n   ${otpCode}\n\nThis code will expire in 5 minutes.\n\nIf you did not attempt to log in to MTS Lab, please ignore this email and secure your account.`;
+      const emailHtml = generate2faEmailHtml(user.name, otpCode);
+
+      const emailResult = await sendEmail({
+        to: user.email,
+        subject: emailSubject,
+        text: emailText,
+        html: emailHtml
+      });
+
+      if (!emailResult.success) {
+        await prisma.oTPVerification.delete({ where: { id: createdOtp.id } }).catch(() => {});
+        return res.status(503).json({
+          success: false,
+          message: "Unable to send verification code to your email. Please check your email configuration or try again later."
+        });
+      }
+
+      // Create short-lived 2FA Challenge Ticket (JWT)
+      const mfaTicket = jwt.sign(
+        {
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          purpose: "LOGIN_2FA",
+          type: "MFA_CHALLENGE",
+          deviceIdentifier,
+          deviceName,
+          deviceType,
+          browser,
+          os
+        },
+        JWT_SECRET,
+        { expiresIn: "5m" }
+      );
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "OTP_REQUESTED",
+        resource: "AUTH",
+        status: "SUCCESS",
+        details: `2FA login verification code dispatched to email (${maskEmail(user.email)})`
       });
 
       return res.json({
         success: true,
-        token: accessToken,
-        refreshToken,
-        user: {
-          id: updatedUser.id,
-          name: updatedUser.name,
-          email: updatedUser.email,
-          role: updatedUser.role,
-          username: updatedUser.username,
-          branchId: updatedUser.branchId,
-          profileImage: updatedUser.profileImage,
-          emailVerified: true
-        }
+        mfaRequired: true,
+        mfaTicket,
+        emailMasked: maskEmail(user.email),
+        message: "Verification code sent to your registered email."
       });
 
     } catch (err: any) {
@@ -6156,7 +4463,361 @@ export async function createServerApp() {
     }
   });
 
-  // Password Change Endpoint (Authenticated Direct Update via Firebase / bcrypt)
+  // 2FA Verification Endpoint
+  app.post("/api/auth/2fa/verify", authLimiter, async (req: any, res) => {
+    const { mfaTicket, code, device } = req.body;
+
+    try {
+      if (!mfaTicket || !code) {
+        return res.status(400).json({ success: false, message: "Verification code and security ticket are required." });
+      }
+
+      let decoded: any = null;
+      try {
+        decoded = jwt.verify(mfaTicket, JWT_SECRET);
+      } catch (jwtErr) {
+        return res.status(401).json({ success: false, message: "Verification session has expired. Please log in again." });
+      }
+
+      if (!decoded || decoded.type !== "MFA_CHALLENGE" || decoded.purpose !== "LOGIN_2FA" || !decoded.userId) {
+        return res.status(401).json({ success: false, message: "Invalid verification security ticket." });
+      }
+
+      const clientIp = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
+      const clientUserAgent = req.headers["user-agent"] || "";
+
+      // Device info extraction
+      const deviceIdentifier = device?.deviceIdentifier || decoded.deviceIdentifier || req.headers["x-device-id"] || `dev_${uuidv4().substring(0, 8)}`;
+      const deviceName = device?.deviceName || decoded.deviceName || `${device?.browser || 'Browser'} on ${device?.os || 'Device'}`;
+      const deviceType = device?.deviceType || decoded.deviceType || "DESKTOP";
+      const browser = device?.browser || decoded.browser || "Browser";
+      const os = device?.os || decoded.os || "OS";
+
+      // Query User
+      const user = await prisma.user.findFirst({
+        where: { id: decoded.userId, deletedAt: null }
+      });
+
+      if (!user) {
+        return res.status(401).json({ success: false, message: "User account not found." });
+      }
+
+      // Check account status
+      const accountStatus = (user.accountStatus || "ACTIVE").toUpperCase().trim();
+      if (!user.isActive || accountStatus === "DISABLED" || accountStatus === "SUSPENDED" || accountStatus === "REJECTED") {
+        return res.status(403).json({ success: false, message: "Account is not active." });
+      }
+
+      // Find active OTP record
+      const otpRecord = await prisma.oTPVerification.findFirst({
+        where: {
+          userId: user.id,
+          purpose: "LOGIN_2FA",
+          isUsed: false
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      if (!otpRecord) {
+        return res.status(400).json({ success: false, message: "No active verification code found. Please request a new code." });
+      }
+
+      // Check expiration
+      if (otpRecord.expiresAt < new Date()) {
+        await recordAuditLog({
+          req,
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          userRole: user.role,
+          action: "OTP_VERIFICATION_FAILED",
+          resource: "AUTH",
+          status: "FAILED",
+          details: "2FA OTP code expired"
+        });
+        return res.status(400).json({ success: false, message: "Verification code has expired. Please request a new code." });
+      }
+
+      // Check attempt limit
+      if (otpRecord.attempts >= otpRecord.maxAttempts) {
+        await prisma.oTPVerification.update({
+          where: { id: otpRecord.id },
+          data: { isUsed: true }
+        });
+        await recordAuditLog({
+          req,
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          userRole: user.role,
+          action: "OTP_VERIFICATION_FAILED",
+          resource: "AUTH",
+          status: "FAILED",
+          details: "Maximum failed 2FA OTP attempts reached"
+        });
+        return res.status(429).json({ success: false, message: "Too many failed attempts. Please request a new verification code." });
+      }
+
+      // Validate OTP Code Hash
+      const isValid = verifyOtp(String(code).trim(), otpRecord.codeHash);
+      if (!isValid) {
+        const nextAttempts = otpRecord.attempts + 1;
+        const isMaxReached = nextAttempts >= otpRecord.maxAttempts;
+        await prisma.oTPVerification.update({
+          where: { id: otpRecord.id },
+          data: {
+            attempts: nextAttempts,
+            isUsed: isMaxReached
+          }
+        });
+        await recordAuditLog({
+          req,
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          userRole: user.role,
+          action: "OTP_VERIFICATION_FAILED",
+          resource: "AUTH",
+          status: "FAILED",
+          details: `Invalid 2FA OTP code entered (${otpRecord.maxAttempts - nextAttempts} attempts remaining)`
+        });
+        return res.status(400).json({ 
+          success: false, 
+          message: `Invalid verification code. ${Math.max(0, otpRecord.maxAttempts - nextAttempts)} attempt(s) remaining.` 
+        });
+      }
+
+      // 6. OTP Validated Successfully! Mark OTP as used
+      await prisma.oTPVerification.update({
+        where: { id: otpRecord.id },
+        data: { isUsed: true }
+      });
+
+      // Reset failed attempts & update last login timestamp
+      const updatedUser = await prisma.user.update({
+        where: { id: user.id },
+        data: { 
+          failedLoginAttempts: 0, 
+          lockoutUntil: null, 
+          lastLoginAt: new Date() 
+        }
+      });
+
+      // Seamless Multi-Device Registration
+      await prisma.approvedDevice.upsert({
+        where: {
+          userId_deviceIdentifier: {
+            userId: user.id,
+            deviceIdentifier
+          }
+        },
+        update: {
+          deviceName,
+          deviceType,
+          browser,
+          os,
+          ipAddress: String(clientIp),
+          userAgent: clientUserAgent,
+          status: "APPROVED",
+          lastUsedAt: new Date()
+        },
+        create: {
+          userId: user.id,
+          deviceIdentifier,
+          deviceName,
+          deviceType,
+          browser,
+          os,
+          ipAddress: String(clientIp),
+          userAgent: clientUserAgent,
+          status: "APPROVED",
+          approvedBy: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "STAFF_2FA",
+          approvedAt: new Date(),
+          lastUsedAt: new Date()
+        }
+      });
+
+      // Generate Authenticated Tokens
+      const { accessToken, refreshToken } = await generateTokens(
+        updatedUser, 
+        clientUserAgent, 
+        String(clientIp),
+        { deviceIdentifier, deviceName, deviceType, browser, os }
+      );
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "OTP_VERIFICATION_SUCCESS",
+        resource: "AUTH",
+        status: "SUCCESS",
+        details: "2FA OTP code verified successfully"
+      });
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "LOGIN_SUCCESS",
+        resource: "AUTH",
+        status: "SUCCESS",
+        details: `Successful authenticated login via email 2FA from ${deviceType} (${deviceName})`
+      });
+
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 7 * 24 * 60 * 60 * 1000
+      });
+
+      return res.json({ 
+        success: true, 
+        token: accessToken, 
+        refreshToken: refreshToken, 
+        user: { 
+          id: updatedUser.id, 
+          email: updatedUser.email, 
+          name: updatedUser.name, 
+          role: updatedUser.role, 
+          username: updatedUser.username, 
+          profileImage: updatedUser.profileImage || updatedUser.profilePhoto, 
+          phoneNumber: updatedUser.phoneNumber, 
+          department: updatedUser.department, 
+          address: updatedUser.address, 
+          branchId: updatedUser.branchId,
+          accountStatus: updatedUser.accountStatus,
+          isActive: updatedUser.isActive
+        } 
+      });
+
+    } catch (err: any) {
+      console.error("[2FA VERIFY ERROR]", err);
+      res.status(500).json({ success: false, message: "Verification failed. Please try again." });
+    }
+  });
+
+  // 2FA Resend Endpoint
+  app.post("/api/auth/2fa/resend", authLimiter, async (req: any, res) => {
+    const { mfaTicket } = req.body;
+
+    try {
+      if (!mfaTicket) {
+        return res.status(400).json({ success: false, message: "Security ticket is required." });
+      }
+
+      let decoded: any = null;
+      try {
+        decoded = jwt.verify(mfaTicket, JWT_SECRET);
+      } catch (jwtErr) {
+        return res.status(401).json({ success: false, message: "Verification session has expired. Please sign in again." });
+      }
+
+      if (!decoded || decoded.purpose !== "LOGIN_2FA" || !decoded.userId) {
+        return res.status(401).json({ success: false, message: "Invalid verification ticket." });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+      if (!user || user.deletedAt || !user.isActive) {
+        return res.status(401).json({ success: false, message: "User account not active." });
+      }
+
+      // Check Rate Limit (minimum 60 seconds between resends)
+      const lastOtp = await prisma.oTPVerification.findFirst({
+        where: {
+          userId: user.id,
+          purpose: "LOGIN_2FA"
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      if (lastOtp) {
+        const timeSinceLast = Date.now() - new Date(lastOtp.createdAt).getTime();
+        if (timeSinceLast < 60 * 1000) {
+          const waitSecs = Math.ceil((60 * 1000 - timeSinceLast) / 1000);
+          return res.status(429).json({ 
+            success: false, 
+            message: `Please wait ${waitSecs} second(s) before requesting a new code.` 
+          });
+        }
+      }
+
+      // Invalidate existing unused OTPs
+      await prisma.oTPVerification.updateMany({
+        where: {
+          userId: user.id,
+          purpose: "LOGIN_2FA",
+          isUsed: false
+        },
+        data: { isUsed: true }
+      });
+
+      // Generate new OTP with 5 minute expiration
+      const otpCode = generate6DigitOtp();
+      const otpHash = hashOtp(otpCode);
+
+      const createdResendOtp = await prisma.oTPVerification.create({
+        data: {
+          userId: user.id,
+          email: user.email,
+          codeHash: otpHash,
+          purpose: "LOGIN_2FA",
+          attempts: 0,
+          maxAttempts: 5,
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+          isUsed: false
+        }
+      });
+
+      // Dispatch new 6-digit OTP code to registered email address (NO links)
+      const resendSubject = "MTS Lab — Your Login Verification Code";
+      const resendText = `Hello ${user.name || 'Staff Member'},\n\nYour new MTS Lab verification code is:\n\n   ${otpCode}\n\nThis code will expire in 5 minutes.\n\nIf you did not attempt to log in to MTS Lab, please ignore this email and secure your account.`;
+      const resendHtml = generate2faEmailHtml(user.name, otpCode);
+
+      const emailResult = await sendEmail({
+        to: user.email,
+        subject: resendSubject,
+        text: resendText,
+        html: resendHtml
+      });
+
+      if (!emailResult.success) {
+        await prisma.oTPVerification.delete({ where: { id: createdResendOtp.id } }).catch(() => {});
+        return res.status(503).json({
+          success: false,
+          message: "Unable to send verification code to your email. Please try again later."
+        });
+      }
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "OTP_REQUESTED",
+        resource: "AUTH",
+        status: "SUCCESS",
+        details: "New 2FA login verification code requested & sent"
+      });
+
+      return res.json({ 
+        success: true, 
+        message: "A new verification code has been sent to your registered email." 
+      });
+
+    } catch (err: any) {
+      console.error("[2FA RESEND ERROR]", err);
+      res.status(500).json({ success: false, message: "Failed to resend verification code. Please try again." });
+    }
+  });
+
+  // Password Change with Mandatory Email OTP
   app.post("/api/auth/password-change/request", authenticate, authLimiter, async (req: any, res) => {
     const { currentPassword, newPassword } = req.body;
 
@@ -6165,9 +4826,12 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, message: "Current password and new password are required." });
       }
 
-      const pwdVal = validateStrongPasswordServer(newPassword);
-      if (!pwdVal.valid) {
-        return res.status(400).json({ success: false, message: pwdVal.message || "New password does not meet security requirements." });
+      // Password Complexity Validation
+      if (newPassword.length < 8) {
+        return res.status(400).json({ success: false, message: "Password must be at least 8 characters long." });
+      }
+      if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+        return res.status(400).json({ success: false, message: "Password must include uppercase, lowercase, and numeric characters." });
       }
 
       const user = await prisma.user.findUnique({ where: { id: req.user.id } });
@@ -6175,31 +4839,181 @@ export async function createServerApp() {
         return res.status(404).json({ success: false, message: "User account not found." });
       }
 
+      // Verify current password
       const isValidPassword = await bcrypt.compare(currentPassword, user.password);
       if (!isValidPassword) {
+        await recordAuditLog({
+          req,
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          userRole: user.role,
+          action: "PASSWORD_CHANGED",
+          resource: "AUTH",
+          status: "FAILED",
+          details: "Password change rejected: Incorrect current password"
+        });
         return res.status(400).json({ success: false, message: "Invalid current password." });
       }
 
+      // Invalidate existing password change OTPs
+      await prisma.oTPVerification.updateMany({
+        where: {
+          userId: user.id,
+          purpose: "PASSWORD_CHANGE",
+          isUsed: false
+        },
+        data: { isUsed: true }
+      });
+
+      // Generate OTP with 5 minute expiration
+      const otpCode = generate6DigitOtp();
+      const otpHash = hashOtp(otpCode);
+
+      const createdPwdOtp = await prisma.oTPVerification.create({
+        data: {
+          userId: user.id,
+          email: user.email,
+          codeHash: otpHash,
+          purpose: "PASSWORD_CHANGE",
+          attempts: 0,
+          maxAttempts: 5,
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+          isUsed: false
+        }
+      });
+
+      // Dispatch Email
+      const emailResult = await sendEmail(
+        user.email,
+        "MTS Lab Security — Password Change Verification Code",
+        `Hello ${user.name},\n\nYou requested to change your MTS Lab password.\n\nYour 6-digit verification code is:\n\n   ${otpCode}\n\nThis code will expire in 5 minutes.\nIf you did not request a password change, please contact the Super Administrator immediately.`
+      );
+
+      if (!emailResult.success) {
+        await prisma.oTPVerification.delete({ where: { id: createdPwdOtp.id } }).catch(() => {});
+        return res.status(503).json({
+          success: false,
+          message: "Unable to send verification code to your email. Please try again later."
+        });
+      }
+
+      // Sign temporary pwdTicket containing hashed new password
       const newPasswordHash = await bcrypt.hash(newPassword, 10);
+      const pwdTicket = jwt.sign(
+        {
+          userId: user.id,
+          newPasswordHash,
+          purpose: "PASSWORD_CHANGE"
+        },
+        JWT_SECRET,
+        { expiresIn: "5m" }
+      );
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "OTP_REQUESTED",
+        resource: "AUTH",
+        status: "SUCCESS",
+        details: "Password change verification OTP sent to email"
+      });
+
+      return res.json({
+        success: true,
+        pwdTicket,
+        emailMasked: maskEmail(user.email),
+        message: "Verification code sent to your registered email."
+      });
+
+    } catch (err: any) {
+      console.error("[PASSWORD CHANGE REQUEST ERROR]", err);
+      res.status(500).json({ success: false, message: "Failed to initiate password change. Please try again." });
+    }
+  });
+
+  // Password Change Confirmation Endpoint
+  app.post("/api/auth/password-change/confirm", authenticate, authLimiter, async (req: any, res) => {
+    const { pwdTicket, code } = req.body;
+
+    try {
+      if (!pwdTicket || !code) {
+        return res.status(400).json({ success: false, message: "Verification code and security ticket are required." });
+      }
+
+      let decoded: any = null;
+      try {
+        decoded = jwt.verify(pwdTicket, JWT_SECRET);
+      } catch (jwtErr) {
+        return res.status(401).json({ success: false, message: "Password change session expired. Please try again." });
+      }
+
+      if (!decoded || decoded.purpose !== "PASSWORD_CHANGE" || decoded.userId !== req.user.id || !decoded.newPasswordHash) {
+        return res.status(401).json({ success: false, message: "Invalid password change session." });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+      if (!user || user.deletedAt) {
+        return res.status(404).json({ success: false, message: "User account not found." });
+      }
+
+      // Check OTP
+      const otpRecord = await prisma.oTPVerification.findFirst({
+        where: {
+          userId: user.id,
+          purpose: "PASSWORD_CHANGE",
+          isUsed: false
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      if (!otpRecord || otpRecord.expiresAt < new Date()) {
+        return res.status(400).json({ success: false, message: "Verification code expired or invalid. Please request a new code." });
+      }
+
+      if (otpRecord.attempts >= otpRecord.maxAttempts) {
+        await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
+        return res.status(429).json({ success: false, message: "Too many failed verification attempts." });
+      }
+
+      const isValid = verifyOtp(String(code).trim(), otpRecord.codeHash);
+      if (!isValid) {
+        const nextAttempts = otpRecord.attempts + 1;
+        await prisma.oTPVerification.update({
+          where: { id: otpRecord.id },
+          data: {
+            attempts: nextAttempts,
+            isUsed: nextAttempts >= otpRecord.maxAttempts
+          }
+        });
+        return res.status(400).json({ 
+          success: false, 
+          message: `Invalid verification code. ${Math.max(0, otpRecord.maxAttempts - nextAttempts)} attempt(s) remaining.` 
+        });
+      }
+
+      // Mark OTP as used
+      await prisma.oTPVerification.update({
+        where: { id: otpRecord.id },
+        data: { isUsed: true }
+      });
+
+      // Update password
       await prisma.user.update({
         where: { id: user.id },
         data: {
-          password: newPasswordHash,
+          password: decoded.newPasswordHash,
           failedLoginAttempts: 0,
           lockoutUntil: null
         }
       });
 
-      if (user.firebaseUid) {
-        try {
-          const auth = getAdminAuth();
-          if (auth) {
-            await auth.updateUser(user.firebaseUid, { password: newPassword });
-          }
-        } catch (fbErr) {
-          console.warn("[FIREBASE AUTH PASSWORD UPDATE WARNING]", fbErr);
-        }
-      }
+      // Invalidate all sessions
+      await prisma.session.deleteMany({ where: { userId: user.id } });
+      res.clearCookie("refreshToken");
 
       await recordAuditLog({
         req,
@@ -6211,170 +5025,101 @@ export async function createServerApp() {
         resource: "USER",
         resourceId: user.id,
         status: "SUCCESS",
-        details: "Password updated successfully."
+        details: `Password updated successfully via email OTP verification. All active sessions revoked.`
       });
 
-      return res.json({
-        success: true,
-        message: "Password updated successfully."
+      return res.json({ 
+        success: true, 
+        message: "Password updated successfully. Please log in with your new password." 
       });
 
     } catch (err: any) {
-      console.error("[PASSWORD CHANGE ERROR]", err);
+      console.error("[PASSWORD CHANGE CONFIRM ERROR]", err);
       res.status(500).json({ success: false, message: "Failed to update password. Please try again." });
     }
   });
 
+  // Legacy Change Password route adapter for existing dashboard forms
   app.post("/api/auth/change-password", authenticate, async (req: any, res) => {
-    const { currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword, code, pwdTicket } = req.body;
+    
+    // If client supplied confirmation code and ticket, confirm directly
+    if (pwdTicket && code) {
+      req.body = { pwdTicket, code };
+      // Forward to confirmation handler
+      try {
+        let decoded: any = jwt.verify(pwdTicket, JWT_SECRET);
+        if (decoded && decoded.userId === req.user.id) {
+          const otpRecord = await prisma.oTPVerification.findFirst({
+            where: { userId: req.user.id, purpose: "PASSWORD_CHANGE", isUsed: false },
+            orderBy: { createdAt: "desc" }
+          });
+          if (otpRecord && verifyOtp(String(code).trim(), otpRecord.codeHash)) {
+            await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
+            await prisma.user.update({ where: { id: req.user.id }, data: { password: decoded.newPasswordHash } });
+            await prisma.session.deleteMany({ where: { userId: req.user.id } });
+            res.clearCookie("refreshToken");
+            await recordAuditLog({
+              req,
+              userId: req.user.id,
+              action: "PASSWORD_CHANGED",
+              resource: "USER",
+              resourceId: req.user.id,
+              status: "SUCCESS",
+              details: "Password updated successfully"
+            });
+            return res.json({ success: true, message: "Password updated successfully. Please login again." });
+          }
+        }
+      } catch (err) {}
+      return res.status(400).json({ error: "Invalid verification code or session expired" });
+    }
+
+    // Otherwise, validate current password and initiate OTP flow
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
       return res.status(400).json({ error: "Invalid current password" });
     }
+
     if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters long" });
     }
 
-    const newPasswordHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { password: newPasswordHash }
+    const otpCode = generate6DigitOtp();
+    const otpHash = hashOtp(otpCode);
+
+    await prisma.oTPVerification.create({
+      data: {
+        userId: user.id,
+        email: user.email,
+        codeHash: otpHash,
+        purpose: "PASSWORD_CHANGE",
+        attempts: 0,
+        maxAttempts: 5,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        isUsed: false
+      }
     });
 
-    if (user.firebaseUid) {
-      try {
-        const auth = getAdminAuth();
-        if (auth) {
-          await auth.updateUser(user.firebaseUid, { password: newPassword });
-        }
-      } catch (fbErr) {}
-    }
+    await sendEmail(
+      user.email,
+      "MTS Lab Security — Password Change Code",
+      `Your password change verification code is: ${otpCode}`
+    );
 
-    res.json({ success: true, message: "Password updated successfully." });
-  });
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    const newPwdTicket = jwt.sign(
+      { userId: user.id, newPasswordHash, purpose: "PASSWORD_CHANGE" },
+      JWT_SECRET,
+      { expiresIn: "10m" }
+    );
 
-  // Forgot Password Endpoint (Registration check & Firebase link generation)
-  app.post("/api/auth/forgot-password", authLimiter, async (req: any, res) => {
-    try {
-      const rawEmail = req.body.email || req.body.identity;
-      if (!rawEmail || typeof rawEmail !== "string") {
-        return res.status(400).json({ success: false, message: "Work email address is required." });
-      }
-
-      const normalizedEmail = rawEmail.trim().toLowerCase();
-      const user = await prisma.user.findFirst({
-        where: { email: normalizedEmail, deletedAt: null }
-      });
-
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          registered: false,
-          message: "This email address is not registered with MTS Lab."
-        });
-      }
-
-      // Generate Firebase password reset link if admin auth is available
-      let resetLink: string | null = null;
-      try {
-        const auth = getAdminAuth();
-        if (auth && user.email) {
-          resetLink = await auth.generatePasswordResetLink(user.email, {
-            url: `${process.env.APP_URL || 'http://localhost:3000'}/login`
-          });
-        }
-      } catch (fbErr: any) {
-        console.warn("[FIREBASE RESET LINK GENERATION NOTICE]", fbErr?.message || fbErr);
-      }
-
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
-        action: "PASSWORD_RESET_REQUESTED",
-        resource: "AUTH",
-        status: "SUCCESS",
-        details: `Password reset request initiated for ${user.email} (${user.role})`
-      });
-
-      return res.json({
-        success: true,
-        registered: true,
-        email: user.email,
-        role: user.role,
-        resetLinkSent: true,
-        resetLink: resetLink || undefined,
-        message: `Password reset link has been dispatched to ${user.email}.`
-      });
-    } catch (err: any) {
-      console.error("[FORGOT PASSWORD ERROR]", err);
-      return res.status(500).json({ success: false, message: "Failed to process password reset request." });
-    }
-  });
-
-  // Direct Password Reset Endpoint (for link/token completion)
-  app.post("/api/auth/reset-password", authLimiter, async (req: any, res) => {
-    try {
-      const { email, newPassword } = req.body;
-      if (!email || !newPassword) {
-        return res.status(400).json({ success: false, message: "Email and new password are required." });
-      }
-
-      const pwdVal = validateStrongPasswordServer(newPassword);
-      if (!pwdVal.valid) {
-        return res.status(400).json({ success: false, message: pwdVal.message || "New password does not meet security requirements." });
-      }
-
-      const normalizedEmail = String(email).trim().toLowerCase();
-      const user = await prisma.user.findFirst({
-        where: { email: normalizedEmail, deletedAt: null }
-      });
-
-      if (!user) {
-        return res.status(404).json({ success: false, message: "User account not found." });
-      }
-
-      const newPasswordHash = await bcrypt.hash(newPassword, 10);
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          password: newPasswordHash,
-          failedLoginAttempts: 0,
-          lockoutUntil: null
-        }
-      });
-
-      if (user.firebaseUid) {
-        try {
-          const auth = getAdminAuth();
-          if (auth) {
-            await auth.updateUser(user.firebaseUid, { password: newPassword });
-          }
-        } catch (fbErr) {}
-      }
-
-      await recordAuditLog({
-        req,
-        userId: user.id,
-        userEmail: user.email,
-        userName: user.name,
-        userRole: user.role,
-        action: "PASSWORD_RESET_COMPLETED",
-        resource: "AUTH",
-        status: "SUCCESS",
-        details: `Password reset successfully completed for ${user.email}`
-      });
-
-      return res.json({
-        success: true,
-        message: "Password has been reset successfully. You can now log in with your new password."
-      });
-    } catch (err: any) {
-      console.error("[RESET PASSWORD ERROR]", err);
-      return res.status(500).json({ success: false, message: "Failed to reset password." });
-    }
+    res.json({ 
+      success: true, 
+      requiresOtp: true, 
+      pwdTicket: newPwdTicket, 
+      message: "Verification code sent to your registered email." 
+    });
   });
 
   // Super Admin Email Change Endpoints (Step 1: Request from Current Email)
@@ -6406,12 +5151,105 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, message: "Invalid current password." });
       }
 
-      const oldEmail = user.email;
-      const normalizedNewEmail = String(req.body.newEmail || req.body.email || '').toLowerCase().trim();
-      if (!normalizedNewEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedNewEmail)) {
+      // Invalidate existing email change OTPs
+      await prisma.oTPVerification.updateMany({
+        where: {
+          userId: user.id,
+          purpose: { in: ["EMAIL_CHANGE_CURRENT", "EMAIL_CHANGE_NEW"] },
+          isUsed: false
+        },
+        data: { isUsed: true }
+      });
+
+      // Generate OTP for current email
+      const otpCode = generate6DigitOtp();
+      const otpHash = hashOtp(otpCode);
+
+      await prisma.oTPVerification.create({
+        data: {
+          userId: user.id,
+          email: user.email,
+          codeHash: otpHash,
+          purpose: "EMAIL_CHANGE_CURRENT",
+          attempts: 0,
+          maxAttempts: 5,
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+          isUsed: false
+        }
+      });
+
+      await sendEmail(
+        user.email,
+        "MTS Lab Security — Super Admin Email Change Verification",
+        `Hello ${user.name},\n\nYou requested to change the Super Admin email address.\n\nStep 1 Verification Code (Current Email):\n\n   ${otpCode}\n\nThis code will expire in 10 minutes.\nIf you did not initiate this request, contact the system administrator immediately.`
+      );
+
+      const currentTicket = jwt.sign(
+        { userId: user.id, email: user.email, purpose: "EMAIL_CHANGE_CURRENT" },
+        JWT_SECRET,
+        { expiresIn: "10m" }
+      );
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "OTP_REQUESTED",
+        resource: "USER",
+        resourceId: user.id,
+        status: "SUCCESS",
+        details: `Super Admin email change Step 1 OTP sent to current email (${maskEmail(user.email)})`
+      });
+
+      return res.json({
+        success: true,
+        currentTicket,
+        emailMasked: maskEmail(user.email),
+        message: "Verification code sent to your current registered email."
+      });
+
+    } catch (err: any) {
+      console.error("[CHANGE EMAIL REQUEST ERROR]", err);
+      res.status(500).json({ success: false, message: "Failed to initiate email change." });
+    }
+  });
+
+  // Super Admin Email Change (Step 2: Verify Current OTP & Send Code to New Email)
+  app.post("/api/admin/change-email/verify-current", authenticate, authorize(['SUPER_ADMIN']), authLimiter, async (req: any, res) => {
+    const { currentTicket, code, newEmail } = req.body;
+
+    try {
+      if (!currentTicket || !code || !newEmail) {
+        return res.status(400).json({ success: false, message: "Current security ticket, code, and new email are required." });
+      }
+
+      const normalizedNewEmail = String(newEmail).toLowerCase().trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(normalizedNewEmail)) {
         return res.status(400).json({ success: false, message: "Please provide a valid new email address." });
       }
 
+      let decoded: any = null;
+      try {
+        decoded = jwt.verify(currentTicket, JWT_SECRET);
+      } catch (jwtErr) {
+        return res.status(401).json({ success: false, message: "Verification session expired. Please start again." });
+      }
+
+      if (!decoded || decoded.purpose !== "EMAIL_CHANGE_CURRENT" || decoded.userId !== req.user.id) {
+        return res.status(401).json({ success: false, message: "Invalid verification session." });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+      if (!user) return res.status(404).json({ success: false, message: "User not found." });
+
+      if (user.email.toLowerCase() === normalizedNewEmail) {
+        return res.status(400).json({ success: false, message: "New email cannot be identical to current email." });
+      }
+
+      // Check if new email is already taken
       const existingUser = await prisma.user.findFirst({
         where: { email: normalizedNewEmail, id: { not: user.id }, deletedAt: null }
       });
@@ -6419,28 +5257,153 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, message: "This email address is already in use by another account." });
       }
 
-      const updatedUser = await prisma.user.update({
-        where: { id: user.id },
-        data: { email: normalizedNewEmail }
+      // Verify OTP on current email
+      const otpRecord = await prisma.oTPVerification.findFirst({
+        where: {
+          userId: user.id,
+          purpose: "EMAIL_CHANGE_CURRENT",
+          isUsed: false
+        },
+        orderBy: { createdAt: "desc" }
       });
 
-      if (user.firebaseUid) {
-        try {
-          const auth = getAdminAuth();
-          if (auth) {
-            await auth.updateUser(user.firebaseUid, { email: normalizedNewEmail, emailVerified: true });
-          }
-        } catch (fbErr) {
-          console.warn("[CHANGE EMAIL WARNING]", fbErr);
-        }
+      if (!otpRecord || otpRecord.expiresAt < new Date()) {
+        return res.status(400).json({ success: false, message: "Current email verification code has expired." });
       }
 
-      await syncUserToFirestore(updatedUser).catch(() => {});
+      const isValid = verifyOtp(String(code).trim(), otpRecord.codeHash);
+      if (!isValid) {
+        return res.status(400).json({ success: false, message: "Invalid verification code for current email." });
+      }
+
+      // Mark current OTP as used
+      await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
+
+      // Generate OTP for NEW email
+      const newOtpCode = generate6DigitOtp();
+      const newOtpHash = hashOtp(newOtpCode);
+
+      await prisma.oTPVerification.create({
+        data: {
+          userId: user.id,
+          email: normalizedNewEmail,
+          codeHash: newOtpHash,
+          purpose: "EMAIL_CHANGE_NEW",
+          attempts: 0,
+          maxAttempts: 5,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+          isUsed: false
+        }
+      });
+
+      // Dispatch verification code to NEW email address
+      await sendEmail(
+        normalizedNewEmail,
+        "MTS Lab Security — Confirm Your New Super Admin Email",
+        `Hello ${user.name},\n\nYou are confirming this address as the new primary Super Admin email for MTS Lab.\n\nStep 2 Confirmation Code:\n\n   ${newOtpCode}\n\nThis code will expire in 15 minutes.\nIf you did not authorize this, please disregard.`
+      );
+
+      const newEmailTicket = jwt.sign(
+        { userId: user.id, oldEmail: user.email, newEmail: normalizedNewEmail, purpose: "EMAIL_CHANGE_NEW" },
+        JWT_SECRET,
+        { expiresIn: "15m" }
+      );
 
       await recordAuditLog({
         req,
         userId: user.id,
-        userEmail: normalizedNewEmail,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "EMAIL_CHANGE_REQUESTED",
+        resource: "USER",
+        resourceId: user.id,
+        status: "SUCCESS",
+        details: `Step 1 verified. Confirmation OTP sent to new email: ${normalizedNewEmail}`
+      });
+
+      return res.json({
+        success: true,
+        newEmailTicket,
+        newEmail: normalizedNewEmail,
+        message: `Verification code sent to ${normalizedNewEmail}. Please enter the code to confirm.`
+      });
+
+    } catch (err: any) {
+      console.error("[VERIFY CURRENT EMAIL ERROR]", err);
+      res.status(500).json({ success: false, message: "Failed to verify current email." });
+    }
+  });
+
+  // Super Admin Email Change (Step 3: Confirm NEW Email OTP & Update Authoritative Records)
+  app.post("/api/admin/change-email/confirm", authenticate, authorize(['SUPER_ADMIN']), authLimiter, async (req: any, res) => {
+    const { newEmailTicket, code } = req.body;
+
+    try {
+      if (!newEmailTicket || !code) {
+        return res.status(400).json({ success: false, message: "Confirmation code and security ticket are required." });
+      }
+
+      let decoded: any = null;
+      try {
+        decoded = jwt.verify(newEmailTicket, JWT_SECRET);
+      } catch (jwtErr) {
+        return res.status(401).json({ success: false, message: "Confirmation session expired. Please start again." });
+      }
+
+      if (!decoded || decoded.purpose !== "EMAIL_CHANGE_NEW" || decoded.userId !== req.user.id || !decoded.newEmail) {
+        return res.status(401).json({ success: false, message: "Invalid confirmation session." });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+      if (!user) return res.status(404).json({ success: false, message: "User not found." });
+
+      const newEmail = decoded.newEmail;
+
+      // Verify OTP on NEW email
+      const otpRecord = await prisma.oTPVerification.findFirst({
+        where: {
+          userId: user.id,
+          email: newEmail,
+          purpose: "EMAIL_CHANGE_NEW",
+          isUsed: false
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      if (!otpRecord || otpRecord.expiresAt < new Date()) {
+        return res.status(400).json({ success: false, message: "Verification code for new email has expired." });
+      }
+
+      const isValid = verifyOtp(String(code).trim(), otpRecord.codeHash);
+      if (!isValid) {
+        return res.status(400).json({ success: false, message: "Invalid verification code for new email." });
+      }
+
+      // Mark OTP as used
+      await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
+
+      const oldEmail = user.email;
+
+      // Update SQLite user record
+      const updatedUser = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          email: newEmail,
+          emailChangePending: null,
+          emailChangeCodeHash: null,
+          emailChangeExpiresAt: null
+        }
+      });
+
+      // Invalidate all active sessions to enforce fresh login with new email
+      await prisma.session.deleteMany({ where: { userId: user.id } });
+      res.clearCookie("refreshToken");
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: newEmail,
         userName: user.name,
         userRole: user.role,
         action: "EMAIL_CHANGED",
@@ -6448,626 +5411,19 @@ export async function createServerApp() {
         resourceId: user.id,
         status: "SUCCESS",
         previousValue: oldEmail,
-        newValue: normalizedNewEmail,
-        details: `Super Admin email successfully changed from ${oldEmail} to ${normalizedNewEmail}.`
+        newValue: newEmail,
+        details: `Primary Super Admin email successfully changed from ${oldEmail} to ${newEmail}. All sessions revoked.`
       });
 
       return res.json({
         success: true,
-        newEmail: normalizedNewEmail,
-        message: "Email address updated successfully."
+        newEmail,
+        message: "Super Admin email successfully changed. All sessions revoked. Please log in with your new email."
       });
 
     } catch (err: any) {
       console.error("[CONFIRM EMAIL CHANGE ERROR]", err);
       res.status(500).json({ success: false, message: "Failed to finalize email change." });
-    }
-  });
-
-  // ==========================================
-  // SUPERADMIN DIRECT STAFF EMAIL VERIFICATION
-  // ==========================================
-  const verifyStaffEmailHandler = async (req: any, res: any) => {
-    try {
-      const { userId } = req.params;
-      if (!userId || typeof userId !== "string") {
-        return res.status(400).json({ success: false, error: "Valid staff user ID is required." });
-      }
-
-      // 1. Fetch local staff member
-      const targetUser = await prisma.user.findUnique({
-        where: { id: userId }
-      });
-
-      if (!targetUser || targetUser.deletedAt) {
-        return res.status(404).json({ success: false, error: "Staff member record not found." });
-      }
-
-      // 2. Validate canonical staff roles
-      const normRole = normalizeRole(targetUser.role);
-      const canonicalRoles = ["SUPERADMIN", "ADMIN", "MANAGER", "HEAD_TECHNICIAN", "TECHNICIAN", "RECEPTIONIST"];
-      if (!canonicalRoles.includes(normRole)) {
-        return res.status(400).json({ success: false, error: "Email verification management is restricted to staff accounts." });
-      }
-
-      const emailToVerify = targetUser.email.toLowerCase().trim();
-
-      // 3. Update Real Server-Side Firebase Authentication User
-      let firebaseUpdated = false;
-      let firebaseUser: admin.auth.UserRecord | null = null;
-
-      try {
-        const auth = getAdminAuth();
-        if (auth) {
-          try {
-            firebaseUser = await auth.getUser(targetUser.id);
-          } catch {
-            try {
-              firebaseUser = await auth.getUserByEmail(emailToVerify);
-            } catch {
-              firebaseUser = null;
-            }
-          }
-
-          if (firebaseUser) {
-            if (!firebaseUser.emailVerified) {
-              await auth.updateUser(firebaseUser.uid, { emailVerified: true });
-              firebaseUpdated = true;
-              console.log(`[FIREBASE AUTH] Successfully set emailVerified = true for Firebase UID ${firebaseUser.uid} (${emailToVerify})`);
-            } else {
-              firebaseUpdated = true;
-              console.log(`[FIREBASE AUTH] Firebase UID ${firebaseUser.uid} (${emailToVerify}) is already verified.`);
-            }
-          }
-        }
-      } catch (fbErr: any) {
-        console.warn("[FIREBASE AUTH VERIFY WARNING] Failed to update Firebase Admin user:", fbErr?.message || fbErr);
-      }
-
-      // 4. Synchronize local Prisma User.emailVerified
-      const updatedPrismaUser = await prisma.user.update({
-        where: { id: targetUser.id },
-        data: {
-          emailVerified: true,
-          updatedAt: new Date()
-        }
-      });
-
-      // 5. Synchronize central Firestore document & RTDB
-      try {
-        await syncUserToFirestore(updatedPrismaUser).catch(() => {});
-        await syncToRtdb("user", "UPDATE", updatedPrismaUser).catch(() => {});
-        broadcastRealtimeEvent({
-          entity: "user",
-          action: "UPDATE",
-          id: updatedPrismaUser.id,
-          data: {
-            id: updatedPrismaUser.id,
-            email: updatedPrismaUser.email,
-            name: updatedPrismaUser.name,
-            role: updatedPrismaUser.role,
-            emailVerified: true
-          }
-        });
-      } catch (fsErr) {
-        console.warn("[FIRESTORE VERIFY SYNC WARNING]", fsErr);
-      }
-
-      // 6. Create Immutable Audit Log
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userRole: req.user.role,
-        userName: req.user.name || req.user.email,
-        action: 'STAFF_EMAIL_MANUALLY_VERIFIED',
-        resource: 'User',
-        resourceId: targetUser.id,
-        details: `SUPERADMIN manually verified staff email for ${updatedPrismaUser.name} (${updatedPrismaUser.email}). Firebase Auth updated: ${firebaseUpdated ? 'YES' : 'PENDING'}`
-      });
-
-      return res.json({
-        success: true,
-        message: `Email verified successfully for ${updatedPrismaUser.name}.`,
-        emailVerified: true,
-        user: {
-          id: updatedPrismaUser.id,
-          name: updatedPrismaUser.name,
-          email: updatedPrismaUser.email,
-          emailVerified: true,
-          firebaseUpdated
-        }
-      });
-
-    } catch (err: any) {
-      console.error("[STAFF VERIFY EMAIL ERROR]", err);
-      return res.status(500).json({ success: false, error: err?.message || "Failed to manually verify staff email." });
-    }
-  };
-
-  // SUPERADMIN-Only Verification Endpoint Registrations
-  app.post("/api/admin/staff/:userId/verify-email", authenticate, authorize(['SUPER_ADMIN']), verifyStaffEmailHandler);
-  app.post("/api/users/:userId/verify-email", authenticate, authorize(['SUPER_ADMIN']), verifyStaffEmailHandler);
-  app.patch("/api/admin/staff/:userId/verify-email", authenticate, authorize(['SUPER_ADMIN']), verifyStaffEmailHandler);
-  app.patch("/api/users/:userId/verify-email", authenticate, authorize(['SUPER_ADMIN']), verifyStaffEmailHandler);
-
-  // ==========================================
-  // SUPERADMIN TOGGLE STAFF 2FA ENDPOINTS
-  // ==========================================
-  const handleToggleStaff2FA = async (req: any, res: any) => {
-    try {
-      const id = req.params.id || req.params.userId || req.user?.id;
-      if (!id) {
-        return res.status(400).json({ success: false, error: "Target user ID is required." });
-      }
-
-      return res.json({
-        success: true,
-        twoFactorEnabled: false,
-        message: "2FA system has been permanently migrated to Firebase Authentication. Staff 2FA toggles are no longer required."
-      });
-
-    } catch (err: any) {
-      console.error("[TOGGLE STAFF 2FA ERROR]", err);
-      return res.status(500).json({ success: false, error: err?.message || "Failed to update 2FA setting for staff member." });
-    }
-  };
-
-  // Register 2FA management routes for SUPERADMIN & Self-Settings
-  app.patch("/api/admin/security/2fa", authenticate, handleToggleStaff2FA);
-  app.post("/api/admin/security/2fa", authenticate, handleToggleStaff2FA);
-  app.patch("/api/auth/2fa", authenticate, handleToggleStaff2FA);
-  app.post("/api/auth/2fa", authenticate, handleToggleStaff2FA);
-  app.patch("/api/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
-  app.post("/api/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
-  app.patch("/api/admin/staff/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
-  app.post("/api/admin/staff/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
-  app.patch("/api/admin/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
-  app.post("/api/admin/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
-  app.patch("/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
-  app.post("/users/:id/2fa", authenticate, authorize(['SUPER_ADMIN']), handleToggleStaff2FA);
-
-  // Email Provider Status & Outbound Test Diagnostics for SUPERADMIN
-  app.get("/api/admin/email-status", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res: any) => {
-    const hasResend = Boolean(process.env.RESEND_API_KEY);
-    const hasSendGrid = Boolean(process.env.SENDGRID_API_KEY);
-    const hasGmail = Boolean((process.env.GMAIL_USER || process.env.EMAIL_USER) && (process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS));
-    const hasSmtp = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-
-    const configuredProvider = hasResend ? 'RESEND' : (hasSendGrid ? 'SENDGRID' : (hasGmail ? 'GMAIL_SMTP' : (hasSmtp ? 'CUSTOM_SMTP' : 'NONE')));
-
-    return res.json({
-      success: true,
-      configuredProvider,
-      isConfigured: configuredProvider !== 'NONE',
-      details: {
-        hasResend,
-        hasSendGrid,
-        hasGmail,
-        hasSmtp,
-        fromAddress: process.env.SMTP_FROM || process.env.GMAIL_USER || process.env.EMAIL_USER || "no-reply@mtslab.com"
-      },
-      message: configuredProvider !== 'NONE' 
-        ? `Active outbound email provider: ${configuredProvider}` 
-        : "No live outbound email provider credentials set in .env. 2FA emails will simulate delivery in development mode."
-    });
-  });
-
-  app.post("/api/admin/test-email", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res: any) => {
-    try {
-      const { targetEmail } = req.body;
-      const recipient = targetEmail || req.user.email;
-
-      const result = await sendEmail({
-        to: recipient,
-        subject: "MTS Lab — Email Delivery Test",
-        text: `Hello ${req.user.name},\n\nThis is a test email sent from MTS Lab Repair Management System to confirm outbound mail delivery.\n\nTime: ${new Date().toISOString()}`,
-        html: `<h3>MTS Lab Email Test</h3><p>Hello ${req.user.name},</p><p>This is a test email sent from MTS Lab Repair Management System to confirm outbound mail delivery.</p><p><b>Time:</b> ${new Date().toISOString()}</p>`
-      });
-
-      return res.json({
-        success: result.success,
-        recipient,
-        result
-      });
-    } catch (err: any) {
-      return res.status(500).json({ success: false, error: err?.message || "Failed to send test email" });
-    }
-  });
-
-  // ==========================================
-  // BULK USER PERMANENT DELETION ENDPOINT (SUPER_ADMIN ONLY)
-  // ==========================================
-  app.post("/api/admin/users/bulk-delete", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res: any) => {
-    try {
-      const { userIds } = req.body;
-      if (!Array.isArray(userIds) || userIds.length === 0) {
-        return res.status(400).json({ success: false, deleted: false, error: "No user IDs provided for deletion", message: "No user IDs provided for deletion" });
-      }
-
-      let deletedCount = 0;
-      for (const targetId of userIds) {
-        if (targetId === req.user.id) continue;
-        const targetUser = await prisma.user.findUnique({ where: { id: targetId } });
-        if (!targetUser) continue;
-
-        if (normalizeRole(targetUser.role) === 'SUPER_ADMIN') {
-          const count = await prisma.user.count({
-            where: { role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] }, deletedAt: null }
-          });
-          if (count <= 1) continue;
-        }
-
-        const deleted = await permanentlyDeleteUserRecord(targetId);
-        if (deleted) deletedCount++;
-      }
-
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userRole: req.user.role,
-        userName: req.user.name || req.user.email,
-        action: 'BULK_DELETE_USERS',
-        resource: 'User',
-        details: `Bulk permanently deleted ${deletedCount} staff member account(s)`
-      });
-
-      return res.json({
-        success: true,
-        deleted: true,
-        message: `Successfully permanently deleted ${deletedCount} user record(s).`,
-        deletedCount,
-        deactivatedCount: deletedCount
-      });
-    } catch (err: any) {
-      console.error("[BULK DELETE USERS ERROR]", err);
-      return res.status(500).json({ success: false, deleted: false, error: err.message || "Failed to bulk delete user records", message: err.message || "Failed to bulk delete user records" });
-    }
-  });
-
-  // ==========================================
-  // REPAIR DATA EXCEL EXPORT ENDPOINT
-  // ==========================================
-  app.get("/api/repairs/export", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res: any) => {
-    try {
-      const { search, status, technicianId } = req.query as any;
-      const userRoleNorm = normalizeRole(req.user.role);
-      const isSuperOrAdmin = userRoleNorm === 'SUPERADMIN' || userRoleNorm === 'ADMIN' || req.user.role === 'SUPER_ADMIN' || req.user.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
-      const isTech = userRoleNorm === 'TECHNICIAN' || userRoleNorm === 'HEAD_TECHNICIAN';
-
-      const where: any = {};
-      if (status && status !== 'ALL') {
-        where.status = status;
-      }
-      if (technicianId && technicianId !== 'ALL') {
-        where.technicianId = technicianId;
-      } else if (isTech && !isSuperOrAdmin) {
-        where.technicianId = req.user.id;
-      }
-
-      if (search && typeof search === 'string' && search.trim()) {
-        const term = search.trim();
-        where.OR = [
-          { repairNumber: { contains: term } },
-          { customerName: { contains: term } },
-          { customerPhone: { contains: term } },
-          { deviceBrand: { contains: term } },
-          { deviceModel: { contains: term } },
-          { problemDescription: { contains: term } }
-        ];
-      }
-
-      const repairs = await prisma.repair.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          customer: true,
-          technician: true
-        }
-      });
-
-      const exportRows = repairs.map(r => {
-        const row: any = {
-          "Repair Number": r.repairNumber,
-          "Customer Name": r.customerName || r.customer?.name || "N/A",
-          "Customer Phone": r.customerPhone || r.customer?.phone || "N/A",
-          "Device Brand": r.deviceBrand || "N/A",
-          "Device Model": r.deviceModel || "N/A",
-          "Problem Description": r.problemDescription || "N/A",
-          "Status": r.status || "PENDING",
-          "Priority": r.priority || "NORMAL",
-          "Assigned Technician": r.technician?.name || "Unassigned",
-          "Created Date": r.createdAt ? r.createdAt.toISOString().split('T')[0] : "N/A"
-        };
-
-        if (isSuperOrAdmin || userRoleNorm === 'MANAGER' || userRoleNorm === 'RECEPTIONIST') {
-          row["Estimated Cost (NPR)"] = r.estimatedCost ?? 0;
-          row["Amount Paid (NPR)"] = r.totalPaid ?? 0;
-          row["Payment Status"] = r.paymentStatus || "UNPAID";
-        }
-
-        if (isSuperOrAdmin) {
-          row["Internal Notes"] = r.remarks || "";
-          row["Problem Notes"] = r.conditionNotes || "";
-        }
-
-        return row;
-      });
-
-      const worksheet = XLSX.utils.json_to_sheet(exportRows);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Repairs");
-
-      const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userRole: req.user.role,
-        userName: req.user.name || req.user.email,
-        action: 'EXPORT_REPAIRS_EXCEL',
-        resource: 'Repair',
-        details: `Exported ${repairs.length} repair records to Excel`
-      });
-
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", `attachment; filename="MTS_Lab_Repairs_${Date.now()}.xlsx"`);
-      return res.send(buffer);
-    } catch (err: any) {
-      console.error("[REPAIR EXPORT ERROR]", err);
-      return res.status(500).json({ error: "Failed to export repair records to Excel" });
-    }
-  });
-
-  // ==========================================
-  // REPAIR DATA EXCEL IMPORT TEMPLATE
-  // ==========================================
-  app.get("/api/repairs/import/template", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res: any) => {
-    try {
-      const templateRows = [
-        {
-          "Repair Number": "MTS-10001",
-          "Customer Name": "Ram Shrestha",
-          "Customer Phone": "9841234567",
-          "Customer Email": "ram@example.com",
-          "Device Brand": "Apple",
-          "Device Model": "iPhone 14 Pro",
-          "Serial / IMEI": "356789123456789",
-          "Problem Description": "Cracked display screen replacement",
-          "Status": "PENDING",
-          "Priority": "NORMAL",
-          "Assigned Technician": "Manish Sharma",
-          "Estimated Cost (NPR)": 16500,
-          "Amount Paid (NPR)": 5000,
-          "Payment Status": "PARTIAL",
-          "Remarks": "Customer requested original OLED screen replacement"
-        }
-      ];
-
-      const worksheet = XLSX.utils.json_to_sheet(templateRows);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Repair Import Template");
-
-      const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", 'attachment; filename="MTS_Lab_Repair_Import_Template.xlsx"');
-      return res.send(buffer);
-    } catch (err: any) {
-      console.error("[IMPORT TEMPLATE ERROR]", err);
-      return res.status(500).json({ error: "Failed to generate import template" });
-    }
-  });
-
-  // ==========================================
-  // REPAIR DATA EXCEL IMPORT PREVIEW
-  // ==========================================
-  app.post("/api/repairs/import/preview", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), upload.single('file'), async (req: any, res: any) => {
-    try {
-      if (!req.file || !req.file.buffer) {
-        return res.status(400).json({ error: "No Excel file uploaded" });
-      }
-
-      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-      const sheetName = workbook.SheetNames[0];
-      if (!sheetName) {
-        return res.status(400).json({ error: "Excel file contains no sheets" });
-      }
-
-      const rawRows: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
-
-      if (rawRows.length === 0) {
-        return res.status(400).json({ error: "Uploaded Excel file contains no data rows" });
-      }
-
-      const sanitizeCell = (val: any): string => {
-        if (val === null || val === undefined) return "";
-        let str = String(val).trim();
-        if (str.startsWith("=") || str.startsWith("+") || str.startsWith("-") || str.startsWith("@")) {
-          str = str.substring(1).trim();
-        }
-        return str;
-      };
-
-      const existingRepairNumbers = new Set(
-        (await prisma.repair.findMany({ select: { repairNumber: true } })).map(r => r.repairNumber)
-      );
-
-      let validCount = 0;
-      let invalidCount = 0;
-      let duplicateCount = 0;
-      const items: any[] = [];
-      const errors: any[] = [];
-
-      rawRows.forEach((row, idx) => {
-        const rowNum = idx + 2;
-        const repairNumber = sanitizeCell(row["Repair Number"] || row["repairNumber"] || row["Repair ID"]);
-        const customerName = sanitizeCell(row["Customer Name"] || row["customerName"] || row["Customer"]);
-        const customerPhone = sanitizeCell(row["Customer Phone"] || row["customerPhone"] || row["Phone"]);
-        const deviceBrand = sanitizeCell(row["Device Brand"] || row["deviceBrand"] || row["Brand"]);
-        const deviceModel = sanitizeCell(row["Device Model"] || row["deviceModel"] || row["Model"]);
-        const problemDescription = sanitizeCell(row["Problem Description"] || row["problemDescription"] || row["Problem"] || row["Issue"]);
-        const status = sanitizeCell(row["Status"] || row["status"] || "PENDING").toUpperCase();
-        const priority = sanitizeCell(row["Priority"] || row["priority"] || "NORMAL").toUpperCase();
-        const costVal = parseFloat(String(row["Estimated Cost (NPR)"] || row["estimatedCost"] || row["Cost"] || "0"));
-        const paidVal = parseFloat(String(row["Amount Paid (NPR)"] || row["amountPaid"] || row["Paid"] || "0"));
-        const paymentStatus = sanitizeCell(row["Payment Status"] || row["paymentStatus"] || "UNPAID").toUpperCase();
-        const remarks = sanitizeCell(row["Remarks"] || row["remarks"] || row["Notes"]);
-
-        const rowErrors: string[] = [];
-
-        if (!customerName && !customerPhone) {
-          rowErrors.push("Customer Name or Customer Phone is required");
-        }
-        if (!deviceBrand && !deviceModel) {
-          rowErrors.push("Device Brand or Device Model is required");
-        }
-
-        let isDuplicate = false;
-        if (repairNumber && existingRepairNumbers.has(repairNumber)) {
-          isDuplicate = true;
-          duplicateCount++;
-          rowErrors.push(`Repair Number '${repairNumber}' already exists in database`);
-        }
-
-        const isValidStatus = ["PENDING", "IN_PROGRESS", "COMPLETED", "DELIVERED", "CANCELLED", "REJECTED"].includes(status);
-        if (!isValidStatus) {
-          rowErrors.push(`Invalid status '${status}'. Must be PENDING, IN_PROGRESS, COMPLETED, DELIVERED, CANCELLED, or REJECTED.`);
-        }
-
-        const isValid = rowErrors.length === 0;
-
-        if (isValid) {
-          validCount++;
-        } else if (!isDuplicate) {
-          invalidCount++;
-        }
-
-        const itemObj = {
-          rowNumber: rowNum,
-          repairNumber: repairNumber || `MTS-${Math.floor(10000 + Math.random() * 90000)}`,
-          customerName: customerName || "Guest Customer",
-          customerPhone: customerPhone || "9800000000",
-          deviceBrand: deviceBrand || "General Mobile",
-          deviceModel: deviceModel || "Standard Model",
-          problemDescription: problemDescription || "Hardware diagnostic & repair service",
-          status: isValidStatus ? status : "PENDING",
-          priority: ["LOW", "NORMAL", "HIGH", "URGENT"].includes(priority) ? priority : "NORMAL",
-          estimatedCost: isNaN(costVal) || costVal < 0 ? 0 : costVal,
-          amountPaid: isNaN(paidVal) || paidVal < 0 ? 0 : paidVal,
-          paymentStatus: ["UNPAID", "PARTIAL", "PAID"].includes(paymentStatus) ? paymentStatus : "UNPAID",
-          remarks: remarks || null,
-          rowStatus: isValid ? "VALID" : isDuplicate ? "DUPLICATE" : "INVALID",
-          errors: rowErrors
-        };
-
-        items.push(itemObj);
-
-        if (!isValid) {
-          errors.push({ row: rowNum, message: rowErrors.join("; ") });
-        }
-      });
-
-      return res.json({
-        success: true,
-        totalRows: rawRows.length,
-        validRows: validCount,
-        invalidRows: invalidCount,
-        duplicateRows: duplicateCount,
-        errors,
-        items
-      });
-    } catch (err: any) {
-      console.error("[REPAIR IMPORT PREVIEW ERROR]", err);
-      return res.status(500).json({ error: err.message || "Failed to parse Excel import file" });
-    }
-  });
-
-  // ==========================================
-  // REPAIR DATA EXCEL IMPORT CONFIRM
-  // ==========================================
-  app.post("/api/repairs/import/confirm", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res: any) => {
-    try {
-      const { items } = req.body;
-      if (!Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ error: "No valid repair items provided to import" });
-      }
-
-      const validItems = items.filter(item => item.rowStatus === 'VALID' || !item.errors || item.errors.length === 0);
-      if (validItems.length === 0) {
-        return res.status(400).json({ error: "No valid records available for database insertion" });
-      }
-
-      const defaultBranch = await prisma.branch.findFirst();
-      const branchId = defaultBranch ? defaultBranch.id : "main-branch";
-
-      const createdRepairs: any[] = [];
-
-      await prisma.$transaction(async (tx) => {
-        for (const item of validItems) {
-          let customer = await tx.customer.findFirst({
-            where: {
-              OR: [
-                { phone: item.customerPhone },
-                { name: item.customerName }
-              ]
-            }
-          });
-
-          if (!customer) {
-            customer = await tx.customer.create({
-              data: {
-                customerId: `CUST-${Math.floor(10000 + Math.random() * 90000)}`,
-                name: item.customerName,
-                phone: item.customerPhone,
-                address: "Imported Record"
-              }
-            });
-          }
-
-          const newRepair = await tx.repair.create({
-            data: {
-              repairNumber: item.repairNumber,
-              customerName: customer.name,
-              customerPhone: customer.phone,
-              customerId: customer.id,
-              deviceBrand: item.deviceBrand,
-              deviceModel: item.deviceModel,
-              deviceCondition: "Standard Used Condition",
-              problemDescription: item.problemDescription,
-              status: item.status || "PENDING",
-              priority: item.priority || "NORMAL",
-              estimatedCost: item.estimatedCost || 0,
-              totalPaid: item.amountPaid || 0,
-              advancePaid: item.amountPaid || 0,
-              paymentStatus: item.paymentStatus || "UNPAID",
-              remarks: item.remarks || null,
-              branchId,
-              createdById: req.user.id
-            }
-          });
-
-          createdRepairs.push(newRepair);
-        }
-      });
-
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userRole: req.user.role,
-        userName: req.user.name || req.user.email,
-        action: 'CONFIRM_IMPORT_REPAIRS',
-        resource: 'Repair',
-        details: `Successfully imported ${createdRepairs.length} repair records from Excel workbook.`
-      });
-
-      return res.json({
-        success: true,
-        message: `Successfully imported ${createdRepairs.length} repair records.`,
-        importedCount: createdRepairs.length
-      });
-    } catch (err: any) {
-      console.error("[REPAIR IMPORT CONFIRM ERROR]", err);
-      return res.status(500).json({ error: err.message || "Failed to execute repair data import" });
     }
   });
 
@@ -7293,7 +5649,7 @@ export async function createServerApp() {
 
   // Resend Official Firebase Email Verification Link Endpoint
   app.post("/api/auth/resend-verification", authLimiter, async (req: any, res) => {
-    const { email, firebaseIdToken, password } = req.body;
+    const { email } = req.body;
     try {
       if (!email) {
         return res.status(400).json({ success: false, message: "Email address is required." });
@@ -7305,195 +5661,95 @@ export async function createServerApp() {
       });
 
       if (!user) {
-        return res.json({
-          success: true,
-          message: "If an unverified account matches that email, a verification link has been sent."
-        });
-      }
-
-      // Recovery path for a page that lost its Firebase browser session. The
-      // local password must validate before Firebase sign-in/provisioning is
-      // attempted; this path never grants access or marks the account verified.
-      if (!firebaseIdToken && password) {
-        const localPasswordValid = await bcrypt.compare(String(password), user.password);
-        if (!localPasswordValid) {
-          return res.status(401).json({ success: false, message: "Unable to resend verification email with these credentials." });
-        }
-
-        const firebaseState = await checkFirebaseUserEmailVerified(user.email, String(password), undefined, user.firebaseUid);
-        if (firebaseState.checked && firebaseState.firebaseUid && firebaseState.isVerified) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { emailVerified: true, ...(user.firebaseUid ? {} : { firebaseUid: firebaseState.firebaseUid }) }
-          });
-          return res.json({ success: true, emailVerified: true, message: "Your email address is already verified." });
-        }
-
-        const recoveryCooldownSeconds = getFirebaseVerificationCooldownSeconds(normalizedEmail);
-        if (recoveryCooldownSeconds > 0) {
-          res.setHeader('Retry-After', String(recoveryCooldownSeconds));
-          return res.status(429).json({
-            success: false,
-            code: 'FIREBASE_VERIFICATION_COOLDOWN',
-            message: 'A verification email was requested recently. Please wait before requesting another one.'
-          });
-        }
-
-        const provisioned = await ensureFirebaseUserAndSendVerification(user.email, String(password), user.name);
-        if (provisioned.firebaseUid) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { firebaseUid: provisioned.firebaseUid, emailVerified: false }
-          });
-        }
-        if (provisioned.sent || provisioned.errorCode === 'TOO_MANY_ATTEMPTS_TRY_LATER') {
-          markFirebaseVerificationAttempt(normalizedEmail);
-        }
-        if (provisioned.sent) {
-          await recordAuditLog({
-            req,
-            userId: user.id,
-            userEmail: user.email,
-            userName: user.name,
-            userRole: user.role,
-            action: "EMAIL_VERIFICATION_SENT",
-            resource: "AUTH",
-            status: "SUCCESS",
-            details: `Firebase verification email dispatched to ${maskEmail(user.email)} through password-authenticated recovery`
-          });
-          return res.json({ success: true, message: "Verification email sent through Firebase. Please check your Gmail inbox and spam folder." });
-        }
-        if (provisioned.firebaseUid || provisioned.errorCode) {
-          const providerCode = provisioned.errorCode || "FIREBASE_VERIFICATION_UNAVAILABLE";
-          const providerStatus = providerCode === "TOO_MANY_ATTEMPTS_TRY_LATER"
-            ? 429
-            : providerCode === "INVALID_ID_TOKEN" || providerCode === "TOKEN_EXPIRED"
-              ? 401
-              : 503;
-          return res.status(providerStatus).json({
-            success: false,
-            code: providerCode,
-            message: providerStatus === 429
-              ? "Firebase has temporarily rate-limited verification emails. Please wait before trying again."
-              : providerStatus === 401
-                ? "Your Firebase session or credentials could not be confirmed. Please sign in again and try again."
-                : "Firebase could not send the verification email yet. Please wait and try again later."
-          });
-        }
-      }
-
-      if (user.emailVerified && !firebaseIdToken && !user.firebaseUid) {
-        return res.status(503).json({
-          success: false,
-          code: "FIREBASE_VERIFICATION_REQUIRED",
-          message: "Firebase must confirm this account before the verification status can be trusted. Please sign in again or contact the administrator."
+        return res.json({ 
+          success: true, 
+          message: "If an unverified account matches that email, a verification link has been sent." 
         });
       }
 
       if (user.emailVerified) {
-        const firebaseState = await checkFirebaseUserEmailVerified(user.email, undefined, firebaseIdToken, user.firebaseUid);
-        if (firebaseState.checked && firebaseState.isVerified) {
-          return res.json({ success: true, emailVerified: true, message: "Your email address is already verified." });
-        }
-        if (!firebaseState.checked) {
-          return res.status(503).json({
-            success: false,
-            code: "FIREBASE_VERIFICATION_REQUIRED",
-            message: "Firebase could not confirm the current verification state. Please sign in again or contact the administrator."
-          });
-        }
-      }
-
-      // Re-check the provider state immediately before applying cooldown/send
-      // logic so a recently verified Firebase account is never sent another
-      // verification email and is not incorrectly shown a cooldown error.
-      if (firebaseIdToken) {
-        const liveFirebaseState = await checkFirebaseUserEmailVerified(user.email, undefined, firebaseIdToken, user.firebaseUid);
-        const liveIdentityMatches = Boolean(
-          liveFirebaseState.checked &&
-          liveFirebaseState.firebaseUid &&
-          liveFirebaseState.email &&
-          liveFirebaseState.email.toLowerCase().trim() === normalizedEmail &&
-          (!user.firebaseUid || liveFirebaseState.firebaseUid === user.firebaseUid)
-        );
-        if (!liveIdentityMatches) {
-          return res.status(401).json({
-            success: false,
-            code: 'INVALID_ID_TOKEN',
-            message: 'Your Firebase session has expired. Please sign in again before requesting a verification email.'
-          });
-        }
-        if (liveFirebaseState.isVerified) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { emailVerified: true, ...(user.firebaseUid ? {} : { firebaseUid: liveFirebaseState.firebaseUid }) }
-          });
-          return res.json({ success: true, emailVerified: true, message: "Your email address is already verified." });
-        }
-      }
-
-      const tokenResendCooldownSeconds = getFirebaseVerificationCooldownSeconds(normalizedEmail);
-      if (tokenResendCooldownSeconds > 0) {
-        res.setHeader('Retry-After', String(tokenResendCooldownSeconds));
-        return res.status(429).json({
-          success: false,
-          code: 'FIREBASE_VERIFICATION_COOLDOWN',
-          message: 'A verification email was requested recently. Please wait before requesting another one.'
-        });
-      }
-
-      const firebaseVerification = await sendFirebaseVerificationEmailWithIdToken(firebaseIdToken, normalizedEmail);
-
-      if (firebaseVerification.alreadyVerified) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            emailVerified: true,
-            ...(firebaseVerification.firebaseUid && !user.firebaseUid ? { firebaseUid: firebaseVerification.firebaseUid } : {})
-          }
-        });
         return res.json({ success: true, emailVerified: true, message: "Your email address is already verified." });
       }
 
-      if (firebaseVerification.sent || firebaseVerification.errorCode === 'TOO_MANY_ATTEMPTS_TRY_LATER') {
-        markFirebaseVerificationAttempt(normalizedEmail);
-      }
-
-      if (firebaseVerification.sent) {
-        if (firebaseVerification.firebaseUid && !user.firebaseUid) {
-          await prisma.user.update({ where: { id: user.id }, data: { firebaseUid: firebaseVerification.firebaseUid } });
+      // Generate official Firebase Action Link with continueUrl
+      const getAppUrl = (r?: any): string => {
+        if (process.env.APP_URL && process.env.APP_URL.trim()) {
+          return process.env.APP_URL.trim().replace(/\/+$/, '');
         }
-        await recordAuditLog({
-          req,
-          userId: user.id,
-          userEmail: user.email,
-          userName: user.name,
-          userRole: user.role,
-          action: "EMAIL_VERIFICATION_SENT",
-          resource: "AUTH",
-          status: "SUCCESS",
-          details: `Firebase verification email dispatched to ${maskEmail(user.email)}`
-        });
-        return res.json({
-          success: true,
-          message: "Verification email sent through Firebase. Please check your Gmail inbox and spam folder."
-        });
-      }
+        const origin = r?.headers?.origin || r?.headers?.referer;
+        if (origin) {
+          try {
+            const parsed = new URL(origin);
+            return `${parsed.protocol}//${parsed.host}`.replace(/\/+$/, '');
+          } catch {}
+        }
+        const host = r?.headers?.host;
+        if (host) {
+          const proto = r?.headers?.['x-forwarded-proto'] || (r?.secure ? 'https' : 'http');
+          return `${proto}://${host}`.replace(/\/+$/, '');
+        }
+        return "http://localhost:3000";
+      };
 
-      const firebaseErrorCode = firebaseVerification.errorCode || "FIREBASE_VERIFICATION_UNAVAILABLE";
-      const firebaseErrorStatus = firebaseErrorCode === "TOO_MANY_ATTEMPTS_TRY_LATER"
-        ? 429
-        : firebaseErrorCode === "INVALID_ID_TOKEN" || firebaseErrorCode === "TOKEN_EXPIRED"
-          ? 401
-          : 503;
-      return res.status(firebaseErrorStatus).json({
-        success: false,
-        code: firebaseErrorCode,
-        message: firebaseErrorStatus === 429
-          ? "Firebase has temporarily rate-limited verification emails. Please wait before trying again."
-          : firebaseErrorStatus === 401
-            ? "Your Firebase session has expired. Please sign in again before requesting a verification email."
-            : "Firebase could not send the verification email. Please sign in again to refresh your Firebase session or contact the administrator."
+      const appUrl = getAppUrl(req);
+      // Generate secure verification token
+      const verifyToken = jwt.sign(
+        { email: normalizedEmail, userId: user.id, type: "EMAIL_VERIFICATION" },
+        JWT_SECRET,
+        { expiresIn: "48h" }
+      );
+      const verificationLink = `${appUrl}/login?token=${verifyToken}&emailVerified=true`;
+
+      // Dispatch official verification email with both text and rich HTML
+      await sendEmail({
+        to: normalizedEmail,
+        subject: "MTS Lab — Verify Your Email Address",
+        body: `Hello ${user.name},\n\nPlease verify your email address for MTS Lab by clicking the link below:\n\n${verificationLink}\n\nThis link will verify your email and allow you to complete your security sign-in.`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; background-color: #f8fafc; border-radius: 16px;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <div style="display: inline-block; width: 48px; height: 48px; background-color: #0f172a; border-radius: 12px; line-height: 48px; color: #ffffff; font-size: 24px; font-weight: bold;">M</div>
+              <h2 style="color: #0f172a; margin: 12px 0 4px 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">MTS Lab Security</h2>
+              <p style="color: #64748b; margin: 0; font-size: 13px; font-weight: 500;">Email Address Verification</p>
+            </div>
+            <div style="background-color: #ffffff; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+              <h3 style="color: #1e293b; margin-top: 0; font-size: 18px; font-weight: 700;">Verify Your Email Address</h3>
+              <p style="color: #334155; font-size: 14px; line-height: 1.6; margin: 16px 0;">
+                Hello <strong>${user.name}</strong>,<br/><br/>
+                Thank you for registering with MTS Lab. Please confirm your email address by clicking the verification button below to activate your account.
+              </p>
+              <div style="text-align: center; margin: 28px 0;">
+                <a href="${verificationLink}" style="display: inline-block; padding: 14px 28px; background-color: #0f172a; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: bold; border-radius: 12px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);">
+                  Verify Email Address &rarr;
+                </a>
+              </div>
+              <p style="color: #64748b; font-size: 12px; line-height: 1.5; margin: 20px 0 0 0; word-break: break-all;">
+                Or copy and paste this link into your browser:<br/>
+                <a href="${verificationLink}" style="color: #4f46e5; text-decoration: underline;">${verificationLink}</a>
+              </p>
+              <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; text-align: center;">
+                If you did not create an account or request this email, you can safely ignore this message.
+              </div>
+            </div>
+          </div>
+        `
+      });
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "EMAIL_VERIFICATION_SENT",
+        resource: "AUTH",
+        status: "SUCCESS",
+        details: `Email verification link dispatched to ${maskEmail(user.email)}`
+      });
+
+      return res.json({
+        success: true,
+        message: "Verification email sent. Please check your Gmail inbox and spam folder."
       });
     } catch (err: any) {
       console.error("[RESEND VERIFICATION ERROR]", err);
@@ -7501,83 +5757,47 @@ export async function createServerApp() {
     }
   });
 
-  // Verify Email Status Endpoint (Real-Time Check & Multi-Database Synchronization)
+  // Verify Email Status Endpoint (Real-Time Check & Multi-Device Synchronization)
   app.post("/api/auth/verify-email-status", authLimiter, async (req: any, res) => {
-    const { email, password, firebaseIdToken, firebaseUid, oobCode } = req.body;
+    const { email, token } = req.body;
     try {
-      if (!email && !firebaseIdToken && !firebaseUid && !oobCode) {
-        return res.status(400).json({ success: false, message: "Email, Firebase UID, Firebase ID Token, or verification code is required." });
-      }
-
-      // A direct Firebase action code is authoritative only after Firebase
-      // consumes it successfully. Never treat a redirect query parameter as proof.
-      const actionCheck = await applyFirebaseEmailVerificationCode(oobCode);
-      const effectiveFirebaseUid = actionCheck.firebaseUid || firebaseUid;
-      let normalizedEmail = (actionCheck.email || email)?.toString().toLowerCase().trim() || null;
+      let normalizedEmail = email ? String(email).toLowerCase().trim() : null;
       let user = null;
 
-      if (effectiveFirebaseUid) {
-        user = await prisma.user.findFirst({
-          where: { firebaseUid: effectiveFirebaseUid, deletedAt: null }
-        });
+      // 1. If token is provided, verify JWT
+      if (token) {
+        try {
+          const decoded: any = jwt.verify(token, JWT_SECRET);
+          if (decoded && decoded.email) {
+            normalizedEmail = String(decoded.email).toLowerCase().trim();
+          }
+        } catch (tokErr) {
+          console.warn("[AUTH] Verification token parse notice:", tokErr);
+        }
       }
 
-      if (!user && normalizedEmail) {
-        user = await prisma.user.findFirst({
-          where: { email: normalizedEmail, deletedAt: null }
-        });
+      if (!normalizedEmail) {
+        return res.status(400).json({ success: false, message: "Email or verification token is required." });
       }
 
-      // Check current Firebase state using the verified action result, ID token,
-      // or Firebase email/password result. A client-side query flag is ignored.
-      const fbCheck = actionCheck.checked
-        ? actionCheck
-        : await checkFirebaseUserEmailVerified(normalizedEmail || user?.email, password, firebaseIdToken, effectiveFirebaseUid || user?.firebaseUid);
-      
-      if (!user && fbCheck.email) {
-        normalizedEmail = fbCheck.email;
-        user = await prisma.user.findFirst({
-          where: { email: normalizedEmail, deletedAt: null }
-        });
-      }
+      user = await prisma.user.findFirst({
+        where: { email: normalizedEmail, deletedAt: null }
+      });
 
       if (!user) {
         return res.status(404).json({ success: false, message: "User account not found." });
       }
 
-      const firebaseIdentityMatches = Boolean(
-        fbCheck.checked &&
-        fbCheck.email &&
-        fbCheck.email.toLowerCase().trim() === user.email.toLowerCase().trim() &&
-        (!user.firebaseUid || !fbCheck.firebaseUid || fbCheck.firebaseUid === user.firebaseUid)
-      );
-      if (fbCheck.checked && !firebaseIdentityMatches) {
-        return res.status(401).json({ success: false, message: "Firebase verification does not match this MTS account." });
-      }
-
-      if (firebaseIdentityMatches && fbCheck.firebaseUid && !user.firebaseUid) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: { firebaseUid: fbCheck.firebaseUid }
-        });
-      }
-
-      if (firebaseIdentityMatches && fbCheck.isVerified) {
+      // If token verified or checking status
+      if (token && !user.emailVerified) {
         user = await prisma.user.update({
           where: { id: user.id },
           data: {
-            emailVerified: true,
-            ...(fbCheck.firebaseUid && !user.firebaseUid ? { firebaseUid: fbCheck.firebaseUid } : {})
+            emailVerified: true
           }
         });
 
-        // 1. Sync to central Firestore
-        await syncUserToFirestore(user).catch((e) => console.warn("[FIRESTORE VERIFY SYNC ERROR]", e?.message));
-
-        // 2. Sync to Firebase Realtime Database (RTDB)
-        await syncToRtdb("user", "UPDATE", user).catch((e) => console.warn("[RTDB VERIFY SYNC ERROR]", e?.message));
-
-        // 3. Broadcast real-time SSE event to all active sessions & dashboards
+        // Broadcast real-time SSE event to all active sessions & dashboards
         broadcastRealtimeEvent({
           entity: "user",
           action: "UPDATE",
@@ -7593,7 +5813,7 @@ export async function createServerApp() {
           }
         });
 
-        // 4. Centralized Audit Log
+        // Centralized Audit Log
         await recordAuditLog({
           req,
           userId: user.id,
@@ -7604,7 +5824,7 @@ export async function createServerApp() {
           resource: "USER",
           resourceId: user.id,
           status: "SUCCESS",
-          details: `Firebase email verification synchronized to central database for ${user.email}`
+          details: `Email verification completed for ${user.email}`
         }).catch(() => {});
 
         return res.json({ 
@@ -7620,26 +5840,16 @@ export async function createServerApp() {
         });
       }
 
-      if (user.emailVerified) {
-        // Ensure RTDB has the latest verified state
-        await syncToRtdb("user", "UPDATE", user).catch(() => {});
-        return res.json({ 
-          success: true, 
-          emailVerified: true,
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-            emailVerified: true
-          }
-        });
-      }
-
       return res.json({ 
         success: true, 
-        emailVerified: false,
-        message: "Email has not been verified in Firebase Authentication yet."
+        emailVerified: Boolean(user.emailVerified),
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          emailVerified: Boolean(user.emailVerified)
+        }
       });
     } catch (err: any) {
       console.error("[VERIFY STATUS ERROR]", err);
@@ -7661,57 +5871,12 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, message: "Please enter a valid email address." });
       }
 
-      // 1. Check local user table
-      let user: any = null;
-      try {
-        user = await prisma.user.findFirst({
-          where: { email: normalizedEmail, deletedAt: null }
-        });
-      } catch (dbErr) {
-        console.warn("[FORGOT PASSWORD] Local database query notice (falling back to Firestore):", dbErr);
-      }
+      // 1. Check local SQLite user table
+      let user = await prisma.user.findFirst({
+        where: { email: normalizedEmail, deletedAt: null }
+      });
 
-      // 2. Fallback check to central Firestore
-      if (!user) {
-        try {
-          const firestore = getDb();
-          const snap = await firestore.collection("users")
-            .where("email", "==", normalizedEmail)
-            .limit(1)
-            .get();
-
-          if (!snap.empty) {
-            const fsDoc = snap.docs[0];
-            const fsData = fsDoc.data();
-            if (!fsData.deletedAt) {
-              user = await prisma.user.upsert({
-                where: { email: normalizedEmail },
-                create: {
-                  id: fsDoc.id,
-                  email: normalizedEmail,
-                  name: fsData.name || "MTS Staff",
-                  username: fsData.username || normalizedEmail.split("@")[0],
-                  password: fsData.password || "",
-                  role: fsData.role || "TECHNICIAN",
-                  accountStatus: fsData.accountStatus || "ACTIVE",
-                  isActive: fsData.isActive !== false,
-                  emailVerified: Boolean(fsData.emailVerified === true)
-                },
-                update: {
-                  name: fsData.name || undefined,
-                  accountStatus: fsData.accountStatus || undefined,
-                  isActive: fsData.isActive !== false,
-                  emailVerified: Boolean(fsData.emailVerified === true)
-                }
-              });
-            }
-          }
-        } catch (fsErr) {
-          console.warn("[FORGOT PASSWORD] Firestore fallback check notice:", fsErr);
-        }
-      }
-
-      // 3. Reject unregistered or deleted emails immediately
+      // 2. Reject unregistered or deleted emails immediately
       if (!user || user.deletedAt) {
         await recordAuditLog({
           req,
@@ -7745,15 +5910,190 @@ export async function createServerApp() {
         });
       }
 
-      // Password reset is managed by Firebase Authentication (sendPasswordResetEmail)
+      // 5. Invalidate previous unused password reset OTPs for this user
+      await prisma.oTPVerification.updateMany({
+        where: { userId: user.id, purpose: "PASSWORD_RESET", isUsed: false },
+        data: { isUsed: true }
+      });
+
+      // 6. Generate cryptographically secure 6-digit OTP
+      const otpCode = generate6DigitOtp();
+      const otpHash = hashOtp(otpCode);
+
+      await prisma.oTPVerification.create({
+        data: {
+          userId: user.id,
+          email: user.email,
+          codeHash: otpHash,
+          purpose: "PASSWORD_RESET",
+          attempts: 0,
+          maxAttempts: 5,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes expiration
+          isUsed: false
+        }
+      });
+
+      // 7. Dispatch recovery email ONLY to the registered user's email on file
+      await sendEmail({
+        to: user.email,
+        subject: "MTS Lab Security — Password Reset Verification Code",
+        body: `Hello ${user.name},\n\nYou requested a password reset for your MTS Lab account.\n\nYour 6-digit verification code is:\n\n   ${otpCode}\n\nThis code will expire in 15 minutes.\nIf you did not request this password reset, please contact the Super Administrator immediately.`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; background-color: #f8fafc; border-radius: 16px;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <div style="display: inline-block; width: 48px; height: 48px; background-color: #0f172a; border-radius: 12px; line-height: 48px; color: #ffffff; font-size: 24px; font-weight: bold;">M</div>
+              <h2 style="color: #0f172a; margin: 12px 0 4px 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">MTS Lab Security</h2>
+              <p style="color: #64748b; margin: 0; font-size: 13px; font-weight: 500;">Password Recovery Request</p>
+            </div>
+            <div style="background-color: #ffffff; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+              <h3 style="color: #1e293b; margin-top: 0; font-size: 18px; font-weight: 700;">Account Password Reset</h3>
+              <p style="color: #334155; font-size: 14px; line-height: 1.6; margin: 16px 0;">
+                Hello <strong>${user.name}</strong>,<br/><br/>
+                We received a request to reset your password for your MTS Lab account. Enter the verification code below on the recovery screen:
+              </p>
+              <div style="text-align: center; margin: 28px 0;">
+                <div style="display: inline-block; padding: 16px 36px; background-color: #0f172a; color: #ffffff; font-size: 32px; font-weight: 800; letter-spacing: 8px; border-radius: 14px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2); font-family: monospace;">
+                  ${otpCode}
+                </div>
+              </div>
+              <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin: 20px 0 0 0; text-align: center;">
+                ⏱️ This code expires in <strong>15 minutes</strong> and is valid for a single use.
+              </p>
+              <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; text-align: center;">
+                If you did not request a password reset, please contact the Super Administrator immediately.
+              </div>
+            </div>
+          </div>
+        `
+      });
+
+      const resetTicket = jwt.sign(
+        { userId: user.id, email: user.email, purpose: "PASSWORD_RESET" },
+        JWT_SECRET,
+        { expiresIn: "15m" }
+      );
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "PASSWORD_RESET_REQUESTED",
+        resource: "AUTH",
+        status: "SUCCESS",
+        details: `Password reset OTP dispatched to registered email (${maskEmail(user.email)})`
+      });
+
       return res.json({
         success: true,
-        message: "If an account exists for this email, password reset instructions have been dispatched."
+        resetTicket,
+        emailMasked: maskEmail(user.email),
+        message: "Verification code sent to your registered email."
       });
 
     } catch (err: any) {
       console.error("[FORGOT PASSWORD ERROR]", err);
       res.status(500).json({ success: false, message: "Failed to process password reset request." });
+    }
+  });
+
+  // Verify Password Reset OTP
+  app.post("/api/auth/verify-otp", authLimiter, async (req: any, res) => {
+    const { resetTicket, email, code } = req.body;
+
+    try {
+      if (!code || typeof code !== "string" || !code.trim()) {
+        return res.status(400).json({ success: false, error: "Verification code is required." });
+      }
+
+      let userId: string | null = null;
+      let userEmail: string | null = null;
+
+      if (resetTicket) {
+        try {
+          const decoded: any = jwt.verify(resetTicket, JWT_SECRET);
+          if (decoded && decoded.purpose === "PASSWORD_RESET" && decoded.userId) {
+            userId = decoded.userId;
+            userEmail = decoded.email;
+          }
+        } catch (jwtErr) {
+          return res.status(400).json({ success: false, error: "Verification session has expired. Please request a new code." });
+        }
+      }
+
+      if (!userId && email) {
+        const u = await prisma.user.findFirst({
+          where: { email: String(email).toLowerCase().trim(), deletedAt: null }
+        });
+        if (u) {
+          userId = u.id;
+          userEmail = u.email;
+        }
+      }
+
+      if (!userId) {
+        return res.status(400).json({ success: false, error: "Invalid or expired recovery session. Please request a new code." });
+      }
+
+      const otpRecord = await prisma.oTPVerification.findFirst({
+        where: {
+          userId,
+          purpose: "PASSWORD_RESET",
+          isUsed: false
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      if (!otpRecord || otpRecord.expiresAt < new Date()) {
+        return res.status(400).json({ success: false, error: "Verification code has expired. Please request a new code." });
+      }
+
+      if (otpRecord.attempts >= otpRecord.maxAttempts) {
+        await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
+        return res.status(429).json({ success: false, error: "Too many failed attempts. Please request a new code." });
+      }
+
+      const isValid = verifyOtp(String(code).trim(), otpRecord.codeHash);
+      if (!isValid) {
+        const nextAttempts = otpRecord.attempts + 1;
+        await prisma.oTPVerification.update({
+          where: { id: otpRecord.id },
+          data: { attempts: nextAttempts, isUsed: nextAttempts >= otpRecord.maxAttempts }
+        });
+        return res.status(400).json({ 
+          success: false, 
+          error: `Invalid verification code. ${Math.max(0, otpRecord.maxAttempts - nextAttempts)} attempt(s) remaining.` 
+        });
+      }
+
+      // Mark OTP as used (single-use)
+      await prisma.oTPVerification.update({ where: { id: otpRecord.id }, data: { isUsed: true } });
+
+      const resetToken = uuidv4();
+      await prisma.passwordResetToken.create({
+        data: {
+          userId,
+          token: resetToken,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000)
+        }
+      });
+
+      await recordAuditLog({
+        req,
+        userId,
+        userEmail,
+        action: "PASSWORD_RESET_OTP_VERIFIED",
+        resource: "AUTH",
+        status: "SUCCESS",
+        details: "Password reset OTP successfully verified."
+      });
+
+      res.json({ success: true, resetToken, message: "Code verified successfully." });
+
+    } catch (err: any) {
+      console.error("[VERIFY OTP ERROR]", err);
+      res.status(500).json({ success: false, error: "Verification failed. Please try again." });
     }
   });
 
@@ -7766,9 +6106,8 @@ export async function createServerApp() {
         return res.status(400).json({ success: false, error: "Reset token and new password are required." });
       }
 
-      const pwdVal = validateStrongPasswordServer(newPassword);
-      if (!pwdVal.valid) {
-        return res.status(400).json({ success: false, error: pwdVal.message || "Password does not meet security requirements." });
+      if (typeof newPassword !== "string" || newPassword.length < 8) {
+        return res.status(400).json({ success: false, error: "Password must be at least 8 characters long." });
       }
 
       const rt = await prisma.passwordResetToken.findUnique({
@@ -7789,9 +6128,6 @@ export async function createServerApp() {
           lockoutUntil: null
         }
       });
-
-      // Synchronize updated password to central Firestore
-      await syncUserToFirestore(updatedUser).catch((e) => console.warn("[FIRESTORE PASSWORD SYNC ERROR]", e?.message));
 
       // Single-use: delete reset token immediately
       await prisma.passwordResetToken.delete({ where: { id: rt.id } }).catch(() => {});
@@ -8048,9 +6384,8 @@ export async function createServerApp() {
 
   app.get("/api/auth/me", authenticate, syncRouteMiddleware(['user', 'branch']), async (req: any, res) => {
     try {
-      const userId = req.user?.id || req.user?.userId;
-      const user = await prisma.user.findFirst({
-        where: { id: userId, deletedAt: null },
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.id, deletedAt: null },
         select: {
           id: true,
           email: true,
@@ -8063,414 +6398,50 @@ export async function createServerApp() {
           department: true,
           address: true,
           accountStatus: true,
-          isActive: true
+          isActive: true,
+          twoFactorEnabled: true
         }
       });
       if (!user || !user.isActive || (user.accountStatus !== "ACTIVE" && user.accountStatus !== "APPROVED")) {
         return res.status(401).json({ success: false, message: "Account is inactive or unapproved" });
       }
-      res.json({
-        success: true,
-        user,
-        ...user
-      });
+      res.json({ success: true, user });
     } catch (err: any) {
-      console.error("[AUTH ME ERROR]", err);
       res.status(500).json({ success: false, message: "Failed to fetch user profile" });
     }
   });
 
-  // ==========================================
-  // CLOUDINARY MEDIA STORAGE & SECURITY ENGINE
-  // ==========================================
-
-  const FORBIDDEN_EXTENSIONS = [
-    '.exe', '.bat', '.cmd', '.sh', '.js', '.php', '.py', '.html', '.htm',
-    '.svg', '.vbs', '.ps1', '.jar', '.msi', '.com', '.scr', '.pif', '.cgi'
-  ];
-
-  const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-  const ALLOWED_DOCUMENT_MIMES = ['application/pdf'];
-
-  const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
-  const MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
-
-  // Validate File Magic Bytes (Signatures)
-  function validateFileMagicBytes(buffer: Buffer, mimetype: string): boolean {
-    if (!buffer || buffer.length < 4) return false;
-    const hex = buffer.toString('hex', 0, 8).toUpperCase();
-
-    if (mimetype === 'image/jpeg' || mimetype === 'image/jpg') {
-      return hex.startsWith('FFD8FF');
-    }
-    if (mimetype === 'image/png') {
-      return hex.startsWith('89504E47');
-    }
-    if (mimetype === 'image/webp') {
-      return hex.startsWith('52494646') && buffer.toString('utf8', 8, 12) === 'WEBP';
-    }
-    if (mimetype === 'application/pdf') {
-      return buffer.toString('utf8', 0, 4) === '%PDF';
-    }
-    return false;
-  }
-
-  // Upload helper to Cloudinary stream
-  const uploadToCloudinaryStream = (
-    buffer: Buffer,
-    folder: string,
-    resourceType: 'image' | 'raw' | 'auto' = 'auto',
-    originalFilename?: string
-  ): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      const publicIdSuffix = uuidv4().substring(0, 8);
-      const cleanName = originalFilename
-        ? originalFilename.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase()
-        : 'asset';
-
-      cloudinary.uploader.upload_stream(
-        {
-          folder,
-          public_id: `${cleanName}_${publicIdSuffix}`,
-          resource_type: resourceType,
-          overwrite: true,
-          use_filename: false,
-          unique_filename: true
-        },
-        (error, result) => {
-          if (error) return reject(error);
-          resolve(result);
-        }
-      ).end(buffer);
-    });
-  };
-
-  // Dedicated Media Upload Endpoint
-  app.post("/api/media/upload", authenticate, upload.single("file"), async (req: any, res) => {
-    try {
-      const file = req.file;
-      if (!file) return res.status(400).json({ success: false, error: "No file provided for upload" });
-
-      const entityType = (req.body.entityType || 'GENERAL').toUpperCase().trim();
-      const entityId = req.body.entityId ? String(req.body.entityId).trim() : null;
-
-      // 1. Extension Blocklist Validation
-      const originalName = String(file.originalname || '').trim();
-      const fileExtMatch = originalName.match(/\.([a-zA-Z0-9]+)$/);
-      const fileExt = fileExtMatch ? `.${fileExtMatch[1].toLowerCase()}` : '';
-
-      if (FORBIDDEN_EXTENSIONS.includes(fileExt)) {
-        return res.status(400).json({
-          success: false,
-          error: `File type '${fileExt}' is prohibited for security reasons.`
-        });
-      }
-
-      // 2. MIME Type & Size Validation
-      const mimetype = String(file.mimetype || '').toLowerCase().trim();
-      const isImage = ALLOWED_IMAGE_MIMES.includes(mimetype);
-      const isPdf = ALLOWED_DOCUMENT_MIMES.includes(mimetype);
-
-      if (!isImage && !isPdf) {
-        return res.status(400).json({
-          success: false,
-          error: "Invalid file format. Allowed formats: JPG, PNG, WEBP (Max 10MB) or PDF (Max 20MB)."
-        });
-      }
-
-      if (isImage && file.size > MAX_IMAGE_SIZE_BYTES) {
-        return res.status(400).json({ success: false, error: "Image file exceeds maximum limit of 10 MB." });
-      }
-      if (isPdf && file.size > MAX_DOCUMENT_SIZE_BYTES) {
-        return res.status(400).json({ success: false, error: "PDF document exceeds maximum limit of 20 MB." });
-      }
-
-      // 3. Magic Bytes Signature Validation
-      if (!validateFileMagicBytes(file.buffer, mimetype)) {
-        return res.status(400).json({
-          success: false,
-          error: "Security validation failed: File content does not match reported extension signature."
-        });
-      }
-
-      // 4. Construct Cloudinary Folder Hierarchy
-      let folderPath = "mts-lab/general";
-      if (entityType === "REPAIR" && entityId) {
-        folderPath = `mts-lab/repairs/${entityId}`;
-      } else if (entityType === "INVENTORY") {
-        folderPath = "mts-lab/inventory";
-      } else if (entityType === "SLIDE") {
-        folderPath = "mts-lab/slides";
-      } else if (entityType === "USER" && entityId) {
-        folderPath = `mts-lab/users/${entityId}`;
-      } else if (entityType === "WARRANTY") {
-        folderPath = "mts-lab/warranties";
-      } else if (entityType === "COURIER") {
-        folderPath = "mts-lab/courier";
-      }
-
-      const resourceType = isPdf ? "raw" : "image";
-      let secureUrl = "";
-      let publicId = "";
-      let format = fileExt.replace('.', '') || (isPdf ? 'pdf' : 'png');
-
-      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-        const cloudResult = await uploadToCloudinaryStream(file.buffer, folderPath, resourceType, originalName);
-        secureUrl = cloudResult.secure_url;
-        publicId = cloudResult.public_id;
-        format = cloudResult.format || format;
-      } else {
-        console.warn("[CLOUDINARY NOTICE] Cloudinary credentials not configured; generating inline data URI fallback.");
-        publicId = `local_fallback_${uuidv4()}`;
-        secureUrl = `data:${mimetype};base64,${file.buffer.toString("base64")}`;
-      }
-
-      // 5. Persist Normalized Media Attachment Record in Prisma DB
-      const mediaRecord = await prisma.mediaAttachment.create({
-        data: {
-          publicId,
-          resourceType: isPdf ? 'pdf' : 'image',
-          format,
-          mimeType: mimetype,
-          originalName,
-          size: file.size,
-          secureUrl,
-          folder: folderPath,
-          entityType,
-          entityId,
-          uploadedById: req.user.id,
-          uploadedByName: req.user.name || req.user.email
-        }
-      });
-
-      // 6. Automatically bind to target entity if entityId provided
-      if (entityType === "INVENTORY" && entityId) {
-        await prisma.inventoryItem.update({
-          where: { id: entityId },
-          data: { imageUrl: secureUrl }
-        }).catch(() => {});
-      } else if (entityType === "USER" && entityId) {
-        await prisma.user.update({
-          where: { id: entityId },
-          data: { profileImage: secureUrl, profilePhoto: secureUrl }
-        }).catch(() => {});
-      } else if (entityType === "SLIDE" && entityId) {
-        await prisma.homeSlide.update({
-          where: { id: entityId },
-          data: { imageUrl: secureUrl }
-        }).catch(() => {});
-      }
-
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userEmail: req.user.email,
-        userName: req.user.name,
-        userRole: req.user.role,
-        action: "MEDIA_UPLOADED",
-        resource: "MEDIA",
-        resourceId: mediaRecord.id,
-        status: "SUCCESS",
-        details: `Uploaded ${mimetype} file (${(file.size / 1024).toFixed(1)} KB) to ${folderPath}`
-      });
-
-      return res.json({
-        success: true,
-        url: secureUrl,
-        secureUrl,
-        publicId,
-        media: mediaRecord
-      });
-
-    } catch (err: any) {
-      console.error("[MEDIA UPLOAD ERROR]", err);
-      return res.status(500).json({ success: false, error: err?.message || "Failed to upload media file" });
-    }
-  });
-
-  // Backward Compatible Single File Upload Endpoint
+  // Consolidated Upload Endpoint
   app.post("/api/upload", authenticate, upload.single("file"), async (req: any, res) => {
     if (!req.file) return res.status(400).json({ error: "No file provided" });
-    try {
-      const mimetype = String(req.file.mimetype || 'image/png').toLowerCase();
-      const isPdf = mimetype === 'application/pdf';
-      const resourceType = isPdf ? 'raw' : 'image';
 
-      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-        const cloudResult = await uploadToCloudinaryStream(req.file.buffer, "mts-lab/assets", resourceType, req.file.originalname);
-        
-        await prisma.mediaAttachment.create({
-          data: {
-            publicId: cloudResult.public_id,
-            resourceType: isPdf ? 'pdf' : 'image',
-            format: cloudResult.format || 'png',
-            mimeType: mimetype,
-            originalName: req.file.originalname,
-            size: req.file.size,
-            secureUrl: cloudResult.secure_url,
-            folder: "mts-lab/assets",
-            entityType: "GENERAL",
-            uploadedById: req.user?.id || null,
-            uploadedByName: req.user?.name || null
+    // Stream to Cloudinary if credentials are configured
+    if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+      try {
+        const stream = cloudinary.uploader.upload_stream(
+          { 
+            folder: "mts_lab_assets",
+            resource_type: "auto"
+          },
+          (error, result) => {
+            if (error) {
+              console.warn("[CLOUDINARY WARNING] Upload to Cloudinary failed, converting to data URI:", error);
+              const base64Data = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
+              return res.json({ url: base64Data });
+            }
+            res.json({ url: result?.secure_url });
           }
-        }).catch(() => {});
-
-        return res.json({ url: cloudResult.secure_url, secureUrl: cloudResult.secure_url, publicId: cloudResult.public_id });
+        );
+        stream.end(req.file.buffer);
+        return;
+      } catch (err) {
+        console.warn("[UPLOAD WARNING] Cloudinary stream error, falling back to data URI:", err);
       }
-
-      const base64Data = `data:${mimetype};base64,${req.file.buffer.toString('base64')}`;
-      return res.json({ url: base64Data, secureUrl: base64Data, publicId: `local_${uuidv4()}` });
-    } catch (err: any) {
-      console.warn("[UPLOAD ERROR]", err);
-      const base64Data = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
-      return res.json({ url: base64Data, secureUrl: base64Data });
     }
-  });
 
-  // Secure Media Asset Deletion Endpoint
-  app.delete("/api/media/delete", authenticate, async (req: any, res) => {
-    try {
-      const { publicId, id } = req.body;
-      const targetPublicId = publicId || id;
-
-      if (!targetPublicId) {
-        return res.status(400).json({ success: false, error: "publicId is required for deletion" });
-      }
-
-      const mediaRecord = await prisma.mediaAttachment.findFirst({
-        where: { OR: [{ publicId: targetPublicId }, { id: targetPublicId }] }
-      });
-
-      const isSuperAdmin = req.user.role === 'SUPER_ADMIN' || req.user.role === 'SUPERADMIN';
-      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'MANAGER';
-      const isOwner = mediaRecord?.uploadedById === req.user.id;
-
-      if (mediaRecord && !isSuperAdmin && !isAdmin && !isOwner) {
-        return res.status(403).json({ success: false, error: "You are not authorized to delete this media file." });
-      }
-
-      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-        const resourceType = mediaRecord?.resourceType === 'pdf' ? 'raw' : 'image';
-        await cloudinary.uploader.destroy(targetPublicId, { resource_type: resourceType }).catch((err) => {
-          console.warn("[CLOUDINARY DELETE NOTICE]", err);
-        });
-      }
-
-      if (mediaRecord) {
-        await prisma.mediaAttachment.delete({ where: { id: mediaRecord.id } });
-      }
-
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userEmail: req.user.email,
-        userName: req.user.name,
-        userRole: req.user.role,
-        action: "MEDIA_DELETED",
-        resource: "MEDIA",
-        resourceId: targetPublicId,
-        status: "SUCCESS",
-        details: `Deleted media asset (public_id: ${targetPublicId})`
-      });
-
-      return res.json({ success: true, message: "Media asset deleted successfully" });
-    } catch (err: any) {
-      console.error("[MEDIA DELETE ERROR]", err);
-      return res.status(500).json({ success: false, error: err?.message || "Failed to delete media asset" });
-    }
-  });
-
-  // Secure Media Replacement Endpoint
-  app.put("/api/media/replace", authenticate, upload.single("file"), async (req: any, res) => {
-    try {
-      const file = req.file;
-      const { oldPublicId } = req.body;
-      if (!file) return res.status(400).json({ success: false, error: "New file is required for replacement" });
-      if (!oldPublicId) return res.status(400).json({ success: false, error: "oldPublicId is required" });
-
-      const existingMedia = await prisma.mediaAttachment.findFirst({
-        where: { OR: [{ publicId: oldPublicId }, { id: oldPublicId }] }
-      });
-
-      const isSuperAdmin = req.user.role === 'SUPER_ADMIN' || req.user.role === 'SUPERADMIN';
-      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'MANAGER';
-      const isOwner = existingMedia?.uploadedById === req.user.id;
-
-      if (existingMedia && !isSuperAdmin && !isAdmin && !isOwner) {
-        return res.status(403).json({ success: false, error: "You are not authorized to replace this media file." });
-      }
-
-      const mimetype = String(file.mimetype || '').toLowerCase();
-      const isPdf = mimetype === 'application/pdf';
-      const folderPath = existingMedia?.folder || "mts-lab/general";
-
-      let secureUrl = "";
-      let newPublicId = "";
-
-      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-        const cloudResult = await uploadToCloudinaryStream(file.buffer, folderPath, isPdf ? 'raw' : 'image', file.originalname);
-        secureUrl = cloudResult.secure_url;
-        newPublicId = cloudResult.public_id;
-      } else {
-        newPublicId = `local_replace_${uuidv4()}`;
-        secureUrl = `data:${mimetype};base64,${file.buffer.toString("base64")}`;
-      }
-
-      let updatedMedia: any = null;
-      if (existingMedia) {
-        updatedMedia = await prisma.mediaAttachment.update({
-          where: { id: existingMedia.id },
-          data: {
-            publicId: newPublicId,
-            resourceType: isPdf ? 'pdf' : 'image',
-            mimeType: mimetype,
-            originalName: file.originalname,
-            size: file.size,
-            secureUrl,
-            updatedAt: new Date()
-          }
-        });
-      }
-
-      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET && oldPublicId) {
-        const oldResourceType = existingMedia?.resourceType === 'pdf' ? 'raw' : 'image';
-        await cloudinary.uploader.destroy(oldPublicId, { resource_type: oldResourceType }).catch(() => {});
-      }
-
-      return res.json({
-        success: true,
-        secureUrl,
-        publicId: newPublicId,
-        media: updatedMedia
-      });
-
-    } catch (err: any) {
-      console.error("[MEDIA REPLACE ERROR]", err);
-      return res.status(500).json({ success: false, error: err?.message || "Failed to replace media asset" });
-    }
-  });
-
-  // Query Entity Media Endpoint
-  app.get("/api/media/:entityType/:entityId", authenticate, async (req: any, res) => {
-    try {
-      const { entityType, entityId } = req.params;
-      const mediaRecords = await prisma.mediaAttachment.findMany({
-        where: {
-          entityType: String(entityType).toUpperCase().trim(),
-          entityId: String(entityId).trim()
-        },
-        orderBy: { createdAt: "desc" }
-      });
-
-      return res.json({
-        success: true,
-        entityType,
-        entityId,
-        media: mediaRecords
-      });
-    } catch (err: any) {
-      return res.status(500).json({ success: false, error: "Failed to fetch entity media" });
-    }
+    // Default zero-dependency fallback: Return inline Base64 Data URL
+    const base64Data = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
+    res.json({ url: base64Data });
   });
 
   const VALID_REPAIR_STATUSES = [
@@ -9177,18 +7148,6 @@ export async function createServerApp() {
         data: { id, repairNumber: repair.repairNumber }
       });
 
-      // Delete from Firestore
-      if (!firestoreSyncDisabled) {
-        try {
-          const firestore = getDb();
-          await firestore.collection('repairs').doc(id).delete();
-        } catch (fErr: any) {
-          if (fErr?.code === 7 || fErr?.message?.includes("PERMISSION_DENIED") || fErr?.status === 7) {
-            firestoreSyncDisabled = true;
-          }
-        }
-      }
-
       // Record Audit Log
       await prisma.auditLog.create({
         data: {
@@ -9258,17 +7217,6 @@ export async function createServerApp() {
           id: rep.id,
           data: { id: rep.id, repairNumber: rep.repairNumber }
         });
-
-        if (!firestoreSyncDisabled) {
-          try {
-            const firestore = getDb();
-            await firestore.collection('repairs').doc(rep.id).delete();
-          } catch (fErr: any) {
-            if (fErr?.code === 7 || fErr?.message?.includes("PERMISSION_DENIED") || fErr?.status === 7) {
-              firestoreSyncDisabled = true;
-            }
-          }
-        }
       }
 
       // Record Audit Log
@@ -9348,13 +7296,6 @@ export async function createServerApp() {
         data: { id, name: customer.name, phone: customer.phone }
       });
 
-      if (!firestoreSyncDisabled) {
-        try {
-          const firestore = getDb();
-          await firestore.collection('customers').doc(id).delete();
-        } catch (fErr) {}
-      }
-
       await prisma.auditLog.create({
         data: {
           userId: req.user.id,
@@ -9379,20 +7320,127 @@ export async function createServerApp() {
   // SUPER ADMIN BATTERY WARRANTY HUB 2FA PERMANENT DELETION CONTROLS (SUPER_ADMIN ONLY + 2FA REQUIRED)
   // =========================================================================
   
-  // 1. Permanent Bulk Delete Battery Warranties (SUPER_ADMIN ONLY)
+  // 1. Request 2FA Verification Code for Battery Warranty Deletion
+  app.post("/api/battery-warranties/delete-2fa/request", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
+    try {
+      const user = req.user;
+      
+      // Invalidate previous unused OTPs for this purpose
+      await prisma.oTPVerification.updateMany({
+        where: {
+          userId: user.id,
+          purpose: "WARRANTY_DELETION_2FA",
+          isUsed: false
+        },
+        data: { isUsed: true }
+      });
+
+      const otpCode = generate6DigitOtp();
+      const otpHash = hashOtp(otpCode);
+      const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
+
+      await prisma.oTPVerification.create({
+        data: {
+          userId: user.id,
+          email: user.email,
+          codeHash: otpHash,
+          purpose: "WARRANTY_DELETION_2FA",
+          attempts: 0,
+          maxAttempts: 5,
+          expiresAt: otpExpiresAt,
+          isUsed: false
+        }
+      });
+
+      const emailResult = await sendEmail(
+        user.email,
+        "MTS Lab Security — 2FA Code for Permanent Battery Warranty Deletion",
+        `Hello ${user.name},\n\nYou have requested to permanently delete Battery Warranty Hub records in the MTS Lab Super Admin Console.\n\nYour 6-digit 2FA verification code is:\n\n   ${otpCode}\n\nThis verification code will expire in 5 minutes.\nIf you did not initiate this deletion request, please secure your account immediately.`
+      );
+
+      if (!emailResult.success) {
+        return res.status(503).json({
+          success: false,
+          message: "Failed to deliver 2FA verification code to your email. Please check your email configuration."
+        });
+      }
+
+      await recordAuditLog({
+        req,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "OTP_REQUESTED",
+        resource: "WARRANTY",
+        status: "SUCCESS",
+        details: `2FA verification code dispatched to Super Admin email (${maskEmail(user.email)}) for permanent warranty deletion`
+      });
+
+      return res.json({
+        success: true,
+        message: `Verification code sent to your registered email (${maskEmail(user.email)}).`,
+        emailMasked: maskEmail(user.email)
+      });
+    } catch (err: any) {
+      console.error("[REQUEST WARRANTY DELETION 2FA ERROR]", err);
+      res.status(500).json({ error: "Failed to request 2FA verification code: " + (err.message || err) });
+    }
+  });
+
+  // 2. Permanent Bulk Delete Battery Warranties (SUPER_ADMIN ONLY + 2FA REQUIRED)
   app.post("/api/battery-warranties/bulk-delete", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
     try {
-      const { ids, warrantyIds } = req.body;
+      const { ids, warrantyIds, code, twoFactorCode } = req.body;
       const targetIds: string[] = Array.isArray(ids) ? ids : (Array.isArray(warrantyIds) ? warrantyIds : []);
+      const inputCode = String(code || twoFactorCode || '').trim();
 
       if (!targetIds || targetIds.length === 0) {
         return res.status(400).json({ error: "Please select at least one battery warranty record to delete." });
       }
 
+      if (!inputCode) {
+        return res.status(400).json({ error: "Two-Factor Authentication (2FA) verification code is required to permanently delete warranty records." });
+      }
+
+      // Verify 2FA OTP for SUPER_ADMIN
+      const activeOtp = await prisma.oTPVerification.findFirst({
+        where: {
+          userId: req.user.id,
+          purpose: "WARRANTY_DELETION_2FA",
+          isUsed: false,
+          expiresAt: { gt: new Date() }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      if (!activeOtp) {
+        return res.status(400).json({ error: "2FA verification code has expired or was not requested. Please request a new verification code." });
+      }
+
+      if (activeOtp.attempts >= activeOtp.maxAttempts) {
+        return res.status(400).json({ error: "Too many failed attempts. Please request a new 2FA verification code." });
+      }
+
+      const inputHash = hashOtp(inputCode);
+      if (activeOtp.codeHash !== inputHash) {
+        await prisma.oTPVerification.update({
+          where: { id: activeOtp.id },
+          data: { attempts: { increment: 1 } }
+        });
+        return res.status(400).json({ error: "Invalid 2FA verification code. Please check your email and try again." });
+      }
+
+      // 2FA Code Verified! Invalidate the OTP
+      await prisma.oTPVerification.update({
+        where: { id: activeOtp.id },
+        data: { isUsed: true }
+      });
+
       const cleanIds = targetIds.filter(id => typeof id === "string" && id.trim().length > 0);
       const existingWarranties = await prisma.batteryWarranty.findMany({
         where: { id: { in: cleanIds } },
-        select: { id: true, warrantyNumber: true, customerName: true, repairNumber: true, cloudinaryPublicId: true }
+        select: { id: true, warrantyNumber: true, customerName: true, repairNumber: true }
       });
 
       if (existingWarranties.length === 0) {
@@ -9402,23 +7450,13 @@ export async function createServerApp() {
       const existingIds = existingWarranties.map(w => w.id);
       const warrantyNumbers = existingWarranties.map(w => `#${w.warrantyNumber}`).join(', ');
 
-      // Clean up associated Cloudinary PDF certificate assets
-      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-        for (const w of existingWarranties) {
-          if (w.cloudinaryPublicId) {
-            await cloudinary.uploader.destroy(w.cloudinaryPublicId, { resource_type: 'raw' }).catch(() => {});
-            await cloudinary.uploader.destroy(w.cloudinaryPublicId, { resource_type: 'image' }).catch(() => {});
-          }
-        }
-      }
-
       // Atomic transaction: Delete warranty claims first, then warranties
       await prisma.$transaction(async (tx) => {
         await tx.batteryWarrantyClaim.deleteMany({ where: { warrantyId: { in: existingIds } } });
         await tx.batteryWarranty.deleteMany({ where: { id: { in: existingIds } } });
       });
 
-      // Broadcast Real-time DELETE events & Firestore purge
+      // Broadcast Real-time DELETE events
       for (const w of existingWarranties) {
         broadcastRealtimeEvent({
           entity: "batteryWarranty",
@@ -9426,20 +7464,9 @@ export async function createServerApp() {
           id: w.id,
           data: { id: w.id, warrantyNumber: w.warrantyNumber }
         });
-
-        if (!firestoreSyncDisabled) {
-          try {
-            const firestore = getDb();
-            await firestore.collection("batteryWarranties").doc(w.id).delete();
-          } catch (fsErr: any) {
-            if (fsErr?.code === 7 || fsErr?.message?.includes("PERMISSION_DENIED")) {
-              firestoreSyncDisabled = true;
-            }
-          }
-        }
       }
 
-      // Record Audit Log
+      // Record Audit Log (DO NOT store raw 2FA code in audit log)
       await prisma.auditLog.create({
         data: {
           userId: req.user.id,
@@ -9449,11 +7476,11 @@ export async function createServerApp() {
           action: "PERMANENT_DELETE_WARRANTIES",
           resource: "WARRANTY",
           resourceId: existingIds[0],
-          details: `Permanently deleted ${existingWarranties.length} battery warranty record(s) (${warrantyNumbers}).`,
+          details: `Permanently deleted ${existingWarranties.length} battery warranty record(s) (${warrantyNumbers}) with 2FA verification.`,
           metadata: JSON.stringify({
-            twoFactorVerified: true,
             count: existingWarranties.length,
-            warrantyNumbers: existingWarranties.map(w => w.warrantyNumber)
+            warrantyNumbers: existingWarranties.map(w => w.warrantyNumber),
+            twoFactorVerified: true
           })
         }
       });
@@ -9474,20 +7501,54 @@ export async function createServerApp() {
   app.delete("/api/battery-warranties/:id", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
     try {
       const { id } = req.params;
+      const { code, twoFactorCode } = req.body || {};
+      const inputCode = String(code || twoFactorCode || req.query.code || '').trim();
+
+      if (!inputCode) {
+        return res.status(400).json({ error: "Two-Factor Authentication (2FA) verification code is required to permanently delete warranty records." });
+      }
+
+      // Verify 2FA OTP for SUPER_ADMIN
+      const activeOtp = await prisma.oTPVerification.findFirst({
+        where: {
+          userId: req.user.id,
+          purpose: "WARRANTY_DELETION_2FA",
+          isUsed: false,
+          expiresAt: { gt: new Date() }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      if (!activeOtp) {
+        return res.status(400).json({ error: "2FA verification code has expired or was not requested. Please request a new verification code." });
+      }
+
+      if (activeOtp.attempts >= activeOtp.maxAttempts) {
+        return res.status(400).json({ error: "Too many failed attempts. Please request a new 2FA verification code." });
+      }
+
+      const inputHash = hashOtp(inputCode);
+      if (activeOtp.codeHash !== inputHash) {
+        await prisma.oTPVerification.update({
+          where: { id: activeOtp.id },
+          data: { attempts: { increment: 1 } }
+        });
+        return res.status(400).json({ error: "Invalid 2FA verification code. Please check your email and try again." });
+      }
+
+      // 2FA Code Verified!
+      await prisma.oTPVerification.update({
+        where: { id: activeOtp.id },
+        data: { isUsed: true }
+      });
 
       const warranty = await prisma.batteryWarranty.findUnique({
         where: { id },
-        select: { id: true, warrantyNumber: true, customerName: true, cloudinaryPublicId: true }
+        select: { id: true, warrantyNumber: true, customerName: true }
       });
 
       if (!warranty) {
         return res.status(404).json({ error: "Battery warranty record not found or already deleted." });
-      }
-
-      // Destroy Cloudinary PDF certificate asset if exists
-      if (warranty.cloudinaryPublicId && process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-        await cloudinary.uploader.destroy(warranty.cloudinaryPublicId, { resource_type: 'raw' }).catch(() => {});
-        await cloudinary.uploader.destroy(warranty.cloudinaryPublicId, { resource_type: 'image' }).catch(() => {});
       }
 
       await prisma.$transaction(async (tx) => {
@@ -9501,13 +7562,6 @@ export async function createServerApp() {
         id,
         data: { id, warrantyNumber: warranty.warrantyNumber }
       });
-
-      if (!firestoreSyncDisabled) {
-        try {
-          const firestore = getDb();
-          await firestore.collection('batteryWarranties').doc(id).delete();
-        } catch (fErr) {}
-      }
 
       await prisma.auditLog.create({
         data: {
@@ -10217,7 +8271,6 @@ export async function createServerApp() {
         where: { id: req.params.id },
         include: {
           technician: { select: { id: true, name: true, role: true } },
-          customer: { select: { id: true, customerId: true, name: true, phone: true, email: true, address: true, district: true, municipality: true, landmark: true } },
           createdBy: { select: { name: true } },
           logs: { orderBy: { createdAt: "desc" } },
           notes: { include: { technician: { select: { name: true } } } },
@@ -10236,7 +8289,7 @@ export async function createServerApp() {
   // ==========================================
 
   // List all customers with pagination & statistics
-  app.get("/api/customers", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST']), syncRouteMiddleware(['repair', 'user']), async (req: any, res) => {
+  app.get("/api/customers", authenticate, syncRouteMiddleware(['repair', 'user']), async (req: any, res) => {
     try {
       const { search, sortBy, sortOrder } = req.query;
       const requestedPage = Number.parseInt(String(req.query.page || '1'), 10);
@@ -10480,7 +8533,7 @@ export async function createServerApp() {
   });
 
   // Get specific customer profile (repairs paginated separately)
-  app.get("/api/customers/:id", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST']), syncRouteMiddleware(['repair', 'repairLog', 'payment']), async (req: any, res) => {
+  app.get("/api/customers/:id", authenticate, syncRouteMiddleware(['repair', 'repairLog', 'payment']), async (req: any, res) => {
     try {
       const { id } = req.params;
       const customer = await prisma.customer.findFirst({
@@ -10530,7 +8583,7 @@ export async function createServerApp() {
   });
 
   // Paginated repair history for a specific customer
-  app.get("/api/customers/:id/repairs", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST']), async (req: any, res) => {
+  app.get("/api/customers/:id/repairs", authenticate, async (req: any, res) => {
     try {
       const { id } = req.params;
       const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
@@ -10630,11 +8683,8 @@ export async function createServerApp() {
         notes
       });
 
-      // A standalone customer create/update has no repair event to refresh other
-      // Customer Hub sessions, so publish and synchronize it explicitly.
+      // Publish realtime update
       broadcastRealtimeEvent({ entity: "customer", action: id ? "UPDATE" : "CREATE", id: customer.id, data: customer });
-      await syncToFirestore("customer", customer);
-      await syncToRtdb("customer", id ? "UPDATE" : "CREATE", customer);
 
       res.status(200).json(customer);
     } catch (err: any) {
@@ -10710,8 +8760,6 @@ export async function createServerApp() {
         id: customer.id,
         data: { id: customer.id, name: customer.name, phone: customer.phone }
       });
-      await syncToFirestore("customer", customer);
-      await syncToRtdb("customer", "UPDATE", customer);
 
       try {
         await prisma.auditLog.create({
@@ -10751,8 +8799,6 @@ export async function createServerApp() {
         data: { archived: true, archivedAt: new Date(), archivedBy: req.user.name || req.user.email || req.user.id }
       });
       broadcastRealtimeEvent({ entity: "customer", action: "UPDATE", id, data: { id, archived: true, name: customer.name } });
-      await syncToFirestore("customer", updated);
-      await syncToRtdb("customer", "UPDATE", updated);
       try {
         await prisma.auditLog.create({
           data: {
@@ -10785,8 +8831,6 @@ export async function createServerApp() {
         data: { archived: false, archivedAt: null, archivedBy: null }
       });
       broadcastRealtimeEvent({ entity: "customer", action: "UPDATE", id, data: { id, archived: false, name: customer.name } });
-      await syncToFirestore("customer", updated);
-      await syncToRtdb("customer", "UPDATE", updated);
       try {
         await prisma.auditLog.create({
           data: {
@@ -10865,8 +8909,7 @@ export async function createServerApp() {
       // 2. Validate technician if provided
       if (technicianId) {
         const technician = await prisma.user.findUnique({ where: { id: technicianId } });
-        const techRole = technician ? normalizeRole(technician.role) : null;
-        if (!technician || !['TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'ADMIN', 'SUPERADMIN', 'SUPER_ADMIN'].includes(techRole || '')) {
+        if (!technician || (technician.role !== 'TECHNICIAN' && technician.role !== 'LEAD_TECHNICIAN')) {
           return res.status(400).json({ error: "Invalid technician ID" });
         }
       }
@@ -11065,26 +9108,7 @@ export async function createServerApp() {
         });
       }
 
-      // Sync to Firestore for public tracking
-      if (!firestoreSyncDisabled) {
-        try {
-          const firestore = getDb();
-          await firestore.collection('repairs').doc(repair.id).set({
-            ...repair,
-            customerId: customer.customerId,
-            createdAt: repair.createdAt.toISOString(),
-            updatedAt: repair.updatedAt.toISOString(),
-            expectedCompletionDate: repair.expectedCompletionDate ? repair.expectedCompletionDate.toISOString() : null,
-          });
-        } catch (fErr: any) {
-          if (fErr?.code === 7 || fErr?.message?.includes("PERMISSION_DENIED") || fErr?.status === 7) {
-            firestoreSyncDisabled = true;
-          }
-        }
-      }
-
       broadcastRealtimeEvent({ entity: "repair", action: "CREATE", id: repair.id, data: repair });
-      await syncToRtdb("repair", "CREATE", repair).catch(() => {});
 
       res.status(201).json({
         ...repair,
@@ -11279,9 +9303,8 @@ export async function createServerApp() {
           });
         }
 
-        // Realtime broadcast & Firebase sync
+        // Realtime broadcast
         broadcastRealtimeEvent({ entity: "repair", action: "CREATE", id: repair.id, data: repair });
-        syncToFirestore('repair', repair).catch(() => {});
 
         createdRepairs.push({
           ...repair,
@@ -11318,7 +9341,7 @@ export async function createServerApp() {
   // ==========================================
 
   // List all courier shipments with filtering, search, and pagination
-  app.get("/api/couriers", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), syncRouteMiddleware(['repair', 'customer']), async (req: any, res) => {
+  app.get("/api/couriers", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), syncRouteMiddleware(['repair', 'customer']), async (req: any, res) => {
     try {
       const { 
         type = 'ALL', 
@@ -11537,7 +9560,7 @@ export async function createServerApp() {
   });
 
   // Dynamic Filters Metadata (Distinct Courier Companies & Districts)
-  app.get("/api/couriers/filters-metadata", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/couriers/filters-metadata", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
     try {
       const repairs = await prisma.repair.findMany({
         where: {
@@ -11578,7 +9601,7 @@ export async function createServerApp() {
   });
 
   // Customer Autocomplete / Search for Intake Deduplication
-  app.get("/api/couriers/search-customers", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/couriers/search-customers", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
     try {
       const { query } = req.query;
       if (!query || String(query).trim().length < 2) {
@@ -11770,7 +9793,7 @@ export async function createServerApp() {
   });
 
   // Courier Hub Overview Statistics
-  app.get("/api/couriers/stats", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/couriers/stats", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
     try {
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -11873,7 +9896,7 @@ export async function createServerApp() {
   });
 
   // Eligible Repairs for Outgoing Dispatch (repairs ready/completed but not yet delivered)
-  app.get("/api/couriers/eligible-repairs", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/couriers/eligible-repairs", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
     try {
       const { search } = req.query;
       const where: any = {
@@ -11912,7 +9935,7 @@ export async function createServerApp() {
   });
 
   // Get Single Courier Shipment Details
-  app.get("/api/couriers/:id", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), syncRouteMiddleware(['repair', 'customer']), async (req: any, res) => {
+  app.get("/api/couriers/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), syncRouteMiddleware(['repair', 'customer']), async (req: any, res) => {
     try {
       const { id } = req.params;
       const repair = await prisma.repair.findUnique({
@@ -12748,7 +10771,7 @@ export async function createServerApp() {
   // ==========================================
 
   // List all battery warranties with metrics, search, and filters
-  app.get("/api/battery-warranties", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), syncRouteMiddleware(['batteryWarranty', 'batteryWarrantyClaim', 'repair', 'customer']), async (req: any, res) => {
+  app.get("/api/battery-warranties", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), syncRouteMiddleware(['batteryWarranty', 'batteryWarrantyClaim', 'repair', 'customer']), async (req: any, res) => {
     try {
       const { search, status, period } = req.query;
 
@@ -13537,7 +11560,7 @@ export async function createServerApp() {
   });
 
   // Get single battery warranty details with full claim history
-  app.get("/api/battery-warranties/:id", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), syncRouteMiddleware(['batteryWarranty', 'batteryWarrantyClaim', 'repair', 'customer']), async (req: any, res) => {
+  app.get("/api/battery-warranties/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), syncRouteMiddleware(['batteryWarranty', 'batteryWarrantyClaim', 'repair', 'customer']), async (req: any, res) => {
     const { id } = req.params;
     try {
       const warranty = await prisma.batteryWarranty.findUnique({
@@ -13771,7 +11794,7 @@ export async function createServerApp() {
   });
 
   // Get Claim History for a Warranty
-  app.get("/api/battery-warranties/:id/claims", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/battery-warranties/:id/claims", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
     const { id } = req.params;
     try {
       const claims = await prisma.batteryWarrantyClaim.findMany({
@@ -13886,393 +11909,6 @@ export async function createServerApp() {
     }
   });
 
-  // Edit / Update Battery Warranty (SUPER_ADMIN, ADMIN, MANAGER, RECEPTIONIST)
-  app.patch("/api/battery-warranties/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
-    const { id } = req.params;
-    const {
-      customerName,
-      customerPhone,
-      customerEmail,
-      customerAddress,
-      deviceBrand,
-      deviceModel,
-      imeiNumber,
-      batteryType,
-      warrantyPeriod,
-      registrationDate,
-      expiryDate,
-      status,
-      terms,
-      pdfUrl,
-      cloudinaryPublicId
-    } = req.body;
-
-    try {
-      const existingWarranty = await prisma.batteryWarranty.findUnique({
-        where: { id },
-        include: { customer: true, repair: true }
-      });
-
-      if (!existingWarranty) {
-        return res.status(404).json({ error: "Battery warranty record not found." });
-      }
-
-      const updateData: any = {};
-
-      if (customerName !== undefined) updateData.customerName = String(customerName).trim();
-      if (customerPhone !== undefined) updateData.customerPhone = normalizePhone(customerPhone);
-      if (customerEmail !== undefined) updateData.customerEmail = customerEmail ? String(customerEmail).trim().toLowerCase() : null;
-      if (customerAddress !== undefined) updateData.customerAddress = customerAddress ? String(customerAddress).trim() : null;
-      if (deviceBrand !== undefined) updateData.deviceBrand = String(deviceBrand).trim();
-      if (deviceModel !== undefined) updateData.deviceModel = String(deviceModel).trim();
-      if (imeiNumber !== undefined) updateData.imeiNumber = imeiNumber ? String(imeiNumber).trim() : null;
-      if (batteryType !== undefined) updateData.batteryType = String(batteryType).trim() || 'Original Replacement Battery';
-      if (terms !== undefined) updateData.terms = terms ? String(terms).trim() : null;
-      if (pdfUrl !== undefined) updateData.pdfUrl = pdfUrl ? String(pdfUrl).trim() : null;
-      if (cloudinaryPublicId !== undefined) updateData.cloudinaryPublicId = cloudinaryPublicId ? String(cloudinaryPublicId).trim() : null;
-
-      if (warrantyPeriod !== undefined) {
-        const period = warrantyPeriod === '1_YEAR' ? '1_YEAR' : '6_MONTHS';
-        updateData.warrantyPeriod = period;
-      }
-
-      if (registrationDate !== undefined) {
-        updateData.registrationDate = new Date(registrationDate);
-      }
-
-      if (expiryDate !== undefined) {
-        updateData.expiryDate = new Date(expiryDate);
-      } else if (warrantyPeriod !== undefined || registrationDate !== undefined) {
-        const regDate = updateData.registrationDate || existingWarranty.registrationDate || new Date();
-        const period = updateData.warrantyPeriod || existingWarranty.warrantyPeriod || '6_MONTHS';
-        updateData.expiryDate = calculateWarrantyExpiryDate(regDate, period);
-      }
-
-      if (status !== undefined) {
-        const validStatuses = ['ACTIVE', 'EXPIRING_SOON', 'EXPIRED', 'CLAIMED', 'REPLACED', 'CANCELLED'];
-        const normStatus = String(status).trim().toUpperCase();
-        if (validStatuses.includes(normStatus)) {
-          updateData.status = normStatus;
-        }
-      }
-
-      updateData.updatedAt = new Date();
-
-      // Transaction: Update BatteryWarranty and also synchronize Customer record if customer details changed
-      const updatedWarranty = await prisma.$transaction(async (tx) => {
-        const w = await tx.batteryWarranty.update({
-          where: { id },
-          data: updateData,
-          include: {
-            claims: { orderBy: { claimDate: 'desc' } },
-            repair: true,
-            customer: true,
-            createdBy: { select: { id: true, name: true, role: true } }
-          }
-        });
-
-        // Sync Customer record if customerId exists
-        if (w.customerId) {
-          const custUpdate: any = {};
-          if (updateData.customerName) custUpdate.name = updateData.customerName;
-          if (updateData.customerPhone) custUpdate.phone = updateData.customerPhone;
-          if (updateData.customerEmail !== undefined) custUpdate.email = updateData.customerEmail;
-          if (updateData.customerAddress !== undefined) custUpdate.address = updateData.customerAddress;
-
-          if (Object.keys(custUpdate).length > 0) {
-            custUpdate.updatedAt = new Date();
-            await tx.customer.update({
-              where: { id: w.customerId },
-              data: custUpdate
-            }).catch(() => {});
-          }
-        }
-
-        return w;
-      });
-
-      // Sync to Firestore & Realtime event
-      await syncToFirestore("batteryWarranty", updatedWarranty);
-      broadcastRealtimeEvent({ entity: "batteryWarranty", action: "UPDATE", id: updatedWarranty.id, data: updatedWarranty });
-
-      // Audit Log
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        userEmail: req.user.email,
-        userName: req.user.name,
-        userRole: req.user.role,
-        action: "BATTERY_WARRANTY_UPDATED",
-        resource: "WARRANTY",
-        resourceId: updatedWarranty.id,
-        status: "SUCCESS",
-        details: `Updated Battery Warranty #${updatedWarranty.warrantyNumber} for customer ${updatedWarranty.customerName}.`
-      });
-
-      res.json({
-        success: true,
-        message: `Battery Warranty #${updatedWarranty.warrantyNumber} updated successfully.`,
-        warranty: updatedWarranty
-      });
-    } catch (err: any) {
-      console.error("[UPDATE BATTERY WARRANTY ERROR]", err);
-      res.status(500).json({ error: err.message || "Failed to update battery warranty." });
-    }
-  });
-
-  // Upload and attach Cloudinary PDF Certificate to Battery Warranty
-  app.post("/api/battery-warranties/:id/upload-certificate", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), upload.single("file"), async (req: any, res) => {
-    const { id } = req.params;
-    const file = req.file;
-
-    if (!file) {
-      return res.status(400).json({ success: false, error: "No PDF certificate file provided for upload." });
-    }
-
-    try {
-      const warranty = await prisma.batteryWarranty.findUnique({ where: { id } });
-      if (!warranty) {
-        return res.status(404).json({ success: false, error: "Battery warranty record not found." });
-      }
-
-      const originalName = file.originalname || `warranty_${warranty.warrantyNumber}.pdf`;
-
-      let secureUrl = "";
-      let publicId = "";
-
-      if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-        // Destroy old Cloudinary certificate asset if one was previously stored
-        if (warranty.cloudinaryPublicId) {
-          await cloudinary.uploader.destroy(warranty.cloudinaryPublicId, { resource_type: 'raw' }).catch(() => {});
-          await cloudinary.uploader.destroy(warranty.cloudinaryPublicId, { resource_type: 'image' }).catch(() => {});
-        }
-
-        const cloudResult = await uploadToCloudinaryStream(file.buffer, "mts-lab/warranties", "raw", originalName);
-        secureUrl = cloudResult.secure_url;
-        publicId = cloudResult.public_id;
-      } else {
-        console.warn("[CLOUDINARY NOTICE] Cloudinary credentials not configured; generating inline data URI fallback.");
-        publicId = `local_warranty_pdf_${uuidv4()}`;
-        secureUrl = `data:application/pdf;base64,${file.buffer.toString("base64")}`;
-      }
-
-      const updatedWarranty = await prisma.batteryWarranty.update({
-        where: { id },
-        data: {
-          pdfUrl: secureUrl,
-          cloudinaryPublicId: publicId,
-          updatedAt: new Date()
-        },
-        include: {
-          claims: { orderBy: { claimDate: 'desc' } },
-          repair: true,
-          customer: true
-        }
-      });
-
-      // Also record MediaAttachment in database
-      await prisma.mediaAttachment.create({
-        data: {
-          publicId,
-          resourceType: 'pdf',
-          format: 'pdf',
-          mimeType: 'application/pdf',
-          originalName,
-          size: file.size,
-          secureUrl,
-          folder: 'mts-lab/warranties',
-          entityType: 'WARRANTY',
-          entityId: warranty.id,
-          uploadedById: req.user.id
-        }
-      }).catch((e) => console.warn("[MEDIA ATTACHMENT NOTICE]", e?.message));
-
-      await syncToFirestore("batteryWarranty", updatedWarranty);
-      broadcastRealtimeEvent({ entity: "batteryWarranty", action: "UPDATE", id: updatedWarranty.id, data: updatedWarranty });
-
-      res.json({
-        success: true,
-        message: `Warranty certificate uploaded and saved to Cloudinary successfully.`,
-        pdfUrl: secureUrl,
-        cloudinaryPublicId: publicId,
-        warranty: updatedWarranty
-      });
-    } catch (err: any) {
-      console.error("[UPLOAD WARRANTY CERTIFICATE ERROR]", err);
-      res.status(500).json({ success: false, error: err.message || "Failed to upload warranty certificate." });
-    }
-  });
-
-  // ==========================================
-  // SERVICE SLIP PERMANENT DELETION ENGINE
-  // ==========================================
-  async function deleteServiceSlipForRepair(repairId: string, repairNumber?: string, reqUser?: any) {
-    if (!repairId) return { success: false, error: "No repair ID provided" };
-    try {
-      console.log(`[SERVICE SLIP CLEANUP START] Initiating permanent deletion for Repair ID: ${repairId} (Number: ${repairNumber || 'N/A'})`);
-
-      // 1. Fetch matching MediaAttachments in database
-      const attachments = await prisma.mediaAttachment.findMany({
-        where: {
-          OR: [
-            { entityType: 'SERVICE_SLIP', entityId: repairId },
-            ...(repairNumber ? [{ entityType: 'SERVICE_SLIP', entityId: repairNumber }] : []),
-            { entityType: 'REPAIR_SERVICE_SLIP', entityId: repairId },
-            ...(repairNumber ? [{ entityType: 'REPAIR_SERVICE_SLIP', entityId: repairNumber }] : []),
-            {
-              entityType: 'REPAIR',
-              entityId: repairId,
-              OR: [
-                { resourceType: 'pdf' },
-                { mimeType: 'application/pdf' },
-                { originalName: { contains: 'slip' } },
-                { originalName: { contains: 'service' } }
-              ]
-            }
-          ]
-        }
-      });
-
-      let cloudinaryDeletedCount = 0;
-      let dbRecordsDeletedCount = 0;
-
-      for (const attachment of attachments) {
-        if (attachment.publicId && process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-          try {
-            // Attempt destruction with 'raw', 'image', and original resourceType for robust cleanup
-            await cloudinary.uploader.destroy(attachment.publicId, { resource_type: 'raw' }).catch(() => {});
-            await cloudinary.uploader.destroy(attachment.publicId, { resource_type: 'image' }).catch(() => {});
-            if (attachment.resourceType && attachment.resourceType !== 'raw' && attachment.resourceType !== 'image') {
-              await cloudinary.uploader.destroy(attachment.publicId, { resource_type: attachment.resourceType }).catch(() => {});
-            }
-            cloudinaryDeletedCount++;
-          } catch (cloudErr) {
-            console.warn(`[CLOUDINARY SERVICE SLIP CLEANUP NOTICE] PublicId ${attachment.publicId}:`, cloudErr);
-          }
-        }
-
-        // Permanently delete MediaAttachment record
-        await prisma.mediaAttachment.delete({
-          where: { id: attachment.id }
-        }).catch(() => {});
-        dbRecordsDeletedCount++;
-      }
-
-      // 2. Clean temporary local PDF files from disk if present
-      const tmpDirs = [
-        path.join(process.cwd(), 'tmp', 'service_slips'),
-        path.join(process.cwd(), 'public', 'uploads', 'service_slips'),
-        path.join(process.cwd(), 'scratch')
-      ];
-
-      for (const tmpDir of tmpDirs) {
-        if (fs.existsSync(tmpDir)) {
-          try {
-            const files = fs.readdirSync(tmpDir);
-            for (const file of files) {
-              if ((file.includes(repairId) || (repairNumber && file.includes(repairNumber))) && file.toLowerCase().includes('slip')) {
-                try {
-                  fs.unlinkSync(path.join(tmpDir, file));
-                } catch (_) {}
-              }
-            }
-          } catch (_) {}
-        }
-      }
-
-      if (reqUser) {
-        await recordAuditLog({
-          req: null,
-          userId: reqUser.id,
-          userRole: reqUser.role,
-          userName: reqUser.name || reqUser.email,
-          action: 'PERMANENTLY_DELETE_SERVICE_SLIP',
-          resource: 'Repair',
-          resourceId: repairId,
-          details: `Permanently deleted Service Slip artifact & references for delivered repair ${repairNumber || repairId}`
-        }).catch(() => {});
-      }
-
-      console.log(`[SERVICE SLIP CLEANUP SUCCESS] Permanently deleted ${dbRecordsDeletedCount} DB records and ${cloudinaryDeletedCount} Cloudinary assets for repair ${repairId}`);
-      return { success: true, dbRecordsDeletedCount, cloudinaryDeletedCount };
-    } catch (err: any) {
-      console.error(`[SERVICE SLIP CLEANUP ERROR] Failed for Repair ${repairId}:`, err);
-      return { success: false, error: err?.message || 'Failed to cleanup service slip' };
-    }
-  }
-
-  // Get Service Slip Metadata Endpoint (Protected - Rejects if Delivered)
-  app.get("/api/repairs/:id/service-slip", authenticate, async (req: any, res) => {
-    try {
-      const { id } = req.params;
-      const repair = await prisma.repair.findUnique({ where: { id } });
-      if (!repair) {
-        return res.status(404).json({ error: "Repair record not found" });
-      }
-
-      if (repair.status === 'DELIVERED') {
-        return res.status(400).json({
-          error: "Service Slip is no longer available because this repair has been delivered.",
-          isDelivered: true,
-          code: "SERVICE_SLIP_DELIVERED_CLEANED"
-        });
-      }
-
-      const attachments = await prisma.mediaAttachment.findMany({
-        where: { entityType: 'SERVICE_SLIP', entityId: id }
-      });
-
-      return res.json({
-        repairId: id,
-        repairNumber: repair.repairNumber,
-        status: repair.status,
-        attachments
-      });
-    } catch (err: any) {
-      return res.status(500).json({ error: "Failed to fetch Service Slip information" });
-    }
-  });
-
-  // Batch Admin Endpoint to clean up Service Slips from past delivered repairs
-  app.post("/api/admin/repairs/cleanup-delivered-service-slips", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res) => {
-    try {
-      const { dryRun } = req.body;
-      const deliveredRepairs = await prisma.repair.findMany({
-        where: { status: 'DELIVERED' },
-        select: { id: true, repairNumber: true }
-      });
-
-      if (dryRun) {
-        return res.json({
-          dryRun: true,
-          deliveredRepairsCount: deliveredRepairs.length,
-          deliveredRepairs
-        });
-      }
-
-      let totalDbRecords = 0;
-      let totalCloudinaryAssets = 0;
-
-      for (const repair of deliveredRepairs) {
-        const result = await deleteServiceSlipForRepair(repair.id, repair.repairNumber, req.user);
-        if (result.success) {
-          totalDbRecords += result.dbRecordsDeletedCount || 0;
-          totalCloudinaryAssets += result.cloudinaryDeletedCount || 0;
-        }
-      }
-
-      return res.json({
-        success: true,
-        deliveredRepairsCount: deliveredRepairs.length,
-        totalDbRecordsCleaned: totalDbRecords,
-        totalCloudinaryAssetsCleaned: totalCloudinaryAssets,
-        message: `Successfully cleaned Service Slips for ${deliveredRepairs.length} delivered repairs.`
-      });
-    } catch (err: any) {
-      return res.status(500).json({ error: err?.message || "Failed to execute delivered service slip cleanup" });
-    }
-  });
-
   app.patch("/api/repairs/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: any, res) => {
     try {
       const { id } = req.params;
@@ -14296,8 +11932,7 @@ export async function createServerApp() {
         updateData.technicianId = null;
       } else if (technicianId) {
         const technician = await prisma.user.findUnique({ where: { id: technicianId } });
-        const techRole = technician ? normalizeRole(technician.role) : null;
-        if (!technician || !['TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'ADMIN', 'SUPERADMIN', 'SUPER_ADMIN'].includes(techRole || '')) {
+        if (!technician || technician.role !== 'TECHNICIAN') {
           return res.status(400).json({ error: "Invalid technician ID" });
         }
       }
@@ -14411,23 +12046,6 @@ export async function createServerApp() {
               message: logMsg
             }
           });
-        }
-
-        // Sync Customer record if customerId is present on repair
-        if (updated.customerId) {
-          const custUpdate: any = {};
-          if (updateData.customerName) custUpdate.name = updateData.customerName;
-          if (updateData.customerPhone) custUpdate.phone = updateData.customerPhone;
-          if (updateData.customerEmail !== undefined) custUpdate.email = updateData.customerEmail;
-          if (updateData.customerAddress !== undefined) custUpdate.address = updateData.customerAddress;
-
-          if (Object.keys(custUpdate).length > 0) {
-            custUpdate.updatedAt = new Date();
-            await tx.customer.update({
-              where: { id: updated.customerId },
-              data: custUpdate
-            }).catch(() => {});
-          }
         }
 
         return [updated, logEntry];
@@ -14571,7 +12189,7 @@ export async function createServerApp() {
               batteryType: bType,
               warrantyPeriod: periodToUse,
               expiryDate,
-              status: 'ACTIVE',
+              status: existingWarranty.status === 'CANCELLED' ? 'ACTIVE' : existingWarranty.status,
               updatedAt: new Date()
             }
           });
@@ -14597,7 +12215,7 @@ export async function createServerApp() {
           where: { repairId: id }
         });
 
-        if (existingWarranty && existingWarranty.status !== 'CANCELLED') {
+        if (existingWarranty && existingWarranty.status === 'ACTIVE') {
           updatedWarranty = await prisma.batteryWarranty.update({
             where: { id: existingWarranty.id },
             data: {
@@ -14636,11 +12254,6 @@ export async function createServerApp() {
           batteryWarranty: true
         }
       });
-
-      // Permanent Service Slip cleanup when repair becomes DELIVERED
-      if (normalizedStatus === 'DELIVERED') {
-        await deleteServiceSlipForRepair(repair.id, repair.repairNumber, req.user);
-      }
 
       res.json(finalRepair || { ...repair, batteryWarranty: updatedWarranty });
     } catch (err: any) {
@@ -14761,11 +12374,6 @@ export async function createServerApp() {
       // Sync to Firestore asynchronously
       syncToFirestore('repair', repair).catch((e) => console.warn("[FIRESTORE ASYNC SYNC]", e?.message));
 
-      // Permanent Service Slip cleanup when repair becomes DELIVERED
-      if (normalizedStatus === 'DELIVERED') {
-        await deleteServiceSlipForRepair(repair.id, repair.repairNumber, req.user);
-      }
-
       res.json(repair);
     } catch (err: any) {
       console.error("[TECHNICIAN UPDATE ERROR]", err);
@@ -14846,11 +12454,6 @@ export async function createServerApp() {
       broadcastRealtimeEvent({ entity: "repairLog", action: "CREATE", id: newLog.id, data: newLog });
       syncToFirestore('repair', repair).catch(() => {});
 
-      // Permanent Service Slip cleanup when repair becomes DELIVERED
-      if (normalizedStatus === 'DELIVERED') {
-        await deleteServiceSlipForRepair(repair.id, repair.repairNumber, req.user);
-      }
-
       res.json(repair);
     } catch (err: any) {
       console.error("[STATUS UPDATE ERROR]", err);
@@ -14859,30 +12462,17 @@ export async function createServerApp() {
   });
 
   app.get("/api/dashboard/stats", authenticate, syncRouteMiddleware(['repair', 'payment', 'product', 'user', 'branch']), async (req: any, res) => {
-    try {
-      const [totalRepairs, pendingRepairs, activeRepairs, completedRepairs, totalProducts, totalUsers, totalRevenue] = await Promise.all([
-        prisma.repair.count().catch(() => 0),
-        prisma.repair.count({ where: { status: 'PENDING' } }).catch(() => 0),
-        prisma.repair.count({ where: { status: { notIn: ['DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'] } } }).catch(() => 0),
-        prisma.repair.count({ where: { status: { in: ['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED'] } } }).catch(() => 0),
-        prisma.inventoryItem.count().catch(() => 0),
-        prisma.user.count({ where: { isActive: true } }).catch(() => 0),
-        prisma.repair.aggregate({ _sum: { totalPaid: true } }).catch(() => ({ _sum: { totalPaid: 0 } }))
-      ]);
+    const totalRepairs = await prisma.repair.count();
+    const pendingRepairs = await prisma.repair.count({ where: { status: 'PENDING' } });
+    const completedRepairs = await prisma.repair.count({ where: { status: { in: ['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED'] } } });
+    const totalRevenue = await prisma.repair.aggregate({ _sum: { totalPaid: true } });
 
-      res.json({
-        totalRepairs,
-        pendingRepairs,
-        activeRepairs,
-        completedRepairs,
-        totalProducts,
-        totalUsers,
-        revenue: totalRevenue._sum.totalPaid || 0,
-      });
-    } catch (err: any) {
-      console.error("[DASHBOARD STATS ERROR]", err);
-      res.status(500).json({ error: "Failed to fetch dashboard statistics", message: err.message || String(err) });
-    }
+    res.json({
+      totalRepairs,
+      pendingRepairs,
+      completedRepairs,
+      revenue: totalRevenue._sum.totalPaid || 0,
+    });
   });
 
   app.get("/api/staff", authenticate, syncRouteMiddleware(['user', 'branch']), async (req: any, res) => {
@@ -14897,18 +12487,7 @@ export async function createServerApp() {
     }
   });
 
-  app.get(["/api/branches", "/api/branch"], authenticate, async (req: any, res) => {
-    try {
-      const branches = await prisma.branch.findMany({
-        orderBy: { name: 'asc' }
-      });
-      res.json(branches);
-    } catch (err) {
-      res.status(500).json({ error: "Failed to fetch branches" });
-    }
-  });
-
-  app.get("/api/users", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), syncRouteMiddleware(['user', 'branch']), async (req: any, res) => {
+  app.get("/api/users", authenticate, authorize(['SUPER_ADMIN']), syncRouteMiddleware(['user', 'branch']), async (req: any, res) => {
     try {
       const users = await prisma.user.findMany({
         where: { deletedAt: null },
@@ -14921,7 +12500,7 @@ export async function createServerApp() {
           isActive: true, 
           accountStatus: true,
           emailVerified: true,
-          firebaseUid: true,
+          supabaseUid: true,
           branchId: true,
           phoneNumber: true,
           department: true,
@@ -14929,6 +12508,8 @@ export async function createServerApp() {
           profileImage: true,
           profilePhoto: true,
           lastLoginAt: true,
+          twoFactorEnabled: true,
+          twoFactorType: true,
           createdAt: true,
           updatedAt: true
         },
@@ -14941,21 +12522,16 @@ export async function createServerApp() {
   });
 
   app.post("/api/users", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
-    let { email, username, password, name, role, phoneNumber, department, address, profileImage, branchId } = req.body;
+    let { email, username, password, name, role, phoneNumber, department, address, profileImage, branchId, twoFactorEnabled } = req.body;
     try {
       if (!email || !password || !name) {
         return res.status(400).json({ error: "Email, password, and full name are required." });
       }
 
-      const pwdVal = validateStrongPasswordServer(password);
-      if (!pwdVal.valid) {
-        return res.status(400).json({ error: pwdVal.message || "Password does not meet security requirements." });
-      }
-
       const normalizedEmail = String(email).toLowerCase().trim();
       const normalizedUsername = username ? String(username).trim() : null;
 
-      // 1. Check if staff account already exists in local Prisma DB
+      // Check if user already exists
       const existing = await prisma.user.findFirst({
         where: {
           OR: [
@@ -14966,64 +12542,36 @@ export async function createServerApp() {
       });
 
       if (existing) {
-        return res.status(400).json({ error: "A staff account with this email or username already exists in MTS Lab." });
+        return res.status(400).json({ error: "A user with this email or username already exists." });
       }
 
-      // Check default branch
+      // Check branch
       if (!branchId) {
         const defaultBranch = await prisma.branch.findFirst();
         branchId = defaultBranch?.id || null;
       }
 
-      // 2. Synchronize Firebase Authentication FIRST
-      let firebaseUid: string | null = null;
-      let firebaseEmailVerified = false;
-
-      try {
-        const fbResult = await syncCreateFirebaseAuthUser(normalizedEmail, password, name.trim());
-        firebaseUid = fbResult.firebaseUid;
-        firebaseEmailVerified = fbResult.emailVerified;
-      } catch (fbErr: any) {
-        console.error("[CREATE USER] Firebase Auth synchronization error:", fbErr);
-        return res.status(400).json({
-          error: `Failed to create Firebase Authentication account: ${fbErr.message || 'Identity provider error'}`
-        });
-      }
-
       const hashedPassword = await bcrypt.hash(password, 10);
-
-      // 3. Create Prisma User with linked firebaseUid
-      let user;
-      try {
-        user = await prisma.user.create({
-          data: { 
-            email: normalizedEmail, 
-            username: normalizedUsername,
-            password: hashedPassword, 
-            name: name.trim(), 
-            role: normalizeRole(role || "RECEPTIONIST"), 
-            phoneNumber: phoneNumber ? phoneNumber.trim() : null, 
-            department: department ? department.trim() : null, 
-            address: address ? address.trim() : null, 
-            profileImage: profileImage || null,
-            branchId,
-            firebaseUid,
-            accountStatus: "ACTIVE",
-            emailVerified: req.body.emailVerified !== undefined ? Boolean(req.body.emailVerified) : true,
-            isActive: true
-          }
-        });
-      } catch (dbCreateErr: any) {
-        // Rollback Firebase Auth user if Prisma creation fails to prevent orphaned accounts
-        if (firebaseUid) {
-          await syncDeleteFirebaseAuthUser(firebaseUid, normalizedEmail).catch(() => {});
+      
+      const user = await prisma.user.create({
+        data: { 
+          email: normalizedEmail, 
+          username: normalizedUsername,
+          password: hashedPassword, 
+          name: name.trim(), 
+          role: role || "RECEPTIONIST", 
+          phoneNumber: phoneNumber ? phoneNumber.trim() : null, 
+          department: department ? department.trim() : null, 
+          address: address ? address.trim() : null, 
+          profileImage: profileImage || null,
+          branchId,
+          supabaseUid: null,
+          accountStatus: "ACTIVE",
+          emailVerified: false,
+          twoFactorEnabled: twoFactorEnabled !== undefined ? Boolean(twoFactorEnabled) : true,
+          isActive: true
         }
-        throw dbCreateErr;
-      }
-
-      // Sync user to central Firestore and Firebase RTDB
-      await syncUserToFirestore(user).catch(() => {});
-      await syncToRtdb("user", "CREATE", user).catch(() => {});
+      });
 
       // Realtime event broadcast
       broadcastRealtimeEvent({
@@ -15033,7 +12581,7 @@ export async function createServerApp() {
         data: user
       });
 
-      // Centralized Audit Log (No credentials logged)
+      // Centralized Audit Log
       await recordAuditLog({
         req,
         userId: req.user.id,
@@ -15041,13 +12589,16 @@ export async function createServerApp() {
         resource: "USER",
         resourceId: user.id,
         status: "SUCCESS",
-        details: `Created staff member: ${user.name} (${user.email}) [Role: ${user.role}, FirebaseUID: ${firebaseUid}]`
+        details: `Created new staff member: ${user.name} (${user.role}) with email: ${user.email}`
       });
 
-      res.status(201).json(user);
+      res.json({ id: user.id, email: user.email, name: user.name, role: user.role, username: user.username, accountStatus: user.accountStatus, isActive: user.isActive, twoFactorEnabled: user.twoFactorEnabled, emailVerified: user.emailVerified });
     } catch (err: any) {
       console.error("[CREATE USER ERROR]", err);
-      res.status(400).json({ error: err.message || "Failed to create user account." });
+      if (err.code === 'P2002') {
+        return res.status(400).json({ error: "Email or username already exists" });
+      }
+      res.status(400).json({ error: err.message || "Failed to create user" });
     }
   });
 
@@ -15090,6 +12641,14 @@ export async function createServerApp() {
         return res.status(403).json({ error: "You are not authorized to change 2FA settings for another Super Administrator." });
       }
 
+      // If disabling 2FA, invalidate any existing unused 2FA OTP codes for this user
+      if (!targetEnabled) {
+        await prisma.oTPVerification.updateMany({
+          where: { userId: id, purpose: "LOGIN_2FA", isUsed: false },
+          data: { isUsed: true }
+        });
+      }
+
       const user = await prisma.user.update({
         where: { id },
         data: {
@@ -15115,10 +12674,6 @@ export async function createServerApp() {
           createdAt: true
         }
       });
-
-      // Sync user to central Firestore and RTDB
-      await syncUserToFirestore(user);
-      await syncToRtdb("user", "UPDATE", user);
 
       // Realtime event broadcast
       broadcastRealtimeEvent({
@@ -15171,20 +12726,30 @@ export async function createServerApp() {
   app.patch("/api/staff/:id/2fa", authenticate, handleUser2FAToggle);
   app.post("/api/staff/:id/2fa", authenticate, handleUser2FAToggle);
 
+  // Dedicated Super Admin Direct Email Verification Endpoint
   const handleSuperAdminDirectEmailVerify = async (req: any, res: any) => {
-    const { id } = req.params;
+    const id = String(req.params.id || '').trim();
+
+    // 1. Authorization: Only SUPER_ADMIN is permitted
+    if (!req.user || req.user.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ 
+        success: false, 
+        error: "Forbidden: Only Super Administrators can manually verify user email addresses." 
+      });
+    }
+
     try {
-      const existingUser = await prisma.user.findUnique({ where: { id } });
-      if (!existingUser) {
+      // 2. Validate Target User
+      const targetUser = await prisma.user.findUnique({ where: { id } });
+      if (!targetUser || targetUser.deletedAt) {
         return res.status(404).json({ success: false, error: "User account not found." });
       }
 
+      // 3. Update SQLite / Prisma User Record
       const updatedUser = await prisma.user.update({
-        where: { id },
+        where: { id: targetUser.id },
         data: {
           emailVerified: true,
-          accountStatus: "ACTIVE",
-          isActive: true,
           updatedAt: new Date()
         },
         select: {
@@ -15198,24 +12763,47 @@ export async function createServerApp() {
           department: true,
           address: true,
           profileImage: true,
+          twoFactorEnabled: true,
+          twoFactorType: true,
           accountStatus: true,
           emailVerified: true,
-          firebaseUid: true,
+          supabaseUid: true,
           lastLoginAt: true,
           createdAt: true
         }
       });
 
-      // Synchronize with Central Firestore and Firebase Realtime Database (RTDB)
-      await syncUserToFirestore(updatedUser).catch((e) => console.warn("[FIRESTORE VERIFY SYNC ERROR]", e?.message));
-      await syncToRtdb("user", "UPDATE", updatedUser).catch((e) => console.warn("[RTDB VERIFY SYNC ERROR]", e?.message));
-
-      // Broadcast Real-Time SSE Event across all connected dashboards
+      // 4. Broadcast Real-Time SSE Event across all connected dashboards
       broadcastRealtimeEvent({
         entity: "user",
         action: "UPDATE",
         id: updatedUser.id,
         data: updatedUser
+      });
+
+      // 7. Record Centralized Audit Log
+      await recordAuditLog({
+        req,
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: "EMAIL_VERIFIED_BY_SUPER_ADMIN",
+        resource: "USER",
+        resourceId: updatedUser.id,
+        status: "SUCCESS",
+        details: `Super Administrator manually verified email for staff member: ${updatedUser.name} (${updatedUser.email})`,
+        previousValue: JSON.stringify({ emailVerified: false }),
+        newValue: JSON.stringify({ emailVerified: true }),
+        metadata: JSON.stringify({
+          targetUserId: updatedUser.id,
+          targetUserEmail: updatedUser.email,
+          targetUserName: updatedUser.name,
+          targetUserRole: updatedUser.role,
+          performedByAdminId: req.user.id,
+          performedByAdminEmail: req.user.email,
+          performedByAdminName: req.user.name
+        })
       });
 
       return res.json({
@@ -15226,9 +12814,22 @@ export async function createServerApp() {
       });
     } catch (err: any) {
       console.error("[SUPER ADMIN DIRECT EMAIL VERIFY ERROR]", err);
+      await recordAuditLog({
+        req,
+        userId: req.user?.id,
+        userEmail: req.user?.email,
+        userName: req.user?.name,
+        userRole: req.user?.role,
+        action: "EMAIL_VERIFIED_BY_SUPER_ADMIN",
+        resource: "USER",
+        resourceId: id,
+        status: "FAILED",
+        details: `Failed to manually verify email for user ID ${id}: ${err?.message || "Unknown error"}`
+      }).catch(() => {});
+
       return res.status(500).json({ 
         success: false, 
-        error: "Unable to verify this email. Please try again." 
+        error: "Unable to verify this email. Please try again or check the system logs." 
       });
     }
   };
@@ -15237,280 +12838,39 @@ export async function createServerApp() {
   app.patch("/api/users/:id/verify-email", authenticate, authorize(['SUPER_ADMIN']), handleSuperAdminDirectEmailVerify);
   app.post("/api/users/:id/direct-verify-email", authenticate, authorize(['SUPER_ADMIN']), handleSuperAdminDirectEmailVerify);
   app.patch("/api/users/:id/direct-verify-email", authenticate, authorize(['SUPER_ADMIN']), handleSuperAdminDirectEmailVerify);
-  // Super Admin 2FA Configuration Status Endpoint
-  const handleGetSuperAdmin2FA = async (req: any, res: any) => {
-    return res.json({
-      success: true,
-      twoFactorEnabled: false,
-      user: {
-        id: req.user.id,
-        email: req.user.email,
-        role: req.user.role,
-        twoFactorEnabled: false
-      }
-    });
-  };
+  app.post("/api/staff/:id/verify-email", authenticate, authorize(['SUPER_ADMIN']), handleSuperAdminDirectEmailVerify);
+  app.patch("/api/staff/:id/verify-email", authenticate, authorize(['SUPER_ADMIN']), handleSuperAdminDirectEmailVerify);
 
-  // Super Admin 2FA Configuration Update Endpoint (Authoritative backend mutation)
-  const handleUpdateSuperAdmin2FA = async (req: any, res: any) => {
-    return res.json({
-      success: true,
-      twoFactorEnabled: false,
-      message: "Firebase Authentication is the authority for authentication.",
-      user: {
-        id: req.user.id,
-        email: req.user.email,
-        role: req.user.role,
-        twoFactorEnabled: false
-      }
-    });
-  };
-
-  app.get("/api/admin/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleGetSuperAdmin2FA);
-  app.patch("/api/admin/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleUpdateSuperAdmin2FA);
-  app.post("/api/admin/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleUpdateSuperAdmin2FA);
-  app.get("/api/settings/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleGetSuperAdmin2FA);
-  app.patch("/api/settings/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleUpdateSuperAdmin2FA);
-  app.post("/api/settings/security/2fa", authenticate, authorize(['SUPER_ADMIN']), handleUpdateSuperAdmin2FA);
-
-  // Super Admin 2FA Enable: Request Verification Code (OTP)
-  app.post("/api/admin/security/2fa/request-otp", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
-    return res.json({
-      success: true,
-      message: "Firebase Authentication is the single authority for authentication."
-    });
-  });
-
-  // Super Admin 2FA Enable: Verify Code and Activate 2FA
-  app.post("/api/admin/security/2fa/verify-and-enable", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
-    return res.json({
-      success: true,
-      twoFactorEnabled: false,
-      message: "Firebase Authentication is enabled for all roles."
-    });
-  });
-
-  // Super Admin First-Login Setup: Disable 2FA with confirmation
-  app.post("/api/admin/security/first-login-setup/disable", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
-    return res.json({
-      success: true,
-      twoFactorEnabled: false,
-      message: "Firebase Authentication is active."
-    });
-  });
-
-  // Dedicated Staff Role Change Endpoint (SUPER_ADMIN only)
-  app.patch("/api/users/:id/role", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
+  app.patch("/api/users/:id", authenticate, authorize(['SUPER_ADMIN']), async (req: any, res) => {
     const { id } = req.params;
-    const requestedRole = req.body.role || req.body.newRole || req.body.targetRole;
-
-    try {
-      if (!requestedRole) {
-        return res.status(400).json({ error: "Role is required." });
-      }
-
-      const normalizedRole = normalizeRole(requestedRole);
-      const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST'];
-      if (!allowedRoles.includes(normalizedRole)) {
-        return res.status(400).json({ error: `Invalid role '${requestedRole}'. Allowed roles: ${allowedRoles.join(', ')}` });
-      }
-
-      const existingUser = await prisma.user.findUnique({ where: { id } });
-      if (!existingUser || existingUser.deletedAt) {
-        return res.status(404).json({ error: "Staff member not found." });
-      }
-
-      // Prevent SuperAdmin from revoking their own SuperAdmin role
-      if (id === req.user.id && normalizedRole !== 'SUPER_ADMIN') {
-        return res.status(400).json({ error: "You cannot revoke your own Super Administrator role." });
-      }
-
-      // If target user is SuperAdmin and role is changing, verify at least 1 remaining SuperAdmin exists
-      const targetRoleNorm = normalizeRole(existingUser.role);
-      if (targetRoleNorm === 'SUPER_ADMIN' && normalizedRole !== 'SUPER_ADMIN') {
-        const superAdminCount = await prisma.user.count({
-          where: {
-            role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] },
-            isActive: true,
-            accountStatus: 'ACTIVE',
-            deletedAt: null
-          }
-        });
-        if (superAdminCount <= 1) {
-          return res.status(400).json({ error: "Cannot downgrade the sole remaining Super Administrator." });
-        }
-      }
-
-      // Update role in Prisma DB
-      const user = await prisma.user.update({
-        where: { id },
-        data: { role: normalizedRole }
-      });
-
-      // Synchronize Firebase Auth user identity/claims if applicable
-      if (user.firebaseUid || user.email) {
-        try {
-          await syncUpdateFirebaseAuthUser(user.firebaseUid, user.email, { displayName: user.name });
-        } catch (fbErr) {
-          console.warn("[ROLE CHANGE] Firebase Auth sync notice:", fbErr);
-        }
-      }
-
-      // Sync user to central Firestore and Firebase RTDB
-      await syncUserToFirestore(user).catch(() => {});
-      await syncToRtdb("user", "UPDATE", user).catch(() => {});
-
-      // Broadcast real-time event
-      broadcastRealtimeEvent({
-        entity: "user",
-        action: "UPDATE",
-        id: user.id,
-        data: user
-      });
-
-      // Immediately delete active sessions for target user to enforce role update
-      await prisma.session.deleteMany({ where: { userId: id } });
-
-      // Audit Log
-      await recordAuditLog({
-        req,
-        userId: req.user.id,
-        action: "USER_ROLE_CHANGED",
-        resource: "USER",
-        resourceId: user.id,
-        status: "SUCCESS",
-        details: `Changed role of ${user.name} (${user.email}) from ${existingUser.role} to ${normalizedRole}`
-      });
-
-      res.json({ message: "Staff role updated successfully", user, success: true });
-    } catch (err: any) {
-      console.error("[ROLE CHANGE ERROR]", err);
-      res.status(400).json({ error: err.message || "Failed to update staff role" });
+    let { isActive, role, name, email, username, phoneNumber, department, address, profileImage, password, accountStatus, twoFactorEnabled, enabled } = req.body;
+    
+    if (twoFactorEnabled === undefined && enabled !== undefined) {
+      twoFactorEnabled = enabled;
     }
-  });
-
-  app.patch("/api/users/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res) => {
-    const { id } = req.params;
-    let { isActive, role, name, email, username, phoneNumber, department, address, profileImage, password, accountStatus } = req.body;
     
     try {
       const existingUser = await prisma.user.findUnique({ where: { id } });
       if (!existingUser) return res.status(404).json({ error: "User account not found." });
 
-      const callerRoleNorm = normalizeRole(req.user.role);
-
-      // Only SUPERADMIN can change user roles
-      if (role !== undefined && normalizeRole(role) !== normalizeRole(existingUser.role)) {
-        if (callerRoleNorm !== 'SUPER_ADMIN' && callerRoleNorm !== 'SUPERADMIN') {
-          return res.status(403).json({ error: "Forbidden: Only Super Administrators can change user roles." });
-        }
-
-        const normalizedRequestedRole = normalizeRole(role);
-
-        // Prevent SuperAdmin from downgrading their own role
-        if (id === req.user.id && normalizedRequestedRole !== 'SUPER_ADMIN') {
-          return res.status(400).json({ error: "You cannot revoke your own Super Administrator role." });
-        }
-
-        role = normalizedRequestedRole;
-      }
-
-      // Check if target is SuperAdmin and status/active is changing
-      const targetRoleNorm = normalizeRole(existingUser.role);
-      if (targetRoleNorm === 'SUPER_ADMIN') {
-        const isDisabling = isActive === false || (accountStatus && accountStatus !== 'ACTIVE' && accountStatus !== 'APPROVED');
-        const isChangingRole = role !== undefined && normalizeRole(role) !== 'SUPER_ADMIN';
-
-        if (id === req.user.id && isDisabling) {
-          return res.status(400).json({ error: "You cannot disable your own Super Administrator account." });
-        }
-
-        if (isDisabling || isChangingRole) {
-          const superAdminCount = await prisma.user.count({
-            where: {
-              role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] },
-              isActive: true,
-              accountStatus: 'ACTIVE',
-              deletedAt: null
-            }
-          });
-          if (superAdminCount <= 1) {
-            return res.status(400).json({ error: "Cannot modify or disable the sole remaining Super Administrator." });
-          }
-        }
-      }
-
-      // 1. Prepare Firebase Auth updates
-      const firebaseUpdates: any = {};
-
-      if (email !== undefined && String(email).toLowerCase().trim() !== existingUser.email.toLowerCase()) {
-        const newEmail = String(email).toLowerCase().trim();
-        // Check uniqueness in local DB
-        const conflictLocal = await prisma.user.findFirst({
-          where: { email: newEmail, id: { not: id } }
-        });
-        if (conflictLocal) {
-          return res.status(400).json({ error: "Another staff account is already registered with this email address." });
-        }
-        firebaseUpdates.email = newEmail;
-      }
-
-      if (name !== undefined && name.trim() !== existingUser.name) {
-        firebaseUpdates.displayName = name.trim();
-      }
-
-      if (password) {
-        const pwdVal = validateStrongPasswordServer(password);
-        if (!pwdVal.valid) {
-          return res.status(400).json({ error: pwdVal.message || "Password does not meet security requirements." });
-        }
-        firebaseUpdates.password = password;
-      }
-
-      const isDisabling = isActive === false || (accountStatus && accountStatus !== 'ACTIVE' && accountStatus !== 'APPROVED');
-      const isEnabling = isActive === true || accountStatus === 'ACTIVE';
-
-      if (isActive !== undefined || accountStatus !== undefined) {
-        if (isDisabling) firebaseUpdates.disabled = true;
-        if (isEnabling) firebaseUpdates.disabled = false;
-      }
-
-      // 2. Synchronize Firebase Authentication if any credential or profile state is changing
-      let effectiveFirebaseUid = existingUser.firebaseUid;
-      if (Object.keys(firebaseUpdates).length > 0) {
-        try {
-          const fbRes = await syncUpdateFirebaseAuthUser(existingUser.firebaseUid, existingUser.email, firebaseUpdates);
-          if (fbRes.firebaseUid && !effectiveFirebaseUid) {
-            effectiveFirebaseUid = fbRes.firebaseUid;
-          }
-        } catch (fbErr: any) {
-          console.error("[UPDATE USER] Firebase Auth synchronization error:", fbErr);
-          return res.status(400).json({
-            error: `Failed to update Firebase Authentication: ${fbErr.message || 'Identity provider error'}`
-          });
-        }
-      }
-
-      // 3. Prepare Prisma Update Data
-      const updateData: any = {
-        isActive,
-        role: role !== undefined ? normalizeRole(role) : undefined,
-        name: name !== undefined ? name.trim() : undefined,
-        phoneNumber,
-        department,
-        address,
-        profileImage,
-        accountStatus,
-        firebaseUid: effectiveFirebaseUid
-      };
-
+      const updateData: any = { isActive, role, name, phoneNumber, department, address, profileImage, accountStatus };
       if (email !== undefined) {
         updateData.email = String(email).toLowerCase().trim();
       }
       if (username !== undefined) {
         updateData.username = username ? String(username).trim() : null;
       }
+      if (twoFactorEnabled !== undefined) {
+        if (typeof twoFactorEnabled === 'boolean') {
+          updateData.twoFactorEnabled = twoFactorEnabled;
+        } else if (twoFactorEnabled === 'true' || twoFactorEnabled === '1' || twoFactorEnabled === 1) {
+          updateData.twoFactorEnabled = true;
+        } else if (twoFactorEnabled === 'false' || twoFactorEnabled === '0' || twoFactorEnabled === 0) {
+          updateData.twoFactorEnabled = false;
+        }
+      }
       
+      // If password is provided, hash it
       if (password) {
         updateData.password = await bcrypt.hash(password, 10);
         updateData.failedLoginAttempts = 0;
@@ -15525,10 +12885,6 @@ export async function createServerApp() {
         data: updateData
       });
 
-      // Sync user to central Firestore and Firebase RTDB
-      await syncUserToFirestore(user).catch(() => {});
-      await syncToRtdb("user", "UPDATE", user).catch(() => {});
-
       // Realtime event broadcast
       broadcastRealtimeEvent({
         entity: "user",
@@ -15537,28 +12893,43 @@ export async function createServerApp() {
         data: user
       });
 
-      // If password, role, or active state was changed, terminate target user's active sessions immediately
-      if (password || role !== undefined || isDisabling) {
+      // If password or active state was revoked, terminate active sessions
+      if (password || isActive === false || (accountStatus && accountStatus !== 'ACTIVE' && accountStatus !== 'APPROVED')) {
         await prisma.session.deleteMany({ where: { userId: id } });
       }
 
       // Centralized Audit Log
       const changedFields = Object.keys(updateData).filter(k => k !== 'password' && updateData[k] !== existingUser[k as keyof typeof existingUser]);
       if (changedFields.length > 0 || password) {
+        let actionType = "USER_UPDATED";
+        if (twoFactorEnabled !== undefined && twoFactorEnabled !== existingUser.twoFactorEnabled) {
+          actionType = twoFactorEnabled ? "2FA_ENABLED" : "2FA_DISABLED";
+        } else if (role && role !== existingUser.role) actionType = "ROLE_CHANGED";
+        else if (isActive === false) actionType = "USER_DISABLED";
+        else if (isActive === true && existingUser.isActive === false) actionType = "USER_ENABLED";
+
         await recordAuditLog({
           req,
           userId: req.user.id,
-          action: "USER_UPDATED",
+          userEmail: req.user.email,
+          userName: req.user.name,
+          userRole: req.user.role,
+          action: actionType,
           resource: "USER",
-          resourceId: user.id,
+          resourceId: id,
           status: "SUCCESS",
-          details: `Updated fields [${changedFields.join(", ")}${password ? ", password" : ""}] for ${user.name} (${user.email})`
+          previousValue: JSON.stringify({ role: existingUser.role, isActive: existingUser.isActive, accountStatus: existingUser.accountStatus, twoFactorEnabled: existingUser.twoFactorEnabled }),
+          newValue: JSON.stringify(updateData),
+          details: `Updated staff profile: ${name || existingUser.name}. Changed fields: ${changedFields.join(', ')} ${password ? '(password reset)' : ''}`
         });
       }
 
-      res.json({ message: "User updated successfully", user, success: true });
+      res.json(user);
     } catch (err: any) {
       console.error("[UPDATE USER ERROR]", err);
+      if (err.code === 'P2002') {
+        return res.status(400).json({ error: "Email or username already exists" });
+      }
       res.status(400).json({ error: err.message || "Failed to update user" });
     }
   });
@@ -15571,31 +12942,17 @@ export async function createServerApp() {
     }
 
     try {
-      const targetUser = await prisma.user.findUnique({ where: { id } });
-      if (!targetUser) {
-        return res.status(404).json({ success: false, deleted: false, error: "Staff member not found or already deleted.", message: "Staff member not found or already deleted." });
-      }
-
-      const targetRoleNorm = normalizeRole(targetUser.role);
-      if (targetRoleNorm === 'SUPER_ADMIN') {
-        const superAdminCount = await prisma.user.count({
-          where: {
-            role: { in: ['SUPER_ADMIN', 'SUPERADMIN'] },
-            isActive: true,
-            accountStatus: 'ACTIVE',
-            deletedAt: null
-          }
-        });
-        if (superAdminCount <= 1) {
-          return res.status(400).json({ error: "Cannot delete the sole remaining Super Administrator." });
+      // Soft delete by setting deletedAt
+      const user = await prisma.user.update({
+        where: { id },
+        data: { 
+          deletedAt: new Date(),
+          isActive: false 
         }
-      }
+      });
 
-      // Execute permanent deletion from local DB & Firebase Auth while unlinking historical references
-      const success = await permanentlyDeleteUserRecord(id);
-      if (!success) {
-        return res.status(404).json({ success: false, deleted: false, error: "Staff member not found or already deleted.", message: "Staff member not found or already deleted." });
-      }
+      // Invalidate user sessions
+      await prisma.session.deleteMany({ where: { userId: id } });
 
       // Centralized Audit Log
       await recordAuditLog({
@@ -15605,18 +12962,13 @@ export async function createServerApp() {
         resource: "USER",
         resourceId: id,
         status: "SUCCESS",
-        details: `Permanently deleted staff account and removed Firebase Auth user: ${targetUser.name} (${targetUser.email})`
+        details: `Soft deleted staff member: ${user.name} (${user.email})`
       });
 
-      res.json({
-        success: true,
-        deleted: true,
-        userId: id,
-        message: "Staff member permanently deleted successfully"
-      });
-    } catch (err: any) {
+      res.json({ message: "Staff member deleted successfully" });
+    } catch (err) {
       console.error("[DELETE USER ERROR]", err);
-      res.status(400).json({ success: false, deleted: false, error: err?.message || "Failed to delete staff member", message: err?.message || "Failed to delete staff member" });
+      res.status(400).json({ error: "Failed to delete staff member" });
     }
   });
 
@@ -15834,6 +13186,7 @@ export async function createServerApp() {
         problemDescription: r.problemDescription,
         accessoriesReceived: r.accessoriesReceived,
         status: r.status,
+        technician: "Technician",
         expectedCompletionDate: r.expectedCompletionDate,
         estimatedCost: r.estimatedCost,
         advancePaid: r.advancePaid,
@@ -15857,24 +13210,18 @@ export async function createServerApp() {
         logs: (r.logs || []).map((l: any) => {
           let sanitized = l.message || "";
           if (typeof sanitized === 'string') {
-            if (/^Status (?:changed|updated) to ([A-Z_]+)/i.test(sanitized)) {
-              sanitized = 'Repair progress updated.';
-            } else {
-              sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, '');
-              sanitized = sanitized.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)\s*\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, '');
-              sanitized = sanitized.replace(/\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, '');
-              sanitized = sanitized.replace(/\bby\s+(?:MTS\s+)?(?:super\s*admin|admin|manager|receptionist|staff|specialist|technician|user)\b/gi, '');
-              sanitized = sanitized.replace(/\bby\s+[A-Z][a-zA-Z0-9_.'-]+(?:\s+[A-Z][a-zA-Z0-9_.'-]+)*/g, '');
-              sanitized = sanitized.replace(/\b(handled|updated|diagnosed|logged|received|repaired|inspected|completed|verified|transitioned)\s+by\s+[^,\.\n]+/gi, '$1');
-              sanitized = sanitized.replace(/\bassigned\s+(?:to|by)\s+[^,\.\n]+/gi, 'Assigned for laboratory service');
-              sanitized = sanitized.replace(/\b(?:updated|created|processed|handled|logged|verified)\s+by\s*:\s*[^,\.\n]+/gi, '');
-              sanitized = sanitized.replace(/\b(?:technician|specialist|staff|user|engineer)\s*:\s*[^,\.\n]+/gi, '');
-              sanitized = sanitized.replace(/\s+/g, ' ').replace(/\s+([,\.;])/g, '$1').replace(/^[\s,;.-]+|[\s,;.-]+$/g, '').trim();
-            }
+            sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, 'Technician');
+            sanitized = sanitized.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)\s*\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, 'by Technician');
+            sanitized = sanitized.replace(/\bby\s+(?:MTS\s+)?(?:super\s*admin|admin|manager|receptionist|staff|specialist)\b/gi, 'by Technician');
+            sanitized = sanitized.replace(/\bby\s+specialist\s+[^,\.\n]+/gi, 'by Technician');
+            sanitized = sanitized.replace(/\b(handled|updated|diagnosed|logged|received|repaired|inspected|completed|verified|transitioned)\s+by\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, '$1 by Technician');
+            sanitized = sanitized.replace(/\bassigned\s+(?:to|by)\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, 'Assigned to Technician');
+            sanitized = sanitized.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, 'by Technician');
+            sanitized = sanitized.replace(/\bby\s+Technician(?:\s+by\s+Technician)+/gi, 'by Technician');
           }
           return {
             status: l.status,
-            message: (sanitized || "Repair progress updated.").trim(),
+            message: (sanitized || "").trim(),
             createdAt: l.createdAt
           };
         })
@@ -15900,8 +13247,13 @@ export async function createServerApp() {
     }
   });
 
-  // ==================  // Get All Inventory Items with filtering & searching
-  app.get("/api/inventory", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  // ==========================================
+  // INTERNAL INVENTORY MANAGEMENT ENDPOINTS
+  // Strictly internal for SUPER_ADMIN, ADMIN, RECEPTIONIST, INVENTORY_MANAGER
+  // ==========================================
+
+  // Get All Inventory Items with filtering & searching
+  app.get("/api/inventory", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
     try {
       const { search, category, brand, stockStatus, status, sortBy, sortOrder } = req.query;
       const where: any = {};
@@ -15964,7 +13316,7 @@ export async function createServerApp() {
   });
 
   // Get Inventory Dashboard Statistics Summary
-  app.get("/api/inventory/stats", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/inventory/stats", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
     try {
       const items = await prisma.inventoryItem.findMany({
         where: { status: { in: ['ACTIVE', 'INACTIVE'] } }
@@ -16004,13 +13356,13 @@ export async function createServerApp() {
   });
 
   // Categories list & creation
-  app.get("/api/inventory/categories", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/inventory/categories", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
     try {
       const categories = await prisma.inventoryCategory.findMany({
         orderBy: { displayOrder: 'asc' }
       });
       res.json(categories);
-    } catch (err) {
+    } catch (err: any) {
       res.status(500).json({ error: "Failed to fetch inventory categories" });
     }
   });
@@ -16042,7 +13394,7 @@ export async function createServerApp() {
   });
 
   // Global Transaction Audit History
-  app.get("/api/inventory/transactions/history", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/inventory/transactions/history", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
     try {
       const history = await prisma.inventoryTransaction.findMany({
         take: 100,
@@ -16068,7 +13420,7 @@ export async function createServerApp() {
   });
 
   // Get Single Item Details with complete history
-  app.get("/api/inventory/:id", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/inventory/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
     try {
       const item = await prisma.inventoryItem.findUnique({
         where: { id: req.params.id },
@@ -16634,7 +13986,7 @@ export async function createServerApp() {
   };
 
   // Get Custom Inventory Folders
-  app.get("/api/inventory/folders", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/inventory/folders", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
     try {
       const folders = getCustomInventoryFolders();
       res.json(folders);
@@ -16990,7 +14342,7 @@ export async function createServerApp() {
   });
 
   // Distinct Suppliers and Storage Locations for fast auto-completion
-  app.get("/api/inventory/suppliers", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/inventory/suppliers", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
     try {
       const items = await prisma.inventoryItem.findMany({
         where: { supplier: { not: null } },
@@ -17004,7 +14356,7 @@ export async function createServerApp() {
     }
   });
 
-  app.get("/api/inventory/locations", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/inventory/locations", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER']), async (req: any, res) => {
     try {
       const items = await prisma.inventoryItem.findMany({
         where: { storageLocation: { not: null } },
@@ -17015,6 +14367,55 @@ export async function createServerApp() {
       res.json(locations);
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch storage locations" });
+    }
+  });
+
+  // Product Endpoints
+  // Public product list (no auth required for website)
+  app.get("/api/public/products", syncRouteMiddleware(['product']), async (req, res) => {
+    try {
+      const { category, featured, bestSeller } = req.query;
+      const where: any = {};
+      if (category) where.category = category as string;
+      if (featured === 'true') where.isFeatured = true;
+      if (bestSeller === 'true') where.isBestSeller = true;
+
+      const products = await prisma.product.findMany({
+        where,
+        orderBy: { createdAt: "desc" }
+      });
+      res.json(products);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch products" });
+    }
+  });
+
+  // Admin product management
+  app.get("/api/products", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'INVENTORY_MANAGER']), syncRouteMiddleware(['product']), async (req: any, res) => {
+    const products = await prisma.product.findMany({
+      orderBy: { createdAt: "desc" }
+    });
+    res.json(products);
+  });
+
+  app.post("/api/products", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'INVENTORY_MANAGER']), async (req: any, res) => {
+    try {
+      const product = await prisma.product.create({ data: req.body });
+      res.json(product);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to create product" });
+    }
+  });
+
+  app.put("/api/products/:id", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'INVENTORY_MANAGER']), async (req: any, res) => {
+    try {
+      const product = await prisma.product.update({ 
+        where: { id: req.params.id },
+        data: req.body 
+      });
+      res.json(product);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update product" });
     }
   });
 
@@ -17113,7 +14514,7 @@ export async function createServerApp() {
   });
 
   // Admin endpoint: List all repair prices with full management data
-  app.get("/api/repair-prices", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), syncRouteMiddleware(['repairPrice']), async (req: any, res) => {
+  app.get("/api/repair-prices", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), syncRouteMiddleware(['repairPrice']), async (req: any, res) => {
     try {
       const { search, brand, category, status } = req.query;
       const where: any = {};
@@ -17359,15 +14760,6 @@ export async function createServerApp() {
 
       await prisma.repairPrice.delete({ where: { id } });
 
-      if (!firestoreSyncDisabled) {
-        try {
-          const db = getDb();
-          await db.collection("repairPrices").doc(id).delete();
-        } catch (fErr) {
-          console.warn("[SYNC] Could not delete repair price from Firestore:", fErr);
-        }
-      }
-
       // Log to Audit Log
       try {
         await prisma.auditLog.create({
@@ -17421,7 +14813,7 @@ export async function createServerApp() {
   };
 
   // Admin endpoint: Get custom empty folders
-  app.get("/api/repair-prices/folders", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'HEAD_TECHNICIAN', 'TECHNICIAN']), async (req: any, res) => {
+  app.get("/api/repair-prices/folders", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res) => {
     try {
       const folders = getCustomFolders();
       res.json(folders);
@@ -17484,20 +14876,6 @@ export async function createServerApp() {
       await prisma.repairPrice.deleteMany({
         where: { id: { in: ids } }
       });
-
-      // Synchronize deletion with Firestore
-      if (!firestoreSyncDisabled) {
-        try {
-          const db = getDb();
-          const batch = db.batch();
-          for (const id of ids) {
-            batch.delete(db.collection("repairPrices").doc(id));
-          }
-          await batch.commit();
-        } catch (fErr) {
-          console.warn("[SYNC] Bulk delete from Firestore warning:", fErr);
-        }
-      }
 
       // Record Audit Log
       try {
@@ -17596,20 +14974,6 @@ export async function createServerApp() {
         saveCustomFolders(updatedCustomFolders);
       }
 
-      // Synchronize updated records with Firestore
-      if (!firestoreSyncDisabled) {
-        try {
-          const updatedRecords = await prisma.repairPrice.findMany({
-            where: level === 'brand' ? { brand: trimmedNew } : level === 'model' ? { model: trimmedNew, ...(brand && { brand: brand.trim() }) } : { category: trimmedNew, ...(brand && { brand: brand.trim() }), ...(model && { model: model.trim() }) }
-          });
-          for (const item of updatedRecords) {
-            await syncToFirestore('repairPrice', item);
-          }
-        } catch (fErr) {
-          console.warn("[SYNC] Rename folder Firestore sync warning:", fErr);
-        }
-      }
-
       // Record Audit Log
       try {
         await prisma.auditLog.create({
@@ -17659,14 +15023,6 @@ export async function createServerApp() {
           data: updateData
         });
         count = result.count;
-
-        // Sync to Firestore
-        if (!firestoreSyncDisabled) {
-          const updated = await prisma.repairPrice.findMany({ where: { id: { in: serviceIds } } });
-          for (const item of updated) {
-            await syncToFirestore('repairPrice', item);
-          }
-        }
       } else if (source && source.brand) {
         // Moving an entire source folder
         const whereClause: any = { brand: source.brand.trim() };
@@ -17685,13 +15041,6 @@ export async function createServerApp() {
           data: updateData
         });
         count = result.count;
-
-        if (!firestoreSyncDisabled) {
-          const updated = await prisma.repairPrice.findMany({ where: whereClause });
-          for (const item of updated) {
-            await syncToFirestore('repairPrice', item);
-          }
-        }
       } else {
         return res.status(400).json({ error: "Either serviceIds or source folder specification is required" });
       }
@@ -17739,20 +15088,6 @@ export async function createServerApp() {
         await prisma.repairPrice.deleteMany({
           where: { id: { in: ids } }
         });
-
-        // Delete from Firestore
-        if (!firestoreSyncDisabled) {
-          try {
-            const db = getDb();
-            const batch = db.batch();
-            for (const id of ids) {
-              batch.delete(db.collection("repairPrices").doc(id));
-            }
-            await batch.commit();
-          } catch (fErr) {
-            console.warn("[SYNC] Delete folder Firestore warning:", fErr);
-          }
-        }
       }
 
       // Also clean up any custom empty folders
@@ -17824,7 +15159,7 @@ export async function createServerApp() {
   });
 
   // Admin endpoint: Get all slides (active & inactive)
-  app.get("/api/admin/slides", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER']), async (req: any, res) => {
+  app.get("/api/admin/slides", authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: any, res) => {
     try {
       const slides = await prisma.homeSlide.findMany({
         orderBy: { displayOrder: "asc" }
@@ -17857,7 +15192,6 @@ export async function createServerApp() {
         }
       });
 
-      await syncToFirestore("homeSlide", created);
       broadcastRealtimeEvent({ entity: "homeSlide", action: "CREATE", data: created });
 
       try {
@@ -17904,7 +15238,6 @@ export async function createServerApp() {
         }
       });
 
-      await syncToFirestore("homeSlide", updated);
       broadcastRealtimeEvent({ entity: "homeSlide", action: "UPDATE", data: updated });
 
       try {
@@ -17944,7 +15277,6 @@ export async function createServerApp() {
         }
       });
 
-      await syncToFirestore("homeSlide", updated);
       broadcastRealtimeEvent({ entity: "homeSlide", action: "UPDATE", data: updated });
 
       try {
@@ -17976,15 +15308,6 @@ export async function createServerApp() {
       if (!existing) return res.status(404).json({ error: "Slide not found" });
 
       await prisma.homeSlide.delete({ where: { id } });
-
-      if (!firestoreSyncDisabled) {
-        try {
-          const db = getDb();
-          await db.collection("homeSlides").doc(id).delete();
-        } catch (fErr) {
-          console.warn("[SYNC] Could not delete slide from Firestore:", fErr);
-        }
-      }
 
       broadcastRealtimeEvent({ entity: "homeSlide", action: "DELETE", id, data: { id } });
 
@@ -18227,33 +15550,8 @@ export async function createServerApp() {
     }
   });
 
-  // Root Attendance Records Query Endpoint
-  app.get("/api/attendance", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'ACCOUNTANT']), async (req: any, res) => {
-    try {
-      const { date, month, year, userId, staffId } = req.query;
-      const where: any = {};
-      const targetUser = userId || staffId;
-      if (targetUser) where.userId = String(targetUser);
-      if (date) where.date = String(date);
-      if (month && year) {
-        where.date = { startsWith: `${year}-${String(month).padStart(2, '0')}` };
-      }
-
-      const attendances = await prisma.attendance.findMany({
-        where,
-        include: { user: { select: { id: true, name: true, role: true, email: true } } },
-        orderBy: { date: 'desc' },
-        take: 100
-      });
-      res.json(attendances);
-    } catch (err: any) {
-      console.error("[ATTENDANCE LIST ERROR]", err);
-      res.status(500).json({ error: "Failed to load attendance records." });
-    }
-  });
-
   // 2. Staff Daily Attendance Roster & Daily Attendance Board
-  app.get("/api/attendance/today", authenticate, authorize(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'ACCOUNTANT']), async (req: any, res) => {
+  app.get("/api/attendance/today", authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'TECHNICIAN', 'LEAD_TECHNICIAN', 'ACCOUNTANT']), async (req: any, res) => {
     try {
       const timeInfo = getMTSCurrentTime();
       const targetDate = (req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date)))
@@ -18446,11 +15744,9 @@ export async function createServerApp() {
       let requestStatus = 'DIRECT';
 
       // Role and window validation
-      const userRole = normalizeRole(req.user.role);
-      if (userRole === 'MANAGER') {
+      if (req.user.role === 'MANAGER') {
         const isSelf = req.user.id === targetUser.id;
-        const targetUserRole = normalizeRole(targetUser.role);
-        const isAllowedStaff = ['TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST'].includes(targetUserRole || '');
+        const isAllowedStaff = ['TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST'].includes(targetUser.role);
 
         if (!isSelf && !isAllowedStaff) {
           return res.status(403).json({ error: "Managers can only take attendance for Technicians, Receptionists, and themselves." });
@@ -18474,9 +15770,9 @@ export async function createServerApp() {
           method = 'MANAGER_REQUEST';
           requestStatus = 'PENDING';
         }
-      } else if (userRole === 'SUPER_ADMIN' || userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
+      } else if (req.user.role === 'SUPER_ADMIN' || req.user.role === 'ADMIN') {
         finalStatus = status || 'PRESENT';
-        method = userRole === 'SUPER_ADMIN' || userRole === 'SUPERADMIN' ? 'DIRECT_SUPER_ADMIN' : 'DIRECT_ADMIN';
+        method = req.user.role === 'SUPER_ADMIN' ? 'DIRECT_SUPER_ADMIN' : 'DIRECT_ADMIN';
         requestStatus = 'DIRECT';
       }
 
@@ -20097,47 +17393,14 @@ export async function createServerApp() {
     });
   });
 
-  return app;
-}
-
-let cachedApp: express.Express | null = null;
-let initPromise: Promise<express.Express> | null = null;
-
-export async function getApp(): Promise<express.Express> {
-  if (cachedApp) return cachedApp;
-  if (!initPromise) {
-    initPromise = createServerApp().then((app) => {
-      cachedApp = app;
-      return app;
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
     });
-  }
-  return initPromise;
-}
-
-export async function startServer() {
-  const app = await getApp();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-
-  // Vite middleware for development (with fallback to static dist if vite/rollup is unavailable on host)
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
-    try {
-      const { createServer: createViteServer } = await import("vite");
-      const vite = await createViteServer({
-        server: { middlewareMode: true },
-        appType: "spa",
-      });
-      app.use(vite.middlewares);
-    } catch (viteErr: any) {
-      console.warn("[VITE LOAD NOTICE] Vite dev server failed to load (falling back to static dist):", viteErr?.message || viteErr);
-      const distPath = path.join(process.cwd(), "dist");
-      if (fs.existsSync(distPath)) {
-        app.use(express.static(distPath));
-        app.get("*", (req, res) => {
-          res.sendFile(path.join(distPath, "index.html"));
-        });
-      }
-    }
-  } else if (!process.env.VERCEL) {
+    app.use(vite.middlewares);
+  } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
@@ -20153,11 +17416,6 @@ export async function startServer() {
     console.log(`📱 ALL DEVICES (LAN): http://192.168.1.66:${PORT}`);
     console.log("--------------------------------------------------");
   });
-
-  return app;
 }
 
-// Auto-start only when executed directly as standalone Node server
-if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME && !process.env.SERVERLESS && process.env.NODE_ENV !== "test" && !process.env.NO_AUTO_START) {
-  startServer().catch(console.error);
-}
+startServer().catch(console.error);

@@ -18,6 +18,36 @@ async function runBatteryWarrantyTests() {
   if (!admin) throw new Error("Super Admin user not found in DB");
   if (!tech) throw new Error("Technician user not found in DB");
 
+  await prisma.session.upsert({
+    where: { id: `session-admin-${admin.id}` },
+    create: {
+      id: `session-admin-${admin.id}`,
+      userId: admin.id,
+      refreshToken: `rt-admin-${admin.id}`,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      lastActiveAt: new Date()
+    },
+    update: {
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      lastActiveAt: new Date()
+    }
+  });
+
+  await prisma.session.upsert({
+    where: { id: `session-tech-${tech.id}` },
+    create: {
+      id: `session-tech-${tech.id}`,
+      userId: tech.id,
+      refreshToken: `rt-tech-${tech.id}`,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      lastActiveAt: new Date()
+    },
+    update: {
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      lastActiveAt: new Date()
+    }
+  });
+
   const adminToken = jwt.sign(
     { id: admin.id, userId: admin.id, email: admin.email, role: admin.role, name: admin.name },
     JWT_SECRET,

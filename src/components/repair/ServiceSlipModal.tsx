@@ -94,11 +94,6 @@ export const ServiceSlipModal: React.FC<ServiceSlipModalProps> = ({
     }));
   }, [repairs]);
 
-  // Check if any of the target repairs are DELIVERED
-  const isDelivered = useMemo(() => {
-    return normalizedRepairs.some(r => String(r.status || '').toUpperCase() === 'DELIVERED');
-  }, [normalizedRepairs]);
-
   // Partition devices for bills according to even/odd rules
   const bills = useMemo(() => {
     return partitionDevicesForBills(normalizedRepairs, normalizedCustomer);
@@ -236,35 +231,6 @@ export const ServiceSlipModal: React.FC<ServiceSlipModalProps> = ({
       setDownloadingAll(false);
     }
   };
-
-  if (isDelivered) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md rounded-3xl p-6 text-center space-y-4 bg-slate-900 text-white border border-slate-800 shadow-2xl">
-          <div className="w-14 h-14 bg-rose-500/10 text-rose-400 rounded-2xl flex items-center justify-center mx-auto border border-rose-500/20">
-            <FileText className="w-7 h-7" />
-          </div>
-          <div className="space-y-2">
-            <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold uppercase tracking-wider">
-              SERVICE SLIP EXPIRED
-            </Badge>
-            <DialogTitle className="text-lg font-black text-white">Service Slip Unavailable</DialogTitle>
-            <DialogDescription className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
-              Service Slip is no longer available because this repair has been delivered. When a repair reaches final delivery, its temporary Service Slip artifact is permanently deleted from storage for security & privacy compliance.
-            </DialogDescription>
-          </div>
-          <div className="pt-2">
-            <Button
-              onClick={() => onOpenChange(false)}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold h-10 rounded-xl text-xs cursor-pointer"
-            >
-              Close Dialog
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
   if (!currentBill) return null;
 

@@ -1,11 +1,10 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x", "debian-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -20,7 +19,7 @@ model User {
   address             String?
   profileImage        String?
   branchId            String?
-  firebaseUid         String?              @unique
+  supabaseUid         String?              @unique
   googleId            String?              @unique
   profilePhoto        String?
   authProvider        String?              @default("LOCAL")
@@ -42,6 +41,7 @@ model User {
   updatedAt           DateTime             @updatedAt
   auditLogs           AuditLog[]
   loginActivity       LoginActivity[]
+  otps                OTPVerification[]
   resetTokens         PasswordResetToken[]
   createdRepairs      Repair[]             @relation("CreatorRepairs")
   assignedRepairs     Repair[]             @relation("TechnicianRepairs")
@@ -123,6 +123,25 @@ model PasswordResetToken {
   user      User     @relation(fields: [userId], references: [id])
 }
 
+model OTPVerification {
+  id          String   @id @default(uuid())
+  code        String?
+  codeHash    String?
+  userId      String
+  email       String?
+  purpose     String   @default("LOGIN_2FA")
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(5)
+  expiresAt   DateTime
+  isUsed      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([purpose])
+  @@index([expiresAt])
+}
+
 model LoginActivity {
   id               String   @id @default(uuid())
   userId           String
@@ -164,6 +183,22 @@ model Branch {
   updatedAt DateTime @updatedAt
   repairs   Repair[]
   users     User[]
+}
+
+model Product {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  price         Float
+  discountPrice Float?
+  stockQuantity Int      @default(0)
+  category      String
+  imageUrl      String?
+  rating        Float    @default(4.5)
+  isFeatured    Boolean  @default(false)
+  isBestSeller  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model InventoryCategory {
@@ -528,8 +563,6 @@ model BatteryWarranty {
   claimCount       Int                    @default(0)
   lastClaimDate    DateTime?
   terms            String?
-  pdfUrl           String?
-  cloudinaryPublicId String?
   createdById      String
   branchId         String?
   createdAt        DateTime               @default(now())
@@ -697,27 +730,4 @@ model RepairRelatedDamageAudit {
   @@index([performedById])
   @@index([createdAt])
 }
-
-model MediaAttachment {
-  id           String   @id @default(uuid())
-  publicId     String   @unique
-  resourceType String   @default("image") // image, raw, pdf
-  format       String?
-  mimeType     String?
-  originalName String?
-  size         Int?
-  secureUrl    String
-  folder       String?  @default("mts-lab")
-  entityType   String?  // REPAIR, PRODUCT, INVENTORY, USER, SLIDE, WARRANTY, COURIER
-  entityId     String?
-  uploadedById String?
-  uploadedByName String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@index([entityType, entityId])
-  @@index([uploadedById])
-  @@index([publicId])
-}
-
 

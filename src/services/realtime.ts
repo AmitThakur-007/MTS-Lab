@@ -1,13 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { rtdb } from '@/lib/firebase';
-import { API_BASE } from './api';
-import { 
-  ref as rtdbRef, 
-  onValue as rtdbOnValue, 
-  onChildAdded as rtdbOnChildAdded,
-  onChildChanged as rtdbOnChildChanged, 
-  onChildRemoved as rtdbOnChildRemoved 
-} from 'firebase/database';
+import { supabase } from '@/lib/supabase';
 
 export interface RealtimeEvent {
   entity: string; // 'repair' | 'user' | 'technicianNote' | 'repairLog' | 'payment' | 'accessRequest' | 'product' | 'repairPrice' | 'homeSlide' | 'session' | 'notification' | 'auditLog';
@@ -25,139 +17,78 @@ class RealtimeService {
   private globalListeners: Set<Listener> = new Set();
   private statusListeners: Set<(status: 'connected' | 'connecting' | 'disconnected') => void> = new Set();
   private currentStatus: 'connected' | 'connecting' | 'disconnected' = 'disconnected';
-  private rtdbConnected = false;
+  private supabaseConnected = false;
   private sseConnected = false;
   private reconnectTimer: any = null;
   private reconnectAttempts = 0;
   private maxReconnectDelay = 6000;
   private lastActivityTime = Date.now();
   private healthCheckInterval: any = null;
-  private rtdbUnsubscribers: (() => void)[] = [];
-  private initialRtdbLoaded = false;
+  private supabaseChannel: any = null;
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.initNetworkListeners();
-      this.initFirebaseRtdbListeners();
+      this.initSupabaseRealtimeListeners();
       this.connect();
       this.startHealthCheck();
     }
   }
 
   private updateAggregateStatus() {
-    if (this.rtdbConnected || this.sseConnected) {
+    if (this.supabaseConnected || this.sseConnected) {
       this.setStatus('connected');
     } else {
       this.setStatus('connecting');
     }
   }
 
-  private initFirebaseRtdbListeners() {
+  private initSupabaseRealtimeListeners() {
     try {
-      if (!rtdb) return;
+      if (!supabase) return;
 
-      // 1. Listen to Firebase Realtime Database connection status (/.info/connected)
-      const connectedRef = rtdbRef(rtdb, '.info/connected');
-      const unsubConnected = rtdbOnValue(connectedRef, (snapshot) => {
-        const isConnected = Boolean(snapshot.val());
-        this.rtdbConnected = isConnected;
-        this.updateAggregateStatus();
-        if (isConnected) {
-          console.log('[REALTIME] Connected to Firebase RTDB (mts-lab-eb8d2-default-rtdb)');
+      this.supabaseChannel = supabase.channel('mts_app_realtime', {
+        config: {
+          broadcast: { self: false }
         }
       });
 
-      // 2. Helper to register entity listeners on RTDB
-      const registerEntityListener = (collectionName: string, entityType: string) => {
-        const collectionRef = rtdbRef(rtdb, collectionName);
-        let initialLoaded = false;
-
-        const unsubChanged = rtdbOnChildChanged(collectionRef, (snapshot) => {
-          if (snapshot.exists()) {
-            const val = snapshot.val();
-            this.handleIncomingEvent({
-              entity: entityType,
-              action: 'UPDATE',
-              id: snapshot.key || val?.id || undefined,
-              data: val,
-              timestamp: Date.now()
-            });
+      // Listen for all broadcast events from Supabase
+      this.supabaseChannel
+        .on('broadcast', { event: 'db_event' }, ({ payload }: { payload: RealtimeEvent }) => {
+          if (payload) {
+            this.handleIncomingEvent(payload);
           }
-        }, (err) => {
-          // Silent permission guard
-        });
-
-        const unsubAdded = rtdbOnChildAdded(collectionRef, (snapshot) => {
-          if (!initialLoaded) return;
-          if (snapshot.exists()) {
-            const val = snapshot.val();
-            this.handleIncomingEvent({
-              entity: entityType,
-              action: 'CREATE',
-              id: snapshot.key || val?.id || undefined,
-              data: val,
-              timestamp: Date.now()
-            });
-          }
-        }, (err) => {
-          // Silent permission guard
-        });
-
-        const unsubRemoved = rtdbOnChildRemoved(collectionRef, (snapshot) => {
-          if (snapshot.exists()) {
-            this.handleIncomingEvent({
-              entity: entityType,
-              action: 'DELETE',
-              id: snapshot.key || undefined,
-              timestamp: Date.now()
-            });
-          }
-        }, (err) => {
-          // Silent permission guard
-        });
-
-        const unsubInitial = rtdbOnValue(collectionRef, () => {
-          initialLoaded = true;
-        }, (err) => {
-          initialLoaded = true;
-        }, { onlyOnce: true });
-
-        this.rtdbUnsubscribers.push(unsubChanged, unsubAdded, unsubRemoved, unsubInitial);
-      };
-
-      // Register primary collections on Firebase RTDB
-      registerEntityListener('customers', 'customer');
-      registerEntityListener('repairs', 'repair');
-      registerEntityListener('inventory', 'inventory');
-      registerEntityListener('inventoryTransactions', 'inventoryTransaction');
-      registerEntityListener('users', 'user');
-      registerEntityListener('accessRequests', 'accessRequest');
-      registerEntityListener('repairPrices', 'repairPrice');
-      registerEntityListener('notifications', 'notification');
-      registerEntityListener('batteryWarranties', 'batteryWarranty');
-      registerEntityListener('batteryWarrantyClaims', 'batteryWarrantyClaim');
-      registerEntityListener('couriers', 'courier');
-      registerEntityListener('attendances', 'attendance');
-      registerEntityListener('damageRecords', 'damageRecord');
-
-      // 3. Listen to root sync node on RTDB (/syncTimestamp)
-      const syncRef = rtdbRef(rtdb, 'syncTimestamp');
-      const unsubSync = rtdbOnValue(syncRef, (snapshot) => {
-        if (snapshot.exists()) {
+        })
+        .on('broadcast', { event: 'repair_sync' }, ({ payload }: { payload: any }) => {
           this.handleIncomingEvent({
-            entity: 'sync',
-            action: 'SYNC',
-            timestamp: snapshot.val() || Date.now()
+            entity: 'repair',
+            action: 'UPDATE',
+            id: payload?.id,
+            data: payload,
+            timestamp: Date.now()
           });
-        }
-      });
-
-      this.rtdbUnsubscribers.push(
-        unsubConnected,
-        unsubSync
-      );
+        })
+        .on('broadcast', { event: 'repair_delete' }, ({ payload }: { payload: any }) => {
+          this.handleIncomingEvent({
+            entity: 'repair',
+            action: 'DELETE',
+            id: payload?.id,
+            timestamp: Date.now()
+          });
+        })
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            this.supabaseConnected = true;
+            this.updateAggregateStatus();
+            console.log('[REALTIME] Connected to Supabase Realtime Channel (mts_app_realtime)');
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            this.supabaseConnected = false;
+            this.updateAggregateStatus();
+          }
+        });
     } catch (e) {
-      console.warn('[REALTIME] Firebase RTDB listeners initialization error:', e);
+      console.warn('[REALTIME] Supabase Realtime listeners initialization error:', e);
     }
   }
 
@@ -274,7 +205,7 @@ class RealtimeService {
     try {
       const token = this.getAuthToken();
       const queryParam = token ? `?token=${encodeURIComponent(token)}` : '';
-      const url = `${API_BASE}/events${queryParam}`;
+      const url = `/api/events${queryParam}`;
 
       const es = new EventSource(url, { withCredentials: true });
       this.eventSource = es;
@@ -334,18 +265,12 @@ class RealtimeService {
   private scheduleReconnect() {
     if (this.reconnectTimer) return;
     this.reconnectAttempts++;
-    // If Firebase RTDB is natively connected, SSE is secondary fallback — use longer backoff to avoid spamming serverless
-    const delay = this.rtdbConnected 
-      ? Math.min(30000 + (this.reconnectAttempts * 5000), 120000)
-      : Math.min(1000 * Math.pow(1.4, this.reconnectAttempts), this.maxReconnectDelay);
-
+    const delay = Math.min(1000 * Math.pow(1.4, this.reconnectAttempts), this.maxReconnectDelay);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
     }, delay);
   }
-
-  private pendingEventDebounceTimers: Map<string, any> = new Map();
 
   private handleIncomingEvent(event: RealtimeEvent) {
     const rawEntity = (event.entity || '').toLowerCase();
@@ -377,26 +302,16 @@ class RealtimeService {
     }
 
     targetEntities.forEach((ent) => {
-      const timerKey = `ent_${ent}`;
-      if (this.pendingEventDebounceTimers.has(timerKey)) {
-        clearTimeout(this.pendingEventDebounceTimers.get(timerKey));
+      const entitySet = this.listeners.get(ent);
+      if (entitySet) {
+        entitySet.forEach((listener) => {
+          try {
+            listener(event);
+          } catch (err) {
+            console.error('[REALTIME LISTENER ERROR]', err);
+          }
+        });
       }
-
-      const timer = setTimeout(() => {
-        this.pendingEventDebounceTimers.delete(timerKey);
-        const entitySet = this.listeners.get(ent);
-        if (entitySet) {
-          entitySet.forEach((listener) => {
-            try {
-              listener(event);
-            } catch (err) {
-              console.error('[REALTIME LISTENER ERROR]', err);
-            }
-          });
-        }
-      }, 150);
-
-      this.pendingEventDebounceTimers.set(timerKey, timer);
     });
 
     // Global listeners

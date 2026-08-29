@@ -48,8 +48,6 @@ import { format } from 'date-fns';
 import { useRealtimeSync } from '@/services/realtime';
 import { Wifi, Radio } from 'lucide-react';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
-import { normalizeRole } from '@/lib/rbac';
-import RouteErrorBoundary from '@/components/common/RouteErrorBoundary';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuthStore();
@@ -106,18 +104,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     fetchPendingAttendance();
   }, [user?.role]);
 
-  // Real-time synchronization across devices for notifications, access requests, user roles and attendance
+  // Real-time synchronization across devices for notifications, access requests and attendance
   useRealtimeSync(
     ['notification', 'accessRequest', 'repair', 'user', 'attendance'],
     (event) => {
       fetchNotifications();
       fetchPendingAccessCount();
       fetchPendingAttendance();
-      if (event.entity === 'user' && event.data && (event.data.id === user?.id || event.data.email === user?.email)) {
-        if (event.data.role) {
-          useAuthStore.getState().updateUser({ role: event.data.role });
-        }
-      }
     }
   );
 
@@ -157,106 +150,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     navigate('/login');
   };
 
-  const canonicalRole = normalizeRole(user?.role) || 'RECEPTIONIST';
-
   const navItems = [
-    { 
-      name: canonicalRole === 'MANAGER' ? 'Manager Hub' : 'Overview', 
-      path: '/dashboard', 
-      icon: canonicalRole === 'MANAGER' ? Briefcase : LayoutDashboard, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST'] 
-    },
-    { 
-      name: 'Repairs', 
-      path: '/dashboard/repairs', 
-      icon: ClipboardList, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST'] 
-    },
-    { 
-      name: 'Customer Hub', 
-      path: '/dashboard/customers', 
-      icon: Users, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] 
-    },
-    { 
-      name: 'New Repair', 
-      path: '/dashboard/repairs/new', 
-      icon: PlusCircle, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] 
-    },
-    { 
-      name: 'Courier Hub', 
-      path: '/dashboard/courier', 
-      icon: Truck, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] 
-    },
-    { 
-      name: 'Battery Warranty Hub', 
-      path: '/dashboard/battery-warranty', 
-      icon: BatteryCharging, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] 
-    },
-    { 
-      name: 'Services & Repair Prices', 
-      path: '/dashboard/repair-prices', 
-      icon: Tag, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN'] 
-    },
-    { 
-      name: 'Slideshow CMS', 
-      path: '/dashboard/slides', 
-      icon: Layers, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN'] 
-    },
-    { 
-      name: 'Inventory Hub', 
-      path: '/dashboard/inventory', 
-      icon: Package, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] 
-    },
-    { 
-      name: 'Attendance', 
-      path: '/dashboard/attendance', 
-      icon: UserCheck, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST'] 
-    },
-    { 
-      name: 'Repair-Related Damage', 
-      path: '/dashboard/repair-damage', 
-      icon: FileWarning, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST'] 
-    },
-    { 
-      name: 'Staff Management', 
-      path: '/dashboard/staff', 
-      icon: Users, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN'] 
-    },
-    { 
-      name: 'Access Requests', 
-      path: '/dashboard/access-requests', 
-      icon: ShieldCheck, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN'] 
-    },
-    { 
-      name: 'Revenue Hub', 
-      path: '/dashboard/revenue', 
-      icon: BarChart3, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER'] 
-    },
-    { 
-      name: 'Super Admin', 
-      path: '/dashboard/super-admin', 
-      icon: ShieldAlert, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN'] 
-    },
-    { 
-      name: 'Settings', 
-      path: '/dashboard/settings', 
-      icon: Settings, 
-      roles: ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST'] 
-    },
-  ].filter(item => item.roles.includes(canonicalRole) || item.roles.includes(user?.role || ''));
+    { name: user?.role === 'MANAGER' ? 'Manager Hub' : 'Overview', path: '/dashboard', icon: user?.role === 'MANAGER' ? Briefcase : LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'INVENTORY_MANAGER', 'TECHNICIAN'] },
+    { name: 'Repairs', path: '/dashboard/repairs', icon: ClipboardList, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'TECHNICIAN'] },
+    { name: 'New Repair', path: '/dashboard/repairs/new', icon: PlusCircle, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+    { name: 'Courier Hub', path: '/dashboard/courier', icon: Truck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+    { name: 'Battery Warranty Hub', path: '/dashboard/battery-warranty', icon: BatteryCharging, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+    { name: 'Services & Repair Prices', path: '/dashboard/repair-prices', icon: Tag, roles: ['SUPER_ADMIN', 'ADMIN'] },
+    { name: 'Slideshow CMS', path: '/dashboard/slides', icon: Layers, roles: ['SUPER_ADMIN', 'ADMIN'] },
+    { name: 'Inventory Hub', path: '/dashboard/inventory', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER'] },
+    { name: 'Attendance', path: '/dashboard/attendance', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST', 'ACCOUNTANT'] },
+    { name: 'Repair-Related Damage', path: '/dashboard/repair-damage', icon: FileWarning, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST'] },
+    { name: 'Staff Management', path: '/dashboard/staff', icon: Users, roles: ['SUPER_ADMIN'] },
+    { name: 'Access Requests', path: '/dashboard/access-requests', icon: ShieldCheck, roles: ['SUPER_ADMIN'] },
+    { name: 'Revenue Hub', path: '/dashboard/revenue', icon: BarChart3, roles: ['SUPER_ADMIN', 'ACCOUNTANT'] },
+    { name: 'Super Admin', path: '/dashboard/super-admin', icon: ShieldAlert, roles: ['SUPER_ADMIN'] },
+    { name: 'Settings', path: '/dashboard/settings', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'ACCOUNTANT'] },
+  ].filter(item => item.roles.includes(user?.role || ''));
 
   return (
     <div className="flex h-screen bg-[#f8f9fa] overflow-hidden font-sans">
@@ -379,12 +289,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Global Refresh Button */}
+            {/* Global Modern Refresh Button with Live Indicator */}
             <DashboardRefreshButton 
               size="sm"
               variant="outline"
-              label="Refresh"
-              refreshingLabel="Refreshing..."
+              label="Sync"
+              refreshingLabel="Syncing..."
               onRefresh={async () => {
                 await fetchNotifications();
                 await fetchPendingAccessCount();
@@ -452,7 +362,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     })
                   )}
                 </div>
-                {(user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com') && (
+                {user?.role === 'SUPER_ADMIN' && (
                   <div className="p-2 border-t border-slate-100 bg-slate-50/50">
                     <Button 
                       variant="ghost" 
@@ -512,9 +422,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Viewport Content Area */}
         <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-6 lg:p-8 xl:p-10">
           <div className="max-w-7xl mx-auto w-full">
-            <RouteErrorBoundary>
-              {children}
-            </RouteErrorBoundary>
+            {children}
           </div>
         </div>
       </main>

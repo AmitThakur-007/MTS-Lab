@@ -57,7 +57,7 @@ import { api } from '@/services/api';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatNPR } from '@/lib/format';
-import { syncRepairToRtdb } from '@/lib/firebase';
+import { syncRepairToSupabase as syncRepairToRtdb, syncRepairToSupabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { format, addMonths, addYears } from 'date-fns';
 import ServiceSlipModal from '@/components/repair/ServiceSlipModal';

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   UserPlus, 
@@ -38,8 +37,6 @@ import {
   ArrowLeft,
   Briefcase
 } from 'lucide-react';
-import { validateStrongPassword } from '@/lib/passwordPolicy';
-import { normalizeRole } from '@/lib/rbac';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -83,7 +80,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ImageUpload } from '@/components/ImageUpload';
 import { useRealtimeSync } from '@/services/realtime';
-import { syncEntityToRtdb, deleteEntityFromRtdb } from '@/lib/firebase';
+import { syncEntityToSupabase as syncEntityToRtdb, deleteEntityFromSupabase as deleteEntityFromRtdb, syncEntityToSupabase, deleteEntityFromSupabase } from '@/lib/supabase';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { format } from 'date-fns';
 import { useAuthStore } from '@/store/authStore';
@@ -110,20 +107,29 @@ const getSafeInitials = (name: any): string => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
+// Authoritative Helper to determine if 2FA is active
+const is2FAActive = (u: any): boolean => {
+  if (!u) return false;
+  const val = u.twoFactorEnabled;
+  if (val === false || val === 'false' || val === 0 || val === '0') return false;
+  if (val === true || val === 'true' || val === 1 || val === '1') return true;
+  return u.twoFactorEnabled !== false;
+};
 
 const ROLES = [
-  { value: 'SUPERADMIN', label: 'Super Admin', description: 'Full system ownership, security logs & administrative controls', color: 'purple' },
+  { value: 'SUPER_ADMIN', label: 'Super Admin', description: 'Full system ownership, security logs & administrative controls', color: 'purple' },
   { value: 'ADMIN', label: 'Administrator', description: 'Store operations, staff supervision, and customer tracking', color: 'indigo' },
   { value: 'MANAGER', label: 'Repair Manager', description: 'Repair orchestration, technician workload & assignment management', color: 'blue' },
-  { value: 'HEAD_TECHNICIAN', label: 'Head Technician', description: 'Master hardware diagnostics, repair approvals & assignment', color: 'cyan' },
+  { value: 'LEAD_TECHNICIAN', label: 'Lead Technician', description: 'Master hardware diagnostics, repair approvals & assignment', color: 'cyan' },
   { value: 'TECHNICIAN', label: 'Technician', description: 'Device repairs, ticket updates, parts usage & testing', color: 'emerald' },
+  { value: 'TECHNICAL_ASSISTANT', label: 'Technical Assistant', description: 'Intake triage, parts preparation & device cleanup', color: 'teal' },
   { value: 'RECEPTIONIST', label: 'Receptionist', description: 'Front desk ticketing, customer intake, and billing', color: 'amber' },
+  { value: 'CUSTOMER', label: 'Customer', description: 'Self-service status portal and repair history tracker', color: 'slate' },
 ];
 
 const getRoleConfig = (role: string | null | undefined) => {
   const cleanRole = (role || '').toUpperCase().trim();
   switch (cleanRole) {
-    case 'SUPERADMIN':
     case 'SUPER_ADMIN':
       return {
         label: 'Super Admin',
@@ -132,7 +138,6 @@ const getRoleConfig = (role: string | null | undefined) => {
         icon: ShieldAlert
       };
     case 'ADMIN':
-    case 'ADMINISTRATOR':
       return {
         label: 'Admin',
         badge: 'bg-indigo-100 text-indigo-800 border-indigo-200',
@@ -146,35 +151,52 @@ const getRoleConfig = (role: string | null | undefined) => {
         dot: 'bg-blue-500',
         icon: Briefcase
       };
-    case 'HEAD_TECHNICIAN':
     case 'LEAD_TECHNICIAN':
       return {
-        label: 'Head Tech',
+        label: 'Lead Tech',
         badge: 'bg-cyan-100 text-cyan-800 border-cyan-200',
         dot: 'bg-cyan-500',
         icon: Wrench
       };
     case 'TECHNICIAN':
-    case 'TECHNICAL_ASSISTANT':
       return {
         label: 'Technician',
         badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
         dot: 'bg-emerald-500',
         icon: Wrench
       };
+    case 'TECHNICAL_ASSISTANT':
+      return {
+        label: 'Tech Assistant',
+        badge: 'bg-teal-100 text-teal-800 border-teal-200',
+        dot: 'bg-teal-500',
+        icon: Wrench
+      };
     case 'RECEPTIONIST':
-    default:
       return {
         label: 'Receptionist',
         badge: 'bg-amber-100 text-amber-800 border-amber-200',
         dot: 'bg-amber-500',
         icon: Users
       };
+    case 'CUSTOMER':
+      return {
+        label: 'Customer',
+        badge: 'bg-slate-100 text-slate-700 border-slate-200',
+        dot: 'bg-slate-500',
+        icon: Users
+      };
+    default:
+      return {
+        label: role ? String(role).replace(/_/g, ' ') : 'Staff',
+        badge: 'bg-slate-100 text-slate-800 border-slate-200',
+        dot: 'bg-slate-500',
+        icon: Users
+      };
   }
 };
 
 export function StaffManagementContent() {
-  const navigate = useNavigate();
   const { user: currentUser } = useAuthStore();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,15 +240,8 @@ export function StaffManagementContent() {
     confirmPassword: ''
   });
 
-  // Bulk Selection States
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
-
-  const fetchUsers = useCallback(async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-    }
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
     setFetchError(null);
     try {
       const data = await api.get('/users');
@@ -234,39 +249,29 @@ export function StaffManagementContent() {
     } catch (err: any) {
       console.error('[FETCH STAFF DIRECTORY ERROR]', err);
       const errorMsg = err?.message || 'Unable to load staff information. Please try again.';
-      if (!silent) {
-        setFetchError(errorMsg);
-        toast.error(errorMsg);
-      }
+      setFetchError(errorMsg);
+      toast.error(errorMsg);
     } finally {
-      if (!silent) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchUsers(false);
+    fetchUsers();
   }, [fetchUsers]);
 
-  // Multi-device real-time sync (silent background update - no flickering)
+  // Multi-device real-time sync
   useRealtimeSync(['user', 'session', 'auditLog', 'sync'], () => {
-    fetchUsers(true);
+    fetchUsers();
   });
 
   // Calculate high-level summary counts
   const counts = useMemo(() => {
     const total = users.length;
-    const active = users.filter(u => u && u.isActive && ((u.accountStatus || 'ACTIVE').toUpperCase() === 'ACTIVE' || (u.accountStatus || '').toUpperCase() === 'APPROVED')).length;
+    const active = users.filter(u => u && u.isActive && (u.accountStatus || 'ACTIVE') === 'ACTIVE').length;
     const disabled = total - active;
-    const admins = users.filter(u => {
-      const normRole = normalizeRole(u?.role);
-      return normRole === 'SUPERADMIN' || normRole === 'ADMIN';
-    }).length;
-    const technicians = users.filter(u => {
-      const normRole = normalizeRole(u?.role);
-      return normRole === 'HEAD_TECHNICIAN' || normRole === 'TECHNICIAN';
-    }).length;
+    const admins = users.filter(u => u && (u.role === 'SUPER_ADMIN' || u.role === 'ADMIN')).length;
+    const technicians = users.filter(u => u && u.role && String(u.role).includes('TECH')).length;
     return { total, active, disabled, admins, technicians };
   }, [users]);
 
@@ -288,11 +293,9 @@ export function StaffManagementContent() {
         phone.includes(term) ||
         department.includes(term);
 
-      const normUserRole = normalizeRole(u.role);
-      const normFilterRole = roleFilter === 'ALL' ? 'ALL' : normalizeRole(roleFilter);
-      const matchesRole = roleFilter === 'ALL' || normUserRole === normFilterRole || u.role === roleFilter;
+      const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
 
-      const isUserActive = Boolean(u.isActive && ((u.accountStatus || 'ACTIVE').toUpperCase() === 'ACTIVE' || (u.accountStatus || '').toUpperCase() === 'APPROVED'));
+      const isUserActive = Boolean(u.isActive && (u.accountStatus || 'ACTIVE') === 'ACTIVE');
       const matchesStatus = 
         statusFilter === 'ALL' ? true :
         statusFilter === 'ACTIVE' ? isUserActive :
@@ -302,60 +305,8 @@ export function StaffManagementContent() {
     });
   }, [users, searchTerm, roleFilter, statusFilter]);
 
-  const selectableUserIds = useMemo(() => {
-    return filteredUsers
-      .filter(u => u.id !== currentUser?.id && u.email?.toLowerCase() !== 'mtsmobilelab@gmail.com')
-      .map(u => u.id);
-  }, [filteredUsers, currentUser]);
-
-  const isAllSelected = selectableUserIds.length > 0 && selectableUserIds.every(id => selectedUserIds.includes(id));
-  const isSomeSelected = selectedUserIds.length > 0 && !isAllSelected;
-
-  const handleToggleSelectAll = () => {
-    if (isAllSelected) {
-      setSelectedUserIds([]);
-    } else {
-      setSelectedUserIds(selectableUserIds);
-    }
-  };
-
-  const handleToggleUserSelect = (id: string) => {
-    if (id === currentUser?.id || users.find(u => u.id === id)?.email?.toLowerCase() === 'mtsmobilelab@gmail.com') {
-      toast.warning('Protected account cannot be selected for deletion.');
-      return;
-    }
-    setSelectedUserIds(prev => 
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
-  };
-
-  const handleExecuteBulkDelete = async () => {
-    if (selectedUserIds.length === 0 || bulkDeleting) return;
-    setBulkDeleting(true);
-    const idsToDelete = [...selectedUserIds];
-    try {
-      const res: any = await api.post('/admin/users/bulk-delete', { userIds: idsToDelete });
-      if (res && res.error) {
-        throw new Error(res.error);
-      }
-      setUsers(prev => prev.filter(u => !idsToDelete.includes(u.id)));
-      for (const uid of idsToDelete) {
-        await deleteEntityFromRtdb('users', uid).catch(() => {});
-      }
-      toast.success(res?.message || `Permanently deleted ${idsToDelete.length} staff member record(s).`);
-      setSelectedUserIds([]);
-      setIsBulkDeleteModalOpen(false);
-      await fetchUsers(true);
-    } catch (err: any) {
-      console.error('[BULK DELETE ERROR]', err);
-      toast.error(err?.message || 'Failed to bulk delete staff records');
-    } finally {
-      setBulkDeleting(false);
-    }
-  };
-
   // Role Protection Guard
-  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'SUPERADMIN' || currentUser?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
+  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
   if (currentUser && !isSuperAdmin) {
     return (
       <div className="p-6 max-w-2xl mx-auto my-8">
@@ -372,7 +323,7 @@ export function StaffManagementContent() {
           <div className="pt-2">
             <Button
               type="button"
-              onClick={() => { navigate('/dashboard'); }}
+              onClick={() => { window.location.href = '/dashboard'; }}
               className="h-11 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm gap-2 shadow-md shadow-slate-900/10 cursor-pointer"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -463,36 +414,15 @@ export function StaffManagementContent() {
     if (!formData.name.trim() || !formData.email.trim() || !formData.password) {
       return toast.error('Please fill in all required fields (Name, Email, Password)');
     }
-    const val = validateStrongPassword(formData.password);
-    if (!val.valid) {
-      return toast.error(val.message || 'Password does not meet security requirements.');
-    }
     setSubmitting(true);
     try {
       const created = await api.post('/users', formData);
       if (created && created.id) {
-        setUsers(prev => [created, ...prev.filter(u => u.id !== created.id)]);
         await syncEntityToRtdb('users', created.id, created).catch(() => {});
       }
-      
-      // Dispatch email verification link directly to the new staff email
-      await api.post('/auth/resend-verification', { email: formData.email.trim().toLowerCase() }).catch(() => {});
-
-      toast.success(`Staff member '${formData.name}' created successfully. Verification email dispatched to ${formData.email}.`);
+      toast.success(`Staff member '${formData.name}' created successfully`);
       setIsAddDialogOpen(false);
-      setFormData({
-        name: '',
-        email: '',
-        username: '',
-        password: '',
-        role: 'TECHNICIAN',
-        phoneNumber: '',
-        department: '',
-        address: '',
-        profileImage: '',
-        isActive: true
-      });
-      await fetchUsers(true);
+      fetchUsers();
     } catch (err: any) {
       console.error('[ADD STAFF ERROR]', err);
       toast.error(err.message || 'Failed to add staff member. Please try again.');
@@ -507,16 +437,14 @@ export function StaffManagementContent() {
     setSubmitting(true);
     try {
       const { password, ...updateData } = formData;
-      const res: any = await api.patch(`/users/${selectedUser.id}`, updateData);
-      const updatedUser = res?.user || res;
-      if (updatedUser && updatedUser.id) {
-        setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
-        await syncEntityToRtdb('users', updatedUser.id, updatedUser).catch(() => {});
+      const updated = await api.patch(`/users/${selectedUser.id}`, updateData);
+      if (updated && updated.id) {
+        await syncEntityToRtdb('users', updated.id, updated).catch(() => {});
       }
       toast.success(`Staff profile for '${formData.name}' updated`);
       setIsEditDialogOpen(false);
-      setSelectedUser(null);
-      await fetchUsers(true);
+      setSelectedUser((prev: any) => prev ? { ...prev, ...updateData } : null);
+      fetchUsers();
     } catch (err: any) {
       console.error('[UPDATE STAFF ERROR]', err);
       toast.error(err.message || 'Failed to update staff member. Please try again.');
@@ -529,17 +457,15 @@ export function StaffManagementContent() {
     if (!selectedUser) return;
     setSubmitting(true);
     try {
-      const res: any = await api.patch(`/users/${selectedUser.id}/role`, { role: newSelectedRole });
-      const updatedUser = res?.user || res;
-      if (updatedUser && updatedUser.id) {
-        setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser, role: newSelectedRole } : u));
-        await syncEntityToRtdb('users', updatedUser.id, updatedUser).catch(() => {});
+      const updated = await api.patch(`/users/${selectedUser.id}`, { role: newSelectedRole });
+      if (updated && updated.id) {
+        await syncEntityToRtdb('users', updated.id, updated).catch(() => {});
       }
       toast.success(`Role for ${selectedUser.name || 'Staff Member'} updated to ${newSelectedRole.replace(/_/g, ' ')}`);
       setIsChangeRoleOpen(false);
       setIsOperationsModalOpen(false);
-      setSelectedUser(null);
-      await fetchUsers(true);
+      setSelectedUser((prev: any) => prev ? { ...prev, role: newSelectedRole } : null);
+      fetchUsers();
     } catch (err: any) {
       console.error('[CHANGE ROLE ERROR]', err);
       toast.error(err.message || 'Failed to change role. Please try again.');
@@ -553,20 +479,18 @@ export function StaffManagementContent() {
     setSubmitting(true);
     const newStatus = !selectedUser.isActive;
     try {
-      const res: any = await api.patch(`/users/${selectedUser.id}`, { 
+      const updated = await api.patch(`/users/${selectedUser.id}`, { 
         isActive: newStatus,
         accountStatus: newStatus ? 'ACTIVE' : 'DISABLED'
       });
-      const updatedUser = res?.user || res;
-      if (updatedUser && updatedUser.id) {
-        setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser, isActive: newStatus, accountStatus: newStatus ? 'ACTIVE' : 'DISABLED' } : u));
-        await syncEntityToRtdb('users', updatedUser.id, updatedUser).catch(() => {});
+      if (updated && updated.id) {
+        await syncEntityToRtdb('users', updated.id, updated).catch(() => {});
       }
       toast.success(`Account for ${selectedUser.name || 'Staff Member'} ${newStatus ? 'activated' : 'deactivated'}`);
       setIsToggleStatusOpen(false);
       setIsOperationsModalOpen(false);
-      setSelectedUser(null);
-      await fetchUsers(true);
+      setSelectedUser((prev: any) => prev ? { ...prev, isActive: newStatus, accountStatus: newStatus ? 'ACTIVE' : 'DISABLED' } : null);
+      fetchUsers();
     } catch (err: any) {
       console.error('[TOGGLE STATUS ERROR]', err);
       toast.error(err.message || 'Failed to change account status. Please try again.');
@@ -575,22 +499,54 @@ export function StaffManagementContent() {
     }
   };
 
-  const handleDeleteUser = async () => {
-    if (!selectedUser || submitting) return;
+  const handleOpenToggle2FA = (user: any) => {
+    if (!user) return;
+    setTarget2FAUser(user);
+    setIsToggle2FAOpen(true);
+  };
+
+  const handleToggle2FAConfirm = async () => {
+    if (!target2FAUser) return;
     setSubmitting(true);
-    const deletedId = selectedUser.id;
+    const currentlyOn = is2FAActive(target2FAUser);
+    const new2FAState = !currentlyOn;
     try {
-      const res: any = await api.delete(`/users/${deletedId}`);
-      if (res && res.error) {
-        throw new Error(res.error);
+      const res: any = await api.patch(`/users/${target2FAUser.id}/2fa`, {
+        twoFactorEnabled: new2FAState,
+        enabled: new2FAState
+      });
+      if (res?.user || res?.success) {
+        const updatedUserData = res.user || { ...target2FAUser, twoFactorEnabled: new2FAState };
+        await syncEntityToRtdb('users', target2FAUser.id, updatedUserData).catch(() => {});
+        setUsers(prev => prev.map(u => u.id === target2FAUser.id ? { ...u, twoFactorEnabled: new2FAState } : u));
+        if (selectedUser?.id === target2FAUser.id) {
+          setSelectedUser({ ...selectedUser, twoFactorEnabled: new2FAState });
+        }
       }
-      setUsers(prev => prev.filter(u => u.id !== deletedId));
-      await deleteEntityFromRtdb('users', deletedId).catch(() => {});
-      toast.success(res?.message || 'Staff account permanently deleted successfully');
+      const roleLabel = target2FAUser.role ? target2FAUser.role.replace(/_/g, ' ') : 'User';
+      toast.success(res?.message || `2FA ${new2FAState ? 'enabled' : 'disabled'} successfully for ${target2FAUser.name || 'User'} (${roleLabel}).`);
+      setIsToggle2FAOpen(false);
+      setIsOperationsModalOpen(false);
+      fetchUsers();
+    } catch (err: any) {
+      console.error('[TOGGLE 2FA ERROR]', err);
+      toast.error(err.message || 'Unable to update 2FA settings. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+    setSubmitting(true);
+    try {
+      const res: any = await api.delete(`/users/${selectedUser.id}`);
+      await deleteEntityFromRtdb('users', selectedUser.id).catch(() => {});
+      toast.success(res?.message || 'Staff member deleted successfully');
       setIsDeleteDialogOpen(false);
       setIsOperationsModalOpen(false);
       setSelectedUser(null);
-      await fetchUsers(true);
+      fetchUsers();
     } catch (err: any) {
       console.error('[DELETE USER ERROR]', err);
       toast.error(err.message || 'Failed to delete staff member. Please try again.');
@@ -628,24 +584,8 @@ export function StaffManagementContent() {
 
   const [checkingVerification, setCheckingVerification] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
-  const [verificationCooldowns, setVerificationCooldowns] = useState<Record<string, number>>({});
   const [userToDirectVerify, setUserToDirectVerify] = useState<any>(null);
   const [directVerifying, setDirectVerifying] = useState(false);
-
-  useEffect(() => {
-    if (!Object.values(verificationCooldowns).some((seconds) => seconds > 0)) return;
-    const timer = window.setInterval(() => {
-      setVerificationCooldowns((current) => {
-        const next: Record<string, number> = {};
-        Object.entries(current).forEach(([id, value]) => {
-          const seconds = Math.max(0, Number(value) - 1);
-          if (seconds > 0) next[id] = seconds;
-        });
-        return next;
-      });
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [verificationCooldowns]);
 
   const handleCheckUserVerification = async (user: any) => {
     if (!user || checkingVerification) return;
@@ -653,7 +593,7 @@ export function StaffManagementContent() {
     try {
       const res: any = await api.post('/auth/verify-email-status', {
         email: user.email,
-        firebaseUid: user.firebaseUid
+        authUid: user.supabaseUid || user.id
       });
       if (res?.emailVerified) {
         toast.success(`Email status confirmed: ${user.name || 'User'} is verified in database!`);
@@ -661,7 +601,7 @@ export function StaffManagementContent() {
           setSelectedUser((prev: any) => prev ? { ...prev, emailVerified: true } : null);
         }
       } else {
-        toast.info(`Email for ${user.name || 'User'} is not yet verified in Firebase.`);
+        toast.info(`Email for ${user.name || 'User'} is not yet verified.`);
       }
       fetchUsers();
     } catch (err: any) {
@@ -673,21 +613,15 @@ export function StaffManagementContent() {
   };
 
   const handleResendUserVerification = async (user: any) => {
-    const userKey = String(user?.id || '');
-    if (!user || !userKey || resendingVerification || (verificationCooldowns[userKey] || 0) > 0) return;
+    if (!user || resendingVerification) return;
     setResendingVerification(true);
     try {
       const res: any = await api.post('/auth/resend-verification', {
         email: user.email
       });
-      setVerificationCooldowns((current) => ({ ...current, [userKey]: 60 }));
       toast.success(res?.message || `Verification email dispatched to ${user.email}`);
     } catch (err: any) {
       console.error('[RESEND VERIFICATION ERROR]', err);
-      const remaining = err?.retryAfter || (err?.status === 429 || err?.code === 429 ? 60 : 0);
-      if (remaining > 0) {
-        setVerificationCooldowns((current) => ({ ...current, [userKey]: remaining }));
-      }
       toast.error(err.message || 'Unable to send verification email.');
     } finally {
       setResendingVerification(false);
@@ -698,9 +632,9 @@ export function StaffManagementContent() {
     if (!userToDirectVerify || directVerifying) return;
     setDirectVerifying(true);
     try {
-      const res: any = await api.post(`/admin/staff/${userToDirectVerify.id}/verify-email`, {});
+      const res: any = await api.post(`/users/${userToDirectVerify.id}/verify-email`, {});
       if (res.success) {
-        toast.success(res.message || `Email verified successfully for ${userToDirectVerify.name || 'Staff User'}.`);
+        toast.success(res.message || 'Email verified successfully.');
         setUsers((prevUsers) =>
           prevUsers.map((u) =>
             u.id === userToDirectVerify.id ? { ...u, emailVerified: true } : u
@@ -709,13 +643,13 @@ export function StaffManagementContent() {
         if (selectedUser?.id === userToDirectVerify.id) {
           setSelectedUser((prev: any) => (prev ? { ...prev, emailVerified: true } : null));
         }
-        fetchUsers(true);
+        fetchUsers();
       } else {
         toast.error(res.error || res.message || 'Unable to verify this email.');
       }
     } catch (err: any) {
       console.error('[DIRECT EMAIL VERIFICATION ERROR]', err);
-      toast.error(err.message || 'Unable to verify this email. Please try again.');
+      toast.error(err.message || 'Unable to verify this email. Please try again or check the system logs.');
     } finally {
       setDirectVerifying(false);
       setUserToDirectVerify(null);
@@ -750,7 +684,7 @@ export function StaffManagementContent() {
           <Button
             type="button"
             size="sm"
-            onClick={() => fetchUsers(false)}
+            onClick={fetchUsers}
             className="h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs gap-1.5 shrink-0"
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -761,26 +695,25 @@ export function StaffManagementContent() {
 
       {/* Top Header & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
-        <div className="flex items-center gap-3.5">
-          <div className="p-3 bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100/80 rounded-2xl text-indigo-600 shadow-inner">
-            <Users className="h-6 w-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Staff Management</h1>
-              <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-slate-50 border-slate-200 text-slate-700">
-                Administration
-              </Badge>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-md shadow-slate-900/10">
+              <Users className="h-5 w-5 text-indigo-400" />
             </div>
-            <p className="text-xs sm:text-sm font-medium text-slate-500">
-              Manage accounts, assign operational roles, and enforce security policies
-            </p>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+                Staff Management
+              </h1>
+              <p className="text-xs sm:text-sm font-medium text-slate-500">
+                Manage accounts, assign operational roles, and enforce security policies
+              </p>
+            </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 pt-2 md:pt-0">
           <DashboardRefreshButton
-            onRefresh={() => fetchUsers(false)}
+            onRefresh={fetchUsers}
             size="default"
             label="Refresh Directory"
           />
@@ -941,41 +874,6 @@ export function StaffManagementContent() {
         </div>
       </div>
 
-      {/* Selection Banner */}
-      {selectedUserIds.length > 0 && (
-        <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg border border-indigo-800 animate-in fade-in">
-          <div className="flex items-center gap-3">
-            <Badge className="bg-indigo-600 text-white font-black px-3 py-1 rounded-xl text-xs">
-              Selected: {selectedUserIds.length}
-            </Badge>
-            <span className="text-xs font-bold text-slate-200">
-              {isAllSelected ? 'All eligible staff records selected' : `${selectedUserIds.length} of ${selectableUserIds.length} eligible records selected`}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelectedUserIds([])}
-              className="text-slate-300 hover:text-white text-xs font-bold"
-            >
-              Clear Selection
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setIsBulkDeleteModalOpen(true)}
-              className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl h-9 px-4 gap-1.5 shadow-md shadow-rose-600/30 cursor-pointer"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete Selected ({selectedUserIds.length})
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* Main Staff Content */}
       {filteredUsers.length === 0 ? (
         <Card className="rounded-3xl border border-slate-200/80 bg-white p-12 text-center shadow-sm">
@@ -1081,7 +979,17 @@ export function StaffManagementContent() {
                       >
                         {isUserActive ? "Active" : "Locked"}
                       </Badge>
-
+                      {is2FAActive(u) ? (
+                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 shadow-2xs shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span>2FA On</span>
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-slate-100 text-slate-600 border-slate-300 flex items-center gap-1 shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                          <span>2FA Off</span>
+                        </Badge>
+                      )}
                       {Boolean(u?.emailVerified) ? (
                         <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 shadow-2xs shrink-0">
                           <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
@@ -1155,16 +1063,6 @@ export function StaffManagementContent() {
               <Table>
                 <TableHeader className="bg-slate-50/80 border-b border-slate-200">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="py-4 px-4 w-10">
-                      <input
-                        type="checkbox"
-                        checked={isAllSelected}
-                        ref={el => { if (el) el.indeterminate = isSomeSelected; }}
-                        onChange={handleToggleSelectAll}
-                        title="Select All Staff Records"
-                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      />
-                    </TableHead>
                     <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4">
                       Staff Personnel
                     </TableHead>
@@ -1177,7 +1075,9 @@ export function StaffManagementContent() {
                     <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4 text-center">
                       Account Status
                     </TableHead>
-
+                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4 text-center">
+                      2FA Security
+                    </TableHead>
                     <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4 text-right">
                       Operations
                     </TableHead>
@@ -1196,16 +1096,6 @@ export function StaffManagementContent() {
                         key={u.id} 
                         className="hover:bg-slate-50/70 transition-colors border-b border-slate-100 last:border-none"
                       >
-                        {/* Checkbox */}
-                        <TableCell className="py-3.5 px-4 w-10">
-                          <input
-                            type="checkbox"
-                            checked={selectedUserIds.includes(u.id)}
-                            disabled={u.id === currentUser?.id || u.email?.toLowerCase() === 'mtsmobilelab@gmail.com'}
-                            onChange={() => handleToggleUserSelect(u.id)}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:opacity-30"
-                          />
-                        </TableCell>
                         {/* Personnel */}
                         <TableCell className="px-4 lg:px-6 py-3.5">
                           <div className="flex items-center gap-3">
@@ -1294,7 +1184,26 @@ export function StaffManagementContent() {
                           </Badge>
                         </TableCell>
 
-
+                        {/* 2FA Status */}
+                        <TableCell className="px-4 lg:px-6 py-3.5 text-center">
+                          {is2FAActive(u) ? (
+                            <Badge 
+                              variant="outline" 
+                              className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              Enabled
+                            </Badge>
+                          ) : (
+                            <Badge 
+                              variant="outline" 
+                              className="bg-slate-100 text-slate-600 border-slate-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                              Disabled
+                            </Badge>
+                          )}
+                        </TableCell>
 
                         {/* Operations Action Buttons */}
                         <TableCell className="px-4 lg:px-6 py-3.5 text-right">
@@ -1492,6 +1401,44 @@ export function StaffManagementContent() {
                 </div>
               </button>
 
+              {/* 5. Two-Factor Authentication (2FA) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOperationsModalOpen(false);
+                  handleOpenToggle2FA(selectedUser);
+                }}
+                className={cn(
+                  "w-full p-3.5 rounded-2xl border hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer",
+                  is2FAActive(selectedUser) 
+                    ? "bg-slate-50/80 hover:bg-slate-100/90 border-slate-200/80" 
+                    : "bg-emerald-50/40 hover:bg-emerald-50/80 border-emerald-200/80"
+                )}
+              >
+                <div className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-2xs",
+                  is2FAActive(selectedUser) 
+                    ? "bg-slate-200 text-slate-700 group-hover:bg-slate-700 group-hover:text-white" 
+                    : "bg-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white"
+                )}>
+                  <Fingerprint className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                    <span>Two-Factor Auth (2FA)</span>
+                    {is2FAActive(selectedUser) ? (
+                      <span className="text-[9px] font-extrabold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-md">● Enabled</span>
+                    ) : (
+                      <span className="text-[9px] font-extrabold bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-md">○ Disabled</span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                    {is2FAActive(selectedUser) 
+                      ? 'OTP verification required on login — Click to Disable' 
+                      : 'Direct login enabled — Click to require 6-digit OTP'}
+                  </div>
+                </div>
+              </button>
 
               {/* 6. Email Verification Status & Live Check */}
               <button
@@ -1525,14 +1472,14 @@ export function StaffManagementContent() {
                   </div>
                   <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
                     {selectedUser?.emailVerified 
-                      ? 'Confirmed in Firebase & database — Click to re-check' 
+                      ? 'Confirmed in central database — Click to re-check' 
                       : 'Not verified yet — Click to query live status'}
                   </div>
                 </div>
               </button>
 
-              {/* 7. Super Admin Direct Verify Email (When Unverified & isSuperAdmin) */}
-              {!selectedUser?.emailVerified && isSuperAdmin && (
+              {/* 7. Super Admin Direct Verify Email (When Unverified & SUPER_ADMIN) */}
+              {!selectedUser?.emailVerified && currentUser?.role === 'SUPER_ADMIN' && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1550,7 +1497,7 @@ export function StaffManagementContent() {
                       <span className="text-[9px] bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded font-extrabold">SUPER ADMIN</span>
                     </div>
                     <div className="text-[11px] text-emerald-800 line-clamp-2 mt-0.5 leading-snug">
-                      Directly verify this staff member's email in Firebase Auth & central database
+                      Directly verify this staff member's email in central database
                     </div>
                   </div>
                 </button>
@@ -1563,7 +1510,7 @@ export function StaffManagementContent() {
                   onClick={() => {
                     handleResendUserVerification(selectedUser);
                   }}
-                  disabled={resendingVerification || (verificationCooldowns[String(selectedUser?.id || '')] || 0) > 0}
+                  disabled={resendingVerification}
                   className="w-full p-3.5 rounded-2xl bg-amber-50/60 hover:bg-amber-100/80 border border-amber-200/90 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
                 >
                   <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 group-hover:bg-amber-600 group-hover:text-white transition-colors shadow-2xs">
@@ -1571,9 +1518,7 @@ export function StaffManagementContent() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-bold text-slate-900">
-                      {(verificationCooldowns[String(selectedUser?.id || '')] || 0) > 0
-                        ? `Available in ${verificationCooldowns[String(selectedUser?.id || '')]}s`
-                        : 'Resend Verification Email'}
+                      Resend Verification Link
                     </div>
                     <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
                       Send a fresh activation email link to {selectedUser?.email}
@@ -1695,17 +1640,72 @@ export function StaffManagementContent() {
                   >
                     {selectedUser.isActive ? 'Online / Active' : 'Deactivated / Locked'}
                   </Badge>
+                  {is2FAActive(selectedUser) ? (
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-bold px-3 py-1 rounded-xl">
+                      <Fingerprint className="h-3.5 w-3.5 mr-1" /> ● 2FA Enabled
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300 text-xs font-bold px-3 py-1 rounded-xl">
+                      <Fingerprint className="h-3.5 w-3.5 mr-1" /> ○ 2FA Disabled
+                    </Badge>
+                  )}
                 </>
               )}
             </div>
 
             {/* Information Cards */}
             <div className="space-y-3 pt-2">
+              {/* Security & 2FA Control Section */}
+              <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Fingerprint className="h-3.5 w-3.5 text-indigo-600" />
+                    Two-Factor Authentication (2FA)
+                  </div>
+                  {is2FAActive(selectedUser) ? (
+                    <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[11px] px-2.5 py-0.5 rounded-full">
+                      ● Enabled (Email OTP)
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-slate-200 text-slate-700 border-slate-300 font-bold text-[11px] px-2.5 py-0.5 rounded-full">
+                      ○ Disabled (Direct Login)
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                  {is2FAActive(selectedUser)
+                    ? `This staff member is required to enter a 6-digit verification code sent to ${selectedUser?.email || 'their email'} upon every login attempt.`
+                    : `Two-Factor Authentication is currently turned OFF. This user logs in with their password directly without receiving an email OTP.`}
+                </p>
+                <div className="pt-1 flex items-center justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={submitting}
+                    onClick={() => {
+                      setIsViewDialogOpen(false);
+                      handleOpenToggle2FA(selectedUser);
+                    }}
+                    className={cn(
+                      "rounded-xl text-xs font-bold h-9 px-4 border shadow-xs transition-all cursor-pointer",
+                      is2FAActive(selectedUser)
+                        ? "border-slate-300 text-slate-700 hover:bg-slate-100"
+                        : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                    )}
+                  >
+                    <Fingerprint className="mr-1.5 h-3.5 w-3.5" />
+                    {is2FAActive(selectedUser) ? "Disable 2FA for this user" : "Enable 2FA for this user"}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Email Verification Section */}
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Mail className="h-3.5 w-3.5 text-indigo-600" />
-                    Firebase Email Verification Status
+                    Email Verification Status
                   </div>
                   {selectedUser?.emailVerified ? (
                     <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
@@ -1719,7 +1719,7 @@ export function StaffManagementContent() {
                 </div>
                 <p className="text-xs text-slate-600 font-medium leading-relaxed">
                   {selectedUser?.emailVerified
-                    ? `Staff member's email (${selectedUser?.email}) is verified in Firebase Authentication and synchronized to central database.`
+                    ? `Staff member's email (${selectedUser?.email}) is verified and synchronized to central database.`
                     : `Staff member's email has not been verified yet. System login is restricted until the verification link is clicked.`}
                 </p>
                 <div className="pt-1 flex items-center gap-2 justify-end flex-wrap">
@@ -1738,17 +1738,15 @@ export function StaffManagementContent() {
                     <Button
                       type="button"
                       size="sm"
-                      disabled={resendingVerification || (verificationCooldowns[String(selectedUser?.id || '')] || 0) > 0}
+                      disabled={resendingVerification}
                       onClick={() => handleResendUserVerification(selectedUser)}
                       className="rounded-xl text-xs font-bold h-8 px-3 bg-slate-900 text-white hover:bg-slate-800 gap-1.5 cursor-pointer"
                     >
                       {resendingVerification ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />}
-                      {(verificationCooldowns[String(selectedUser?.id || '')] || 0) > 0
-                        ? `Available in ${verificationCooldowns[String(selectedUser?.id || '')]}s`
-                        : 'Resend Verification Email'}
+                      Resend Link
                     </Button>
                   )}
-                  {!selectedUser?.emailVerified && isSuperAdmin && (
+                  {!selectedUser?.emailVerified && currentUser?.role === 'SUPER_ADMIN' && (
                     <Button
                       type="button"
                       size="sm"
@@ -2291,25 +2289,90 @@ export function StaffManagementContent() {
             </div>
           </AlertDialogHeader>
           <AlertDialogFooter className="pt-3 flex items-center justify-between gap-2">
-            <AlertDialogCancel disabled={submitting} className="rounded-xl text-xs font-bold text-slate-500 border-slate-200 cursor-pointer">
+            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-500 border-slate-200 cursor-pointer">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleDeleteUser();
-              }}
-              className="rounded-xl text-xs font-bold px-5 bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/10 cursor-pointer flex items-center gap-1.5"
+              onClick={handleDeleteUser}
+              className="rounded-xl text-xs font-bold px-5 bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/10 cursor-pointer"
               disabled={submitting}
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              <span>Permanently Delete Staff</span>
+              Delete Staff Member
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* ========================================================================= */}
+      {/* 9. TWO-FACTOR AUTHENTICATION (2FA) TOGGLE CONFIRMATION DIALOG */}
+      {/* ========================================================================= */}
+      <AlertDialog open={isToggle2FAOpen} onOpenChange={setIsToggle2FAOpen}>
+        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-sm sm:max-w-md rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
+          <AlertDialogHeader>
+            <div className="flex items-start gap-3 min-w-0 overflow-hidden">
+              <div className={cn(
+                "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border shadow-xs mt-0.5",
+                is2FAActive(target2FAUser) 
+                  ? "bg-slate-100 text-slate-700 border-slate-200" 
+                  : "bg-emerald-50 text-emerald-600 border-emerald-100"
+              )}>
+                <Fingerprint className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <AlertDialogTitle className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                  {is2FAActive(target2FAUser) ? 'Disable Two-Factor Auth' : 'Enable Two-Factor Auth'}
+                </AlertDialogTitle>
+                <div className="text-xs text-slate-500 mt-0.5 min-w-0 overflow-hidden">
+                  User: <span className="font-semibold text-slate-800 truncate">{target2FAUser?.name || 'User'}</span>
+                  <span className="block truncate text-slate-400">{target2FAUser?.email || ''}</span>
+                </div>
+              </div>
+            </div>
+          </AlertDialogHeader>
 
+          <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
+            {is2FAActive(target2FAUser) ? (
+              <>
+                <p>
+                  Are you sure you want to <b>disable 2FA</b> for <span className="font-bold text-slate-900">{target2FAUser?.name || 'this user'}</span>?
+                </p>
+                <p className="text-slate-500">
+                  The staff member will be able to log into the MTS Lab system using only their password, and <b>no email OTP code</b> will be dispatched.
+                </p>
+              </>
+            ) : (
+              <>
+                <p>
+                  Enable <b>Two-Factor Authentication</b> for <span className="font-bold text-slate-900">{target2FAUser?.name || 'this user'}</span>?
+                </p>
+                <p className="text-slate-500">
+                  Upon logging in with their password, a secure 6-digit verification code will be sent to <span className="font-bold text-slate-900">{target2FAUser?.email || 'their email'}</span> before dashboard access is granted.
+                </p>
+              </>
+            )}
+          </div>
+
+          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 pt-2">
+            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-600 border-slate-200 cursor-pointer w-full sm:w-auto">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submitting}
+              onClick={handleToggle2FAConfirm}
+              className={cn(
+                "rounded-xl text-xs font-bold h-10 px-5 text-white shadow-md transition-all cursor-pointer w-full sm:w-auto",
+                is2FAActive(target2FAUser) 
+                  ? "bg-slate-900 hover:bg-slate-800 shadow-slate-900/10" 
+                  : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20"
+              )}
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              {is2FAActive(target2FAUser) ? 'Confirm Disable 2FA' : 'Confirm Enable 2FA'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ========================================================================= */}
       {/* 10. SUPER ADMIN DIRECT EMAIL VERIFICATION CONFIRMATION DIALOG */}
@@ -2338,7 +2401,7 @@ export function StaffManagementContent() {
               You are about to manually verify this user's email address (<b>{userToDirectVerify?.email}</b>).
             </p>
             <p className="text-slate-500">
-              This action directly updates the user's verification status in Firebase Authentication and the central MTS database. This action should only be used when you have confirmed the user's identity.
+              This action directly updates the user's verification status in the central MTS database. This action should only be used when you have confirmed the user's identity.
             </p>
           </div>
 
@@ -2369,43 +2432,6 @@ export function StaffManagementContent() {
                   <span>Verify Email</span>
                 </>
               )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* ========================================================================= */}
-      {/* 9. BULK DELETE CONFIRMATION DIALOG */}
-      {/* ========================================================================= */}
-      <AlertDialog open={isBulkDeleteModalOpen} onOpenChange={setIsBulkDeleteModalOpen}>
-        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
-          <AlertDialogHeader>
-            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-1 border border-rose-100 mx-auto">
-              <Trash2 className="h-6 w-6" />
-            </div>
-            <AlertDialogTitle className="text-xl font-extrabold text-slate-900 text-center">
-              Permanently Delete Selected Staff?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs text-slate-500 text-center font-medium leading-relaxed">
-              You are about to permanently delete <strong className="text-slate-900">{selectedUserIds.length} staff member account(s)</strong>.
-              Security credentials and authentication profiles will be completely removed while preserving historical repairs, attendance, and audit logs.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          <AlertDialogFooter className="pt-2 flex items-center justify-center gap-3">
-            <AlertDialogCancel disabled={bulkDeleting} className="rounded-xl text-xs font-bold text-slate-600 border-slate-200 h-10 px-5 cursor-pointer">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleExecuteBulkDelete();
-              }}
-              disabled={bulkDeleting}
-              className="rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-10 px-5 shadow-md shadow-rose-600/30 cursor-pointer flex items-center gap-1.5"
-            >
-              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
-              <span>Permanently Delete Staff</span>
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -164,57 +164,32 @@ const COURIER_TIMELINE_STEPS = [
   { key: 'DELIVERED', label: 'Delivered', icon: CheckCircle2 }
 ];
 
-// Customer-Safe Sanitization: Completely strips staff/user names, roles, and internal identities
-function sanitizeLogMessage(msg: string, status?: string): string {
-  if (!msg || typeof msg !== 'string') {
-    return statusConfig[status || 'RECEIVED']?.desc || 'Repair progress updated.';
-  }
-
-  let cleaned = msg.trim();
-
-  // If message matches generic status change "Status changed to STATUS by Name (ROLE)"
-  if (/^Status (?:changed|updated) to ([A-Z_]+)/i.test(cleaned)) {
-    const match = cleaned.match(/^Status (?:changed|updated) to ([A-Z_]+)/i);
-    const targetStatus = match ? match[1] : status;
-    return statusConfig[targetStatus || status || 'RECEIVED']?.desc || 'Repair progress updated.';
-  }
+// Sanitize any staff names or specialist references to generic 'Technician'
+function sanitizeLogMessage(msg: string): string {
+  if (!msg || typeof msg !== 'string') return '';
+  let sanitized = msg;
 
   // 1. Strip emails
-  cleaned = cleaned.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, '');
+  sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, 'Technician');
 
-  // 2. Strip "by [Name] (ROLE)" or "(ROLE)"
-  cleaned = cleaned.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)\s*\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, '');
-  cleaned = cleaned.replace(/\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, '');
+  // 2. Replace "by [Name] (ROLE)" or "by [ROLE]" e.g. SUPER_ADMIN, ADMIN, MANAGER, RECEPTIONIST, TECHNICIAN, MTS Admin, MTS Manager
+  sanitized = sanitized.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)\s*\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi, 'by Technician');
+  sanitized = sanitized.replace(/\bby\s+(?:MTS\s+)?(?:super\s*admin|admin|manager|receptionist|staff|specialist)\b/gi, 'by Technician');
+  sanitized = sanitized.replace(/\bby\s+specialist\s+[^,\.\n]+/gi, 'by Technician');
 
-  // 3. Strip "by Technician/Specialist [Name]"
-  cleaned = cleaned.replace(/\bby\s+(?:technician|specialist|engineer|staff|user|super\s*admin|admin|manager|receptionist)\s+[A-Za-z0-9_.'-]+/gi, '');
+  // 3. Replace action verbs followed by "by [Name]"
+  sanitized = sanitized.replace(/\b(handled|updated|diagnosed|logged|received|repaired|inspected|completed|verified|transitioned)\s+by\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, '$1 by Technician');
 
-  // 4. Strip "by [Staff Name / Role]"
-  cleaned = cleaned.replace(/\bby\s+(?:MTS\s+)?(?:super\s*admin|admin|manager|receptionist|staff|specialist|technician|user|engineer)\b/gi, '');
-  cleaned = cleaned.replace(/\bby\s+[A-Z][a-zA-Z0-9_.'-]+(?:\s+[A-Z][a-zA-Z0-9_.'-]+)*/g, '');
+  // 4. Replace "Assigned to/by [Name]"
+  sanitized = sanitized.replace(/\bassigned\s+(?:to|by)\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, 'Assigned to Technician');
 
-  // 5. Strip "Technician/Specialist/Engineer [Name]" anywhere
-  cleaned = cleaned.replace(/\b(?:technician|specialist|engineer|staff)\s+[A-Z][a-zA-Z0-9_.'-]+/gi, 'Technician');
-  cleaned = cleaned.replace(/\bTechnician\b/gi, '');
+  // 5. Replace any remaining "by [Words]" before punctuation or end of line
+  sanitized = sanitized.replace(/\bby\s+([a-zA-Z0-9_.'\s-]+?)(?=[\.,;\n]|\bNote\b|$)/gi, 'by Technician');
 
-  // 6. Strip action verbs followed by "by ..."
-  cleaned = cleaned.replace(/\b(handled|updated|diagnosed|logged|received|repaired|inspected|completed|verified|transitioned)\s+by\s+[^,\.\n]+/gi, '$1');
+  // 6. Clean duplicate "by Technician"
+  sanitized = sanitized.replace(/\bby\s+Technician(?:\s+by\s+Technician)+/gi, 'by Technician');
 
-  // 7. Strip "Assigned to [Name]" or "Assigned to/by ..."
-  cleaned = cleaned.replace(/\bassigned\s+(?:to|by)\s+[^,\.\n]+/gi, 'Assigned for laboratory service');
-
-  // 8. Strip "Updated by: ...", "Created by: ...", "Technician: ...", "Staff: ...", "User: ..."
-  cleaned = cleaned.replace(/\b(?:updated|created|processed|handled|logged|verified)\s+by\s*:\s*[^,\.\n]+/gi, '');
-  cleaned = cleaned.replace(/\b(?:technician|specialist|staff|user|engineer)\s*:\s*[^,\.\n]+/gi, '');
-
-  // 9. Clean trailing punctuation or orphan spaces
-  cleaned = cleaned.replace(/\s+/g, ' ').replace(/\s+([,\.;])/g, '$1').replace(/^[\s,;.-]+|[\s,;.-]+$/g, '').trim();
-
-  if (!cleaned || cleaned.length < 5) {
-    return statusConfig[status || 'RECEIVED']?.desc || 'Repair progress updated.';
-  }
-
-  return cleaned;
+  return sanitized.trim();
 }
 
 export default function Tracking() {
@@ -763,8 +738,8 @@ export default function Tracking() {
                       </div>
 
                       <div>
-                        <div className="text-slate-500 text-[11px] font-bold uppercase">Service Laboratory</div>
-                        <div className="font-bold text-slate-900 mt-0.5">MTS Central Lab</div>
+                        <div className="text-slate-500 text-[11px] font-bold uppercase">Assigned Specialist</div>
+                        <div className="font-bold text-slate-900 mt-0.5">Technician</div>
                       </div>
 
                       <div className="col-span-2 border-t border-slate-100 pt-2.5">

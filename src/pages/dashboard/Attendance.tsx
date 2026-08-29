@@ -72,8 +72,6 @@ import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
 import { format, addMonths, subMonths } from 'date-fns';
 
-import { normalizeRole } from '@/lib/rbac';
-
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"
@@ -81,11 +79,10 @@ const MONTH_NAMES = [
 
 export default function Attendance() {
   const { user } = useAuthStore();
-  const canonicalRole = normalizeRole(user?.role) || 'RECEPTIONIST';
-  const isSuperAdmin = canonicalRole === 'SUPERADMIN';
-  const isAdmin = isSuperAdmin || canonicalRole === 'ADMIN';
-  const isManager = canonicalRole === 'MANAGER';
-  const isStaff = canonicalRole === 'TECHNICIAN' || canonicalRole === 'HEAD_TECHNICIAN' || canonicalRole === 'RECEPTIONIST';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isAdmin = isSuperAdmin || user?.role === 'ADMIN';
+  const isManager = user?.role === 'MANAGER';
+  const isStaff = user?.role === 'TECHNICIAN' || user?.role === 'LEAD_TECHNICIAN' || user?.role === 'RECEPTIONIST';
   const canManage = isSuperAdmin || isAdmin || isManager;
 
   // Primary Active Tab: 'monthly', 'daily', 'today', 'my', 'history'

@@ -76,10 +76,9 @@ import { toast } from 'sonner';
 import { formatNPR } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useRealtimeSync } from '@/services/realtime';
-import { syncEntityToRtdb, deleteEntityFromRtdb } from '@/lib/firebase';
+import { syncEntityToSupabase as syncEntityToRtdb, deleteEntityFromSupabase as deleteEntityFromRtdb, syncEntityToSupabase, deleteEntityFromSupabase } from '@/lib/supabase';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { format } from 'date-fns';
-import { normalizeRole } from '@/lib/rbac';
 
 const REPAIR_CATEGORIES = [
   'Displays',
@@ -150,15 +149,14 @@ export interface CustomInventoryFolder {
 
 export default function Inventory() {
   const { token, user } = useAuthStore();
-  const normRole = normalizeRole(user?.role);
-  const isSuperAdmin = normRole === 'SUPERADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'SUPERADMIN' || user?.email?.toLowerCase() === 'mtsmobilelab@gmail.com';
-  const isAdmin = isSuperAdmin || normRole === 'ADMIN' || user?.role === 'ADMIN';
-  const isManager = normRole === 'MANAGER' || user?.role === 'MANAGER';
-  const isReceptionist = normRole === 'RECEPTIONIST' || user?.role === 'RECEPTIONIST';
-  const isInventoryManager = normRole === 'MANAGER' || user?.role === 'INVENTORY_MANAGER';
-  const isTechnician = normRole === 'TECHNICIAN' || normRole === 'HEAD_TECHNICIAN' || user?.role === 'TECHNICIAN' || user?.role === 'LEAD_TECHNICIAN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isAdmin = isSuperAdmin || user?.role === 'ADMIN';
+  const isManager = user?.role === 'MANAGER';
+  const isReceptionist = user?.role === 'RECEPTIONIST';
+  const isInventoryManager = user?.role === 'INVENTORY_MANAGER';
+  const isTechnician = user?.role === 'TECHNICIAN' || user?.role === 'LEAD_TECHNICIAN';
 
-  const canManage = isSuperAdmin || isAdmin || isManager || isReceptionist || isInventoryManager || isTechnician;
+  const canManage = isSuperAdmin || isAdmin || isManager || isReceptionist || isInventoryManager;
   const canDelete = isSuperAdmin || isAdmin;
 
   // Data states
@@ -286,10 +284,7 @@ export default function Inventory() {
   });
 
   // Fetch Inventory Data
-  const fetchData = async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-    }
+  const fetchData = async () => {
     try {
       const [itemsRes, statsRes, catRes, foldersRes, supRes, locRes] = await Promise.all([
         api.get('/inventory?status=ALL'),
@@ -321,23 +316,19 @@ export default function Inventory() {
       }
     } catch (err: any) {
       console.error("[INVENTORY FETCH ERROR]", err);
-      if (!silent) {
-        toast.error(err.message || 'Failed to load inventory data');
-      }
+      toast.error(err.message || 'Failed to load inventory data');
     } finally {
-      if (!silent) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData(false);
+    fetchData();
   }, [token]);
 
-  // Real-Time Database Synchronization across dashboards (silent background update)
+  // Real-Time Database Synchronization across dashboards
   useRealtimeSync(['inventoryItem', 'inventoryTransaction', 'inventoryFolder', 'repair', 'sync'], () => {
-    fetchData(true);
+    fetchData();
   });
 
   // ==========================================
@@ -1111,9 +1102,10 @@ export default function Inventory() {
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
           <DashboardRefreshButton
             onRefresh={fetchData}
+            showLiveBadge={false}
             showLastUpdated={false}
             size="sm"
-            label="Refresh Stock"
+            label="Sync Stock"
           />
 
           {canManage && (
