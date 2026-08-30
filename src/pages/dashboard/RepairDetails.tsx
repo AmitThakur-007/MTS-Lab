@@ -182,7 +182,6 @@ export default function RepairDetails() {
     if (!alertMessage.trim() || sendingAlert) return;
     setSendingAlert(true);
     try {
-      // Dispatch alert and explicitly pass priority
       const res = await api.post(`/repairs/${id}/alert`, {
         message: alertMessage.trim(),
         priority: alertPriority,
@@ -340,11 +339,11 @@ export default function RepairDetails() {
     }
   };
 
-  if (loading) {
+  if (loading || !repair) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-4">
-        <Loader2 className="h-12 w-12 text-slate-300 animate-spin" />
-        <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Opening Repair Vault...</p>
+      <div className="h-[70vh] flex flex-col items-center justify-center gap-4">
+        <Loader2 className="h-12 w-12 text-indigo-600 animate-spin" />
+        <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Opening Repair Vault...</p>
       </div>
     );
   }
@@ -352,20 +351,20 @@ export default function RepairDetails() {
   const isAssigned = Boolean(repair.technicianId);
 
   return (
-    <div className="space-y-8 pb-32 max-w-7xl mx-auto px-2 sm:px-4">
-      {/* Top Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+    <div className="space-y-6 sm:space-y-8 pb-32 max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 w-full overflow-x-hidden">
+      {/* Top Header & Responsive Toolbar */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-sm w-full">
+        <div className="flex items-center gap-3.5 min-w-0 flex-1 w-full xl:w-auto">
           <Button
             variant="outline"
             onClick={() => navigate('/dashboard/repairs')}
-            className="rounded-2xl border-slate-200 h-10 w-10 sm:h-11 sm:w-11 p-0 flex items-center justify-center shrink-0 cursor-pointer hover:bg-slate-100"
+            className="rounded-2xl border-slate-200 h-10 w-10 p-0 flex items-center justify-center shrink-0 cursor-pointer hover:bg-slate-100"
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
           <div className="space-y-1 min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="font-mono text-xs font-black uppercase tracking-tighter bg-slate-900 text-white px-2.5 py-1 rounded-xl">
+              <Badge variant="secondary" className="font-mono text-xs font-black uppercase tracking-tight bg-slate-900 text-white px-2.5 py-1 rounded-xl">
                 JOB #{repair.repairNumber}
               </Badge>
               <Badge className={repair.status === 'COMPLETED' || repair.status === 'REPAIRED' ? "bg-emerald-600 text-white font-bold" : "bg-indigo-600 text-white font-bold"}>
@@ -373,17 +372,17 @@ export default function RepairDetails() {
               </Badge>
               {repair.priority === 'URGENT' && (
                 <Badge className="bg-rose-600 text-white font-bold animate-pulse">
-                  URGENT PRIORITY
+                  URGENT
                 </Badge>
               )}
               {repair.priority === 'HIGH' && (
                 <Badge className="bg-amber-500 text-white font-bold">
-                  HIGH PRIORITY
+                  HIGH
                 </Badge>
               )}
               {(!repair.priority || repair.priority === 'NORMAL' || repair.priority === 'MEDIUM') && (
                 <Badge variant="outline" className="bg-slate-100 text-slate-700 font-bold border-slate-300">
-                  {repair.priority || 'MEDIUM'} PRIORITY
+                  {repair.priority || 'MEDIUM'}
                 </Badge>
               )}
             </div>
@@ -393,158 +392,151 @@ export default function RepairDetails() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full lg:w-auto justify-start lg:justify-end shrink-0">
-          {/* Priority selector for managers/admins */}
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end shrink-0 pt-2 xl:pt-0 border-t xl:border-t-0 border-slate-100">
           {['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(user?.role || '') && (
             <Select
               value={repair.priority || 'MEDIUM'}
               onValueChange={handleUpdatePriority}
               disabled={updating}
             >
-              <SelectTrigger className="h-10 sm:h-11 rounded-2xl border-slate-200 bg-white font-bold text-xs w-32 sm:w-36 shrink-0 cursor-pointer">
+              <SelectTrigger className="h-10 rounded-2xl border-slate-200 bg-white font-bold text-xs w-32 shrink-0 cursor-pointer">
                 <SelectValue placeholder="Priority" />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
-                <SelectItem value="NORMAL" className="font-bold text-xs">Normal Priority</SelectItem>
-                <SelectItem value="MEDIUM" className="font-bold text-xs text-slate-700">Medium Priority</SelectItem>
-                <SelectItem value="HIGH" className="font-bold text-xs text-amber-600">High Priority</SelectItem>
-                <SelectItem value="URGENT" className="font-bold text-xs text-rose-600">Urgent Priority</SelectItem>
+                <SelectItem value="NORMAL" className="font-bold text-xs">Normal</SelectItem>
+                <SelectItem value="MEDIUM" className="font-bold text-xs text-slate-700">Medium</SelectItem>
+                <SelectItem value="HIGH" className="font-bold text-xs text-amber-600">High</SelectItem>
+                <SelectItem value="URGENT" className="font-bold text-xs text-rose-600">Urgent</SelectItem>
               </SelectContent>
             </Select>
           )}
 
-          {/* Dispatch via Courier Button (for Super Admin, Admin, Receptionist) */}
           {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && (
             <Button
               variant="outline"
               onClick={handleOpenCourierDispatch}
-              className="rounded-2xl border-blue-200 bg-blue-50/60 hover:bg-blue-100 text-blue-700 font-bold text-xs h-10 sm:h-11 px-3 sm:px-4 shadow-sm shrink-0 cursor-pointer"
+              className="rounded-2xl border-blue-200 bg-blue-50/60 hover:bg-blue-100 text-blue-700 font-bold text-xs h-10 px-3 shadow-xs shrink-0 cursor-pointer"
             >
-              <Package className="h-4 w-4 mr-1.5 text-blue-600" />
-              <span>{repair.isReturnCourierDispatched ? 'Update Courier Dispatch' : 'Dispatch Courier'}</span>
+              <Package className="h-4 w-4 mr-1 text-blue-600" />
+              <span>{repair.isReturnCourierDispatched ? 'Update Courier' : 'Dispatch Courier'}</span>
             </Button>
           )}
 
-          {/* Priority Alert to Technician Button (for Manager, Receptionist, Admin, Super Admin) */}
           {isAssigned && ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'LEAD_TECHNICIAN'].includes(user?.role || '') && (
             <Button
               variant="outline"
               onClick={() => setIsAlertDialogOpen(true)}
-              className="rounded-2xl border-rose-200 bg-rose-50/50 hover:bg-rose-100/80 text-rose-700 font-bold text-xs h-10 sm:h-11 px-3 sm:px-4 shadow-sm shrink-0 cursor-pointer"
+              className="rounded-2xl border-rose-200 bg-rose-50/50 hover:bg-rose-100 text-rose-700 font-bold text-xs h-10 px-3 shadow-xs shrink-0 cursor-pointer"
             >
-              <Bell className="h-4 w-4 mr-1.5 text-rose-600 animate-bounce" />
-              <span>Alert Technician</span>
+              <Bell className="h-4 w-4 mr-1 text-rose-600 animate-bounce" />
+              <span>Alert Tech</span>
             </Button>
           )}
 
-          {/* Edit Repair Button (Super Admin, Admin, Manager, Receptionist) */}
           {['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(user?.role || '') && (
             <Button
               variant="outline"
               onClick={() => setIsEditModalOpen(true)}
-              className="rounded-2xl border-slate-300 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs h-10 sm:h-11 px-3 sm:px-4 shadow-sm shrink-0 cursor-pointer"
+              className="rounded-2xl border-slate-300 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs h-10 px-3 shadow-xs shrink-0 cursor-pointer"
             >
-              <Edit3 className="h-4 w-4 mr-1.5 text-blue-600" />
-              <span>Edit Repair</span>
+              <Edit3 className="h-4 w-4 mr-1 text-blue-600" />
+              <span>Edit</span>
             </Button>
           )}
 
           <DashboardRefreshButton
             onRefresh={fetchData}
-            size="default"
+            size="sm"
             label="Refresh"
             variant="outline"
-            className="rounded-2xl h-10 sm:h-11 border-slate-200 font-bold text-xs shrink-0"
+            className="rounded-2xl h-10 border-slate-200 font-bold text-xs shrink-0"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 w-full">
+        <div className="lg:col-span-2 space-y-6 sm:space-y-8 w-full min-w-0">
           {/* Device & Status Card */}
-          <Card className="rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white">
-            <CardHeader className="bg-slate-50/50 p-8 border-b">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-white rounded-2xl shadow-md flex items-center justify-center text-slate-900 border border-slate-100">
-                    <Smartphone className="h-7 w-7" />
+          <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white w-full">
+            <CardHeader className="bg-slate-50/50 p-6 sm:p-8 border-b">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-slate-900 border border-slate-100 shrink-0">
+                    <Smartphone className="h-6 w-6" />
                   </div>
-                  <div>
-                    <CardTitle className="text-2xl font-bold">Repair Diagnostics</CardTitle>
-                    <CardDescription>Comprehensive device state and reported issues.</CardDescription>
+                  <div className="min-w-0">
+                    <CardTitle className="text-xl sm:text-2xl font-bold truncate">Repair Diagnostics</CardTitle>
+                    <CardDescription className="text-xs">Comprehensive device state & reported issues.</CardDescription>
                   </div>
                 </div>
                 <Button
                   variant="outline"
                   onClick={() => setIsSlipModalOpen(true)}
-                  className="rounded-2xl font-bold border-slate-200 h-10 px-4 hover:bg-slate-50 cursor-pointer"
+                  className="rounded-2xl font-bold border-slate-200 h-10 px-4 hover:bg-slate-50 cursor-pointer shrink-0 text-xs"
                 >
                   <Printer className="h-4 w-4 mr-2 text-slate-700" /> Print Service Slip
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="p-8 sm:p-10 space-y-8">
-              <div className="grid sm:grid-cols-3 gap-6 text-center sm:text-left">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Brand / Manufacturer</p>
-                  <p className="text-xl font-extrabold text-slate-900">{repair.deviceBrand}</p>
+            <CardContent className="p-6 sm:p-10 space-y-8 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+                <div className="space-y-1 bg-slate-50/60 p-4 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Brand / Manufacturer</p>
+                  <p className="text-lg font-extrabold text-slate-900 truncate">{repair.deviceBrand}</p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Model Specification</p>
-                  <p className="text-xl font-extrabold text-slate-900">{repair.deviceModel}</p>
+                <div className="space-y-1 bg-slate-50/60 p-4 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Model Specification</p>
+                  <p className="text-lg font-extrabold text-slate-900 truncate">{repair.deviceModel}</p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">IMEI / Serial</p>
-                  <p className="text-xl font-mono font-bold text-indigo-600">{repair.imeiNumber || 'N/A'}</p>
+                <div className="space-y-1 bg-slate-50/60 p-4 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">IMEI / Serial</p>
+                  <p className="text-lg font-mono font-bold text-indigo-600 truncate">{repair.imeiNumber || 'N/A'}</p>
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-200/60 relative overflow-hidden">
-                <div className="relative z-10 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-xs">
-                      <FileText className="h-4 w-4 text-indigo-600" />
-                    </div>
-                    <h4 className="font-bold text-base text-slate-900">Problem Description</h4>
+              <div className="bg-slate-50 p-6 rounded-[28px] border border-slate-200/60 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-xs shrink-0">
+                    <FileText className="h-4 w-4 text-indigo-600" />
                   </div>
-                  <p className="text-slate-700 font-medium text-base leading-relaxed italic">
-                    "{repair.problemDescription}"
-                  </p>
+                  <h4 className="font-bold text-sm sm:text-base text-slate-900">Problem Description</h4>
+                </div>
+                <p className="text-slate-700 font-medium text-sm sm:text-base leading-relaxed italic break-words">
+                  "{repair.problemDescription}"
+                </p>
 
-                  <div className="pt-2 flex flex-wrap gap-3">
-                    <Badge variant="outline" className="bg-white rounded-xl px-3.5 py-1.5 font-bold border-slate-200 text-xs">
-                      <ShieldCheck className="h-3.5 w-3.5 mr-1.5 text-emerald-500" /> Condition: {repair.deviceCondition}
+                <div className="pt-2 flex flex-wrap gap-2">
+                  <Badge variant="outline" className="bg-white rounded-xl px-3 py-1.5 font-bold border-slate-200 text-xs">
+                    <ShieldCheck className="h-3.5 w-3.5 mr-1 text-emerald-500" /> Condition: {repair.deviceCondition}
+                  </Badge>
+                  {repair.deviceColor && (
+                    <Badge variant="outline" className="bg-white rounded-xl px-3 py-1.5 font-bold border-slate-200 text-xs text-slate-800">
+                      Color: {repair.deviceColor}
                     </Badge>
-                    {repair.deviceColor && (
-                      <Badge variant="outline" className="bg-white rounded-xl px-3.5 py-1.5 font-bold border-slate-200 text-xs text-slate-800">
-                        Color: {repair.deviceColor}
-                      </Badge>
-                    )}
-                    {repair.accessoriesReceived && (
-                      <Badge variant="outline" className="bg-white rounded-xl px-3.5 py-1.5 font-bold border-slate-200 text-xs">
-                        <Zap className="h-3.5 w-3.5 mr-1.5 text-amber-500" /> Includes: {repair.accessoriesReceived}
-                      </Badge>
-                    )}
-                    {(repair.receivingMethod === 'COURIER' || repair.isCourierIn) && (
-                      <Badge className="bg-amber-500 text-white font-bold text-xs rounded-xl px-3.5 py-1.5 flex items-center gap-1 shadow-xs">
-                        <Package className="w-3.5 h-3.5" /> Received Via Courier
-                      </Badge>
-                    )}
-                  </div>
-
-                  {repair.conditionNotes && (
-                    <div className="pt-1 text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200/80">
-                      <span className="font-bold text-slate-800">Condition Notes:</span> {repair.conditionNotes}
-                    </div>
+                  )}
+                  {repair.accessoriesReceived && (
+                    <Badge variant="outline" className="bg-white rounded-xl px-3 py-1.5 font-bold border-slate-200 text-xs">
+                      <Zap className="h-3.5 w-3.5 mr-1 text-amber-500" /> Includes: {repair.accessoriesReceived}
+                    </Badge>
+                  )}
+                  {(repair.receivingMethod === 'COURIER' || repair.isCourierIn) && (
+                    <Badge className="bg-amber-500 text-white font-bold text-xs rounded-xl px-3 py-1.5 flex items-center gap-1">
+                      <Package className="w-3.5 h-3.5" /> Received Via Courier
+                    </Badge>
                   )}
                 </div>
+
+                {repair.conditionNotes && (
+                  <div className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200/80 break-words">
+                    <span className="font-bold text-slate-800">Condition Notes:</span> {repair.conditionNotes}
+                  </div>
+                )}
               </div>
 
               {/* INBOUND & RETURN COURIER DETAILS PANELS */}
               {(repair.isCourierIn || repair.receivingMethod === 'COURIER' || repair.isReturnCourierDispatched) && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Inbound Courier */}
-                  {(repair.isCourierIn || repair.receivingMethod === 'COURIER') && (
+                  {repair.isCourierIn || repair.receivingMethod === 'COURIER' ? (
                     <div className="p-5 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2 text-xs">
                       <div className="flex items-center gap-2 font-bold text-amber-900 text-sm border-b border-amber-200/60 pb-2">
                         <Package className="w-4 h-4 text-amber-700" />
@@ -559,64 +551,34 @@ export default function RepairDetails() {
                           <span className="text-amber-800/80 block text-[10px] font-bold uppercase">Tracking #:</span>
                           <span className="font-mono font-bold">{repair.courierTrackingNumber || 'N/A'}</span>
                         </div>
-                        <div>
-                          <span className="text-amber-800/80 block text-[10px] font-bold uppercase">Origin District:</span>
-                          <span>{repair.originDistrict || repair.customer?.district || 'Nepal'}</span>
-                        </div>
-                        <div>
-                          <span className="text-amber-800/80 block text-[10px] font-bold uppercase">Sender Phone:</span>
-                          <span className="font-mono">{repair.senderPhone || repair.customerPhone || '—'}</span>
-                        </div>
                       </div>
-                      {repair.courierNotes && (
-                        <p className="text-[11px] text-amber-900/80 italic pt-1 border-t border-amber-200/40">
-                          Notes: {repair.courierNotes}
-                        </p>
-                      )}
                     </div>
-                  )}
+                  ) : null}
 
-                  {/* Return Courier Dispatch */}
-                  {repair.isReturnCourierDispatched && (
+                  {repair.isReturnCourierDispatched ? (
                     <div className="p-5 rounded-2xl bg-blue-50/60 border border-blue-200/80 space-y-2 text-xs">
                       <div className="flex items-center justify-between border-b border-blue-200/60 pb-2">
                         <div className="flex items-center gap-2 font-bold text-blue-950 text-sm">
                           <Truck className="w-4 h-4 text-blue-700" />
                           <span>Return Dispatch Consignment</span>
                         </div>
-                        <Badge className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 font-bold">
-                          Dispatched
-                        </Badge>
+                        <Badge className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 font-bold">Dispatched</Badge>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-slate-800 pt-1">
                         <div>
-                          <span className="text-blue-800/80 block text-[10px] font-bold uppercase">Dispatch Courier:</span>
+                          <span className="text-blue-800/80 block text-[10px] font-bold uppercase">Courier:</span>
                           <span className="font-bold">{repair.returnCourierCompany}</span>
                         </div>
                         <div>
-                          <span className="text-blue-800/80 block text-[10px] font-bold uppercase">Return Tracking #:</span>
+                          <span className="text-blue-800/80 block text-[10px] font-bold uppercase">Tracking #:</span>
                           <span className="font-mono font-bold text-blue-700">{repair.returnCourierTrackingNumber}</span>
                         </div>
-                        <div>
-                          <span className="text-blue-800/80 block text-[10px] font-bold uppercase">Destination District:</span>
-                          <span>{repair.destinationDistrict || 'Customer Address'}</span>
-                        </div>
-                        <div>
-                          <span className="text-blue-800/80 block text-[10px] font-bold uppercase">Receiver:</span>
-                          <span>{repair.receiverName || repair.customerName}</span>
-                        </div>
                       </div>
-                      {repair.returnCourierNotes && (
-                        <p className="text-[11px] text-blue-900/80 italic pt-1 border-t border-blue-200/40">
-                          Notes: {repair.returnCourierNotes}
-                        </p>
-                      )}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
 
-              {/* Reopen / Warranty Claim Banner if Delivered */}
               {repair.status === 'DELIVERED' && ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(user?.role || '') && (
                 <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
@@ -625,23 +587,18 @@ export default function RepairDetails() {
                     </div>
                     <div>
                       <h5 className="font-bold text-sm text-amber-900">Warranty Claim / Re-Problem</h5>
-                      <p className="text-xs text-amber-700">If the customer reports a recurring fault after delivery, reopen this job for warranty service.</p>
+                      <p className="text-xs text-amber-700">If the customer reports a recurring fault after delivery, reopen this job.</p>
                     </div>
                   </div>
-                  <Button
-                    type="button"
-                    onClick={() => setIsReopenDialogOpen(true)}
-                    className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-10 px-5 rounded-xl shrink-0 shadow-md shadow-rose-600/10"
-                  >
-                    <AlertCircle className="w-4 h-4 mr-1.5" />
-                    Reopen as Re-Problem
+                  <Button onClick={() => setIsReopenDialogOpen(true)} className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-10 px-5 rounded-xl shrink-0">
+                    <AlertCircle className="w-4 h-4 mr-1.5" /> Reopen as Re-Problem
                   </Button>
                 </div>
               )}
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Update Operation Status</h4>
-                <div className="flex flex-wrap gap-2.5">
+                <div className="flex flex-wrap gap-2">
                   {[
                     'DIAGNOSING',
                     'IN_PROCESS',
@@ -658,8 +615,8 @@ export default function RepairDetails() {
                       onClick={() => updateStatus(s)}
                       disabled={updating || repair.status === s}
                       variant={repair.status === s ? "default" : "outline"}
-                      className={`rounded-2xl font-bold h-11 px-5 text-xs ${repair.status === s
-                        ? s === 'RE_PROBLEM' ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20' : 'bg-indigo-600 shadow-lg shadow-indigo-600/20 text-white'
+                      className={`rounded-2xl font-bold h-10 px-4 text-xs ${repair.status === s
+                        ? s === 'RE_PROBLEM' ? 'bg-rose-600 text-white shadow-md' : 'bg-indigo-600 shadow-md text-white'
                         : s === 'RE_PROBLEM' ? 'border-rose-200 text-rose-700 hover:bg-rose-50' : 'border-slate-200 hover:bg-slate-50'
                         }`}
                     >
@@ -671,23 +628,20 @@ export default function RepairDetails() {
             </CardContent>
           </Card>
 
-          {/* Communication & Multi-Role Notes Section */}
-          <Card className="rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white">
+          {/* Communication & Technical Notes */}
+          <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white w-full">
             <CardHeader className="bg-slate-50/50 p-6 sm:p-8 border-b">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center border border-blue-100">
-                    <MessageSquare className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl font-bold">Communication & Technical Notes</CardTitle>
-                    <CardDescription className="text-xs">Real-time collaboration between Reception, Technicians, and Admin.</CardDescription>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center border border-blue-100 shrink-0">
+                  <MessageSquare className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl font-bold">Communication & Technical Notes</CardTitle>
+                  <CardDescription className="text-xs">Real-time collaboration across roles.</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="p-6 sm:p-8 space-y-6">
-              {/* Notes List */}
               <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                 {notes.length === 0 ? (
                   <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
@@ -700,14 +654,14 @@ export default function RepairDetails() {
                       <div
                         key={n.id}
                         className={cn(
-                          "p-4 rounded-2xl text-xs space-y-1.5 border",
-                          isAlert ? "bg-rose-50/90 border-rose-200 text-rose-950" : "bg-slate-50 border-slate-100 text-slate-900"
+                          "p-4 rounded-2xl text-xs space-y-1.5 border break-words",
+                          isAlert ? "bg-rose-50 border-rose-200 text-rose-950" : "bg-slate-50 border-slate-100 text-slate-900"
                         )}
                       >
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
                           <span className="font-extrabold text-[11px] flex items-center gap-1.5">
-                            {isAlert ? <Flame className="h-3.5 w-3.5 text-rose-600" /> : null}
-                            {n.authorName || n.technician?.name || 'Staff Member'}
+                            {isAlert ? <Flame className="h-3.5 w-3.5 text-rose-600 shrink-0" /> : null}
+                            <span>{n.authorName || n.technician?.name || 'Staff Member'}</span>
                             <Badge variant="outline" className="text-[9px] px-1.5 py-0 rounded-md font-bold uppercase">
                               {n.authorRole || n.technician?.role || 'STAFF'}
                             </Badge>
@@ -723,10 +677,9 @@ export default function RepairDetails() {
                 )}
               </div>
 
-              {/* Add Note Composer */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
                 <Textarea
-                  placeholder="Post internal instruction, customer update, or diagnostic note..."
+                  placeholder="Post internal instruction or diagnostic note..."
                   value={newNote}
                   onChange={e => setNewNote(e.target.value)}
                   className="rounded-2xl border-slate-200 text-xs font-medium min-h-[70px]"
@@ -736,7 +689,7 @@ export default function RepairDetails() {
                     size="sm"
                     disabled={submittingNote || !newNote.trim()}
                     onClick={handleAddNote}
-                    className="rounded-xl h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm"
+                    className="rounded-xl h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm cursor-pointer"
                   >
                     {submittingNote ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Send className="h-3.5 w-3.5 mr-1.5" />}
                     Add Note
@@ -747,66 +700,62 @@ export default function RepairDetails() {
           </Card>
         </div>
 
-        <div className="space-y-8">
-          {/* Customer & Billing */}
-          <Card className="rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white">
-            <CardHeader className="bg-slate-950 text-white p-8">
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-xl font-bold flex items-center gap-2">
-                  <User className="h-5 w-5" /> Client Information
-                </CardTitle>
-              </div>
+        {/* Right Sidebar Column */}
+        <div className="space-y-6 sm:space-y-8 w-full min-w-0">
+
+          {/* Client & Billing Card */}
+          <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white w-full">
+            <CardHeader className="bg-slate-950 text-white p-6 sm:p-8">
+              <CardTitle className="text-lg sm:text-xl font-bold flex items-center gap-2">
+                <User className="h-5 w-5 text-indigo-400" /> Client Information
+              </CardTitle>
             </CardHeader>
-            <CardContent className="p-8 space-y-8">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
+            <CardContent className="p-6 sm:p-8 space-y-6">
+              <div className="space-y-3.5 text-xs">
+                <div className="flex justify-between items-center gap-2">
                   <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Customer ID</span>
-                  <span className="font-mono font-bold text-blue-600 text-xs bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
+                  <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 truncate">
                     {repair.customer?.customerId || repair.customerId || 'CUS-00101'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center gap-2">
                   <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Client Name</span>
-                  <span className="font-bold text-slate-900">{repair.customerName}</span>
+                  <span className="font-bold text-slate-900 truncate">{repair.customerName}</span>
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center gap-2">
                   <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Phone Number</span>
-                  <span className="font-mono font-bold text-slate-900">{repair.customerPhone}</span>
+                  <span className="font-mono font-bold text-slate-900 truncate">{repair.customerPhone}</span>
                 </div>
                 {repair.customerEmail && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Email Address</span>
-                    <span className="font-bold text-slate-900 text-sm">{repair.customerEmail}</span>
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Email</span>
+                    <span className="font-bold text-slate-900 truncate">{repair.customerEmail}</span>
                   </div>
                 )}
               </div>
 
               <Separator />
 
-              <div className="space-y-6">
-                <h4 className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+              <div className="space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
                   <Banknote className="h-4 w-4" /> Billing Snapshot
                 </h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center text-lg">
+                <div className="space-y-2.5 text-xs sm:text-sm">
+                  <div className="flex justify-between items-center">
                     <span className="font-bold text-slate-500">Total Estimation</span>
                     <span className="font-black font-mono text-slate-900">
-                      {repair.estimatedCost !== null && repair.estimatedCost !== undefined
-                        ? formatNPR(repair.estimatedCost)
-                        : <span className="text-sm font-medium text-slate-400 italic">Unspecified</span>}
+                      {repair.estimatedCost != null ? formatNPR(repair.estimatedCost) : 'Unspecified'}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-lg">
+                  <div className="flex justify-between items-center">
                     <span className="font-bold text-slate-500">Advance Paid</span>
                     <span className="font-black font-mono text-emerald-600">{formatNPR(repair.advancePaid || 0)}</span>
                   </div>
-                  <Separator className="my-2" />
-                  <div className="flex justify-between items-center text-2xl">
+                  <Separator className="my-1" />
+                  <div className="flex justify-between items-center text-base sm:text-lg">
                     <span className="font-black text-slate-900">Balance Due</span>
                     <span className="font-black font-mono text-rose-600">
-                      {repair.estimatedCost !== null && repair.estimatedCost !== undefined
-                        ? formatNPR(Math.max(0, repair.estimatedCost - (repair.advancePaid || 0)))
-                        : <span className="text-sm font-medium text-slate-400 italic">—</span>}
+                      {repair.estimatedCost != null ? formatNPR(Math.max(0, repair.estimatedCost - (repair.advancePaid || 0))) : '—'}
                     </span>
                   </div>
                 </div>
@@ -814,26 +763,26 @@ export default function RepairDetails() {
             </CardContent>
           </Card>
 
-          {/* Specialist Assignment & Transfer Card */}
-          <Card className="rounded-[40px] border-indigo-100 bg-indigo-50/20 shadow-sm overflow-hidden bg-white">
-            <CardHeader className="p-8">
-              <CardTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+          {/* Specialist Assignment */}
+          <Card className="rounded-[32px] sm:rounded-[40px] border-indigo-100 shadow-sm overflow-hidden bg-white w-full">
+            <CardHeader className="p-6 sm:p-8">
+              <CardTitle className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
                 <Zap className="h-5 w-5 text-indigo-600" /> Specialist Assignment
               </CardTitle>
-              <CardDescription>Assign or transfer this diagnostic case.</CardDescription>
+              <CardDescription className="text-xs">Assign or transfer diagnostic case.</CardDescription>
             </CardHeader>
-            <CardContent className="p-8 pt-0 space-y-6">
+            <CardContent className="p-6 sm:p-8 pt-0 space-y-4">
               <Select
                 value={repair.technicianId || ''}
                 onValueChange={handleAssignmentChange}
                 disabled={updating}
               >
-                <SelectTrigger className="h-14 rounded-2xl border-slate-200 bg-white shadow-sm font-bold text-base">
+                <SelectTrigger className="h-12 rounded-2xl border-slate-200 bg-white shadow-xs font-bold text-xs sm:text-sm">
                   <SelectValue placeholder="Manual Assignment" />
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl">
                   {technicians.map((t) => (
-                    <SelectItem key={t.id} value={t.id} className="rounded-xl font-bold py-3">
+                    <SelectItem key={t.id} value={t.id} className="rounded-xl font-bold text-xs py-2.5">
                       {t.name} ({t.role.replace(/_/g, ' ')})
                     </SelectItem>
                   ))}
@@ -841,27 +790,26 @@ export default function RepairDetails() {
               </Select>
 
               {repair.technician && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-indigo-100 shadow-sm">
-                    <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-600/30">
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center gap-3.5 p-3.5 bg-slate-50 rounded-2xl border border-indigo-100">
+                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">
                       {repair.technician.name.charAt(0)}
                     </div>
-                    <div className="flex-1">
-                      <p className="font-bold text-slate-900">{repair.technician.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-slate-900 text-xs truncate">{repair.technician.name}</p>
                       <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Active Specialist</p>
                     </div>
                   </div>
 
-                  {/* Quick Transfer Button */}
                   {['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LEAD_TECHNICIAN', 'TECHNICIAN'].includes(user?.role || '') && (
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() => setIsTransferDialogOpen(true)}
-                      className="w-full rounded-2xl border-amber-200 text-amber-800 hover:bg-amber-50 font-bold text-xs h-11"
+                      className="w-full rounded-2xl border-amber-200 text-amber-800 hover:bg-amber-50 font-bold text-xs h-10 cursor-pointer"
                     >
-                      <ArrowRightLeft className="h-4 w-4 mr-2 text-amber-600" />
-                      Transfer Case to Another Specialist
+                      <ArrowRightLeft className="h-3.5 w-3.5 mr-1.5 text-amber-600" />
+                      Transfer Case
                     </Button>
                   )}
                 </div>
@@ -872,104 +820,110 @@ export default function RepairDetails() {
       </div>
 
       {/* ========================================================================= */}
-      {/* 1. REOPEN FOR RE-PROBLEM (WARRANTY) MODAL                                 */}
+      {/* MODALS SECTION (Crash Proof & Fully Interactive)                         */}
       {/* ========================================================================= */}
+
+      {/* 1. Reopen Dialog */}
       <Dialog open={isReopenDialogOpen} onOpenChange={setIsReopenDialogOpen}>
         <DialogContent className="max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
           <DialogHeader>
             <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-1 border border-rose-100">
               <RotateCcw className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-xl font-bold text-slate-900">Reopen for Re-Problem (Warranty)</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-slate-900">Reopen Warranty Claim</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Reopen job <b>#{repair?.repairNumber}</b> for warranty diagnostic assessment
+              Reopen job <b>#{repair?.repairNumber}</b> for warranty assessment.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Reported Problem / Customer Remarks *</Label>
+              <Label className="text-xs font-bold text-slate-700">Reported Problem *</Label>
               <Textarea
-                placeholder="e.g. Customer reported display flicker after 3 days of delivery..."
+                placeholder="e.g. Customer reported recurring issue..."
                 value={reopenRemark}
                 onChange={e => setReopenRemark(e.target.value)}
-                className="rounded-xl border-slate-200 min-h-[100px] text-xs font-medium"
+                className="rounded-xl border-slate-200 min-h-[90px] text-xs"
               />
             </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              This will update the status to <b>RE-PROBLEM</b>, add a timestamped log to the activity trace, and alert the technical squad.
-            </p>
           </div>
 
           <DialogFooter className="pt-2 flex items-center justify-between gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setIsReopenDialogOpen(false)}
-              className="rounded-xl text-xs font-bold text-slate-500"
-            >
+            <Button variant="ghost" onClick={() => setIsReopenDialogOpen(false)} className="rounded-xl text-xs font-bold text-slate-500">
               Cancel
             </Button>
-            <Button
-              type="button"
-              onClick={handleReopenReProblem}
-              className="rounded-xl h-10 px-5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/10"
-              disabled={updating}
-            >
-              {updating ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RotateCcw className="h-4 w-4 mr-1.5" />}
+            <Button onClick={handleReopenReProblem} className="rounded-xl h-10 px-5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs" disabled={updating}>
               Confirm Reopen
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ========================================================================= */}
-      {/* 2. PRIORITY ALERT TO ASSIGNED TECHNICIAN MODAL                            */}
-      {/* ========================================================================= */}
+      {/* 2. Advanced Priority Alert Technician Dialog (Interactive Urgency Buttons) */}
       <Dialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
-          <DialogHeader>
-            <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-1 border border-rose-100">
-              <Bell className="h-5 w-5" />
+        <DialogContent className="max-w-md w-full rounded-[32px] p-6 sm:p-7 border border-slate-200 shadow-2xl bg-white space-y-6">
+          <DialogHeader className="space-y-2">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100 shadow-xs">
+              <Bell className="h-6 w-6 animate-pulse" />
             </div>
-            <DialogTitle className="text-xl font-bold text-slate-900">Alert Assigned Technician</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Send instant high-priority alert for Job <b>#{repair?.repairNumber}</b> to <b>{repair?.technician?.name}</b>
+            <DialogTitle className="text-xl font-extrabold text-slate-900 tracking-tight">
+              Alert Assigned Technician
+            </DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm text-slate-500 font-medium leading-relaxed">
+              Dispatch an operational alert for Job <span className="font-mono font-bold text-slate-900">#{repair?.repairNumber}</span> to <span className="font-bold text-slate-800">{repair?.technician?.name || 'Assigned Specialist'}</span>.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Urgency Level</Label>
-              <Select value={alertPriority} onValueChange={(val: any) => setAlertPriority(val)}>
-                <SelectTrigger className="rounded-xl h-11 border-slate-200 text-xs font-bold">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-2xl">
-                  <SelectItem value="URGENT" className="text-xs font-bold text-rose-600">🚨 URGENT Priority</SelectItem>
-                  <SelectItem value="HIGH" className="text-xs font-bold text-amber-600">⚠️ High Priority</SelectItem>
-                  <SelectItem value="NORMAL" className="text-xs font-bold text-slate-700">ℹ️ Normal Priority</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-wider text-slate-500">Select Urgency Level</Label>
+              <div className="grid grid-cols-3 gap-2.5">
+                {[
+                  { value: 'URGENT', label: 'Urgent', desc: 'Immediate Action' },
+                  { value: 'HIGH', label: 'High', desc: 'Priority Queue' },
+                  { value: 'NORMAL', label: 'Normal', desc: 'Standard Notice' },
+                ].map((item) => {
+                  const isSelected = alertPriority === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setAlertPriority(item.value as any)}
+                      className={cn(
+                        "flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all cursor-pointer text-center gap-1",
+                        item.value === 'URGENT' && "border-rose-200 bg-rose-50/50 text-rose-800 hover:bg-rose-100",
+                        item.value === 'HIGH' && "border-amber-200 bg-amber-50/50 text-amber-900 hover:bg-amber-100",
+                        item.value === 'NORMAL' && "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100",
+                        isSelected && item.value === 'URGENT' && "border-rose-600 bg-rose-600 text-white shadow-md shadow-rose-600/20 scale-[1.02]",
+                        isSelected && item.value === 'HIGH' && "border-amber-500 bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20 scale-[1.02]",
+                        isSelected && item.value === 'NORMAL' && "border-slate-900 bg-slate-900 text-white shadow-md scale-[1.02]"
+                      )}
+                    >
+                      <span className="text-xs font-black uppercase tracking-wider">{item.label}</span>
+                      <span className="text-[10px] opacity-80 font-medium">{item.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Alert Message *</Label>
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-wider text-slate-500">Alert Message / Instructions *</Label>
               <Textarea
-                placeholder="e.g. Customer is waiting at the counter. Please expedite IC replacement testing."
+                placeholder="e.g. Customer waiting at counter. Please expedite diagnostics..."
                 value={alertMessage}
                 onChange={e => setAlertMessage(e.target.value)}
-                className="rounded-xl border-slate-200 min-h-[90px] text-xs font-medium"
+                className="rounded-2xl border-slate-200 bg-slate-50/50 min-h-[110px] text-xs sm:text-sm font-medium p-3.5 focus:bg-white transition-all shadow-inner"
               />
             </div>
           </div>
 
-          <DialogFooter className="pt-2 flex items-center justify-between gap-2">
+          <DialogFooter className="pt-2 flex flex-row items-center gap-2.5 border-t border-slate-100">
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               onClick={() => setIsAlertDialogOpen(false)}
-              className="rounded-xl text-xs font-bold text-slate-500"
+              className="flex-1 rounded-2xl h-11 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs cursor-pointer"
             >
               Cancel
             </Button>
@@ -977,18 +931,30 @@ export default function RepairDetails() {
               type="button"
               disabled={sendingAlert || !alertMessage.trim()}
               onClick={handleSendAlert}
-              className="rounded-xl h-10 px-5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20"
+              className={cn(
+                "flex-1 rounded-2xl h-11 font-bold text-xs shadow-md cursor-pointer text-white",
+                alertPriority === 'URGENT' && "bg-rose-600 hover:bg-rose-700 shadow-rose-600/20",
+                alertPriority === 'HIGH' && "bg-amber-500 hover:bg-amber-600 text-slate-950 font-black shadow-amber-500/20",
+                alertPriority === 'NORMAL' && "bg-slate-900 hover:bg-slate-800 shadow-slate-900/20"
+              )}
             >
-              {sendingAlert ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
-              Send Priority Alert
+              {sendingAlert ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                  <span>Dispatching...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-1.5" />
+                  <span>Dispatch {alertPriority} Alert</span>
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ========================================================================= */}
-      {/* 3. REPAIR TRANSFER MODAL                                                  */}
-      {/* ========================================================================= */}
+      {/* 3. Transfer Dialog */}
       <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}>
         <DialogContent className="max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
           <DialogHeader>
@@ -997,7 +963,7 @@ export default function RepairDetails() {
             </div>
             <DialogTitle className="text-xl font-bold text-slate-900">Transfer Repair Case</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Transfer Job <b>#{repair?.repairNumber}</b> to another lab technician
+              Transfer Job <b>#{repair?.repairNumber}</b> to another technician
             </DialogDescription>
           </DialogHeader>
 
@@ -1010,7 +976,7 @@ export default function RepairDetails() {
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl max-h-56">
                   {technicians.filter(t => t.id !== repair?.technicianId).map((t) => (
-                    <SelectItem key={t.id} value={t.id} className="text-xs font-bold py-2.5">
+                    <SelectItem key={t.id} value={t.id} className="text-xs font-bold py-2">
                       {t.name} ({t.role.replace(/_/g, ' ')})
                     </SelectItem>
                   ))}
@@ -1021,39 +987,26 @@ export default function RepairDetails() {
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">Reason for Transfer *</Label>
               <Textarea
-                placeholder="e.g. Requires specialized microscope setup for CPU reballing..."
+                placeholder="Reason..."
                 value={transferReason}
                 onChange={e => setTransferReason(e.target.value)}
-                className="rounded-xl border-slate-200 min-h-[90px] text-xs font-medium"
+                className="rounded-xl border-slate-200 min-h-[90px] text-xs"
               />
             </div>
           </div>
 
           <DialogFooter className="pt-2 flex items-center justify-between gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setIsTransferDialogOpen(false)}
-              className="rounded-xl text-xs font-bold text-slate-500"
-            >
+            <Button variant="ghost" onClick={() => setIsTransferDialogOpen(false)} className="rounded-xl text-xs font-bold text-slate-500">
               Cancel
             </Button>
-            <Button
-              type="button"
-              disabled={sendingTransfer || !transferTargetId || !transferReason.trim()}
-              onClick={handleSendTransfer}
-              className="rounded-xl h-10 px-5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-600/20"
-            >
-              {sendingTransfer ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <ArrowRightLeft className="h-4 w-4 mr-1.5" />}
+            <Button disabled={sendingTransfer || !transferTargetId || !transferReason.trim()} onClick={handleSendTransfer} className="rounded-xl h-10 px-5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs">
               Submit Transfer
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ========================================================================= */}
-      {/* 4. COURIER RETURN DISPATCH DIALOG                                         */}
-      {/* ========================================================================= */}
+      {/* 4. Courier Dispatch Dialog */}
       <Dialog open={isCourierDispatchDialogOpen} onOpenChange={setIsCourierDispatchDialogOpen}>
         <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-lg">
           <form onSubmit={handleSaveCourierDispatch}>
@@ -1065,14 +1018,12 @@ export default function RepairDetails() {
                 Dispatch Repaired Device via Courier
               </DialogTitle>
               <DialogDescription className="text-slate-500 text-xs">
-                Record shipment details to dispatch job <strong>#{repair?.repairNumber}</strong> back to the customer.
+                Record shipment details for <strong>#{repair?.repairNumber}</strong>.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 my-4">
+            <div className="space-y-4 my-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-
-                {/* Courier Partner */}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-slate-700">Courier Partner *</Label>
                   <Select
@@ -1083,149 +1034,39 @@ export default function RepairDetails() {
                       <SelectValue placeholder="Select Courier" />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl shadow-xl">
-                      {[
-                        "Nepal Can Move (NCM)",
-                        "Sundar Courier",
-                        "Nepal Post / GPO",
-                        "Pathao Logistics",
-                        "Aramex Nepal",
-                        "DHL Express",
-                        "FedEx / TNT",
-                        "Gorkha Express",
-                        "Gaura Courier",
-                        "Other Courier"
-                      ].map(c => (
+                      {["Nepal Can Move (NCM)", "Sundar Courier", "Pathao Logistics", "Aramex Nepal", "DHL Express", "Other Courier"].map(c => (
                         <SelectItem key={c} value={c}>{c}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {courierDispatchForm.returnCourierCompany === 'Other Courier' && (
-                    <Input
-                      placeholder="Specify Courier Name"
-                      value={courierDispatchForm.customCourierCompany}
-                      onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, customCourierCompany: e.target.value }))}
-                      className="h-9 rounded-xl border-slate-200 bg-white text-xs mt-1"
-                      required
-                    />
-                  )}
                 </div>
 
-                {/* Tracking / Consignment Number */}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-slate-700">Consignment / Tracking # *</Label>
                   <Input
-                    placeholder="e.g. SCN-982341, TRK-10293"
+                    placeholder="e.g. SCN-982341"
                     value={courierDispatchForm.returnCourierTrackingNumber}
                     onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierTrackingNumber: e.target.value }))}
                     className="h-10 rounded-xl border-slate-200 bg-slate-50 font-mono text-xs font-bold"
                     required
                   />
                 </div>
-
-                {/* Dispatch Date */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Dispatch Date *</Label>
-                  <Input
-                    type="date"
-                    value={courierDispatchForm.returnCourierDispatchDate}
-                    onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierDispatchDate: e.target.value }))}
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
-                    required
-                  />
-                </div>
-
-                {/* Destination District */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Destination District</Label>
-                  <Input
-                    placeholder="e.g. Pokhara, Morang"
-                    value={courierDispatchForm.destinationDistrict}
-                    onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, destinationDistrict: e.target.value }))}
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
-                  />
-                </div>
-
-                {/* Receiver Name */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Receiver Name</Label>
-                  <Input
-                    placeholder="Receiver Full Name"
-                    value={courierDispatchForm.receiverName}
-                    onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, receiverName: e.target.value }))}
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
-                  />
-                </div>
-
-                {/* Receiver Phone */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Receiver Phone</Label>
-                  <Input
-                    placeholder="Receiver Phone Number"
-                    value={courierDispatchForm.receiverPhone}
-                    onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, receiverPhone: e.target.value }))}
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-mono"
-                  />
-                </div>
-
-              </div>
-
-              {/* Destination Address */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Destination Full Address</Label>
-                <Input
-                  placeholder="Full delivery location / address"
-                  value={courierDispatchForm.destinationAddress}
-                  onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, destinationAddress: e.target.value }))}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
-                />
-              </div>
-
-              {/* Courier Notes */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Courier Return Notes</Label>
-                <Textarea
-                  rows={2}
-                  placeholder="e.g. Fragile display sticker attached, bubble wrap 3-layers"
-                  value={courierDispatchForm.returnCourierNotes}
-                  onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierNotes: e.target.value }))}
-                  className="rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
-                />
               </div>
             </div>
 
             <DialogFooter className="gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsCourierDispatchDialogOpen(false)}
-                disabled={sendingCourierDispatch}
-                className="h-10 rounded-xl border-slate-200 text-xs font-bold"
-              >
+              <Button type="button" variant="outline" onClick={() => setIsCourierDispatchDialogOpen(false)} className="h-10 rounded-xl border-slate-200 text-xs font-bold">
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={sendingCourierDispatch}
-                className="h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 shadow-sm flex items-center gap-1.5"
-              >
-                {sendingCourierDispatch ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <span>Dispatching...</span>
-                  </>
-                ) : (
-                  <>
-                    <Truck className="h-3.5 w-3.5" />
-                    <span>Confirm Courier Dispatch</span>
-                  </>
-                )}
+              <Button type="submit" disabled={sendingCourierDispatch} className="h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 shadow-sm">
+                {sendingCourierDispatch ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Truck className="h-3.5 w-3.5 mr-1" />}
+                Confirm Dispatch
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Printable Service Slip Modal */}
       {repair && (
         <ServiceSlipModal
           open={isSlipModalOpen}
@@ -1235,7 +1076,6 @@ export default function RepairDetails() {
         />
       )}
 
-      {/* Edit Repair Modal */}
       {isEditModalOpen && repair && (
         <EditRepairModal
           open={isEditModalOpen}
