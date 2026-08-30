@@ -3358,7 +3358,12 @@ async function fetchSafeStaffUsers() {
   try {
     const { data: staffMembers, error: staffErr } = await supabaseAdmin.from("Staff").select("*").order("name", { ascending: true });
     if (!staffErr && Array.isArray(staffMembers) && staffMembers.length > 0) {
-      return staffMembers.filter((s) => s.status !== "INACTIVE" && s.status !== "SUSPENDED").map((s) => ({
+      return staffMembers.filter((s) => {
+        const status = (s.status || "ACTIVE").toUpperCase();
+        const email = (s.email || "").toLowerCase();
+        const isReal = !email.endsWith(".local") && !email.includes("2fatest") && !email.includes("test_admin");
+        return status === "ACTIVE" && isReal;
+      }).map((s) => ({
         id: s.userId || s.id,
         name: s.name || "Staff Member",
         email: s.email || "",
@@ -3369,7 +3374,7 @@ async function fetchSafeStaffUsers() {
         status: s.status || "ACTIVE"
       }));
     }
-    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("*").order("name", { ascending: true });
+    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("*").in("role", AUTHORIZED_STAFF_ROLES).order("name", { ascending: true });
     if (userErr) {
       console.error("[SUPABASE USER QUERY ERROR]", userErr);
       return [];
@@ -3377,9 +3382,11 @@ async function fetchSafeStaffUsers() {
     return (users || []).filter((u) => {
       const status = (u.status || "ACTIVE").toUpperCase();
       const role = (u.role || "").toUpperCase();
+      const email = (u.email || "").toLowerCase();
       const isStaffRole = AUTHORIZED_STAFF_ROLES.includes(role);
-      const isActive = status !== "SUSPENDED" && status !== "INACTIVE" && status !== "DELETED";
-      return isStaffRole && isActive;
+      const isRealAccount = !email.endsWith(".local") && !email.includes("2fatest") && !email.includes("test_admin");
+      const isActive = status === "ACTIVE";
+      return isStaffRole && isActive && isRealAccount;
     });
   } catch (err) {
     console.error("[SAFE USER FETCH EXCEPTION]", err);

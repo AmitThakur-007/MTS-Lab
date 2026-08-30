@@ -49,11 +49,11 @@ function getNepalTimeDetails() {
 }
 
 /**
- * Helper to fetch only staff registered in Staff Management / User accounts
+ * Helper to fetch ONLY active staff members registered in the Staff Management directory
  */
 async function fetchSafeStaffUsers() {
   try {
-    // 1. Check if dedicated Staff table exists
+    // 1. Check if dedicated Staff table exists and has registered directory members
     const { data: staffMembers, error: staffErr } = await supabaseAdmin
       .from('Staff')
       .select('*')
@@ -61,7 +61,12 @@ async function fetchSafeStaffUsers() {
 
     if (!staffErr && Array.isArray(staffMembers) && staffMembers.length > 0) {
       return staffMembers
-        .filter((s: any) => s.status !== 'INACTIVE' && s.status !== 'SUSPENDED')
+        .filter((s: any) => {
+          const status = (s.status || 'ACTIVE').toUpperCase();
+          const email = (s.email || '').toLowerCase();
+          const isReal = !email.endsWith('.local') && !email.includes('2fatest') && !email.includes('test_admin');
+          return status === 'ACTIVE' && isReal;
+        })
         .map((s: any) => ({
           id: s.userId || s.id,
           name: s.name || 'Staff Member',
@@ -74,10 +79,11 @@ async function fetchSafeStaffUsers() {
         }));
     }
 
-    // 2. Fallback directly to User table with role filters
+    // 2. Query User table with strict staff directory filtering
     const { data: users, error: userErr } = await supabaseAdmin
       .from('User')
       .select('*')
+      .in('role', AUTHORIZED_STAFF_ROLES)
       .order('name', { ascending: true });
 
     if (userErr) {
@@ -88,9 +94,14 @@ async function fetchSafeStaffUsers() {
     return (users || []).filter((u: any) => {
       const status = (u.status || 'ACTIVE').toUpperCase();
       const role = (u.role || '').toUpperCase();
+      const email = (u.email || '').toLowerCase();
       const isStaffRole = AUTHORIZED_STAFF_ROLES.includes(role);
-      const isActive = status !== 'SUSPENDED' && status !== 'INACTIVE' && status !== 'DELETED';
-      return isStaffRole && isActive;
+
+      // Exclude deactivated/suspended users and leftover local testing accounts
+      const isRealAccount = !email.endsWith('.local') && !email.includes('2fatest') && !email.includes('test_admin');
+      const isActive = status === 'ACTIVE';
+
+      return isStaffRole && isActive && isRealAccount;
     });
   } catch (err) {
     console.error('[SAFE USER FETCH EXCEPTION]', err);
