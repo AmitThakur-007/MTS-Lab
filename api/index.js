@@ -3343,6 +3343,19 @@ function getNepalTimeDetails() {
     windowEnd: "10:35:00"
   };
 }
+async function fetchSafeStaffUsers() {
+  try {
+    const { data: users, error } = await supabaseAdmin.from("User").select("*").order("name", { ascending: true });
+    if (error) {
+      console.error("[SUPABASE USER QUERY ERROR]", error);
+      return [];
+    }
+    return (users || []).filter((u) => u.status !== "SUSPENDED" && u.status !== "INACTIVE");
+  } catch (err) {
+    console.error("[SAFE USER FETCH EXCEPTION]", err);
+    return [];
+  }
+}
 router8.get("/server-time", (req, res) => {
   const time = getNepalTimeDetails();
   return res.json({
@@ -3357,12 +3370,9 @@ router8.get("/server-time", (req, res) => {
 router8.get("/pending-requests", authenticate, async (req, res) => {
   try {
     const { data: records } = await supabaseAdmin.from("Attendance").select("*").eq("status", "PENDING").order("createdAt", { ascending: false });
-    const userIds = Array.from(new Set((records || []).map((r) => r.userId).filter(Boolean)));
-    let userMap = /* @__PURE__ */ new Map();
-    if (userIds.length > 0) {
-      const { data: users } = await supabaseAdmin.from("User").select("id, name, role, department, avatarUrl").in("id", userIds);
-      (users || []).forEach((u) => userMap.set(u.id, u));
-    }
+    const staffList = await fetchSafeStaffUsers();
+    const userMap = /* @__PURE__ */ new Map();
+    staffList.forEach((u) => userMap.set(u.id, u));
     const formatted = (records || []).map((r) => ({
       ...r,
       user: userMap.get(r.userId) || { name: "Staff Member", role: "TECHNICIAN" }
@@ -3376,12 +3386,7 @@ var handleRosterRequest = async (req, res) => {
   try {
     const time = getNepalTimeDetails();
     const todayStr = req.query.date || time.dateString;
-    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("id, name, email, role, department, phone, avatarUrl, status").order("name", { ascending: true });
-    if (userErr) {
-      console.error("[ATTENDANCE ROSTER USERS ERROR]", userErr);
-      return res.status(500).json({ error: "Failed to retrieve staff roster." });
-    }
-    const staffList = (users || []).filter((u) => u.status !== "SUSPENDED" && u.status !== "INACTIVE");
+    const staffList = await fetchSafeStaffUsers();
     const { data: attendanceRecords } = await supabaseAdmin.from("Attendance").select("*").eq("date", todayStr);
     const attendanceMap = /* @__PURE__ */ new Map();
     (attendanceRecords || []).forEach((rec) => {
@@ -3404,7 +3409,7 @@ var handleRosterRequest = async (req, res) => {
         role: u.role || "TECHNICIAN",
         department: u.department || "Repair Lab",
         phone: u.phone || "",
-        avatarUrl: u.avatarUrl || null,
+        avatarUrl: u.avatarUrl || u.profileImage || null,
         date: todayStr,
         status: record ? record.status : "NOT_MARKED",
         checkInTime: record ? record.checkInTime : null,
@@ -3417,7 +3422,7 @@ var handleRosterRequest = async (req, res) => {
           email: u.email,
           role: u.role || "TECHNICIAN",
           department: u.department || "Repair Lab",
-          profileImage: u.avatarUrl || null
+          profileImage: u.avatarUrl || u.profileImage || null
         },
         attendance: record ? {
           id: record.id,
@@ -3467,11 +3472,7 @@ router8.get("/monthly-report", authenticate, async (req, res) => {
   try {
     const { month } = req.query;
     const currentMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("id, name, email, role, department, avatarUrl, status").order("name", { ascending: true });
-    if (userErr) {
-      return res.status(500).json({ error: "Failed to load staff list." });
-    }
-    const staffList = (users || []).filter((u) => u.status !== "SUSPENDED" && u.status !== "INACTIVE");
+    const staffList = await fetchSafeStaffUsers();
     const { data: records } = await supabaseAdmin.from("Attendance").select("*").gte("date", `${currentMonth}-01`).lte("date", `${currentMonth}-31`);
     const userLogsMap = /* @__PURE__ */ new Map();
     (records || []).forEach((r) => {
@@ -3505,7 +3506,7 @@ router8.get("/monthly-report", authenticate, async (req, res) => {
           email: u.email,
           role: u.role || "TECHNICIAN",
           department: u.department || "Repair Lab",
-          profileImage: u.avatarUrl || null
+          profileImage: u.avatarUrl || u.profileImage || null
         },
         presentDays,
         absentDays,
@@ -3636,8 +3637,8 @@ router8.post("/dispatch-request", authenticate, authorize(["MANAGER", "SUPER_ADM
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       }).eq("id", managerRecord.id);
     }
-    const { data: staffUsers } = await supabaseAdmin.from("User").select("id").neq("id", req.user.id).not("status", "eq", "SUSPENDED");
-    for (const staff of staffUsers || []) {
+    const staffUsers = await fetchSafeStaffUsers();
+    for (const staff of staffUsers.filter((u) => u.id !== req.user.id)) {
       const { data: exists } = await supabaseAdmin.from("Attendance").select("id, status").eq("userId", staff.id).eq("date", time.dateString).maybeSingle();
       if (!exists) {
         await supabaseAdmin.from("Attendance").insert([
@@ -3793,12 +3794,9 @@ router8.get("/history", authenticate, async (req, res) => {
     }
     const { data: records, error } = await query.order("date", { ascending: false }).limit(parseInt(limit, 10) || 100);
     if (error) return res.status(500).json({ error: "Failed to fetch attendance history." });
-    const userIds = Array.from(new Set((records || []).map((r) => r.userId).filter(Boolean)));
-    let userMap = /* @__PURE__ */ new Map();
-    if (userIds.length > 0) {
-      const { data: users } = await supabaseAdmin.from("User").select("id, name, role, department").in("id", userIds);
-      (users || []).forEach((u) => userMap.set(u.id, u));
-    }
+    const staffList = await fetchSafeStaffUsers();
+    const userMap = /* @__PURE__ */ new Map();
+    staffList.forEach((u) => userMap.set(u.id, u));
     const enriched = (records || []).map((r) => ({
       ...r,
       user: userMap.get(r.userId) || { name: "Staff Member", role: "TECHNICIAN" }
@@ -3838,12 +3836,9 @@ router8.get("/export", authenticate, async (req, res) => {
     const { month } = req.query;
     const targetMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
     const { data: records } = await supabaseAdmin.from("Attendance").select("*").gte("date", `${targetMonth}-01`).lte("date", `${targetMonth}-31`).order("date", { ascending: false });
-    const userIds = Array.from(new Set((records || []).map((r) => r.userId).filter(Boolean)));
-    let userMap = /* @__PURE__ */ new Map();
-    if (userIds.length > 0) {
-      const { data: users } = await supabaseAdmin.from("User").select("id, name, role, department").in("id", userIds);
-      (users || []).forEach((u) => userMap.set(u.id, u));
-    }
+    const staffList = await fetchSafeStaffUsers();
+    const userMap = /* @__PURE__ */ new Map();
+    staffList.forEach((u) => userMap.set(u.id, u));
     const rows = (records || []).map((r) => {
       const u = userMap.get(r.userId) || {};
       return {
