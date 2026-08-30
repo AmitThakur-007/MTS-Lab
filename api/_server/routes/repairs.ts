@@ -227,7 +227,8 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     const role = normalizeRole(req.user!.role);
     if (role === 'TECHNICIAN' && !technicianId) {
-      query = query.eq('technicianId', req.user!.id);
+      // Allow technicians to view their own assigned jobs OR any urgent/high priority tickets globally
+      query = query.or(`technicianId.eq.${req.user!.id},priority.eq.URGENT,priority.eq.HIGH`);
     } else if (technicianId && technicianId !== 'ALL') {
       query = query.eq('technicianId', String(technicianId));
     }
@@ -763,7 +764,7 @@ router.post('/:id/courier-dispatch', authenticate, async (req: AuthRequest, res:
       .single();
 
     if (error) {
-      return res.status(500).json({ error: 'Failed to dispatch repair shipment.' });
+      return res.status(500).json({ error: 'Test dispatch failure.' });
     }
 
     await broadcastServerChange('Repair', 'UPDATE', id, updated);
