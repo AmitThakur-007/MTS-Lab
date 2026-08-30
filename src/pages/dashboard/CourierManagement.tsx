@@ -1,35 +1,35 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  Truck, 
-  Package, 
-  Search, 
-  Filter, 
-  Plus, 
-  Phone, 
-  MessageSquare, 
-  Calendar, 
-  MapPin, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  Send, 
-  Copy, 
-  Check, 
-  MoreVertical, 
-  ExternalLink, 
-  RotateCw, 
-  Edit3, 
-  Trash2, 
-  ShieldCheck, 
-  BatteryCharging, 
-  Smartphone, 
-  User, 
-  Banknote, 
-  Layers, 
-  ChevronRight, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  Eye, 
+import {
+  Truck,
+  Package,
+  Search,
+  Filter,
+  Plus,
+  Phone,
+  MessageSquare,
+  Calendar,
+  MapPin,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Send,
+  Copy,
+  Check,
+  MoreVertical,
+  ExternalLink,
+  RotateCw,
+  Edit3,
+  Trash2,
+  ShieldCheck,
+  BatteryCharging,
+  Smartphone,
+  User,
+  Banknote,
+  Layers,
+  ChevronRight,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Eye,
   Navigation,
   FileText,
   X,
@@ -49,27 +49,27 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription, 
-  DialogFooter 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
 } from "@/components/ui/dialog";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { api } from '@/services/api';
 import { useRealtimeSync } from '@/services/realtime';
@@ -177,6 +177,7 @@ export default function CourierManagement() {
 
   const [selectedShipment, setSelectedShipment] = useState<any>(null);
   const [eligibleRepairs, setEligibleRepairs] = useState<any[]>([]);
+  const [loadingRepairs, setLoadingRepairs] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Customer Autocomplete for Intake
@@ -255,7 +256,7 @@ export default function CourierManagement() {
   // Fetch Metadata & Shipments
   const fetchMetadata = async () => {
     try {
-      const data = await api.get('/couriers/filters-metadata');
+      const data: any = await api.get('/couriers/filters-metadata');
       if (data) setFiltersMetadata(data);
     } catch (err) {
       console.warn("Could not load courier filter metadata:", err);
@@ -279,7 +280,7 @@ export default function CourierManagement() {
       if (searchQuery.trim()) params.set('search', searchQuery.trim());
       if (sortBy) params.set('sortBy', sortBy);
 
-      const [shipmentsRes, statsRes] = await Promise.all([
+      const [shipmentsRes, statsRes]: any = await Promise.all([
         api.get(`/couriers?${params.toString()}`),
         api.get('/couriers/stats')
       ]);
@@ -295,12 +296,31 @@ export default function CourierManagement() {
     }
   };
 
+  // Robust Fetch Eligible Repairs with Fallback
   const fetchEligibleRepairs = async () => {
+    setLoadingRepairs(true);
     try {
-      const data = await api.get('/couriers/eligible-repairs');
-      setEligibleRepairs(Array.isArray(data) ? data : []);
+      let repairList: any[] = [];
+      try {
+        const data: any = await api.get('/couriers/eligible-repairs');
+        repairList = Array.isArray(data) ? data : data?.repairs || data?.data || [];
+      } catch (err) {
+        console.warn('Dedicated eligible repairs route failed, attempting fallback to /repairs...', err);
+      }
+
+      // Fallback if eligible list was empty or errored
+      if (!repairList || repairList.length === 0) {
+        const fallbackRes: any = await api.get('/repairs?limit=100');
+        const fallbackData = Array.isArray(fallbackRes) ? fallbackRes : fallbackRes?.repairs || fallbackRes?.data || [];
+        repairList = fallbackData;
+      }
+
+      setEligibleRepairs(repairList);
     } catch (err) {
       console.error("Failed to load eligible repairs:", err);
+      setEligibleRepairs([]);
+    } finally {
+      setLoadingRepairs(false);
     }
   };
 
@@ -313,7 +333,7 @@ export default function CourierManagement() {
   }, [activeTab, statusFilter, courierCompanyFilter, districtFilter, paymentStatusFilter, dateRangeFilter, customStartDate, customEndDate, sortBy]);
 
   // Real-time synchronization
-  useRealtimeSync(['courier', 'repair', 'repairLog'], () => {
+  useRealtimeSync(['courier', 'repair', 'repairLog', 'Customer'], () => {
     fetchData();
     fetchMetadata();
   });
@@ -338,7 +358,7 @@ export default function CourierManagement() {
       setIsSearchingCustomers(true);
       customerSearchTimeoutRef.current = setTimeout(async () => {
         try {
-          const res = await api.get(`/couriers/search-customers?query=${encodeURIComponent(phoneVal.trim())}`);
+          const res: any = await api.get(`/couriers/search-customers?query=${encodeURIComponent(phoneVal.trim())}`);
           setCustomerSuggestions(Array.isArray(res) ? res : []);
         } catch {
           setCustomerSuggestions([]);
@@ -379,7 +399,7 @@ export default function CourierManagement() {
       return;
     }
     try {
-      const res = await api.post('/couriers/check-duplicate-awb', { trackingNumber: awb.trim() });
+      const res: any = await api.post('/couriers/check-duplicate-awb', { trackingNumber: awb.trim() });
       if (res?.exists) {
         setDuplicateAwbWarning(res.duplicateRepair);
       } else {
@@ -423,7 +443,7 @@ export default function CourierManagement() {
   const openWhatsAppModal = (shipment: any, type: 'DISPATCH' | 'RECEIVED' | 'DELIVERED' = 'DISPATCH') => {
     setSelectedShipment(shipment);
     setWhatsappTemplateType(type);
-    
+
     const customerName = shipment.receiverName || shipment.customerName || shipment.customer?.name || 'Valued Customer';
     const repairNo = shipment.repairNumber || 'MTS-JOB';
     const trackingNo = shipment.returnCourierTrackingNumber || shipment.courierTrackingNumber || 'Pending';
@@ -659,7 +679,7 @@ export default function CourierManagement() {
 
   // Export to CSV
   const handleExportCSV = () => {
-    const listToExport = selectedIds.length > 0 
+    const listToExport = selectedIds.length > 0
       ? shipments.filter(s => selectedIds.includes(s.id))
       : shipments;
 
@@ -723,7 +743,7 @@ export default function CourierManagement() {
   };
 
   const handleToggleSelectOne = (id: string) => {
-    setSelectedIds(prev => 
+    setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   };
@@ -762,7 +782,7 @@ export default function CourierManagement() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-4 pb-12 animate-in fade-in duration-200">
-      
+
       {/* 1. Header (Compact, High Density) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs">
         <div className="flex items-center gap-3">
@@ -783,6 +803,7 @@ export default function CourierManagement() {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             onClick={() => {
+              fetchEligibleRepairs();
               setIncomingForm({
                 existingRepairId: '',
                 customerId: '',
@@ -850,14 +871,14 @@ export default function CourierManagement() {
 
       {/* 2. Interactive KPI Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-        
+
         {/* Total Shipments */}
         <button
           onClick={() => handleCardClick('TOTAL')}
           className={cn(
             "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
-            statusFilter === 'ALL' 
-              ? "border-slate-900 ring-2 ring-slate-900/10 bg-slate-50/70" 
+            statusFilter === 'ALL'
+              ? "border-slate-900 ring-2 ring-slate-900/10 bg-slate-50/70"
               : "border-slate-200 hover:border-slate-300"
           )}
         >
@@ -876,8 +897,8 @@ export default function CourierManagement() {
           onClick={() => handleCardClick('IN_TRANSIT')}
           className={cn(
             "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
-            statusFilter === 'IN_TRANSIT' 
-              ? "border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/50" 
+            statusFilter === 'IN_TRANSIT'
+              ? "border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/50"
               : "border-slate-200 hover:border-indigo-300"
           )}
         >
@@ -896,8 +917,8 @@ export default function CourierManagement() {
           onClick={() => handleCardClick('RECEIVED_AT_LAB')}
           className={cn(
             "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
-            statusFilter === 'RECEIVED_AT_LAB' 
-              ? "border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/50" 
+            statusFilter === 'RECEIVED_AT_LAB'
+              ? "border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/50"
               : "border-slate-200 hover:border-emerald-300"
           )}
         >
@@ -916,8 +937,8 @@ export default function CourierManagement() {
           onClick={() => handleCardClick('READY_FOR_DISPATCH')}
           className={cn(
             "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
-            statusFilter === 'READY_FOR_DISPATCH' 
-              ? "border-amber-600 ring-2 ring-amber-500/20 bg-amber-50/50" 
+            statusFilter === 'READY_FOR_DISPATCH'
+              ? "border-amber-600 ring-2 ring-amber-500/20 bg-amber-50/50"
               : "border-slate-200 hover:border-amber-300"
           )}
         >
@@ -936,8 +957,8 @@ export default function CourierManagement() {
           onClick={() => handleCardClick('DISPATCHED')}
           className={cn(
             "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
-            statusFilter === 'DISPATCHED' 
-              ? "border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50" 
+            statusFilter === 'DISPATCHED'
+              ? "border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50"
               : "border-slate-200 hover:border-blue-300"
           )}
         >
@@ -956,8 +977,8 @@ export default function CourierManagement() {
           onClick={() => handleCardClick('DELIVERED')}
           className={cn(
             "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
-            statusFilter === 'DELIVERED' 
-              ? "border-slate-900 ring-2 ring-slate-900/10 bg-slate-100" 
+            statusFilter === 'DELIVERED'
+              ? "border-slate-900 ring-2 ring-slate-900/10 bg-slate-100"
               : "border-slate-200 hover:border-slate-400"
           )}
         >
@@ -975,10 +996,10 @@ export default function CourierManagement() {
 
       {/* 3. Main Filter & Control Toolbar */}
       <Card className="rounded-2xl border-slate-200 bg-white p-3.5 shadow-2xs space-y-3">
-        
+
         {/* Top Control Line */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          
+
           {/* Direction Tabs */}
           <div className="inline-flex p-0.5 bg-slate-100 rounded-xl border border-slate-200/60 shrink-0">
             <button
@@ -1014,7 +1035,7 @@ export default function CourierManagement() {
 
           {/* Quick Search & Filter Controls */}
           <div className="flex flex-wrap items-center gap-2 flex-1 max-w-3xl justify-start lg:justify-end">
-            
+
             {/* Search Input */}
             <div className="relative flex-1 min-w-[220px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -1064,7 +1085,7 @@ export default function CourierManagement() {
               className={cn(
                 "h-9 rounded-xl border-slate-200 text-xs font-bold cursor-pointer gap-1.5",
                 (showAdvancedFilters || courierCompanyFilter !== 'ALL' || districtFilter !== 'ALL' || paymentStatusFilter !== 'ALL' || dateRangeFilter !== 'ALL')
-                  ? "bg-indigo-50 border-indigo-200 text-indigo-700" 
+                  ? "bg-indigo-50 border-indigo-200 text-indigo-700"
                   : "bg-slate-50 hover:bg-slate-100 text-slate-700"
               )}
             >
@@ -1103,7 +1124,7 @@ export default function CourierManagement() {
         {/* Collapsible Advanced Filters Drawer */}
         {showAdvancedFilters && (
           <div className="pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 animate-in slide-in-from-top-2 duration-150">
-            
+
             {/* Courier Company Filter */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase">Courier Partner</label>
@@ -1228,7 +1249,7 @@ export default function CourierManagement() {
 
       </Card>
 
-      {/* 4. Bulk Action Bar (Visible when items selected) */}
+      {/* 4. Bulk Action Bar */}
       {selectedIds.length > 0 && (
         <div className="sticky top-2 z-30 flex items-center justify-between gap-3 p-3 bg-slate-950 text-white rounded-2xl shadow-xl border border-slate-800 animate-in slide-in-from-top-3 duration-200">
           <div className="flex items-center gap-2 text-xs font-bold pl-2">
@@ -1277,9 +1298,9 @@ export default function CourierManagement() {
         </div>
       )}
 
-      {/* 5. Main Shipments Content: High-Density Table (Desktop) / Cards (Mobile & Tablet) */}
+      {/* 5. Main Shipments Content: High-Density Table */}
       <Card className="rounded-2xl border-slate-200 bg-white p-3.5 sm:p-4 shadow-2xs">
-        
+
         {loading ? (
           <div className="p-12 text-center text-slate-400 space-y-2">
             <RotateCw className="w-6 h-6 animate-spin mx-auto text-indigo-600" />
@@ -1303,7 +1324,6 @@ export default function CourierManagement() {
           </div>
         ) : (
           <>
-            {/* Desktop / Laptop High-Density Table View */}
             <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-100">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
@@ -1340,14 +1360,13 @@ export default function CourierManagement() {
                     const isSelected = selectedIds.includes(shipment.id);
 
                     return (
-                      <tr 
-                        key={shipment.id} 
+                      <tr
+                        key={shipment.id}
                         className={cn(
                           "hover:bg-slate-50 transition-colors group",
                           isSelected && "bg-indigo-50/40"
                         )}
                       >
-                        {/* Checkbox */}
                         <td className="py-2.5 px-3">
                           <input
                             type="checkbox"
@@ -1357,7 +1376,6 @@ export default function CourierManagement() {
                           />
                         </td>
 
-                        {/* Direction Badge */}
                         <td className="py-2.5 px-3 whitespace-nowrap">
                           {isOutbound ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black bg-slate-900 text-white">
@@ -1372,7 +1390,6 @@ export default function CourierManagement() {
                           )}
                         </td>
 
-                        {/* Repair Job */}
                         <td className="py-2.5 px-3 whitespace-nowrap">
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1">
@@ -1393,7 +1410,6 @@ export default function CourierManagement() {
                           </div>
                         </td>
 
-                        {/* Customer & Phone (with Direct Call & WhatsApp) */}
                         <td className="py-2.5 px-3">
                           <div className="space-y-0.5 min-w-[150px]">
                             <span className="font-bold text-slate-900 block truncate text-xs">{contactName}</span>
@@ -1421,7 +1437,6 @@ export default function CourierManagement() {
                           </div>
                         </td>
 
-                        {/* District */}
                         <td className="py-2.5 px-3 whitespace-nowrap">
                           <div className="flex items-center gap-1 text-slate-600 text-xs">
                             <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
@@ -1429,7 +1444,6 @@ export default function CourierManagement() {
                           </div>
                         </td>
 
-                        {/* Courier Partner & AWB */}
                         <td className="py-2.5 px-3">
                           <div className="space-y-0.5 min-w-[140px]">
                             <strong className="font-bold text-slate-900 block text-xs truncate">
@@ -1452,20 +1466,18 @@ export default function CourierManagement() {
                           </div>
                         </td>
 
-                        {/* Status Milestone */}
                         <td className="py-2.5 px-3 whitespace-nowrap">
                           <Badge variant="outline" className={cn(
                             "text-[10px] font-extrabold px-2 py-0.5 rounded-md border",
                             currentStatusStr === 'DELIVERED' ? "bg-emerald-50 text-emerald-800 border-emerald-300" :
-                            currentStatusStr === 'DISPATCHED' || currentStatusStr === 'IN_TRANSIT' ? "bg-purple-50 text-purple-800 border-purple-300" :
-                            currentStatusStr === 'RECEIVED_AT_LAB' ? "bg-blue-50 text-blue-800 border-blue-300" :
-                            "bg-amber-50 text-amber-800 border-amber-300"
+                              currentStatusStr === 'DISPATCHED' || currentStatusStr === 'IN_TRANSIT' ? "bg-purple-50 text-purple-800 border-purple-300" :
+                                currentStatusStr === 'RECEIVED_AT_LAB' ? "bg-blue-50 text-blue-800 border-blue-300" :
+                                  "bg-amber-50 text-amber-800 border-amber-300"
                           )}>
                             {currentStatusStr.replace(/_/g, ' ')}
                           </Badge>
                         </td>
 
-                        {/* Charges & Payment */}
                         <td className="py-2.5 px-3 whitespace-nowrap">
                           <div className="space-y-0.5 text-[11px]">
                             <span className="font-mono font-bold text-slate-900 block">
@@ -1480,7 +1492,6 @@ export default function CourierManagement() {
                           </div>
                         </td>
 
-                        {/* Actions */}
                         <td className="py-2.5 px-3 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1">
                             <Button
@@ -1500,8 +1511,7 @@ export default function CourierManagement() {
                                 <MoreVertical className="w-3.5 h-3.5" />
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-52 rounded-xl p-1 shadow-xl border-slate-200">
-                                
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => {
                                     setSelectedShipment(shipment);
                                     setStatusUpdateForm({
@@ -1517,7 +1527,7 @@ export default function CourierManagement() {
                                   <span>Update Milestone</span>
                                 </DropdownMenuItem>
 
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => openWhatsAppModal(shipment, isOutbound ? 'DISPATCH' : 'RECEIVED')}
                                   className="text-xs font-bold py-1.5 cursor-pointer gap-2 text-emerald-700 focus:bg-emerald-50"
                                 >
@@ -1525,7 +1535,7 @@ export default function CourierManagement() {
                                   <span>Send WhatsApp Update</span>
                                 </DropdownMenuItem>
 
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => {
                                     setSelectedShipment(shipment);
                                     setPrintModalOpen(true);
@@ -1536,7 +1546,7 @@ export default function CourierManagement() {
                                   <span>Print Waybill Label</span>
                                 </DropdownMenuItem>
 
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => navigate(`/dashboard/repairs/${shipment.id}`)}
                                   className="text-xs font-bold py-1.5 cursor-pointer gap-2"
                                 >
@@ -1544,7 +1554,7 @@ export default function CourierManagement() {
                                   <span>View Core Repair Job</span>
                                 </DropdownMenuItem>
 
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => window.open(`/track?repairNumber=${shipment.repairNumber}`, '_blank')}
                                   className="text-xs font-bold py-1.5 cursor-pointer gap-2"
                                 >
@@ -1554,7 +1564,7 @@ export default function CourierManagement() {
 
                                 <DropdownMenuSeparator />
 
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => {
                                     setSelectedShipment(shipment);
                                     setDeleteModalOpen(true);
@@ -1564,12 +1574,10 @@ export default function CourierManagement() {
                                   <Trash2 className="w-3.5 h-3.5" />
                                   <span>Archive Record</span>
                                 </DropdownMenuItem>
-
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
                         </td>
-
                       </tr>
                     );
                   })}
@@ -1577,7 +1585,7 @@ export default function CourierManagement() {
               </table>
             </div>
 
-            {/* Tablet & Smartphone Cards View (< 1024px) */}
+            {/* Mobile Cards View */}
             <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
               {shipments.map((shipment) => {
                 const isOutbound = shipment.isCourierOut || shipment.isReturnCourierDispatched || shipment.courierStatus === 'COURIER_DISPATCHED' || shipment.courierOutStatus;
@@ -1590,8 +1598,8 @@ export default function CourierManagement() {
                 const isSelected = selectedIds.includes(shipment.id);
 
                 return (
-                  <div 
-                    key={shipment.id} 
+                  <div
+                    key={shipment.id}
                     className={cn(
                       "p-3.5 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2.5 transition-all",
                       isSelected && "border-indigo-400 bg-indigo-50/30"
@@ -1679,7 +1687,7 @@ export default function CourierManagement() {
 
       </Card>
 
-      {/* MODAL 1: Receive Inbound Courier Modal (HORIZONTAL 2-COLUMN LAYOUT ON LAPTOPS/TABLETS) */}
+      {/* MODAL 1: Receive Inbound Courier Modal */}
       <Dialog open={incomingModalOpen} onOpenChange={setIncomingModalOpen}>
         <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl max-h-[88vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl p-4 sm:p-5 lg:p-6 space-y-3.5">
           <DialogHeader className="pb-2 border-b border-slate-100 space-y-0">
@@ -1698,7 +1706,6 @@ export default function CourierManagement() {
                 </div>
               </div>
 
-              {/* Mode Switcher in Header */}
               <div className="inline-flex p-0.5 bg-slate-100 rounded-xl border border-slate-200/60 shrink-0 self-start sm:self-auto">
                 <button
                   type="button"
@@ -1728,10 +1735,8 @@ export default function CourierManagement() {
           </DialogHeader>
 
           <form onSubmit={handleIncomingSubmit} className="space-y-3.5">
-            
-            {/* 2-Column Horizontal Grid for Laptop/Tablet/Desktop, 1-Col for Phone */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start">
-              
+
               {/* Left Column: Customer & Device Intake */}
               <div className="space-y-3 p-3.5 sm:p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80">
                 <div className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center justify-between">
@@ -1749,50 +1754,44 @@ export default function CourierManagement() {
                 {incomingMode === 'EXISTING' ? (
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-slate-700">Select Existing Repair Ticket *</Label>
-                    <Select
+
+                    {/* Resilient Native Select for Instant Ticket Selection */}
+                    <select
                       value={incomingForm.existingRepairId}
-                      onValueChange={(v) => {
+                      onChange={(e) => {
+                        const v = e.target.value;
                         const rep = eligibleRepairs.find(r => r.id === v);
                         setIncomingForm(prev => ({
                           ...prev,
                           existingRepairId: v,
-                          customerName: rep?.customerName || '',
-                          customerPhone: rep?.customerPhone || '',
-                          senderName: rep?.customerName || '',
-                          senderPhone: rep?.customerPhone || '',
-                          originDistrict: rep?.customer?.district || 'Kathmandu',
-                          originAddress: rep?.customerAddress || ''
+                          customerName: rep?.customerName || rep?.customer?.name || '',
+                          customerPhone: rep?.customerPhone || rep?.customer?.phone || '',
+                          senderName: rep?.customerName || rep?.customer?.name || '',
+                          senderPhone: rep?.customerPhone || rep?.customer?.phone || '',
+                          originDistrict: rep?.customer?.district || rep?.customerDistrict || 'Kathmandu',
+                          originAddress: rep?.customerAddress || rep?.customer?.address || ''
                         }));
                       }}
+                      className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer"
                     >
-                      <SelectTrigger className="h-10 rounded-xl bg-white border-slate-200 text-xs font-bold w-full shadow-2xs">
-                        <SelectValue placeholder="Search & Select Repair Job" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-2xl max-h-72 min-w-[300px] sm:min-w-[420px] max-w-[calc(100vw-2rem)]">
-                        {eligibleRepairs.map((r) => (
-                          <SelectItem key={r.id} value={r.id} className="text-xs py-2 px-3">
-                            <div className="flex flex-col gap-1 min-w-0 text-left">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-mono font-black text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">#{r.repairNumber}</span>
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-100">
-                                  {(r.deviceBrand || '').toUpperCase()} {r.deviceModel}
-                                </span>
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded border border-emerald-100">
-                                  {r.status?.replace(/_/g, ' ')}
-                                </span>
-                              </div>
-                              <div className="text-xs font-semibold text-slate-700 truncate">
-                                {r.customerName} {r.customerPhone ? `• ${r.customerPhone}` : ''}
-                              </div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <option value="">
+                        {loadingRepairs ? 'Loading repair tickets...' : '-- Search & Select Repair Job --'}
+                      </option>
+                      {eligibleRepairs.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          #{r.repairNumber} — {r.customerName || r.customer?.name || 'Walk-in'} ({(r.deviceBrand || '').toUpperCase()} {r.deviceModel}) [{r.status}]
+                        </option>
+                      ))}
+                    </select>
+
+                    {eligibleRepairs.length === 0 && !loadingRepairs && (
+                      <p className="text-[11px] text-amber-600 font-medium">
+                        No active repair tickets available. Switch to "+ New Intake Ticket" or create one in Repairs.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {/* Customer Phone with Autocomplete Search */}
                     <div className="space-y-1 relative">
                       <Label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
                         <span>Customer Phone *</span>
@@ -1822,7 +1821,6 @@ export default function CourierManagement() {
                       )}
                     </div>
 
-                    {/* Customer Name */}
                     <div className="space-y-1">
                       <Label className="text-[11px] font-bold text-slate-700">Customer Name *</Label>
                       <Input
@@ -1834,7 +1832,6 @@ export default function CourierManagement() {
                       />
                     </div>
 
-                    {/* Device Brand */}
                     <div className="space-y-1">
                       <Label className="text-[11px] font-bold text-slate-700">Device Brand *</Label>
                       <Select
@@ -1858,7 +1855,6 @@ export default function CourierManagement() {
                       </Select>
                     </div>
 
-                    {/* Device Model */}
                     <div className="space-y-1">
                       <Label className="text-[11px] font-bold text-slate-700">Device Model *</Label>
                       <Input
@@ -1870,7 +1866,6 @@ export default function CourierManagement() {
                       />
                     </div>
 
-                    {/* Origin District */}
                     <div className="space-y-1">
                       <Label className="text-[11px] font-bold text-slate-700">Origin District *</Label>
                       <Input
@@ -1882,7 +1877,6 @@ export default function CourierManagement() {
                       />
                     </div>
 
-                    {/* Physical Condition */}
                     <div className="space-y-1">
                       <Label className="text-[11px] font-bold text-slate-700">Physical Condition</Label>
                       <Input
@@ -1893,7 +1887,6 @@ export default function CourierManagement() {
                       />
                     </div>
 
-                    {/* Problem Description (Full Width Span) */}
                     <div className="space-y-1 col-span-1 sm:col-span-2">
                       <Label className="text-[11px] font-bold text-slate-700">Reported Problem Description *</Label>
                       <Input
@@ -1916,8 +1909,7 @@ export default function CourierManagement() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  
-                  {/* Courier Partner with Chips (Full Width) */}
+
                   <div className="space-y-1.5 col-span-1 sm:col-span-2">
                     <Label className="text-[11px] font-bold text-slate-700">Courier Partner *</Label>
                     <Input
@@ -1932,7 +1924,6 @@ export default function CourierManagement() {
                       {POPULAR_COURIERS.map(c => <option key={c} value={c} />)}
                     </datalist>
 
-                    {/* Quick Courier Selection Chips */}
                     <div className="flex flex-wrap gap-1 pt-0.5">
                       <button
                         type="button"
@@ -1985,7 +1976,6 @@ export default function CourierManagement() {
                     </div>
                   </div>
 
-                  {/* Tracking / AWB */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-bold text-slate-700">Tracking / AWB Number *</Label>
                     <Input
@@ -2000,7 +1990,6 @@ export default function CourierManagement() {
                     />
                   </div>
 
-                  {/* Delivery Charge */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-bold text-slate-700">Delivery Charge (NPR)</Label>
                     <Input
@@ -2012,7 +2001,6 @@ export default function CourierManagement() {
                     />
                   </div>
 
-                  {/* Payment Status */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-bold text-slate-700">Payment Status</Label>
                     <Select
@@ -2029,7 +2017,6 @@ export default function CourierManagement() {
                     </Select>
                   </div>
 
-                  {/* Received Date */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-bold text-slate-700">Received at Lab Date</Label>
                     <Input
@@ -2040,7 +2027,6 @@ export default function CourierManagement() {
                     />
                   </div>
 
-                  {/* Duplicate AWB Warning Alert */}
                   {duplicateAwbWarning && (
                     <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-xs flex items-start gap-2 col-span-1 sm:col-span-2">
                       <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -2051,7 +2037,6 @@ export default function CourierManagement() {
                     </div>
                   )}
 
-                  {/* Logistics Handling Remarks (Full Width) */}
                   <div className="space-y-1 col-span-1 sm:col-span-2">
                     <Label className="text-[11px] font-bold text-slate-700">Logistics Notes / Remarks</Label>
                     <Input
@@ -2067,18 +2052,17 @@ export default function CourierManagement() {
 
             </div>
 
-            {/* Action Buttons */}
             <DialogFooter className="pt-2 border-t border-slate-100 flex flex-row items-center justify-end gap-2">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setIncomingModalOpen(false)} 
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIncomingModalOpen(false)}
                 className="rounded-xl h-9 text-xs font-bold border-slate-200 cursor-pointer"
               >
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="rounded-xl h-9 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer px-5 gap-1.5 shadow-xs"
               >
                 <CheckCircle2 className="w-4 h-4" />
@@ -2090,7 +2074,7 @@ export default function CourierManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 2: Send Outbound Courier Dispatch Modal (HORIZONTAL 2-COLUMN LAYOUT ON LAPTOPS/TABLETS) */}
+      {/* MODAL 2: Send Outbound Courier Dispatch Modal */}
       <Dialog open={outgoingModalOpen} onOpenChange={setOutgoingModalOpen}>
         <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl max-h-[88vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl p-4 sm:p-5 lg:p-6 space-y-3.5">
           <DialogHeader className="pb-2 border-b border-slate-100 space-y-0">
@@ -2110,10 +2094,8 @@ export default function CourierManagement() {
           </DialogHeader>
 
           <form onSubmit={handleOutgoingSubmit} className="space-y-3.5">
-            
-            {/* 2-Column Horizontal Grid for Laptop/Tablet/Desktop, 1-Col for Phone */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start">
-              
+
               {/* Left Column: Repair Job & Recipient Delivery Address */}
               <div className="space-y-3 p-3.5 sm:p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80">
                 <div className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
@@ -2122,37 +2104,23 @@ export default function CourierManagement() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  
                   <div className="space-y-1 col-span-1 sm:col-span-2">
                     <Label className="text-xs font-bold text-slate-700">Select Completed / Ready Repair Job *</Label>
-                    <Select
+
+                    <select
                       value={outgoingForm.repairId}
-                      onValueChange={handleSelectEligibleRepair}
+                      onChange={(e) => handleSelectEligibleRepair(e.target.value)}
+                      className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer"
                     >
-                      <SelectTrigger className="h-10 rounded-xl bg-white border-slate-200 text-xs font-bold w-full shadow-2xs">
-                        <SelectValue placeholder="Choose a repair job for return dispatch" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-2xl max-h-72 min-w-[300px] sm:min-w-[420px] max-w-[calc(100vw-2rem)]">
-                        {eligibleRepairs.map((r) => (
-                          <SelectItem key={r.id} value={r.id} className="text-xs py-2 px-3">
-                            <div className="flex flex-col gap-1 min-w-0 text-left">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-mono font-black text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">#{r.repairNumber}</span>
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-100">
-                                  {(r.deviceBrand || '').toUpperCase()} {r.deviceModel}
-                                </span>
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded border border-emerald-100">
-                                  {r.status?.replace(/_/g, ' ')}
-                                </span>
-                              </div>
-                              <div className="text-xs font-semibold text-slate-700 truncate">
-                                {r.customerName} {r.customerPhone ? `• ${r.customerPhone}` : ''}
-                              </div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <option value="">
+                        {loadingRepairs ? 'Loading repair tickets...' : '-- Choose a repair job for return dispatch --'}
+                      </option>
+                      {eligibleRepairs.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          #{r.repairNumber} — {r.customerName || r.customer?.name || 'Customer'} ({(r.deviceBrand || '').toUpperCase()} {r.deviceModel}) [{r.status}]
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="space-y-1">
@@ -2197,7 +2165,6 @@ export default function CourierManagement() {
                       className="h-8.5 rounded-lg bg-white border-slate-200 text-xs font-medium"
                     />
                   </div>
-
                 </div>
               </div>
 
@@ -2209,8 +2176,6 @@ export default function CourierManagement() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  
-                  {/* Courier Partner with Chips (Full Width) */}
                   <div className="space-y-1.5 col-span-1 sm:col-span-2">
                     <Label className="text-[11px] font-bold text-slate-700">Courier Partner *</Label>
                     <Input
@@ -2225,7 +2190,6 @@ export default function CourierManagement() {
                       {POPULAR_COURIERS.map(c => <option key={c} value={c} />)}
                     </datalist>
 
-                    {/* Quick Courier Selection Chips */}
                     <div className="flex flex-wrap gap-1 pt-0.5">
                       <button
                         type="button"
@@ -2353,18 +2317,17 @@ export default function CourierManagement() {
 
             </div>
 
-            {/* Action Buttons */}
             <DialogFooter className="pt-2 border-t border-slate-100 flex flex-row items-center justify-end gap-2">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setOutgoingModalOpen(false)} 
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOutgoingModalOpen(false)}
                 className="rounded-xl h-9 text-xs font-bold border-slate-200 cursor-pointer"
               >
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="rounded-xl h-9 text-xs font-bold bg-slate-950 hover:bg-black text-white cursor-pointer px-5 gap-1.5 shadow-xs"
               >
                 <Send className="w-4 h-4 text-indigo-400" />
@@ -2376,7 +2339,7 @@ export default function CourierManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 3: Shipment Details Drawer / Modal */}
+      {/* MODAL 3: Shipment Details Modal */}
       {selectedShipment && (
         <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl p-5 space-y-4">
@@ -2397,7 +2360,6 @@ export default function CourierManagement() {
               </DialogDescription>
             </DialogHeader>
 
-            {/* Quick Action Buttons */}
             <div className="flex flex-wrap items-center gap-2 pt-1 border-b border-slate-100 pb-3">
               {(selectedShipment.receiverPhone || selectedShipment.customerPhone || selectedShipment.senderPhone) && (
                 <>
@@ -2454,7 +2416,6 @@ export default function CourierManagement() {
               </Button>
             </div>
 
-            {/* Waybill Information Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {selectedShipment.isCourierIn && (
                 <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-200 space-y-1.5 text-xs">
@@ -2481,7 +2442,6 @@ export default function CourierManagement() {
               )}
             </div>
 
-            {/* Customer & Device Report */}
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
               <div className="font-extrabold text-slate-900 uppercase text-[10px] flex items-center justify-between">
                 <span>Device & Customer Information</span>
@@ -2500,7 +2460,6 @@ export default function CourierManagement() {
               </div>
             </div>
 
-            {/* Tracking Actions */}
             <div className="p-3.5 rounded-xl bg-slate-900 text-white space-y-2 text-xs">
               <div className="flex items-center justify-between">
                 <span className="font-extrabold text-[10px] uppercase text-slate-300 tracking-wider">
@@ -2512,7 +2471,6 @@ export default function CourierManagement() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                {/* If Nepal Can Move: External Tracking Button */}
                 {isNepalCanMove(selectedShipment.returnCourierCompany || selectedShipment.courierCompany) && (
                   <a
                     href={NCM_TRACKING_URL}
@@ -2526,7 +2484,6 @@ export default function CourierManagement() {
                   </a>
                 )}
 
-                {/* MTS Repair Tracking Option */}
                 {selectedShipment.repairNumber && (
                   <a
                     href={`/track?repairNumber=${selectedShipment.repairNumber}`}
@@ -2554,7 +2511,6 @@ export default function CourierManagement() {
               </div>
             </div>
 
-            {/* Audit History Logs */}
             <div className="space-y-1.5">
               <div className="text-xs font-black text-slate-900 uppercase tracking-wider">Activity History</div>
               <div className="max-h-40 overflow-y-auto space-y-1.5 divide-y divide-slate-100 pr-1">
@@ -2596,7 +2552,6 @@ export default function CourierManagement() {
               </DialogDescription>
             </DialogHeader>
 
-            {/* Printable Area */}
             <div id="printable-waybill" className="p-4 border-2 border-dashed border-slate-300 rounded-xl bg-white space-y-3 text-xs">
               <div className="flex items-center justify-between border-b pb-2">
                 <div>

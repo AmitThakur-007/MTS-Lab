@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -7,7 +7,67 @@ import { logAudit } from '../services/auditService';
 
 const router = Router();
 
-// 1. GET /api/inventory
+// ==========================================
+// 1. DYNAMIC CATALOG METADATA (Placed before /:id)
+// ==========================================
+
+// GET /api/inventory/folders (Resolves 404 console errors)
+router.get('/folders', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { data: items } = await supabaseAdmin
+      .from('InventoryItem')
+      .select('category, subcategory')
+      .not('category', 'is', null);
+
+    const categories = Array.from(new Set((items || []).map((i: any) => i.category).filter(Boolean)));
+    const subcategories = Array.from(new Set((items || []).map((i: any) => i.subcategory).filter(Boolean)));
+
+    return res.json({
+      success: true,
+      folders: categories,
+      categories,
+      subcategories
+    });
+  } catch (err: any) {
+    return res.json({ success: true, folders: [], categories: [], subcategories: [] });
+  }
+});
+
+// GET /api/inventory/suppliers (Resolves 404 console errors)
+router.get('/suppliers', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { data: items } = await supabaseAdmin
+      .from('InventoryItem')
+      .select('supplier')
+      .not('supplier', 'is', null);
+
+    const suppliers = Array.from(new Set((items || []).map((i: any) => i.supplier).filter(Boolean)));
+    return res.json(suppliers);
+  } catch (err: any) {
+    return res.json([]);
+  }
+});
+
+// GET /api/inventory/locations (Resolves 404 console errors)
+router.get('/locations', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { data: items } = await supabaseAdmin
+      .from('InventoryItem')
+      .select('storageLocation')
+      .not('storageLocation', 'is', null);
+
+    const locations = Array.from(new Set((items || []).map((i: any) => i.storageLocation).filter(Boolean)));
+    return res.json(locations);
+  } catch (err: any) {
+    return res.json([]);
+  }
+});
+
+// ==========================================
+// 2. INVENTORY LIST & STATS
+// ==========================================
+
+// GET /api/inventory
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { category, brand, status = 'ACTIVE', search, limit = '200' } = req.query;
@@ -45,10 +105,12 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 2. GET /api/inventory/stats
+// GET /api/inventory/stats
 router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { data: items } = await supabaseAdmin.from('InventoryItem').select('currentStock, minStockLevel, purchasePrice, sellingPrice, status');
+    const { data: items } = await supabaseAdmin
+      .from('InventoryItem')
+      .select('currentStock, minStockLevel, purchasePrice, sellingPrice, status');
 
     const totalItems = items?.length || 0;
     let lowStockCount = 0;
@@ -83,7 +145,7 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 3. GET /api/inventory/categories
+// GET /api/inventory/categories
 router.get('/categories', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { data: categories } = await supabaseAdmin
@@ -97,7 +159,7 @@ router.get('/categories', authenticate, async (req: AuthRequest, res: Response) 
   }
 });
 
-// 4. POST /api/inventory/categories
+// POST /api/inventory/categories
 router.post('/categories', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { name, description, icon } = req.body;
@@ -112,7 +174,12 @@ router.post('/categories', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), as
       updatedAt: new Date().toISOString(),
     };
 
-    const { data: created, error } = await supabaseAdmin.from('InventoryCategory').insert([newCat]).select('*').single();
+    const { data: created, error } = await supabaseAdmin
+      .from('InventoryCategory')
+      .insert([newCat])
+      .select('*')
+      .single();
+
     if (error) return res.status(500).json({ error: 'Failed to create category.' });
 
     return res.status(201).json(created);
@@ -121,7 +188,7 @@ router.post('/categories', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), as
   }
 });
 
-// 5. GET /api/inventory/transactions/history
+// GET /api/inventory/transactions/history
 router.get('/transactions/history', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { itemId, limit = '50' } = req.query;
@@ -145,7 +212,30 @@ router.get('/transactions/history', authenticate, async (req: AuthRequest, res: 
   }
 });
 
-// 6. GET /api/inventory/:id
+// POST /api/inventory/bulk-delete
+router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No item IDs provided.' });
+    }
+
+    await supabaseAdmin.from('InventoryTransaction').delete().in('itemId', ids);
+    const { error } = await supabaseAdmin.from('InventoryItem').delete().in('id', ids);
+
+    if (error) return res.status(500).json({ error: 'Failed to delete inventory items.' });
+
+    return res.json({ success: true, message: `Successfully removed ${ids.length} items.` });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to process bulk delete.' });
+  }
+});
+
+// ==========================================
+// 3. SINGLE ITEM CRUD & STOCK ADJUSTMENTS
+// ==========================================
+
+// GET /api/inventory/:id
 router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -165,7 +255,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 7. POST /api/inventory
+// POST /api/inventory
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const {
@@ -259,7 +349,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 8. PATCH /api/inventory/:id
+// PATCH /api/inventory/:id
 router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -284,7 +374,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 9. POST /api/inventory/:id/stock-in
+// POST /api/inventory/:id/stock-in
 router.post('/:id/stock-in', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -332,7 +422,7 @@ router.post('/:id/stock-in', authenticate, async (req: AuthRequest, res: Respons
   }
 });
 
-// 10. POST /api/inventory/:id/stock-out
+// POST /api/inventory/:id/stock-out
 router.post('/:id/stock-out', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -381,7 +471,7 @@ router.post('/:id/stock-out', authenticate, async (req: AuthRequest, res: Respon
   }
 });
 
-// 11. POST /api/inventory/:id/adjust-stock
+// POST /api/inventory/:id/adjust-stock
 router.post('/:id/adjust-stock', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -429,7 +519,7 @@ router.post('/:id/adjust-stock', authenticate, async (req: AuthRequest, res: Res
   }
 });
 
-// 12. DELETE /api/inventory/:id
+// DELETE /api/inventory/:id
 router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -444,45 +534,4 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
   }
 });
 
-// 13. POST /api/inventory/bulk-delete
-router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
-  try {
-    const { ids } = req.body;
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: 'No item IDs provided.' });
-    }
-
-    await supabaseAdmin.from('InventoryTransaction').delete().in('itemId', ids);
-    const { error } = await supabaseAdmin.from('InventoryItem').delete().in('id', ids);
-
-    if (error) return res.status(500).json({ error: 'Failed to delete inventory items.' });
-
-    return res.json({ success: true, message: `Successfully removed ${ids.length} items.` });
-  } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to process bulk delete.' });
-  }
-});
-
-// 14. GET /api/inventory/suppliers
-router.get('/suppliers', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const { data: items } = await supabaseAdmin.from('InventoryItem').select('supplier').not('supplier', 'is', null);
-    const suppliers = Array.from(new Set((items || []).map((i: any) => i.supplier).filter(Boolean)));
-    return res.json(suppliers);
-  } catch (err: any) {
-    return res.json([]);
-  }
-});
-
-// 15. GET /api/inventory/locations
-router.get('/locations', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const { data: items } = await supabaseAdmin.from('InventoryItem').select('storageLocation').not('storageLocation', 'is', null);
-    const locations = Array.from(new Set((items || []).map((i: any) => i.storageLocation).filter(Boolean)));
-    return res.json(locations);
-  } catch (err: any) {
-    return res.json([]);
-  }
-});
-
-export default router;
+export default router; 

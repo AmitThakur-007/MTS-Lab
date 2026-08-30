@@ -1955,6 +1955,39 @@ var customers_default = router4;
 import { Router as Router5 } from "express";
 import { v4 as uuidv46 } from "uuid";
 var router5 = Router5();
+router5.get("/folders", authenticate, async (req, res) => {
+  try {
+    const { data: items } = await supabaseAdmin.from("InventoryItem").select("category, subcategory").not("category", "is", null);
+    const categories = Array.from(new Set((items || []).map((i) => i.category).filter(Boolean)));
+    const subcategories = Array.from(new Set((items || []).map((i) => i.subcategory).filter(Boolean)));
+    return res.json({
+      success: true,
+      folders: categories,
+      categories,
+      subcategories
+    });
+  } catch (err) {
+    return res.json({ success: true, folders: [], categories: [], subcategories: [] });
+  }
+});
+router5.get("/suppliers", authenticate, async (req, res) => {
+  try {
+    const { data: items } = await supabaseAdmin.from("InventoryItem").select("supplier").not("supplier", "is", null);
+    const suppliers = Array.from(new Set((items || []).map((i) => i.supplier).filter(Boolean)));
+    return res.json(suppliers);
+  } catch (err) {
+    return res.json([]);
+  }
+});
+router5.get("/locations", authenticate, async (req, res) => {
+  try {
+    const { data: items } = await supabaseAdmin.from("InventoryItem").select("storageLocation").not("storageLocation", "is", null);
+    const locations = Array.from(new Set((items || []).map((i) => i.storageLocation).filter(Boolean)));
+    return res.json(locations);
+  } catch (err) {
+    return res.json([]);
+  }
+});
 router5.get("/", authenticate, async (req, res) => {
   try {
     const { category, brand, status = "ACTIVE", search, limit = "200" } = req.query;
@@ -2054,6 +2087,20 @@ router5.get("/transactions/history", authenticate, async (req, res) => {
     return res.json(transactions || []);
   } catch (err) {
     return res.status(500).json({ error: "Failed to retrieve transaction logs." });
+  }
+});
+router5.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "No item IDs provided." });
+    }
+    await supabaseAdmin.from("InventoryTransaction").delete().in("itemId", ids);
+    const { error } = await supabaseAdmin.from("InventoryItem").delete().in("id", ids);
+    if (error) return res.status(500).json({ error: "Failed to delete inventory items." });
+    return res.json({ success: true, message: `Successfully removed ${ids.length} items.` });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to process bulk delete." });
   }
 });
 router5.get("/:id", authenticate, async (req, res) => {
@@ -2280,38 +2327,6 @@ router5.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async 
     return res.json({ success: true, message: "Item deleted successfully." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to delete item." });
-  }
-});
-router5.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { ids } = req.body;
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: "No item IDs provided." });
-    }
-    await supabaseAdmin.from("InventoryTransaction").delete().in("itemId", ids);
-    const { error } = await supabaseAdmin.from("InventoryItem").delete().in("id", ids);
-    if (error) return res.status(500).json({ error: "Failed to delete inventory items." });
-    return res.json({ success: true, message: `Successfully removed ${ids.length} items.` });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to process bulk delete." });
-  }
-});
-router5.get("/suppliers", authenticate, async (req, res) => {
-  try {
-    const { data: items } = await supabaseAdmin.from("InventoryItem").select("supplier").not("supplier", "is", null);
-    const suppliers = Array.from(new Set((items || []).map((i) => i.supplier).filter(Boolean)));
-    return res.json(suppliers);
-  } catch (err) {
-    return res.json([]);
-  }
-});
-router5.get("/locations", authenticate, async (req, res) => {
-  try {
-    const { data: items } = await supabaseAdmin.from("InventoryItem").select("storageLocation").not("storageLocation", "is", null);
-    const locations = Array.from(new Set((items || []).map((i) => i.storageLocation).filter(Boolean)));
-    return res.json(locations);
-  } catch (err) {
-    return res.json([]);
   }
 });
 var inventory_default = router5;
