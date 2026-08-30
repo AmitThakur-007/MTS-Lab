@@ -3354,6 +3354,28 @@ router8.get("/server-time", (req, res) => {
     windowRange: "10:00 AM \u2013 10:35 AM NPT"
   });
 });
+router8.get("/pending-requests", authenticate, async (req, res) => {
+  try {
+    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*").eq("status", "PENDING").order("createdAt", { ascending: false });
+    if (error) {
+      console.warn("[PENDING REQUESTS WARN]", error);
+      return res.json([]);
+    }
+    const userIds = Array.from(new Set((records || []).map((r) => r.userId).filter(Boolean)));
+    let userMap = /* @__PURE__ */ new Map();
+    if (userIds.length > 0) {
+      const { data: users } = await supabaseAdmin.from("User").select("id, name, role, department, avatarUrl").in("id", userIds);
+      (users || []).forEach((u) => userMap.set(u.id, u));
+    }
+    const formatted = (records || []).map((r) => ({
+      ...r,
+      user: userMap.get(r.userId) || { name: "Staff Member", role: "TECHNICIAN" }
+    }));
+    return res.json(formatted);
+  } catch (err) {
+    return res.json([]);
+  }
+});
 router8.get("/roster", authenticate, async (req, res) => {
   try {
     const time = getNepalTimeDetails();
@@ -3369,8 +3391,13 @@ router8.get("/roster", authenticate, async (req, res) => {
     (attendanceRecords || []).forEach((rec) => {
       attendanceMap.set(rec.userId, rec);
     });
-    const { data: broadcastLogs } = await supabaseAdmin.from("AttendanceBroadcast").select("id").eq("date", todayStr);
-    const dispatchCount = broadcastLogs?.length || 0;
+    let dispatchCount = 0;
+    try {
+      const { data: broadcastLogs } = await supabaseAdmin.from("AttendanceBroadcast").select("id").eq("date", todayStr);
+      dispatchCount = broadcastLogs?.length || 0;
+    } catch {
+      dispatchCount = 0;
+    }
     const roster = staffList.map((u) => {
       const record = attendanceMap.get(u.id);
       return {
@@ -3415,6 +3442,31 @@ router8.get("/roster", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to generate attendance roster." });
   }
 });
+router8.get("/monthly-report", authenticate, async (req, res) => {
+  try {
+    const { month } = req.query;
+    const currentMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*").gte("date", `${currentMonth}-01`).lte("date", `${currentMonth}-31`).order("date", { ascending: false });
+    if (error) {
+      console.error("[MONTHLY REPORT FETCH ERROR]", error);
+      return res.status(500).json({ error: error.message || "Failed to load monthly report." });
+    }
+    const userIds = Array.from(new Set((records || []).map((r) => r.userId).filter(Boolean)));
+    let userMap = /* @__PURE__ */ new Map();
+    if (userIds.length > 0) {
+      const { data: users } = await supabaseAdmin.from("User").select("id, name, role, department, avatarUrl, email").in("id", userIds);
+      (users || []).forEach((u) => userMap.set(u.id, u));
+    }
+    const enriched = (records || []).map((r) => ({
+      ...r,
+      user: userMap.get(r.userId) || { name: "Staff Member", role: "TECHNICIAN", department: "Repair Lab" }
+    }));
+    return res.json(enriched);
+  } catch (err) {
+    console.error("[MONTHLY REPORT EXCEPTION]", err);
+    return res.status(500).json({ error: "Failed to load monthly report." });
+  }
+});
 router8.post("/dispatch-request", authenticate, authorize(["MANAGER", "SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const time = getNepalTimeDetails();
@@ -3431,17 +3483,21 @@ router8.post("/dispatch-request", authenticate, authorize(["MANAGER", "SUPER_ADM
         error: "Daily limit reached: Manager can only send attendance requests up to 3 times per day."
       });
     }
-    await supabaseAdmin.from("AttendanceBroadcast").insert([
-      {
-        id: uuidv49(),
-        dispatchedById: req.user.id,
-        dispatchedByName: req.user.name,
-        date: time.dateString,
-        time: time.timeString,
-        broadcastNumber: currentCount + 1,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
+    try {
+      await supabaseAdmin.from("AttendanceBroadcast").insert([
+        {
+          id: uuidv49(),
+          dispatchedById: req.user.id,
+          dispatchedByName: req.user.name,
+          date: time.dateString,
+          time: time.timeString,
+          broadcastNumber: currentCount + 1,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+    } catch (e) {
+      console.warn("[BROADCAST LOG FAIL NON FATAL]", e);
+    }
     const { data: managerRecord } = await supabaseAdmin.from("Attendance").select("id").eq("userId", req.user.id).eq("date", time.dateString).maybeSingle();
     if (!managerRecord) {
       await supabaseAdmin.from("Attendance").insert([
@@ -3596,7 +3652,7 @@ router8.get("/today", authenticate, async (req, res) => {
   try {
     const time = getNepalTimeDetails();
     const todayStr = req.query.date || time.dateString;
-    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*, user:User(id, name, email, role, department, avatarUrl)").eq("date", todayStr);
+    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*").eq("date", todayStr);
     if (error) return res.status(500).json({ error: "Failed to fetch today attendance." });
     return res.json(records || []);
   } catch (err) {
@@ -3620,11 +3676,11 @@ router8.get("/my", authenticate, async (req, res) => {
 router8.get("/history", authenticate, async (req, res) => {
   try {
     const { userId, status, month, startDate, endDate, limit = "100" } = req.query;
-    let query = supabaseAdmin.from("Attendance").select("*, user:User(id, name, role, department)");
+    let query = supabaseAdmin.from("Attendance").select("*");
     if (userId && userId !== "ALL") query = query.eq("userId", String(userId));
     if (status && status !== "ALL") query = query.eq("status", String(status));
     if (month) {
-      query = query.ilike("date", `${month}%`);
+      query = query.gte("date", `${month}-01`).lte("date", `${month}-31`);
     } else if (startDate || endDate) {
       if (startDate) query = query.gte("date", String(startDate));
       if (endDate) query = query.lte("date", String(endDate));
@@ -3634,17 +3690,6 @@ router8.get("/history", authenticate, async (req, res) => {
     return res.json(records || []);
   } catch (err) {
     return res.status(500).json({ error: "Failed to retrieve attendance logs." });
-  }
-});
-router8.get("/monthly-report", authenticate, async (req, res) => {
-  try {
-    const { month } = req.query;
-    const currentMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*, user:User(id, name, role, department)").ilike("date", `${currentMonth}%`);
-    if (error) return res.status(500).json({ error: "Failed to load monthly report." });
-    return res.json(records || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to load monthly report." });
   }
 });
 router8.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
@@ -3661,17 +3706,26 @@ router8.get("/export", authenticate, async (req, res) => {
   try {
     const { month } = req.query;
     const targetMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const { data: records } = await supabaseAdmin.from("Attendance").select("*, user:User(name, role, department)").ilike("date", `${targetMonth}%`).order("date", { ascending: false });
-    const rows = (records || []).map((r) => ({
-      "Date": r.date,
-      "Staff Name": r.user?.name || "Staff",
-      "Role": r.user?.role || "TECHNICIAN",
-      "Department": r.user?.department || "Lab",
-      "Check In": r.checkInTime || "\u2014",
-      "Check Out": r.checkOutTime || "\u2014",
-      "Status": r.status,
-      "Notes": r.notes || "\u2014"
-    }));
+    const { data: records } = await supabaseAdmin.from("Attendance").select("*").gte("date", `${targetMonth}-01`).lte("date", `${targetMonth}-31`).order("date", { ascending: false });
+    const userIds = Array.from(new Set((records || []).map((r) => r.userId).filter(Boolean)));
+    let userMap = /* @__PURE__ */ new Map();
+    if (userIds.length > 0) {
+      const { data: users } = await supabaseAdmin.from("User").select("id, name, role, department").in("id", userIds);
+      (users || []).forEach((u) => userMap.set(u.id, u));
+    }
+    const rows = (records || []).map((r) => {
+      const u = userMap.get(r.userId) || {};
+      return {
+        "Date": r.date,
+        "Staff Name": u.name || "Staff",
+        "Role": u.role || "TECHNICIAN",
+        "Department": u.department || "Repair Lab",
+        "Check In": r.checkInTime || "\u2014",
+        "Check Out": r.checkOutTime || "\u2014",
+        "Status": r.status,
+        "Notes": r.notes || "\u2014"
+      };
+    });
     const buffer = createExcelBuffer("Attendance", rows);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="MTS_Attendance_${targetMonth}.xlsx"`);

@@ -13,7 +13,6 @@ const router = Router();
 function getNepalTimeDetails() {
   const now = new Date();
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  // Nepal is UTC + 5 hours 45 minutes = 345 minutes
   const nptDate = new Date(utc + 345 * 60000);
 
   const hours = nptDate.getHours();
@@ -56,7 +55,45 @@ router.get('/server-time', (req, res) => {
 });
 
 // ==========================================
-// 2. GET /api/attendance/roster
+// 2. GET /api/attendance/pending-requests (Fixes 404)
+// ==========================================
+router.get('/pending-requests', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { data: records, error } = await supabaseAdmin
+      .from('Attendance')
+      .select('*')
+      .eq('status', 'PENDING')
+      .order('createdAt', { ascending: false });
+
+    if (error) {
+      console.warn('[PENDING REQUESTS WARN]', error);
+      return res.json([]);
+    }
+
+    const userIds = Array.from(new Set((records || []).map((r: any) => r.userId).filter(Boolean)));
+    let userMap = new Map();
+    if (userIds.length > 0) {
+      const { data: users } = await supabaseAdmin
+        .from('User')
+        .select('id, name, role, department, avatarUrl')
+        .in('id', userIds);
+
+      (users || []).forEach((u: any) => userMap.set(u.id, u));
+    }
+
+    const formatted = (records || []).map((r: any) => ({
+      ...r,
+      user: userMap.get(r.userId) || { name: 'Staff Member', role: 'TECHNICIAN' }
+    }));
+
+    return res.json(formatted);
+  } catch (err: any) {
+    return res.json([]);
+  }
+});
+
+// ==========================================
+// 3. GET /api/attendance/roster
 // ==========================================
 router.get('/roster', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -88,12 +125,16 @@ router.get('/roster', authenticate, async (req: AuthRequest, res: Response) => {
     });
 
     // 3. Fetch manager broadcast dispatch count for today
-    const { data: broadcastLogs } = await supabaseAdmin
-      .from('AttendanceBroadcast')
-      .select('id')
-      .eq('date', todayStr);
-
-    const dispatchCount = broadcastLogs?.length || 0;
+    let dispatchCount = 0;
+    try {
+      const { data: broadcastLogs } = await supabaseAdmin
+        .from('AttendanceBroadcast')
+        .select('id')
+        .eq('date', todayStr);
+      dispatchCount = broadcastLogs?.length || 0;
+    } catch {
+      dispatchCount = 0;
+    }
 
     // 4. Merge users with attendance status
     const roster = staffList.map((u: any) => {
@@ -144,21 +185,64 @@ router.get('/roster', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ==========================================
-// 3. POST /api/attendance/dispatch-request (Manager Broadcast: 10:00 - 10:35 AM only, max 3 times)
+// 4. GET /api/attendance/monthly-report (Fixes 500)
+// ==========================================
+router.get('/monthly-report', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { month } = req.query;
+    const currentMonth = (month as string) || new Date().toISOString().slice(0, 7);
+
+    // Fetch records by date prefix safely
+    const { data: records, error } = await supabaseAdmin
+      .from('Attendance')
+      .select('*')
+      .gte('date', `${currentMonth}-01`)
+      .lte('date', `${currentMonth}-31`)
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.error('[MONTHLY REPORT FETCH ERROR]', error);
+      return res.status(500).json({ error: error.message || 'Failed to load monthly report.' });
+    }
+
+    // Attach user profile metadata
+    const userIds = Array.from(new Set((records || []).map((r: any) => r.userId).filter(Boolean)));
+    let userMap = new Map();
+    if (userIds.length > 0) {
+      const { data: users } = await supabaseAdmin
+        .from('User')
+        .select('id, name, role, department, avatarUrl, email')
+        .in('id', userIds);
+
+      (users || []).forEach((u: any) => userMap.set(u.id, u));
+    }
+
+    const enriched = (records || []).map((r: any) => ({
+      ...r,
+      user: userMap.get(r.userId) || { name: 'Staff Member', role: 'TECHNICIAN', department: 'Repair Lab' }
+    }));
+
+    return res.json(enriched);
+  } catch (err: any) {
+    console.error('[MONTHLY REPORT EXCEPTION]', err);
+    return res.status(500).json({ error: 'Failed to load monthly report.' });
+  }
+});
+
+// ==========================================
+// 5. POST /api/attendance/dispatch-request (Manager 10:00 - 10:35 AM Broadcast)
 // ==========================================
 router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const time = getNepalTimeDetails();
     const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
 
-    // Rule: Manager cannot dispatch outside 10:00 AM - 10:35 AM
     if (!isSuperAdmin && !time.isWithinWindow) {
       return res.status(403).json({
         error: `Manager attendance dispatch is only allowed between 10:00 AM and 10:35 AM NPT. (Current NPT: ${time.timeString})`
       });
     }
 
-    // Rule: Check 3-dispatch daily limit for Manager
     const { data: existingDispatches } = await supabaseAdmin
       .from('AttendanceBroadcast')
       .select('id')
@@ -171,20 +255,23 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
       });
     }
 
-    // 1. Log the broadcast dispatch
-    await supabaseAdmin.from('AttendanceBroadcast').insert([
-      {
-        id: uuidv4(),
-        dispatchedById: req.user!.id,
-        dispatchedByName: req.user!.name,
-        date: time.dateString,
-        time: time.timeString,
-        broadcastNumber: currentCount + 1,
-        createdAt: new Date().toISOString()
-      }
-    ]);
+    try {
+      await supabaseAdmin.from('AttendanceBroadcast').insert([
+        {
+          id: uuidv4(),
+          dispatchedById: req.user!.id,
+          dispatchedByName: req.user!.name,
+          date: time.dateString,
+          time: time.timeString,
+          broadcastNumber: currentCount + 1,
+          createdAt: new Date().toISOString()
+        }
+      ]);
+    } catch (e) {
+      console.warn('[BROADCAST LOG FAIL NON FATAL]', e);
+    }
 
-    // 2. AUTOMATIC ATTENDANCE FOR THE MANAGER (Manager gets marked PRESENT automatically)
+    // Auto-mark the manager PRESENT
     const { data: managerRecord } = await supabaseAdmin
       .from('Attendance')
       .select('id')
@@ -215,7 +302,7 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
       }).eq('id', managerRecord.id);
     }
 
-    // 3. Mark unmarked staff as PENDING / REQUESTED so they can respond
+    // Set other staff to PENDING if not marked
     const { data: staffUsers } = await supabaseAdmin
       .from('User')
       .select('id')
@@ -259,7 +346,7 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
 });
 
 // ==========================================
-// 4. POST /api/attendance/mark (Super Admin Universal Override & Staff Response)
+// 6. POST /api/attendance/mark (Super Admin Direct Override / Staff Response)
 // ==========================================
 router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -279,7 +366,6 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
     const isSuperAdmin = req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'ADMIN';
     const isManager = req.user?.role === 'MANAGER';
 
-    // Check existing record
     const { data: existing } = await supabaseAdmin
       .from('Attendance')
       .select('*')
@@ -289,9 +375,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
 
     const existingRecord = existing?.[0];
 
-    // ----------------------------------------------------
-    // CASE A: SUPER ADMIN UNIVERSAL DIRECT MARK (ANY TIME 24/7)
-    // ----------------------------------------------------
+    // CASE A: SUPER ADMIN UNIVERSAL OVERRIDE
     if (isSuperAdmin || (isManager && explicitStatus && time.isWithinWindow)) {
       const finalStatus = explicitStatus || 'PRESENT';
       const updatePayload: any = {
@@ -340,9 +424,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // ----------------------------------------------------
-    // CASE B: REGULAR STAFF SELF CHECK-IN (During Active Window or if Requested)
-    // ----------------------------------------------------
+    // CASE B: REGULAR STAFF SELF CHECK-IN
     if (type === 'CHECK_IN' || type === 'IN') {
       if (existingRecord && existingRecord.checkInTime && existingRecord.status === 'PRESENT') {
         return res.status(400).json({ error: 'Check-in already completed for today.' });
@@ -387,9 +469,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(201).json({ success: true, message: 'Check-in recorded.', record: created });
     }
 
-    // ----------------------------------------------------
     // CASE C: REGULAR STAFF CHECK-OUT
-    // ----------------------------------------------------
     if (type === 'CHECK_OUT' || type === 'OUT') {
       if (!existingRecord) {
         return res.status(400).json({ error: 'No check-in record found for today.' });
@@ -418,7 +498,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ==========================================
-// 5. GET /api/attendance/today
+// 7. GET /api/attendance/today
 // ==========================================
 router.get('/today', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -427,7 +507,7 @@ router.get('/today', authenticate, async (req: AuthRequest, res: Response) => {
 
     const { data: records, error } = await supabaseAdmin
       .from('Attendance')
-      .select('*, user:User(id, name, email, role, department, avatarUrl)')
+      .select('*')
       .eq('date', todayStr);
 
     if (error) return res.status(500).json({ error: 'Failed to fetch today attendance.' });
@@ -438,7 +518,7 @@ router.get('/today', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ==========================================
-// 6. GET /api/attendance/my
+// 8. GET /api/attendance/my
 // ==========================================
 router.get('/my', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -469,18 +549,18 @@ router.get('/my', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ==========================================
-// 7. GET /api/attendance/history
+// 9. GET /api/attendance/history
 // ==========================================
 router.get('/history', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { userId, status, month, startDate, endDate, limit = '100' } = req.query;
-    let query = supabaseAdmin.from('Attendance').select('*, user:User(id, name, role, department)');
+    let query = supabaseAdmin.from('Attendance').select('*');
 
     if (userId && userId !== 'ALL') query = query.eq('userId', String(userId));
     if (status && status !== 'ALL') query = query.eq('status', String(status));
 
     if (month) {
-      query = query.ilike('date', `${month}%`);
+      query = query.gte('date', `${month}-01`).lte('date', `${month}-31`);
     } else if (startDate || endDate) {
       if (startDate) query = query.gte('date', String(startDate));
       if (endDate) query = query.lte('date', String(endDate));
@@ -498,27 +578,7 @@ router.get('/history', authenticate, async (req: AuthRequest, res: Response) => 
 });
 
 // ==========================================
-// 8. GET /api/attendance/monthly-report
-// ==========================================
-router.get('/monthly-report', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const { month } = req.query;
-    const currentMonth = (month as string) || new Date().toISOString().slice(0, 7);
-
-    const { data: records, error } = await supabaseAdmin
-      .from('Attendance')
-      .select('*, user:User(id, name, role, department)')
-      .ilike('date', `${currentMonth}%`);
-
-    if (error) return res.status(500).json({ error: 'Failed to load monthly report.' });
-    return res.json(records || []);
-  } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to load monthly report.' });
-  }
-});
-
-// ==========================================
-// 9. DELETE /api/attendance/:id
+// 10. DELETE /api/attendance/:id
 // ==========================================
 router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
@@ -533,7 +593,7 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
 });
 
 // ==========================================
-// 10. GET /api/attendance/export
+// 11. GET /api/attendance/export
 // ==========================================
 router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -542,20 +602,35 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
 
     const { data: records } = await supabaseAdmin
       .from('Attendance')
-      .select('*, user:User(name, role, department)')
-      .ilike('date', `${targetMonth}%`)
+      .select('*')
+      .gte('date', `${targetMonth}-01`)
+      .lte('date', `${targetMonth}-31`)
       .order('date', { ascending: false });
 
-    const rows = (records || []).map((r: any) => ({
-      'Date': r.date,
-      'Staff Name': r.user?.name || 'Staff',
-      'Role': r.user?.role || 'TECHNICIAN',
-      'Department': r.user?.department || 'Lab',
-      'Check In': r.checkInTime || '—',
-      'Check Out': r.checkOutTime || '—',
-      'Status': r.status,
-      'Notes': r.notes || '—',
-    }));
+    const userIds = Array.from(new Set((records || []).map((r: any) => r.userId).filter(Boolean)));
+    let userMap = new Map();
+    if (userIds.length > 0) {
+      const { data: users } = await supabaseAdmin
+        .from('User')
+        .select('id, name, role, department')
+        .in('id', userIds);
+
+      (users || []).forEach((u: any) => userMap.set(u.id, u));
+    }
+
+    const rows = (records || []).map((r: any) => {
+      const u = userMap.get(r.userId) || {};
+      return {
+        'Date': r.date,
+        'Staff Name': u.name || 'Staff',
+        'Role': u.role || 'TECHNICIAN',
+        'Department': u.department || 'Repair Lab',
+        'Check In': r.checkInTime || '—',
+        'Check Out': r.checkOutTime || '—',
+        'Status': r.status,
+        'Notes': r.notes || '—',
+      };
+    });
 
     const buffer = createExcelBuffer('Attendance', rows);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
