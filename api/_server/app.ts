@@ -4902,7 +4902,7 @@ data: ${JSON.stringify({ ts: Date.now() })}
 var events_default = router17;
 
 // api/_server/app.ts
-function createApp() {
+export function createApp() {
   const app2 = express();
   app2.use(express.json({ limit: "20mb" }));
   app2.use(express.urlencoded({ extended: true, limit: "20mb" }));
@@ -4921,7 +4921,7 @@ function createApp() {
   app2.use("/api/users", users_default);
   app2.use("/api/staff", users_default);
   app2.use("/api/repairs", repairs_default);
-  app2.use("/api/repair-transfers", repairTransfers_default); // <-- Corrected path for 404 fix
+  app2.use("/api/repair-transfers", repairTransfers_default);
   app2.use("/api/customers", customers_default);
   app2.use("/api/inventory", inventory_default);
   app2.use("/api/couriers", couriers_default);
@@ -4969,6 +4969,8 @@ function createApp() {
   });
   return app2;
 }
+
+export { createApp };
 
 // api/_server/index.ts
 var app = createApp();
