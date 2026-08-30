@@ -48,7 +48,7 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       updatedAt,
       completedAt,
       deliveredAt,
-      logs:RepairLog(action, status, notes, createdAt)
+      logs:RepairLog(action, status, notes, message, createdAt)
     `;
 
     let repairRecord: any = null;
@@ -110,7 +110,18 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
     }
 
-    // Ensure logs are sorted newest first if they were returned unordered
+    // GUARANTEED FALLBACK: If embedded logs relation returns empty, query RepairLog explicitly by repairId
+    if (!repairRecord.logs || repairRecord.logs.length === 0) {
+      const { data: explicitLogs } = await supabaseAdmin
+        .from('RepairLog')
+        .select('action, status, notes, message, createdAt')
+        .eq('repairId', repairRecord.id)
+        .order('createdAt', { ascending: false });
+
+      repairRecord.logs = explicitLogs || [];
+    }
+
+    // Ensure logs are sorted newest first
     if (repairRecord.logs && Array.isArray(repairRecord.logs)) {
       repairRecord.logs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
