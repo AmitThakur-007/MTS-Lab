@@ -352,7 +352,7 @@ export default function Repairs() {
   }, [fetchData]);
 
   useRealtimeSync(
-    ['Repair', 'repair', 'RepairLog', 'repairLog', 'TechnicianNote', 'technicianNote', 'Payment', 'payment', 'User', 'user', 'Notification', 'notification', 'Attendance', 'attendance', 'RepairTransferRequest', 'repairTransferRequest'],
+    ['Repair', 'repair', 'RepairLog', 'repairLog', 'TechnicianNote', 'technicianNote', 'Payment', 'payment', 'User', 'user', 'Notification', 'notification', 'Attendance', 'attendance', 'RepairTransferRequest', 'repairTransferRequest', 'Customer', 'customer', 'InventoryItem', 'inventoryitem', 'BatteryWarranty', 'batterywarranty'],
     (event) => {
       console.log('[REPAIRS REALTIME EVENT]', event);
       fetchData();
