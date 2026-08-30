@@ -423,7 +423,7 @@ export default function Tracking() {
                   </CardContent>
                 </Card>
 
-                {/* DIAGNOSTIC ACTIVITY TRACE (GUARANTEED MULTI-SOURCE FALLBACK RENDERER) */}
+                {/* DIAGNOSTIC ACTIVITY TRACE (TIMESTAMP/DATE/YEAR REMOVED) */}
                 <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden w-full">
                   <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                     <div className="flex items-center gap-2.5">
@@ -432,18 +432,17 @@ export default function Tracking() {
                       </div>
                       <div>
                         <h3 className="font-bold text-slate-900 text-sm sm:text-base">Diagnostic Activity Trace</h3>
-                        <p className="text-xs text-slate-500">Live timestamped progress tracker for your repair service</p>
+                        <p className="text-xs text-slate-500">Progress tracker for your repair service</p>
                       </div>
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
                       <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
-                      Live Timestamped
+                      Live Updates
                     </span>
                   </div>
 
                   <CardContent className="p-4 sm:p-6 lg:p-8">
                     {(() => {
-                      // Collect logs from any possible array format, or synthesize a fallback if empty
                       let repairLogs = activeRepair?.logs || trackingData?.logs || activeRepair?.repairLogs || [];
 
                       if (!Array.isArray(repairLogs) || repairLogs.length === 0) {
@@ -453,7 +452,6 @@ export default function Tracking() {
                             action: 'STATUS_UPDATED',
                             status: activeRepair?.status || 'RECEIVED',
                             notes: `Device registered in system with status: ${activeRepair?.status || 'RECEIVED'}.`,
-                            createdAt: activeRepair?.createdAt || new Date().toISOString()
                           }
                         ];
                       }
@@ -475,12 +473,9 @@ export default function Tracking() {
                                 </div>
 
                                 <div className="ml-2 sm:ml-4 flex-1 bg-slate-50 hover:bg-slate-50/80 rounded-xl p-4 sm:p-5 border border-slate-200/70 shadow-2xs">
-                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1.5">
+                                  <div className="flex items-center justify-between gap-1 mb-1.5">
                                     <span className={cn("text-xs sm:text-sm font-bold uppercase tracking-wider", logStatus.textColor || "text-indigo-600")}>
                                       {friendlyInfo.title}
-                                    </span>
-                                    <span className="text-[11px] sm:text-xs font-medium text-slate-400 bg-white px-2.5 py-0.5 rounded-md border border-slate-200/60 font-mono">
-                                      {new Date(log.createdAt || log.timestamp || Date.now()).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                   </div>
                                   <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
