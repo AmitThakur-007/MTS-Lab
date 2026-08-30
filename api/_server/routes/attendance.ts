@@ -49,7 +49,7 @@ function getNepalTimeDetails() {
 }
 
 /**
- * Helper to fetch ONLY the exact staff members from the Staff directory table (Staff Management)
+ * Helper to fetch ONLY the exact active staff members from the Staff directory table (Staff Management)
  */
 async function fetchSafeStaffUsers() {
   try {
@@ -79,11 +79,12 @@ async function fetchSafeStaffUsers() {
         }));
     }
 
-    // 2. Fallback: Query User table with strict active staff directory filtering
+    // 2. Fallback: Query User table with strict staff directory filtering
     const { data: users, error: userErr } = await supabaseAdmin
       .from('User')
       .select('*')
       .in('role', AUTHORIZED_STAFF_ROLES)
+      .eq('status', 'ACTIVE')
       .order('name', { ascending: true });
 
     if (userErr) {
@@ -92,16 +93,9 @@ async function fetchSafeStaffUsers() {
     }
 
     return (users || []).filter((u: any) => {
-      const status = (u.status || 'ACTIVE').toUpperCase();
-      const role = (u.role || '').toUpperCase();
       const email = (u.email || '').toLowerCase();
-      const isStaffRole = AUTHORIZED_STAFF_ROLES.includes(role);
-
-      // Exclude deactivated/suspended users and leftover local testing accounts
       const isRealAccount = !email.endsWith('.local') && !email.includes('2fatest') && !email.includes('test_admin');
-      const isActive = status === 'ACTIVE';
-
-      return isStaffRole && isActive && isRealAccount;
+      return isRealAccount;
     });
   } catch (err) {
     console.error('[SAFE USER FETCH EXCEPTION]', err);
@@ -806,8 +800,6 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
         'Staff Name': u.name || 'Staff',
         'Role': u.role || 'TECHNICIAN',
         'Department': u.department || 'Repair Lab',
-        'Check In': r.checkInTime || '—',
-        'Check Out': r.checkOutTime || '—',
         'Status': r.status,
         'Notes': r.notes || '—',
       };

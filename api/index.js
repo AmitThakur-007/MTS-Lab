@@ -3374,19 +3374,15 @@ async function fetchSafeStaffUsers() {
         status: s.status || "ACTIVE"
       }));
     }
-    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("*").in("role", AUTHORIZED_STAFF_ROLES).order("name", { ascending: true });
+    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("*").in("role", AUTHORIZED_STAFF_ROLES).eq("status", "ACTIVE").order("name", { ascending: true });
     if (userErr) {
       console.error("[SUPABASE USER QUERY ERROR]", userErr);
       return [];
     }
     return (users || []).filter((u) => {
-      const status = (u.status || "ACTIVE").toUpperCase();
-      const role = (u.role || "").toUpperCase();
       const email = (u.email || "").toLowerCase();
-      const isStaffRole = AUTHORIZED_STAFF_ROLES.includes(role);
       const isRealAccount = !email.endsWith(".local") && !email.includes("2fatest") && !email.includes("test_admin");
-      const isActive = status === "ACTIVE";
-      return isStaffRole && isActive && isRealAccount;
+      return isRealAccount;
     });
   } catch (err) {
     console.error("[SAFE USER FETCH EXCEPTION]", err);
@@ -3872,8 +3868,6 @@ router8.get("/export", authenticate, async (req, res) => {
         "Staff Name": u.name || "Staff",
         "Role": u.role || "TECHNICIAN",
         "Department": u.department || "Repair Lab",
-        "Check In": r.checkInTime || "\u2014",
-        "Check Out": r.checkOutTime || "\u2014",
         "Status": r.status,
         "Notes": r.notes || "\u2014"
       };
