@@ -1671,7 +1671,7 @@ router3.post("/:id/transfer", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to transfer repair ticket." });
   }
 });
-router3.get("/repair-transfers/my-requests", authenticate, async (req, res) => {
+var handleMyTransferRequests = async (req, res) => {
   try {
     const { data: requests, error } = await supabaseAdmin.from("RepairTransferRequest").select("*").or(`senderId.eq.${req.user.id},receiverId.eq.${req.user.id}`).order("createdAt", { ascending: false });
     if (error) {
@@ -1681,7 +1681,9 @@ router3.get("/repair-transfers/my-requests", authenticate, async (req, res) => {
   } catch {
     return res.json([]);
   }
-});
+};
+router3.get("/repair-transfers/my-requests", authenticate, handleMyTransferRequests);
+router3.get("/repair-transfers/my-requests", authenticate, handleMyTransferRequests);
 router3.post("/:id/courier-dispatch", authenticate, async (req, res) => {
   try {
     const { id } = req.params;

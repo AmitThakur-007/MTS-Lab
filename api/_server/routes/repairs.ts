@@ -889,8 +889,8 @@ router.post('/:id/transfer', authenticate, async (req: AuthRequest, res: Respons
   }
 });
 
-// 13.1 GET /api/repair-transfers/my-requests (Repair transfer requests list endpoint)
-router.get('/repair-transfers/my-requests', authenticate, async (req: AuthRequest, res: Response) => {
+// 13.1 GET /api/repair-transfers/my-requests & /api/repairs/repair-transfers/my-requests (Repair transfer requests list endpoint aliases)
+const handleMyTransferRequests = async (req: AuthRequest, res: Response) => {
   try {
     const { data: requests, error } = await supabaseAdmin
       .from('RepairTransferRequest')
@@ -906,7 +906,10 @@ router.get('/repair-transfers/my-requests', authenticate, async (req: AuthReques
   } catch {
     return res.json([]);
   }
-});
+};
+
+router.get('/repair-transfers/my-requests', authenticate, handleMyTransferRequests);
+router.get('/repair-transfers/my-requests', authenticate, handleMyTransferRequests);
 
 // 14. POST /api/repairs/:id/courier-dispatch
 router.post('/:id/courier-dispatch', authenticate, async (req: AuthRequest, res: Response) => {
