@@ -39,3 +39,17 @@ prisma/*.db-journal
 # Scratch & Temporary
 scratch/
 .system_generated/
+
+# Local data and dumps
+data/
+*.sql
+*.dump
+
+# Next.js / Vite build caches
+.vercel
+.vite/
+.turbo
+
+# OS temporary files
+Thumbs.db
+ehthumbs.db    
