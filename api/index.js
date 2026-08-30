@@ -3320,70 +3320,244 @@ var batteryWarranties_default = router7;
 import { Router as Router8 } from "express";
 import { v4 as uuidv49 } from "uuid";
 var router8 = Router8();
-router8.get("/server-time", (req, res) => {
+function getNepalTimeDetails() {
   const now = /* @__PURE__ */ new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 6e4;
+  const nptDate = new Date(utc + 345 * 6e4);
+  const hours = nptDate.getHours();
+  const minutes = nptDate.getMinutes();
+  const seconds = nptDate.getSeconds();
+  const totalMinutes = hours * 60 + minutes;
+  const isWithinWindow = totalMinutes >= 600 && totalMinutes <= 635;
+  const dateString = nptDate.toISOString().split("T")[0];
+  const timeString = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  return {
+    nptDate,
+    dateString,
+    timeString,
+    hours,
+    minutes,
+    totalMinutes,
+    isWithinWindow,
+    windowStart: "10:00:00",
+    windowEnd: "10:35:00"
+  };
+}
+router8.get("/server-time", (req, res) => {
+  const time = getNepalTimeDetails();
   return res.json({
-    iso: now.toISOString(),
-    timestamp: now.getTime(),
-    dateString: now.toISOString().split("T")[0],
-    timeString: now.toTimeString().split(" ")[0]
+    iso: time.nptDate.toISOString(),
+    timestamp: time.nptDate.getTime(),
+    dateString: time.dateString,
+    timeString: time.timeString,
+    isWithinWindow: time.isWithinWindow,
+    windowRange: "10:00 AM \u2013 10:35 AM NPT"
   });
 });
-router8.get("/today", authenticate, async (req, res) => {
+router8.get("/roster", authenticate, async (req, res) => {
   try {
-    const todayStr = req.query.date || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*, user:User!Attendance_userId_fkey(id, name, email, role, department, profileImage)").eq("date", todayStr);
-    if (error) {
-      console.error("[ATTENDANCE TODAY ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch today attendance." });
+    const time = getNepalTimeDetails();
+    const todayStr = req.query.date || time.dateString;
+    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("id, name, email, role, department, phone, avatarUrl, status").order("name", { ascending: true });
+    if (userErr) {
+      console.error("[ATTENDANCE ROSTER USERS ERROR]", userErr);
+      return res.status(500).json({ error: "Failed to retrieve staff roster." });
     }
-    return res.json(records || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to load today attendance records." });
-  }
-});
-router8.get("/my", authenticate, async (req, res) => {
-  try {
-    const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-    const { data: todayRecord } = await supabaseAdmin.from("Attendance").select("*").eq("userId", req.user.id).eq("date", todayStr).limit(1);
-    const { data: recentRecords } = await supabaseAdmin.from("Attendance").select("*").eq("userId", req.user.id).order("date", { ascending: false }).limit(30);
+    const staffList = (users || []).filter((u) => u.status !== "SUSPENDED" && u.status !== "INACTIVE");
+    const { data: attendanceRecords } = await supabaseAdmin.from("Attendance").select("*").eq("date", todayStr);
+    const attendanceMap = /* @__PURE__ */ new Map();
+    (attendanceRecords || []).forEach((rec) => {
+      attendanceMap.set(rec.userId, rec);
+    });
+    const { data: broadcastLogs } = await supabaseAdmin.from("AttendanceBroadcast").select("id").eq("date", todayStr);
+    const dispatchCount = broadcastLogs?.length || 0;
+    const roster = staffList.map((u) => {
+      const record = attendanceMap.get(u.id);
+      return {
+        userId: u.id,
+        name: u.name || u.email?.split("@")[0] || "Staff Member",
+        email: u.email,
+        role: u.role || "TECHNICIAN",
+        department: u.department || "Repair Lab",
+        phone: u.phone || "",
+        avatarUrl: u.avatarUrl || null,
+        date: todayStr,
+        status: record ? record.status : "NOT_MARKED",
+        checkInTime: record ? record.checkInTime : null,
+        checkOutTime: record ? record.checkOutTime : null,
+        notes: record ? record.notes : null,
+        attendanceId: record ? record.id : null
+      };
+    });
+    const presentToday = roster.filter((r) => ["PRESENT", "LATE", "HALF_DAY"].includes(r.status)).length;
+    const absentToday = roster.filter((r) => r.status === "ABSENT").length;
     return res.json({
-      today: todayRecord?.[0] || null,
-      recent: recentRecords || []
+      success: true,
+      roster,
+      windowInfo: {
+        isWithinWindow: time.isWithinWindow,
+        currentTimeNPT: time.timeString,
+        windowStart: "10:00 AM",
+        windowEnd: "10:35 AM",
+        dispatchCount,
+        maxDispatches: 3,
+        canManagerDispatch: time.isWithinWindow && dispatchCount < 3
+      },
+      stats: {
+        totalStaff: roster.length,
+        presentToday,
+        absentToday,
+        unmarked: roster.length - (presentToday + absentToday)
+      }
     });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to fetch personal attendance." });
+    console.error("[ATTENDANCE ROSTER EXCEPTION]", err);
+    return res.status(500).json({ error: "Failed to generate attendance roster." });
   }
 });
-router8.get("/pending-requests", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
+router8.post("/dispatch-request", authenticate, authorize(["MANAGER", "SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
-    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*, user:User!Attendance_userId_fkey(id, name, role, department)").eq("status", "PENDING").order("createdAt", { ascending: false });
-    if (error) return res.status(500).json({ error: "Failed to fetch pending requests." });
-    return res.json(records || []);
+    const time = getNepalTimeDetails();
+    const isSuperAdmin = req.user?.role === "SUPER_ADMIN";
+    if (!isSuperAdmin && !time.isWithinWindow) {
+      return res.status(403).json({
+        error: `Manager attendance dispatch is only allowed between 10:00 AM and 10:35 AM NPT. (Current NPT: ${time.timeString})`
+      });
+    }
+    const { data: existingDispatches } = await supabaseAdmin.from("AttendanceBroadcast").select("id").eq("date", time.dateString);
+    const currentCount = existingDispatches?.length || 0;
+    if (!isSuperAdmin && currentCount >= 3) {
+      return res.status(429).json({
+        error: "Daily limit reached: Manager can only send attendance requests up to 3 times per day."
+      });
+    }
+    await supabaseAdmin.from("AttendanceBroadcast").insert([
+      {
+        id: uuidv49(),
+        dispatchedById: req.user.id,
+        dispatchedByName: req.user.name,
+        date: time.dateString,
+        time: time.timeString,
+        broadcastNumber: currentCount + 1,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      }
+    ]);
+    const { data: managerRecord } = await supabaseAdmin.from("Attendance").select("id").eq("userId", req.user.id).eq("date", time.dateString).maybeSingle();
+    if (!managerRecord) {
+      await supabaseAdmin.from("Attendance").insert([
+        {
+          id: uuidv49(),
+          userId: req.user.id,
+          date: time.dateString,
+          checkInTime: time.timeString,
+          status: "PRESENT",
+          notes: "Auto-marked PRESENT via Daily Attendance Broadcast Dispatch",
+          markedById: req.user.id,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+    } else {
+      await supabaseAdmin.from("Attendance").update({
+        status: "PRESENT",
+        checkInTime: time.timeString,
+        notes: "Confirmed PRESENT via Broadcast Dispatch",
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      }).eq("id", managerRecord.id);
+    }
+    const { data: staffUsers } = await supabaseAdmin.from("User").select("id").neq("id", req.user.id).not("status", "eq", "SUSPENDED");
+    for (const staff of staffUsers || []) {
+      const { data: exists } = await supabaseAdmin.from("Attendance").select("id, status").eq("userId", staff.id).eq("date", time.dateString).maybeSingle();
+      if (!exists) {
+        await supabaseAdmin.from("Attendance").insert([
+          {
+            id: uuidv49(),
+            userId: staff.id,
+            date: time.dateString,
+            status: "PENDING",
+            notes: `Attendance requested by Manager (Attempt #${currentCount + 1})`,
+            markedById: req.user.id,
+            createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+          }
+        ]);
+      }
+    }
+    return res.json({
+      success: true,
+      message: `Attendance request dispatched to all staff (${currentCount + 1}/3). You have been auto-marked PRESENT.`,
+      dispatchCount: currentCount + 1,
+      maxDispatches: 3
+    });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to load pending requests." });
+    console.error("[DISPATCH REQUEST ERROR]", err);
+    return res.status(500).json({ error: "Failed to broadcast attendance request." });
   }
 });
 router8.post("/mark", authenticate, async (req, res) => {
   try {
-    const { type, notes, userId: targetUserId, date: targetDate, time: targetTime } = req.body;
-    const now = /* @__PURE__ */ new Date();
-    const effectiveDate = targetDate || now.toISOString().split("T")[0];
-    const effectiveTime = targetTime || now.toTimeString().split(" ")[0];
+    const {
+      type,
+      status: explicitStatus,
+      notes,
+      userId: targetUserId,
+      date: targetDate,
+      time: targetTime
+    } = req.body;
+    const time = getNepalTimeDetails();
+    const effectiveDate = targetDate || time.dateString;
+    const effectiveTime = targetTime || time.timeString;
     const effectiveUserId = targetUserId || req.user.id;
+    const isSuperAdmin = req.user?.role === "SUPER_ADMIN" || req.user?.role === "ADMIN";
+    const isManager = req.user?.role === "MANAGER";
     const { data: existing } = await supabaseAdmin.from("Attendance").select("*").eq("userId", effectiveUserId).eq("date", effectiveDate).limit(1);
-    if (type === "CHECK_IN" || type === "IN") {
-      if (existing && existing.length > 0 && existing[0].checkInTime) {
-        return res.status(400).json({ error: "Check-in already recorded for this date." });
+    const existingRecord = existing?.[0];
+    if (isSuperAdmin || isManager && explicitStatus && time.isWithinWindow) {
+      const finalStatus = explicitStatus || "PRESENT";
+      const updatePayload = {
+        status: finalStatus,
+        notes: notes ? notes.trim() : isSuperAdmin ? `Directly marked by Super Admin (${req.user.name})` : "Marked by Manager",
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      if (type === "CHECK_OUT" || explicitStatus === "CHECK_OUT") {
+        updatePayload.checkOutTime = effectiveTime;
+      } else {
+        if (!existingRecord?.checkInTime) updatePayload.checkInTime = effectiveTime;
       }
-      if (existing && existing.length > 0) {
-        const { data: updated } = await supabaseAdmin.from("Attendance").update({
+      if (existingRecord) {
+        const { data: updated, error } = await supabaseAdmin.from("Attendance").update(updatePayload).eq("id", existingRecord.id).select("*").single();
+        if (error) throw error;
+        return res.json({ success: true, message: `Staff attendance updated to ${finalStatus}.`, record: updated });
+      } else {
+        const newRecord = {
+          id: uuidv49(),
+          userId: effectiveUserId,
+          date: effectiveDate,
+          checkInTime: effectiveTime,
+          status: finalStatus,
+          notes: notes ? notes.trim() : `Directly marked by Super Admin (${req.user.name})`,
+          markedById: req.user.id,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        const { data: created, error } = await supabaseAdmin.from("Attendance").insert([newRecord]).select("*").single();
+        if (error) throw error;
+        return res.status(201).json({ success: true, message: `Staff attendance marked as ${finalStatus}.`, record: created });
+      }
+    }
+    if (type === "CHECK_IN" || type === "IN") {
+      if (existingRecord && existingRecord.checkInTime && existingRecord.status === "PRESENT") {
+        return res.status(400).json({ error: "Check-in already completed for today." });
+      }
+      if (existingRecord) {
+        const { data: updated, error: error2 } = await supabaseAdmin.from("Attendance").update({
           checkInTime: effectiveTime,
           status: "PRESENT",
-          notes: notes || existing[0].notes,
+          notes: notes || "Confirmed presence in response to request",
           updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        }).eq("id", existing[0].id).select("*").single();
-        return res.json({ success: true, message: "Check-in marked successfully.", record: updated });
+        }).eq("id", existingRecord.id).select("*").single();
+        if (error2) throw error2;
+        return res.json({ success: true, message: "Check-in confirmed successfully.", record: updated });
       }
       const newRecord = {
         id: uuidv49(),
@@ -3397,53 +3571,58 @@ router8.post("/mark", authenticate, async (req, res) => {
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       const { data: created, error } = await supabaseAdmin.from("Attendance").insert([newRecord]).select("*").single();
-      if (error) return res.status(500).json({ error: "Failed to record check-in." });
+      if (error) throw error;
       return res.status(201).json({ success: true, message: "Check-in recorded.", record: created });
     }
     if (type === "CHECK_OUT" || type === "OUT") {
-      if (!existing || existing.length === 0) {
-        return res.status(400).json({ error: "No check-in record found for today to check out from." });
+      if (!existingRecord) {
+        return res.status(400).json({ error: "No check-in record found for today." });
       }
-      const record = existing[0];
       const { data: updated, error } = await supabaseAdmin.from("Attendance").update({
         checkOutTime: effectiveTime,
-        notes: notes ? `${record.notes || ""} | ${notes}`.trim() : record.notes,
+        notes: notes ? `${existingRecord.notes || ""} | ${notes}`.trim() : existingRecord.notes,
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      }).eq("id", record.id).select("*").single();
-      if (error) return res.status(500).json({ error: "Failed to record check-out." });
+      }).eq("id", existingRecord.id).select("*").single();
+      if (error) throw error;
       return res.json({ success: true, message: "Check-out recorded successfully.", record: updated });
     }
-    return res.status(400).json({ error: "Invalid attendance action type (must be CHECK_IN or CHECK_OUT)." });
+    return res.status(400).json({ error: "Invalid attendance parameters." });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to mark attendance." });
+    console.error("[ATTENDANCE MARK ERROR]", err);
+    return res.status(500).json({ error: err?.message || "Failed to mark attendance." });
   }
 });
-router8.post("/:id/respond", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
+router8.get("/today", authenticate, async (req, res) => {
   try {
-    const { id } = req.params;
-    const { action, notes } = req.body;
-    const newStatus = action === "APPROVE" ? "PRESENT" : "REJECTED";
-    const { data: updated, error } = await supabaseAdmin.from("Attendance").update({
-      status: newStatus,
-      notes: notes || `Request ${action.toLowerCase()}d by ${req.user.name}`,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to respond to attendance request." });
-    return res.json({ success: true, message: `Request ${action.toLowerCase()}d.`, record: updated });
+    const time = getNepalTimeDetails();
+    const todayStr = req.query.date || time.dateString;
+    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*, user:User(id, name, email, role, department, avatarUrl)").eq("date", todayStr);
+    if (error) return res.status(500).json({ error: "Failed to fetch today attendance." });
+    return res.json(records || []);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to update request." });
+    return res.status(500).json({ error: "Failed to load today attendance records." });
+  }
+});
+router8.get("/my", authenticate, async (req, res) => {
+  try {
+    const time = getNepalTimeDetails();
+    const todayStr = time.dateString;
+    const { data: todayRecord } = await supabaseAdmin.from("Attendance").select("*").eq("userId", req.user.id).eq("date", todayStr).limit(1);
+    const { data: recentRecords } = await supabaseAdmin.from("Attendance").select("*").eq("userId", req.user.id).order("date", { ascending: false }).limit(30);
+    return res.json({
+      today: todayRecord?.[0] || null,
+      recent: recentRecords || []
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch personal attendance." });
   }
 });
 router8.get("/history", authenticate, async (req, res) => {
   try {
     const { userId, status, month, startDate, endDate, limit = "100" } = req.query;
-    let query = supabaseAdmin.from("Attendance").select("*, user:User!Attendance_userId_fkey(id, name, role, department)");
-    if (userId && userId !== "ALL") {
-      query = query.eq("userId", String(userId));
-    }
-    if (status && status !== "ALL") {
-      query = query.eq("status", String(status));
-    }
+    let query = supabaseAdmin.from("Attendance").select("*, user:User(id, name, role, department)");
+    if (userId && userId !== "ALL") query = query.eq("userId", String(userId));
+    if (status && status !== "ALL") query = query.eq("status", String(status));
     if (month) {
       query = query.ilike("date", `${month}%`);
     } else if (startDate || endDate) {
@@ -3461,36 +3640,11 @@ router8.get("/monthly-report", authenticate, async (req, res) => {
   try {
     const { month } = req.query;
     const currentMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*, user:User!Attendance_userId_fkey(id, name, role, department)").ilike("date", `${currentMonth}%`);
+    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*, user:User(id, name, role, department)").ilike("date", `${currentMonth}%`);
     if (error) return res.status(500).json({ error: "Failed to load monthly report." });
     return res.json(records || []);
   } catch (err) {
     return res.status(500).json({ error: "Failed to load monthly report." });
-  }
-});
-router8.get("/staff/:userId/monthly", authenticate, async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { month } = req.query;
-    const currentMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*").eq("userId", userId).ilike("date", `${currentMonth}%`).order("date", { ascending: true });
-    if (error) return res.status(500).json({ error: "Failed to fetch user monthly attendance." });
-    return res.json(records || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to load staff monthly calendar." });
-  }
-});
-router8.patch("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    delete updateData.id;
-    delete updateData.user;
-    const { data: updated, error } = await supabaseAdmin.from("Attendance").update(updateData).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to update attendance log." });
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update log." });
   }
 });
 router8.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
@@ -3507,7 +3661,7 @@ router8.get("/export", authenticate, async (req, res) => {
   try {
     const { month } = req.query;
     const targetMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const { data: records } = await supabaseAdmin.from("Attendance").select("*, user:User!Attendance_userId_fkey(name, role, department)").ilike("date", `${targetMonth}%`).order("date", { ascending: false });
+    const { data: records } = await supabaseAdmin.from("Attendance").select("*, user:User(name, role, department)").ilike("date", `${targetMonth}%`).order("date", { ascending: false });
     const rows = (records || []).map((r) => ({
       "Date": r.date,
       "Staff Name": r.user?.name || "Staff",
