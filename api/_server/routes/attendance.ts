@@ -754,7 +754,7 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ==========================================
-// 13. DELETE /api/attendance/staff/:userId (Super Admin Only - Safe Deactivation)
+// 13. DELETE /api/attendance/staff/:userId (Super Admin Only - Permanent Deletion)
 // ==========================================
 router.delete('/staff/:userId', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
@@ -780,19 +780,20 @@ router.delete('/staff/:userId', authenticate, authorize(['SUPER_ADMIN']), async 
       .delete()
       .or(`id.eq.${userId},userId.eq.${userId}`);
 
-    // 3. Mark user as INACTIVE to bypass foreign key constraints in Repair records
-    const { error: userUpdateErr } = await supabaseAdmin
+    // 3. Permanently delete from User table (now fully supported with ON DELETE SET NULL)
+    const { error: userDelErr } = await supabaseAdmin
       .from('User')
-      .update({ status: 'INACTIVE', updatedAt: new Date().toISOString() })
+      .delete()
       .eq('id', userId);
 
-    if (userUpdateErr) {
-      console.warn('[USER STATUS UPDATE WARN]', userUpdateErr);
+    if (userDelErr) {
+      console.error('[USER TABLE DELETE ERROR]', userDelErr);
+      return res.status(500).json({ error: 'Failed to delete user account.' });
     }
 
     return res.json({
       success: true,
-      message: 'Staff member deactivated and removed from attendance roster.'
+      message: 'Staff member and all their records have been permanently removed.'
     });
   } catch (err: any) {
     console.error('[STAFF DELETE EXCEPTION]', err);

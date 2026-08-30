@@ -3858,13 +3858,14 @@ router8.delete("/staff/:userId", authenticate, authorize(["SUPER_ADMIN"]), async
     }
     await supabaseAdmin.from("Attendance").delete().eq("userId", userId);
     await supabaseAdmin.from("Staff").delete().or(`id.eq.${userId},userId.eq.${userId}`);
-    const { error: userUpdateErr } = await supabaseAdmin.from("User").update({ status: "INACTIVE", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", userId);
-    if (userUpdateErr) {
-      console.warn("[USER STATUS UPDATE WARN]", userUpdateErr);
+    const { error: userDelErr } = await supabaseAdmin.from("User").delete().eq("id", userId);
+    if (userDelErr) {
+      console.error("[USER TABLE DELETE ERROR]", userDelErr);
+      return res.status(500).json({ error: "Failed to delete user account." });
     }
     return res.json({
       success: true,
-      message: "Staff member deactivated and removed from attendance roster."
+      message: "Staff member and all their records have been permanently removed."
     });
   } catch (err) {
     console.error("[STAFF DELETE EXCEPTION]", err);
