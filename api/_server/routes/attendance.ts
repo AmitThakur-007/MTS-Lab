@@ -49,11 +49,11 @@ function getNepalTimeDetails() {
 }
 
 /**
- * Helper to fetch ONLY active staff members registered in the Staff Management directory
+ * Helper to fetch ONLY the exact staff members from the Staff directory table (Staff Management)
  */
 async function fetchSafeStaffUsers() {
   try {
-    // 1. Check if dedicated Staff table exists and has registered directory members
+    // 1. Primary Source: Query the Staff directory table used by Staff Management
     const { data: staffMembers, error: staffErr } = await supabaseAdmin
       .from('Staff')
       .select('*')
@@ -79,7 +79,7 @@ async function fetchSafeStaffUsers() {
         }));
     }
 
-    // 2. Query User table with strict staff directory filtering
+    // 2. Fallback: Query User table with strict active staff directory filtering
     const { data: users, error: userErr } = await supabaseAdmin
       .from('User')
       .select('*')
@@ -806,6 +806,8 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
         'Staff Name': u.name || 'Staff',
         'Role': u.role || 'TECHNICIAN',
         'Department': u.department || 'Repair Lab',
+        'Check In': r.checkInTime || '—',
+        'Check Out': r.checkOutTime || '—',
         'Status': r.status,
         'Notes': r.notes || '—',
       };

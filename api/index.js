@@ -3872,6 +3872,8 @@ router8.get("/export", authenticate, async (req, res) => {
         "Staff Name": u.name || "Staff",
         "Role": u.role || "TECHNICIAN",
         "Department": u.department || "Repair Lab",
+        "Check In": r.checkInTime || "\u2014",
+        "Check Out": r.checkOutTime || "\u2014",
         "Status": r.status,
         "Notes": r.notes || "\u2014"
       };
