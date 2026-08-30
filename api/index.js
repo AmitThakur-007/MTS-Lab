@@ -3356,11 +3356,7 @@ router8.get("/server-time", (req, res) => {
 });
 router8.get("/pending-requests", authenticate, async (req, res) => {
   try {
-    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*").eq("status", "PENDING").order("createdAt", { ascending: false });
-    if (error) {
-      console.warn("[PENDING REQUESTS WARN]", error);
-      return res.json([]);
-    }
+    const { data: records } = await supabaseAdmin.from("Attendance").select("*").eq("status", "PENDING").order("createdAt", { ascending: false });
     const userIds = Array.from(new Set((records || []).map((r) => r.userId).filter(Boolean)));
     let userMap = /* @__PURE__ */ new Map();
     if (userIds.length > 0) {
@@ -3376,7 +3372,7 @@ router8.get("/pending-requests", authenticate, async (req, res) => {
     return res.json([]);
   }
 });
-router8.get("/roster", authenticate, async (req, res) => {
+var handleRosterRequest = async (req, res) => {
   try {
     const time = getNepalTimeDetails();
     const todayStr = req.query.date || time.dateString;
@@ -3402,6 +3398,7 @@ router8.get("/roster", authenticate, async (req, res) => {
       const record = attendanceMap.get(u.id);
       return {
         userId: u.id,
+        id: u.id,
         name: u.name || u.email?.split("@")[0] || "Staff Member",
         email: u.email,
         role: u.role || "TECHNICIAN",
@@ -3413,11 +3410,29 @@ router8.get("/roster", authenticate, async (req, res) => {
         checkInTime: record ? record.checkInTime : null,
         checkOutTime: record ? record.checkOutTime : null,
         notes: record ? record.notes : null,
-        attendanceId: record ? record.id : null
+        attendanceId: record ? record.id : null,
+        user: {
+          id: u.id,
+          name: u.name || u.email?.split("@")[0] || "Staff Member",
+          email: u.email,
+          role: u.role || "TECHNICIAN",
+          department: u.department || "Repair Lab",
+          profileImage: u.avatarUrl || null
+        },
+        attendance: record ? {
+          id: record.id,
+          status: record.status,
+          checkInTime: record.checkInTime,
+          checkOutTime: record.checkOutTime,
+          markedByName: record.markedByName || "Administrator",
+          markedAt: record.checkInTime || record.date,
+          notes: record.notes
+        } : null
       };
     });
     const presentToday = roster.filter((r) => ["PRESENT", "LATE", "HALF_DAY"].includes(r.status)).length;
     const absentToday = roster.filter((r) => r.status === "ABSENT").length;
+    const rate = roster.length > 0 ? Math.round(presentToday / roster.length * 100) : 100;
     return res.json({
       success: true,
       roster,
@@ -3433,38 +3448,138 @@ router8.get("/roster", authenticate, async (req, res) => {
       stats: {
         totalStaff: roster.length,
         presentToday,
+        presentCount: presentToday,
         absentToday,
-        unmarked: roster.length - (presentToday + absentToday)
+        absentCount: absentToday,
+        attendanceRate: rate,
+        pendingCount: roster.filter((r) => r.status === "PENDING").length,
+        notMarkedCount: roster.filter((r) => r.status === "NOT_MARKED").length
       }
     });
   } catch (err) {
     console.error("[ATTENDANCE ROSTER EXCEPTION]", err);
     return res.status(500).json({ error: "Failed to generate attendance roster." });
   }
-});
+};
+router8.get("/roster", authenticate, handleRosterRequest);
+router8.get("/today", authenticate, handleRosterRequest);
 router8.get("/monthly-report", authenticate, async (req, res) => {
   try {
     const { month } = req.query;
     const currentMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*").gte("date", `${currentMonth}-01`).lte("date", `${currentMonth}-31`).order("date", { ascending: false });
-    if (error) {
-      console.error("[MONTHLY REPORT FETCH ERROR]", error);
-      return res.status(500).json({ error: error.message || "Failed to load monthly report." });
+    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("id, name, email, role, department, avatarUrl, status").order("name", { ascending: true });
+    if (userErr) {
+      return res.status(500).json({ error: "Failed to load staff list." });
     }
-    const userIds = Array.from(new Set((records || []).map((r) => r.userId).filter(Boolean)));
-    let userMap = /* @__PURE__ */ new Map();
-    if (userIds.length > 0) {
-      const { data: users } = await supabaseAdmin.from("User").select("id, name, role, department, avatarUrl, email").in("id", userIds);
-      (users || []).forEach((u) => userMap.set(u.id, u));
-    }
-    const enriched = (records || []).map((r) => ({
-      ...r,
-      user: userMap.get(r.userId) || { name: "Staff Member", role: "TECHNICIAN", department: "Repair Lab" }
-    }));
-    return res.json(enriched);
+    const staffList = (users || []).filter((u) => u.status !== "SUSPENDED" && u.status !== "INACTIVE");
+    const { data: records } = await supabaseAdmin.from("Attendance").select("*").gte("date", `${currentMonth}-01`).lte("date", `${currentMonth}-31`);
+    const userLogsMap = /* @__PURE__ */ new Map();
+    (records || []).forEach((r) => {
+      const existing = userLogsMap.get(r.userId) || [];
+      existing.push(r);
+      userLogsMap.set(r.userId, existing);
+    });
+    let totalPresentAll = 0;
+    let totalAbsentAll = 0;
+    const report = staffList.map((u) => {
+      const logs = userLogsMap.get(u.id) || [];
+      const presentDays = logs.filter((l) => ["PRESENT", "LATE", "HALF_DAY"].includes(l.status)).length;
+      const absentDays = logs.filter((l) => l.status === "ABSENT").length;
+      const pendingDays = logs.filter((l) => l.status === "PENDING").length;
+      const rejectedDays = logs.filter((l) => l.status === "REJECTED").length;
+      totalPresentAll += presentDays;
+      totalAbsentAll += absentDays;
+      const totalActiveDays = presentDays + absentDays;
+      const attendanceRate = totalActiveDays > 0 ? Math.round(presentDays / totalActiveDays * 100) : null;
+      let statusTag = "NO_DATA";
+      if (attendanceRate !== null) {
+        if (attendanceRate >= 90) statusTag = "EXCELLENT";
+        else if (attendanceRate >= 75) statusTag = "GOOD";
+        else if (attendanceRate >= 60) statusTag = "AVERAGE";
+        else statusTag = "NEEDS_ATTENTION";
+      }
+      return {
+        user: {
+          id: u.id,
+          name: u.name || u.email?.split("@")[0] || "Staff Member",
+          email: u.email,
+          role: u.role || "TECHNICIAN",
+          department: u.department || "Repair Lab",
+          profileImage: u.avatarUrl || null
+        },
+        presentDays,
+        absentDays,
+        pendingDays,
+        rejectedDays,
+        attendanceRate,
+        statusTag,
+        logs
+      };
+    });
+    const avgRate = staffList.length > 0 && totalPresentAll + totalAbsentAll > 0 ? Math.round(totalPresentAll / (totalPresentAll + totalAbsentAll) * 100) : 100;
+    return res.json({
+      success: true,
+      report,
+      stats: {
+        totalStaff: staffList.length,
+        presentToday: totalPresentAll,
+        absentToday: totalAbsentAll,
+        attendanceRate: avgRate
+      }
+    });
   } catch (err) {
     console.error("[MONTHLY REPORT EXCEPTION]", err);
     return res.status(500).json({ error: "Failed to load monthly report." });
+  }
+});
+router8.get("/staff/:userId/monthly", authenticate, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { month } = req.query;
+    const currentMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+    const { data: records } = await supabaseAdmin.from("Attendance").select("*").eq("userId", userId).gte("date", `${currentMonth}-01`).lte("date", `${currentMonth}-31`).order("date", { ascending: true });
+    const logs = records || [];
+    const presentCount = logs.filter((l) => ["PRESENT", "LATE", "HALF_DAY"].includes(l.status)).length;
+    const absentCount = logs.filter((l) => l.status === "ABSENT").length;
+    const pendingCount = logs.filter((l) => l.status === "PENDING").length;
+    const rejectedCount = logs.filter((l) => l.status === "REJECTED").length;
+    const rate = presentCount + absentCount > 0 ? Math.round(presentCount / (presentCount + absentCount) * 100) : null;
+    const [y, m] = currentMonth.split("-").map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const dailyLogs = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dStr = `${currentMonth}-${String(day).padStart(2, "0")}`;
+      const rec = logs.find((l) => l.date === dStr);
+      const isFuture = dStr > todayStr;
+      const isToday = dStr === todayStr;
+      const dayOfWeek = format(new Date(y, m - 1, day), "EEE");
+      dailyLogs.push({
+        date: dStr,
+        dayOfWeek,
+        isToday,
+        isFuture,
+        status: rec ? rec.status : isFuture ? "FUTURE" : "NOT_MARKED",
+        record: rec ? {
+          ...rec,
+          formattedCheckInTime: rec.checkInTime || "\u2014",
+          markedBy: rec.markedByName || "Administrator"
+        } : null
+      });
+    }
+    return res.json({
+      success: true,
+      dailyLogs,
+      stats: {
+        presentCount,
+        absentCount,
+        pendingCount,
+        rejectedCount,
+        attendanceRate: rate
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to load staff monthly calendar." });
   }
 });
 router8.post("/dispatch-request", authenticate, authorize(["MANAGER", "SUPER_ADMIN", "ADMIN"]), async (req, res) => {
@@ -3648,17 +3763,6 @@ router8.post("/mark", authenticate, async (req, res) => {
     return res.status(500).json({ error: err?.message || "Failed to mark attendance." });
   }
 });
-router8.get("/today", authenticate, async (req, res) => {
-  try {
-    const time = getNepalTimeDetails();
-    const todayStr = req.query.date || time.dateString;
-    const { data: records, error } = await supabaseAdmin.from("Attendance").select("*").eq("date", todayStr);
-    if (error) return res.status(500).json({ error: "Failed to fetch today attendance." });
-    return res.json(records || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to load today attendance records." });
-  }
-});
 router8.get("/my", authenticate, async (req, res) => {
   try {
     const time = getNepalTimeDetails();
@@ -3666,8 +3770,10 @@ router8.get("/my", authenticate, async (req, res) => {
     const { data: todayRecord } = await supabaseAdmin.from("Attendance").select("*").eq("userId", req.user.id).eq("date", todayStr).limit(1);
     const { data: recentRecords } = await supabaseAdmin.from("Attendance").select("*").eq("userId", req.user.id).order("date", { ascending: false }).limit(30);
     return res.json({
+      success: true,
       today: todayRecord?.[0] || null,
-      recent: recentRecords || []
+      recent: recentRecords || [],
+      history: recentRecords || []
     });
   } catch (err) {
     return res.status(500).json({ error: "Failed to fetch personal attendance." });
@@ -3687,9 +3793,34 @@ router8.get("/history", authenticate, async (req, res) => {
     }
     const { data: records, error } = await query.order("date", { ascending: false }).limit(parseInt(limit, 10) || 100);
     if (error) return res.status(500).json({ error: "Failed to fetch attendance history." });
-    return res.json(records || []);
+    const userIds = Array.from(new Set((records || []).map((r) => r.userId).filter(Boolean)));
+    let userMap = /* @__PURE__ */ new Map();
+    if (userIds.length > 0) {
+      const { data: users } = await supabaseAdmin.from("User").select("id, name, role, department").in("id", userIds);
+      (users || []).forEach((u) => userMap.set(u.id, u));
+    }
+    const enriched = (records || []).map((r) => ({
+      ...r,
+      user: userMap.get(r.userId) || { name: "Staff Member", role: "TECHNICIAN" }
+    }));
+    return res.json(enriched);
   } catch (err) {
     return res.status(500).json({ error: "Failed to retrieve attendance logs." });
+  }
+});
+router8.patch("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, notes, reason } = req.body;
+    const { data: updated, error } = await supabaseAdmin.from("Attendance").update({
+      status,
+      notes: notes || `Corrected by Admin (${req.user.name}): ${reason || ""}`,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }).eq("id", id).select("*").single();
+    if (error) return res.status(500).json({ error: "Failed to update record." });
+    return res.json({ success: true, message: "Attendance record corrected.", record: updated });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to update attendance log." });
   }
 });
 router8.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
@@ -3726,10 +3857,7 @@ router8.get("/export", authenticate, async (req, res) => {
         "Notes": r.notes || "\u2014"
       };
     });
-    const buffer = createExcelBuffer("Attendance", rows);
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="MTS_Attendance_${targetMonth}.xlsx"`);
-    return res.send(buffer);
+    return res.json({ success: true, rows });
   } catch (err) {
     return res.status(500).json({ error: "Failed to export attendance records." });
   }

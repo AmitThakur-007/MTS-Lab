@@ -7,9 +7,6 @@ import { createExcelBuffer } from '../services/excelService';
 
 const router = Router();
 
-/**
- * Helper to get exact current Nepal Standard Time (UTC + 5:45)
- */
 function getNepalTimeDetails() {
   const now = new Date();
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
@@ -20,7 +17,7 @@ function getNepalTimeDetails() {
   const seconds = nptDate.getSeconds();
   const totalMinutes = hours * 60 + minutes;
 
-  // 10:00 AM = 600 mins, 10:35 AM = 635 mins
+  // 10:00 AM (600m) to 10:35 AM (635m)
   const isWithinWindow = totalMinutes >= 600 && totalMinutes <= 635;
 
   const dateString = nptDate.toISOString().split('T')[0];
@@ -55,20 +52,15 @@ router.get('/server-time', (req, res) => {
 });
 
 // ==========================================
-// 2. GET /api/attendance/pending-requests (Fixes 404)
+// 2. GET /api/attendance/pending-requests
 // ==========================================
 router.get('/pending-requests', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { data: records, error } = await supabaseAdmin
+    const { data: records } = await supabaseAdmin
       .from('Attendance')
       .select('*')
       .eq('status', 'PENDING')
       .order('createdAt', { ascending: false });
-
-    if (error) {
-      console.warn('[PENDING REQUESTS WARN]', error);
-      return res.json([]);
-    }
 
     const userIds = Array.from(new Set((records || []).map((r: any) => r.userId).filter(Boolean)));
     let userMap = new Map();
@@ -93,14 +85,14 @@ router.get('/pending-requests', authenticate, async (req: AuthRequest, res: Resp
 });
 
 // ==========================================
-// 3. GET /api/attendance/roster
+// 3. GET /api/attendance/roster & /api/attendance/today
 // ==========================================
-router.get('/roster', authenticate, async (req: AuthRequest, res: Response) => {
+const handleRosterRequest = async (req: AuthRequest, res: Response) => {
   try {
     const time = getNepalTimeDetails();
     const todayStr = (req.query.date as string) || time.dateString;
 
-    // 1. Fetch all registered staff members
+    // 1. Fetch all staff members from User table
     const { data: users, error: userErr } = await supabaseAdmin
       .from('User')
       .select('id, name, email, role, department, phone, avatarUrl, status')
@@ -113,7 +105,7 @@ router.get('/roster', authenticate, async (req: AuthRequest, res: Response) => {
 
     const staffList = (users || []).filter((u: any) => u.status !== 'SUSPENDED' && u.status !== 'INACTIVE');
 
-    // 2. Fetch today's attendance logs
+    // 2. Fetch today's attendance records
     const { data: attendanceRecords } = await supabaseAdmin
       .from('Attendance')
       .select('*')
@@ -124,7 +116,7 @@ router.get('/roster', authenticate, async (req: AuthRequest, res: Response) => {
       attendanceMap.set(rec.userId, rec);
     });
 
-    // 3. Fetch manager broadcast dispatch count for today
+    // 3. Fetch broadcast counts
     let dispatchCount = 0;
     try {
       const { data: broadcastLogs } = await supabaseAdmin
@@ -136,11 +128,12 @@ router.get('/roster', authenticate, async (req: AuthRequest, res: Response) => {
       dispatchCount = 0;
     }
 
-    // 4. Merge users with attendance status
+    // 4. Merge all staff with their daily status
     const roster = staffList.map((u: any) => {
       const record = attendanceMap.get(u.id);
       return {
         userId: u.id,
+        id: u.id,
         name: u.name || u.email?.split('@')[0] || 'Staff Member',
         email: u.email,
         role: u.role || 'TECHNICIAN',
@@ -153,11 +146,29 @@ router.get('/roster', authenticate, async (req: AuthRequest, res: Response) => {
         checkOutTime: record ? record.checkOutTime : null,
         notes: record ? record.notes : null,
         attendanceId: record ? record.id : null,
+        user: {
+          id: u.id,
+          name: u.name || u.email?.split('@')[0] || 'Staff Member',
+          email: u.email,
+          role: u.role || 'TECHNICIAN',
+          department: u.department || 'Repair Lab',
+          profileImage: u.avatarUrl || null,
+        },
+        attendance: record ? {
+          id: record.id,
+          status: record.status,
+          checkInTime: record.checkInTime,
+          checkOutTime: record.checkOutTime,
+          markedByName: record.markedByName || 'Administrator',
+          markedAt: record.checkInTime || record.date,
+          notes: record.notes
+        } : null
       };
     });
 
     const presentToday = roster.filter((r: any) => ['PRESENT', 'LATE', 'HALF_DAY'].includes(r.status)).length;
     const absentToday = roster.filter((r: any) => r.status === 'ABSENT').length;
+    const rate = roster.length > 0 ? Math.round((presentToday / roster.length) * 100) : 100;
 
     return res.json({
       success: true,
@@ -174,55 +185,115 @@ router.get('/roster', authenticate, async (req: AuthRequest, res: Response) => {
       stats: {
         totalStaff: roster.length,
         presentToday,
+        presentCount: presentToday,
         absentToday,
-        unmarked: roster.length - (presentToday + absentToday),
+        absentCount: absentToday,
+        attendanceRate: rate,
+        pendingCount: roster.filter((r: any) => r.status === 'PENDING').length,
+        notMarkedCount: roster.filter((r: any) => r.status === 'NOT_MARKED').length,
       }
     });
   } catch (err: any) {
     console.error('[ATTENDANCE ROSTER EXCEPTION]', err);
     return res.status(500).json({ error: 'Failed to generate attendance roster.' });
   }
-});
+};
+
+router.get('/roster', authenticate, handleRosterRequest);
+router.get('/today', authenticate, handleRosterRequest);
 
 // ==========================================
-// 4. GET /api/attendance/monthly-report (Fixes 500)
+// 4. GET /api/attendance/monthly-report (Aggregated Staff Breakdown)
 // ==========================================
 router.get('/monthly-report', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { month } = req.query;
     const currentMonth = (month as string) || new Date().toISOString().slice(0, 7);
 
-    // Fetch records by date prefix safely
-    const { data: records, error } = await supabaseAdmin
+    // 1. Fetch all active staff
+    const { data: users, error: userErr } = await supabaseAdmin
+      .from('User')
+      .select('id, name, email, role, department, avatarUrl, status')
+      .order('name', { ascending: true });
+
+    if (userErr) {
+      return res.status(500).json({ error: 'Failed to load staff list.' });
+    }
+
+    const staffList = (users || []).filter((u: any) => u.status !== 'SUSPENDED' && u.status !== 'INACTIVE');
+
+    // 2. Fetch all logs for this month
+    const { data: records } = await supabaseAdmin
       .from('Attendance')
       .select('*')
       .gte('date', `${currentMonth}-01`)
-      .lte('date', `${currentMonth}-31`)
-      .order('date', { ascending: false });
+      .lte('date', `${currentMonth}-31`);
 
-    if (error) {
-      console.error('[MONTHLY REPORT FETCH ERROR]', error);
-      return res.status(500).json({ error: error.message || 'Failed to load monthly report.' });
-    }
+    const userLogsMap = new Map<string, any[]>();
+    (records || []).forEach((r: any) => {
+      const existing = userLogsMap.get(r.userId) || [];
+      existing.push(r);
+      userLogsMap.set(r.userId, existing);
+    });
 
-    // Attach user profile metadata
-    const userIds = Array.from(new Set((records || []).map((r: any) => r.userId).filter(Boolean)));
-    let userMap = new Map();
-    if (userIds.length > 0) {
-      const { data: users } = await supabaseAdmin
-        .from('User')
-        .select('id, name, role, department, avatarUrl, email')
-        .in('id', userIds);
+    let totalPresentAll = 0;
+    let totalAbsentAll = 0;
 
-      (users || []).forEach((u: any) => userMap.set(u.id, u));
-    }
+    // 3. Aggregate stats per staff member
+    const report = staffList.map((u: any) => {
+      const logs = userLogsMap.get(u.id) || [];
+      const presentDays = logs.filter((l: any) => ['PRESENT', 'LATE', 'HALF_DAY'].includes(l.status)).length;
+      const absentDays = logs.filter((l: any) => l.status === 'ABSENT').length;
+      const pendingDays = logs.filter((l: any) => l.status === 'PENDING').length;
+      const rejectedDays = logs.filter((l: any) => l.status === 'REJECTED').length;
 
-    const enriched = (records || []).map((r: any) => ({
-      ...r,
-      user: userMap.get(r.userId) || { name: 'Staff Member', role: 'TECHNICIAN', department: 'Repair Lab' }
-    }));
+      totalPresentAll += presentDays;
+      totalAbsentAll += absentDays;
 
-    return res.json(enriched);
+      const totalActiveDays = presentDays + absentDays;
+      const attendanceRate = totalActiveDays > 0 ? Math.round((presentDays / totalActiveDays) * 100) : null;
+
+      let statusTag = 'NO_DATA';
+      if (attendanceRate !== null) {
+        if (attendanceRate >= 90) statusTag = 'EXCELLENT';
+        else if (attendanceRate >= 75) statusTag = 'GOOD';
+        else if (attendanceRate >= 60) statusTag = 'AVERAGE';
+        else statusTag = 'NEEDS_ATTENTION';
+      }
+
+      return {
+        user: {
+          id: u.id,
+          name: u.name || u.email?.split('@')[0] || 'Staff Member',
+          email: u.email,
+          role: u.role || 'TECHNICIAN',
+          department: u.department || 'Repair Lab',
+          profileImage: u.avatarUrl || null,
+        },
+        presentDays,
+        absentDays,
+        pendingDays,
+        rejectedDays,
+        attendanceRate,
+        statusTag,
+        logs
+      };
+    });
+
+    const avgRate = staffList.length > 0 && (totalPresentAll + totalAbsentAll) > 0
+      ? Math.round((totalPresentAll / (totalPresentAll + totalAbsentAll)) * 100)
+      : 100;
+
+    return res.json({
+      success: true,
+      report,
+      stats: {
+        totalStaff: staffList.length,
+        presentToday: totalPresentAll,
+        absentToday: totalAbsentAll,
+        attendanceRate: avgRate
+      }
+    });
   } catch (err: any) {
     console.error('[MONTHLY REPORT EXCEPTION]', err);
     return res.status(500).json({ error: 'Failed to load monthly report.' });
@@ -230,7 +301,74 @@ router.get('/monthly-report', authenticate, async (req: AuthRequest, res: Respon
 });
 
 // ==========================================
-// 5. POST /api/attendance/dispatch-request (Manager 10:00 - 10:35 AM Broadcast)
+// 5. GET /api/attendance/staff/:userId/monthly
+// ==========================================
+router.get('/staff/:userId/monthly', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { month } = req.query;
+    const currentMonth = (month as string) || new Date().toISOString().slice(0, 7);
+
+    const { data: records } = await supabaseAdmin
+      .from('Attendance')
+      .select('*')
+      .eq('userId', userId)
+      .gte('date', `${currentMonth}-01`)
+      .lte('date', `${currentMonth}-31`)
+      .order('date', { ascending: true });
+
+    const logs = records || [];
+    const presentCount = logs.filter((l: any) => ['PRESENT', 'LATE', 'HALF_DAY'].includes(l.status)).length;
+    const absentCount = logs.filter((l: any) => l.status === 'ABSENT').length;
+    const pendingCount = logs.filter((l: any) => l.status === 'PENDING').length;
+    const rejectedCount = logs.filter((l: any) => l.status === 'REJECTED').length;
+
+    const rate = (presentCount + absentCount) > 0 ? Math.round((presentCount / (presentCount + absentCount)) * 100) : null;
+
+    const [y, m] = currentMonth.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const dailyLogs = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dStr = `${currentMonth}-${String(day).padStart(2, '0')}`;
+      const rec = logs.find((l: any) => l.date === dStr);
+      const isFuture = dStr > todayStr;
+      const isToday = dStr === todayStr;
+      const dayOfWeek = format(new Date(y, m - 1, day), 'EEE');
+
+      dailyLogs.push({
+        date: dStr,
+        dayOfWeek,
+        isToday,
+        isFuture,
+        status: rec ? rec.status : isFuture ? 'FUTURE' : 'NOT_MARKED',
+        record: rec ? {
+          ...rec,
+          formattedCheckInTime: rec.checkInTime || '—',
+          markedBy: rec.markedByName || 'Administrator'
+        } : null
+      });
+    }
+
+    return res.json({
+      success: true,
+      dailyLogs,
+      stats: {
+        presentCount,
+        absentCount,
+        pendingCount,
+        rejectedCount,
+        attendanceRate: rate
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to load staff monthly calendar.' });
+  }
+});
+
+// ==========================================
+// 6. POST /api/attendance/dispatch-request (Manager 10:00 - 10:35 AM Broadcast)
 // ==========================================
 router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
@@ -271,7 +409,7 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
       console.warn('[BROADCAST LOG FAIL NON FATAL]', e);
     }
 
-    // Auto-mark the manager PRESENT
+    // Auto-mark manager PRESENT
     const { data: managerRecord } = await supabaseAdmin
       .from('Attendance')
       .select('id')
@@ -346,7 +484,7 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
 });
 
 // ==========================================
-// 6. POST /api/attendance/mark (Super Admin Direct Override / Staff Response)
+// 7. POST /api/attendance/mark (Super Admin Direct Override / Staff Response)
 // ==========================================
 router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -375,7 +513,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
 
     const existingRecord = existing?.[0];
 
-    // CASE A: SUPER ADMIN UNIVERSAL OVERRIDE
+    // CASE A: SUPER ADMIN UNIVERSAL DIRECT MARK (24/7 ANY TIME)
     if (isSuperAdmin || (isManager && explicitStatus && time.isWithinWindow)) {
       const finalStatus = explicitStatus || 'PRESENT';
       const updatePayload: any = {
@@ -498,26 +636,6 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ==========================================
-// 7. GET /api/attendance/today
-// ==========================================
-router.get('/today', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const time = getNepalTimeDetails();
-    const todayStr = (req.query.date as string) || time.dateString;
-
-    const { data: records, error } = await supabaseAdmin
-      .from('Attendance')
-      .select('*')
-      .eq('date', todayStr);
-
-    if (error) return res.status(500).json({ error: 'Failed to fetch today attendance.' });
-    return res.json(records || []);
-  } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to load today attendance records.' });
-  }
-});
-
-// ==========================================
 // 8. GET /api/attendance/my
 // ==========================================
 router.get('/my', authenticate, async (req: AuthRequest, res: Response) => {
@@ -540,8 +658,10 @@ router.get('/my', authenticate, async (req: AuthRequest, res: Response) => {
       .limit(30);
 
     return res.json({
+      success: true,
       today: todayRecord?.[0] || null,
       recent: recentRecords || [],
+      history: recentRecords || []
     });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch personal attendance.' });
@@ -571,14 +691,57 @@ router.get('/history', authenticate, async (req: AuthRequest, res: Response) => 
       .limit(parseInt(limit as string, 10) || 100);
 
     if (error) return res.status(500).json({ error: 'Failed to fetch attendance history.' });
-    return res.json(records || []);
+
+    const userIds = Array.from(new Set((records || []).map((r: any) => r.userId).filter(Boolean)));
+    let userMap = new Map();
+    if (userIds.length > 0) {
+      const { data: users } = await supabaseAdmin
+        .from('User')
+        .select('id, name, role, department')
+        .in('id', userIds);
+
+      (users || []).forEach((u: any) => userMap.set(u.id, u));
+    }
+
+    const enriched = (records || []).map((r: any) => ({
+      ...r,
+      user: userMap.get(r.userId) || { name: 'Staff Member', role: 'TECHNICIAN' }
+    }));
+
+    return res.json(enriched);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to retrieve attendance logs.' });
   }
 });
 
 // ==========================================
-// 10. DELETE /api/attendance/:id
+// 10. PATCH /api/attendance/:id
+// ==========================================
+router.patch('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, notes, reason } = req.body;
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('Attendance')
+      .update({
+        status,
+        notes: notes || `Corrected by Admin (${req.user!.name}): ${reason || ''}`,
+        updatedAt: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) return res.status(500).json({ error: 'Failed to update record.' });
+    return res.json({ success: true, message: 'Attendance record corrected.', record: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update attendance log.' });
+  }
+});
+
+// ==========================================
+// 11. DELETE /api/attendance/:id
 // ==========================================
 router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
@@ -593,7 +756,7 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
 });
 
 // ==========================================
-// 11. GET /api/attendance/export
+// 12. GET /api/attendance/export
 // ==========================================
 router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -632,10 +795,7 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
       };
     });
 
-    const buffer = createExcelBuffer('Attendance', rows);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="MTS_Attendance_${targetMonth}.xlsx"`);
-    return res.send(buffer);
+    return res.json({ success: true, rows });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to export attendance records.' });
   }
