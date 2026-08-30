@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  MoreVertical, 
-  Download, 
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  Plus,
+  Search,
+  Filter,
+  MoreVertical,
+  Download,
   ChevronRight,
   User,
   Smartphone,
@@ -45,44 +45,44 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
   DropdownMenuGroup
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { 
-  format, 
-  isToday, 
-  isYesterday, 
-  isThisWeek, 
-  isThisMonth, 
-  parseISO, 
-  startOfDay, 
-  endOfDay, 
-  subDays, 
-  startOfWeek, 
-  endOfWeek, 
-  startOfMonth, 
-  endOfMonth 
+import {
+  format,
+  isToday,
+  isYesterday,
+  isThisWeek,
+  isThisMonth,
+  parseISO,
+  startOfDay,
+  endOfDay,
+  subDays,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth
 } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -318,7 +318,7 @@ export default function Repairs() {
   };
 
   // Fetch all repair records and staff from the real database
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [repairRes, staffRes] = await Promise.all([
         api.get('/repairs'),
@@ -332,17 +332,17 @@ export default function Repairs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  // Real-Time Event Sync across Super Admin, Admin, and Receptionist
+  // Real-Time Event Sync across all user roles with instant state refresh
   useRealtimeSync(
-    ['repair', 'repairLog', 'technicianNote', 'payment', 'user', 'sync'],
+    ['Repair', 'repair', 'RepairLog', 'repairLog', 'TechnicianNote', 'technicianNote', 'Payment', 'payment', 'User', 'user', 'Notification', 'notification', 'Attendance', 'attendance', 'RepairTransferRequest', 'repairTransferRequest'],
     (event) => {
-      // Refresh current dataset immediately on any server-side database change
+      console.log('[REPAIRS REALTIME EVENT]', event);
       fetchData();
     }
   );
@@ -352,10 +352,10 @@ export default function Repairs() {
     const total = repairs.length;
     const pending = repairs.filter(r => r.status === 'PENDING').length;
     const received = repairs.filter(r => r.status === 'RECEIVED').length;
-    const inProgress = repairs.filter(r => 
+    const inProgress = repairs.filter(r =>
       ['IN_PROCESS', 'DIAGNOSING', 'WAITING_FOR_PARTS', 'TESTING'].includes(r.status)
     ).length;
-    const repaired = repairs.filter(r => 
+    const repaired = repairs.filter(r =>
       ['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED'].includes(r.status)
     ).length;
     const totalPaidSum = repairs.reduce((acc, r) => acc + (Number(r.totalPaid) || Number(r.advancePaid) || 0), 0);
@@ -411,12 +411,12 @@ export default function Repairs() {
       return dateFilteredRepairs.filter(r => r.status === 'RECEIVED');
     }
     if (activeStatusTab === 'IN_PROGRESS') {
-      return dateFilteredRepairs.filter(r => 
+      return dateFilteredRepairs.filter(r =>
         ['IN_PROCESS', 'DIAGNOSING', 'WAITING_FOR_PARTS', 'TESTING'].includes(r.status)
       );
     }
     if (activeStatusTab === 'REPAIRED') {
-      return dateFilteredRepairs.filter(r => 
+      return dateFilteredRepairs.filter(r =>
         ['REPAIRED', 'READY_FOR_PICKUP'].includes(r.status)
       );
     }
@@ -445,7 +445,7 @@ export default function Repairs() {
     // Fast search across repair number, customer name, phone, device model, brand, problem, technician
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      result = result.filter(r => 
+      result = result.filter(r =>
         (r.repairNumber && String(r.repairNumber).toLowerCase().includes(q)) ||
         (r.customerId && String(r.customerId).toLowerCase().includes(q)) ||
         (r.customer?.customerId && String(r.customer.customerId).toLowerCase().includes(q)) ||
@@ -562,9 +562,9 @@ export default function Repairs() {
 
     try {
       const res = await api.post('/repairs/bulk-delete', { ids: idsToDelete });
-      
+
       for (const id of idsToDelete) {
-        await deleteRepairFromRtdb(id).catch(() => {});
+        await deleteRepairFromRtdb(id).catch(() => { });
       }
 
       toast.success(res?.message || `Successfully deleted ${idsToDelete.length} repair record(s).`);
@@ -750,9 +750,9 @@ export default function Repairs() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <DashboardRefreshButton 
-            onRefresh={fetchData} 
-            size="default" 
+          <DashboardRefreshButton
+            onRefresh={fetchData}
+            size="default"
             label="Refresh"
           />
 
@@ -819,11 +819,10 @@ export default function Repairs() {
       {/* 1. Dashboard Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {/* Total Repairs */}
-        <Card 
+        <Card
           onClick={() => setActiveStatusTab('ALL')}
-          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${
-            activeStatusTab === 'ALL' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'
-          }`}
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'ALL' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'ALL' ? 'text-slate-300' : 'text-slate-500'}`}>
@@ -838,11 +837,10 @@ export default function Repairs() {
         </Card>
 
         {/* Pending */}
-        <Card 
+        <Card
           onClick={() => setActiveStatusTab('PENDING')}
-          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${
-            activeStatusTab === 'PENDING' ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-200 bg-white text-slate-900'
-          }`}
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'PENDING' ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-200 bg-white text-slate-900'
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'PENDING' ? 'text-amber-100' : 'text-amber-700'}`}>
@@ -857,11 +855,10 @@ export default function Repairs() {
         </Card>
 
         {/* Received */}
-        <Card 
+        <Card
           onClick={() => setActiveStatusTab('RECEIVED')}
-          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${
-            activeStatusTab === 'RECEIVED' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 bg-white text-slate-900'
-          }`}
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'RECEIVED' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 bg-white text-slate-900'
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'RECEIVED' ? 'text-sky-100' : 'text-sky-700'}`}>
@@ -876,11 +873,10 @@ export default function Repairs() {
         </Card>
 
         {/* In Progress */}
-        <Card 
+        <Card
           onClick={() => setActiveStatusTab('IN_PROGRESS')}
-          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${
-            activeStatusTab === 'IN_PROGRESS' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-900'
-          }`}
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'IN_PROGRESS' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-900'
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'IN_PROGRESS' ? 'text-indigo-100' : 'text-indigo-700'}`}>
@@ -895,11 +891,10 @@ export default function Repairs() {
         </Card>
 
         {/* Repaired */}
-        <Card 
+        <Card
           onClick={() => setActiveStatusTab('REPAIRED')}
-          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md col-span-2 sm:col-span-1 ${
-            activeStatusTab === 'REPAIRED' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-200 bg-white text-slate-900'
-          }`}
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md col-span-2 sm:col-span-1 ${activeStatusTab === 'REPAIRED' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-200 bg-white text-slate-900'
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'REPAIRED' ? 'text-emerald-100' : 'text-emerald-700'}`}>
@@ -933,16 +928,14 @@ export default function Repairs() {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveStatusTab(tab.key as StatusTabKey)}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${
-                  isActive 
-                    ? 'bg-slate-900 text-white shadow-sm' 
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${isActive
+                    ? 'bg-slate-900 text-white shadow-sm'
                     : 'bg-slate-100/80 hover:bg-slate-200 text-slate-700'
-                }`}
+                  }`}
               >
                 <span>{tab.label}</span>
-                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${
-                  isActive ? 'bg-slate-800 text-slate-200' : 'bg-slate-200 text-slate-700'
-                }`}>
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${isActive ? 'bg-slate-800 text-slate-200' : 'bg-slate-200 text-slate-700'
+                  }`}>
                   {tab.count}
                 </span>
               </button>
@@ -955,7 +948,7 @@ export default function Repairs() {
           {/* Search Box */}
           <div className="md:col-span-4 relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input 
+            <Input
               placeholder="Search repair #, customer, phone, model, tech..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -988,11 +981,10 @@ export default function Repairs() {
                   key={preset.key}
                   type="button"
                   onClick={() => setDateFilterPreset(preset.key as DateFilterPreset)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    isSelected 
-                      ? 'bg-indigo-600 text-white shadow-xs' 
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${isSelected
+                      ? 'bg-indigo-600 text-white shadow-xs'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                  }`}
+                    }`}
                 >
                   {preset.label}
                 </button>
@@ -1036,7 +1028,7 @@ export default function Repairs() {
           <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100">
             <div className="flex items-center gap-2">
               <Label className="text-xs font-semibold text-slate-600">From:</Label>
-              <Input 
+              <Input
                 type="date"
                 value={customStartDate}
                 onChange={(e) => setCustomStartDate(e.target.value)}
@@ -1045,7 +1037,7 @@ export default function Repairs() {
             </div>
             <div className="flex items-center gap-2">
               <Label className="text-xs font-semibold text-slate-600">To:</Label>
-              <Input 
+              <Input
                 type="date"
                 value={customEndDate}
                 onChange={(e) => setCustomEndDate(e.target.value)}
@@ -1101,19 +1093,18 @@ export default function Repairs() {
                 <button
                   type="button"
                   onClick={handleToggleSelectAll}
-                  className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${
-                    isAllVisibleSelected
+                  className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${isAllVisibleSelected
                       ? 'bg-white border-white text-slate-900'
                       : isSomeVisibleSelected
-                      ? 'bg-slate-700 border-slate-500 text-white'
-                      : 'border-slate-600 bg-slate-800 text-white hover:bg-slate-700'
-                  }`}
+                        ? 'bg-slate-700 border-slate-500 text-white'
+                        : 'border-slate-600 bg-slate-800 text-white hover:bg-slate-700'
+                    }`}
                   title={isAllVisibleSelected ? "Deselect all visible repairs" : "Select all visible repairs"}
                 >
                   {isAllVisibleSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                   {!isAllVisibleSelected && isSomeVisibleSelected && <Minus className="w-3.5 h-3.5 stroke-[3]" />}
                 </button>
-                
+
                 <div className="flex items-center gap-2">
                   <span className="font-extrabold text-sm text-white">
                     {selectedRepairIds.size} {selectedRepairIds.size === 1 ? 'Repair' : 'Repairs'} Selected
@@ -1158,13 +1149,12 @@ export default function Repairs() {
                         <button
                           type="button"
                           onClick={handleToggleSelectAll}
-                          className={`w-4 h-4 rounded border flex items-center justify-center transition-colors cursor-pointer mx-auto ${
-                            isAllVisibleSelected
+                          className={`w-4 h-4 rounded border flex items-center justify-center transition-colors cursor-pointer mx-auto ${isAllVisibleSelected
                               ? 'bg-slate-900 border-slate-900 text-white'
                               : isSomeVisibleSelected
-                              ? 'bg-slate-200 border-slate-400 text-slate-800'
-                              : 'border-slate-300 bg-white hover:border-slate-400'
-                          }`}
+                                ? 'bg-slate-200 border-slate-400 text-slate-800'
+                                : 'border-slate-300 bg-white hover:border-slate-400'
+                            }`}
                           title={isAllVisibleSelected ? "Deselect all visible repairs" : "Select all visible repairs"}
                           aria-label={isAllVisibleSelected ? "Deselect all visible repairs" : "Select all visible repairs"}
                         >
@@ -1206,11 +1196,10 @@ export default function Repairs() {
                             <button
                               type="button"
                               onClick={(e) => handleToggleSelectRepair(repair.id, e)}
-                              className={`w-4 h-4 rounded border flex items-center justify-center transition-colors cursor-pointer mx-auto ${
-                                isSelected
+                              className={`w-4 h-4 rounded border flex items-center justify-center transition-colors cursor-pointer mx-auto ${isSelected
                                   ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
                                   : 'border-slate-300 bg-white hover:border-slate-400'
-                              }`}
+                                }`}
                               aria-label={`Select repair #${repair.repairNumber}`}
                             >
                               {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
@@ -1303,7 +1292,7 @@ export default function Repairs() {
 
                         {/* Status */}
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          <Badge 
+                          <Badge
                             onClick={() => handleOpenStatusModal(repair)}
                             className={`cursor-pointer font-bold text-[11px] px-2.5 py-0.5 rounded-lg border shadow-none ${statusInfo.badgeClass}`}
                           >
@@ -1316,13 +1305,12 @@ export default function Repairs() {
                           <div className="font-mono text-xs font-bold text-slate-900">
                             {formatRepairCost(repair.totalCost ?? repair.estimatedCost)}
                           </div>
-                          <Badge 
+                          <Badge
                             variant="secondary"
-                            className={`text-[9px] font-bold uppercase px-1.5 py-0.2 rounded ${
-                              isPaid ? 'bg-emerald-100 text-emerald-800' :
-                              isPartial ? 'bg-amber-100 text-amber-800' :
-                              'bg-slate-100 text-slate-600'
-                            }`}
+                            className={`text-[9px] font-bold uppercase px-1.5 py-0.2 rounded ${isPaid ? 'bg-emerald-100 text-emerald-800' :
+                                isPartial ? 'bg-amber-100 text-amber-800' :
+                                  'bg-slate-100 text-slate-600'
+                              }`}
                           >
                             {repair.paymentStatus || 'UNPAID'}
                           </Badge>
@@ -1347,21 +1335,21 @@ export default function Repairs() {
                                 <MoreVertical className="h-4 w-4" />
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="rounded-2xl w-48 shadow-xl border-slate-200 p-1.5">
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
                                   className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2"
                                 >
                                   <Eye className="h-3.5 w-3.5" /> Full Details Page
                                 </DropdownMenuItem>
 
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleOpenQuickEdit(repair)}
                                   className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2"
                                 >
                                   <Edit3 className="h-3.5 w-3.5" /> Edit Repair Info
                                 </DropdownMenuItem>
 
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleOpenStatusModal(repair)}
                                   className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2"
                                 >
@@ -1369,7 +1357,7 @@ export default function Repairs() {
                                 </DropdownMenuItem>
 
                                 {canAssign && (
-                                  <DropdownMenuItem 
+                                  <DropdownMenuItem
                                     onClick={() => handleOpenAssignModal(repair)}
                                     className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2"
                                   >
@@ -1377,7 +1365,7 @@ export default function Repairs() {
                                   </DropdownMenuItem>
                                 )}
 
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => {
                                     setSelectedSlipRepair(repair);
                                     setIsSlipModalOpen(true);
@@ -1387,7 +1375,7 @@ export default function Repairs() {
                                   <FileText className="h-3.5 w-3.5 text-emerald-600" /> Print Service Slip
                                 </DropdownMenuItem>
 
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => generateRepairReport([repair], `REPAIR JOB #${repair.repairNumber}`)}
                                   className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2"
                                 >
@@ -1396,7 +1384,7 @@ export default function Repairs() {
 
                                 {/* Courier Dispatch Option */}
                                 {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && (
-                                  <DropdownMenuItem 
+                                  <DropdownMenuItem
                                     onClick={() => handleOpenCourierDispatch(repair)}
                                     className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-blue-700 hover:bg-blue-50"
                                   >
@@ -1405,7 +1393,7 @@ export default function Repairs() {
                                 )}
 
                                 {/* Re-Problem Option */}
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleOpenReProblem(repair)}
                                   className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-rose-700 hover:bg-rose-50"
                                 >
@@ -1415,7 +1403,7 @@ export default function Repairs() {
                                 {canDelete && (
                                   <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem 
+                                    <DropdownMenuItem
                                       onClick={() => setDeleteRepairData(repair)}
                                       className="h-9 px-3 rounded-xl font-semibold text-xs text-rose-600 hover:bg-rose-50 cursor-pointer gap-2"
                                     >
@@ -1447,11 +1435,10 @@ export default function Repairs() {
               const isSelected = selectedRepairIds.has(repair.id);
 
               return (
-                <Card 
+                <Card
                   key={repair.id}
-                  className={`rounded-2xl border bg-white p-4 shadow-sm space-y-3 hover:border-slate-300 transition-all ${
-                    isSelected ? 'border-indigo-400 bg-indigo-50/30 ring-1 ring-indigo-400/50' : 'border-slate-200'
-                  }`}
+                  className={`rounded-2xl border bg-white p-4 shadow-sm space-y-3 hover:border-slate-300 transition-all ${isSelected ? 'border-indigo-400 bg-indigo-50/30 ring-1 ring-indigo-400/50' : 'border-slate-200'
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1459,11 +1446,10 @@ export default function Repairs() {
                         <button
                           type="button"
                           onClick={(e) => handleToggleSelectRepair(repair.id, e)}
-                          className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer mr-0.5 ${
-                            isSelected
+                          className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer mr-0.5 ${isSelected
                               ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
                               : 'border-slate-300 bg-white hover:border-slate-400'
-                          }`}
+                            }`}
                           aria-label={`Select repair #${repair.repairNumber}`}
                         >
                           {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -1620,15 +1606,15 @@ export default function Repairs() {
           )}
 
           <DialogFooter className="mt-4 gap-2 sm:gap-0">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setDeleteRepairData(null)}
               disabled={deleteLoading}
               className="h-11 rounded-xl border-slate-200 font-bold"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleDeleteRepair}
               disabled={deleteLoading}
               className="h-11 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold px-6 shadow-sm"
@@ -1677,16 +1663,16 @@ export default function Repairs() {
           )}
 
           <DialogFooter className="mt-4 gap-2 sm:gap-0">
-            <Button 
+            <Button
               type="button"
-              variant="outline" 
+              variant="outline"
               onClick={() => setIsBulkDeleteModalOpen(false)}
               disabled={bulkDeleteLoading}
               className="h-11 rounded-xl border-slate-200 font-bold"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               type="button"
               onClick={handleBulkDeleteRepairs}
               disabled={bulkDeleteLoading}
@@ -1741,7 +1727,7 @@ export default function Repairs() {
 
             <div className="space-y-2">
               <Label className="text-xs font-bold text-slate-700">Status Update Note (Optional)</Label>
-              <Textarea 
+              <Textarea
                 placeholder="Reason or technical remarks for this status transition..."
                 value={statusUpdateNote}
                 onChange={(e) => setStatusUpdateNote(e.target.value)}
@@ -1751,15 +1737,15 @@ export default function Repairs() {
           </div>
 
           <DialogFooter className="mt-4 gap-2 sm:gap-0">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setStatusModalRepair(null)}
               disabled={statusUpdateLoading}
               className="h-10 rounded-xl border-slate-200 font-bold text-xs"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleSaveStatusUpdate}
               disabled={statusUpdateLoading}
               className="h-10 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs px-5 shadow-sm"
@@ -1805,15 +1791,15 @@ export default function Repairs() {
           </div>
 
           <DialogFooter className="mt-4 gap-2 sm:gap-0">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setAssignModalRepair(null)}
               disabled={assignLoading}
               className="h-10 rounded-xl border-slate-200 font-bold text-xs"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleSaveTechnicianAssignment}
               disabled={assignLoading}
               className="h-10 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs px-5 shadow-sm"
@@ -1952,13 +1938,12 @@ export default function Repairs() {
                     {previewData.items?.map((item: any, idx: number) => (
                       <div
                         key={idx}
-                        className={`p-3 transition-colors ${
-                          item.status === 'VALID'
+                        className={`p-3 transition-colors ${item.status === 'VALID'
                             ? 'bg-white hover:bg-slate-50/80'
                             : item.status === 'DUPLICATE'
-                            ? 'bg-amber-50/40 hover:bg-amber-50/70'
-                            : 'bg-rose-50/40 hover:bg-rose-50/70'
-                        }`}
+                              ? 'bg-amber-50/40 hover:bg-amber-50/70'
+                              : 'bg-rose-50/40 hover:bg-rose-50/70'
+                          }`}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
@@ -2092,7 +2077,7 @@ export default function Repairs() {
 
             <div className="space-y-4 my-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                
+
                 {/* Courier Partner */}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-slate-700">Courier Partner *</Label>
