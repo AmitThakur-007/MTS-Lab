@@ -575,7 +575,6 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
       console.warn('[NOTIFICATION DISPATCH WARN - NON FATAL]', notifErr);
     }
 
-    // BROADCAST REPAIR UPDATE INSTANTLY TO ALL ROLES (Admin, Manager, Tech, Receptionist, Head Tech)
     await broadcastServerChange('Repair', 'UPDATE', id, updatedRepair);
 
     return res.json({
@@ -586,6 +585,73 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
   } catch (err: any) {
     console.error('[TECHNICIAN UPDATE EXCEPTION]', err);
     return res.status(500).json({ error: err?.message || 'Server error updating repair.' });
+  }
+});
+
+// Urgent Alert & Priority Escalation Endpoint
+router.post('/:id/alert', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { priority, message, isUrgent } = req.body;
+
+    const resolvedPriority = isUrgent || (priority && String(priority).toUpperCase() === 'URGENT')
+      ? 'URGENT'
+      : (priority ? String(priority).toUpperCase() : 'HIGH');
+
+    const { data: updatedRepair, error: updateErr } = await supabaseAdmin
+      .from('Repair')
+      .update({
+        priority: resolvedPriority,
+        updatedAt: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (updateErr) {
+      return res.status(500).json({ error: 'Failed to update repair priority.' });
+    }
+
+    const logId = uuidv4();
+    await supabaseAdmin.from('RepairLog').insert([
+      {
+        id: logId,
+        repairId: id,
+        userId: req.user!.id,
+        action: 'URGENT_ALERT_DISPATCHED',
+        status: updatedRepair.status,
+        notes: message || `Priority escalated to ${resolvedPriority} by ${req.user!.name}`,
+        createdAt: new Date().toISOString()
+      }
+    ]);
+    await broadcastServerChange('RepairLog', 'CREATE', logId);
+
+    if (updatedRepair.technicianId) {
+      const notifId = uuidv4();
+      await supabaseAdmin.from('Notification').insert([
+        {
+          id: notifId,
+          title: `🚨 Urgent Alert: Job #${updatedRepair.repairNumber}`,
+          message: message || `High priority escalation requested by ${req.user!.name}`,
+          type: 'URGENT_ALERT',
+          userId: updatedRepair.technicianId,
+          isRead: false,
+          createdAt: new Date().toISOString()
+        }
+      ]);
+      await broadcastServerChange('Notification', 'CREATE', notifId);
+    }
+
+    await broadcastServerChange('Repair', 'UPDATE', id, updatedRepair);
+
+    return res.json({
+      success: true,
+      message: `Repair successfully marked as ${resolvedPriority} priority and technician alerted.`,
+      repair: updatedRepair
+    });
+  } catch (err: any) {
+    console.error('[ALERT TECHNICIAN EXCEPTION]', err);
+    return res.status(500).json({ error: 'Failed to dispatch urgent alert.' });
   }
 });
 
@@ -708,7 +774,7 @@ router.post('/:id/courier-dispatch', authenticate, async (req: AuthRequest, res:
   }
 });
 
-router.post('/:id/re-problem', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/re-problem', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { description } = req.body;
@@ -750,7 +816,7 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
 
     await broadcastServerChange('Repair', 'DELETE', id);
 
-    return res.json({ success: true, message: 'Repair deleted successfully.' });
+    return res.json({ success: true, message: 'Repair listed successfully deleted.' });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to delete repair record.' });
   }
