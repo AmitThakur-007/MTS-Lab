@@ -1,4978 +1,2319 @@
-// api/_server/app.ts
-import express from "express";
-import cookieParser from "cookie-parser";
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  Plus,
+  Search,
+  Filter,
+  MoreVertical,
+  Download,
+  ChevronRight,
+  User,
+  Smartphone,
+  Calendar,
+  Clock,
+  CircleCheck as CheckCircle2,
+  AlertCircle,
+  Truck,
+  PackageCheck,
+  Zap,
+  Trash2,
+  FileText,
+  Loader2,
+  Banknote,
+  Wrench,
+  Edit3,
+  Phone,
+  Mail,
+  MapPin,
+  RefreshCw,
+  ArrowUpDown,
+  Check,
+  X,
+  Eye,
+  Layers,
+  History,
+  ShieldAlert,
+  Printer,
+  ChevronDown,
+  Minus,
+  FileSpreadsheet,
+  Upload,
+  FileDown,
+  FileCheck2,
+  RotateCcw
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuGroup
+} from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
+import {
+  format,
+  isToday,
+  isYesterday,
+  isThisWeek,
+  isThisMonth,
+  parseISO,
+  startOfDay,
+  endOfDay,
+  subDays,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth
+} from 'date-fns';
+import { Link, useNavigate } from 'react-router-dom';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+import { api } from '@/services/api';
+import { useAuthStore } from '@/store/authStore';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { generateRepairReport } from '@/services/reportService';
+import { formatNPR, formatRepairCost, formatNepalPhone } from '@/lib/format';
+import { useRealtimeSync } from '@/services/realtime';
+import DashboardRefreshButton from '@/components/DashboardRefreshButton';
+import ServiceSlipModal from '@/components/repair/ServiceSlipModal';
+import EditRepairModal from '@/components/repair/EditRepairModal';
 
-// api/_server/routes/auth.ts
-import { Router } from "express";
-import bcrypt from "bcryptjs";
-import jwt2 from "jsonwebtoken";
-import crypto from "crypto";
-import { v4 as uuidv42 } from "uuid";
-
-// api/_server/config/supabase.ts
-import { createClient } from "@supabase/supabase-js";
-import dotenv from "dotenv";
-dotenv.config();
-var SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://pirynpugkiurjobrqiqg.supabase.co";
-var SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w";
-var SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-var supabaseAdmin = createClient(
-  SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  }
-);
-var supabasePublic = createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  }
-);
-var config = {
-  supabaseUrl: SUPABASE_URL,
-  supabaseAnonKey: SUPABASE_ANON_KEY,
-  jwtSecret: process.env.JWT_SECRET || "mts-lab-super-secret-key-2026",
-  refreshSecret: process.env.REFRESH_SECRET || "mts-lab-refresh-secret-key-2026",
-  appUrl: process.env.APP_URL || "http://localhost:3000",
-  cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
-  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
-  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || ""
+// Status badge styling
+const statusConfig: Record<string, { label: string; badgeClass: string; bgSoft: string; textClass: string }> = {
+  PENDING: { label: 'Pending', badgeClass: 'bg-slate-100 text-slate-700 border-slate-300', bgSoft: 'bg-slate-50', textClass: 'text-slate-700' },
+  RECEIVED: { label: 'Received', badgeClass: 'bg-amber-100 text-amber-800 border-amber-300', bgSoft: 'bg-amber-50', textClass: 'text-amber-700' },
+  DIAGNOSING: { label: 'Diagnosing', badgeClass: 'bg-sky-100 text-sky-800 border-sky-300', bgSoft: 'bg-sky-50', textClass: 'text-sky-700' },
+  IN_PROCESS: { label: 'In Progress', badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-300', bgSoft: 'bg-indigo-50', textClass: 'text-indigo-700' },
+  WAITING_FOR_PARTS: { label: 'Waiting for Parts', badgeClass: 'bg-purple-100 text-purple-800 border-purple-300', bgSoft: 'bg-purple-50', textClass: 'text-purple-700' },
+  TESTING: { label: 'Testing QA', badgeClass: 'bg-orange-100 text-orange-800 border-orange-300', bgSoft: 'bg-orange-50', textClass: 'text-orange-700' },
+  REPAIRED: { label: 'Repaired', badgeClass: 'bg-teal-100 text-teal-800 border-teal-300', bgSoft: 'bg-teal-50', textClass: 'text-teal-700' },
+  READY_FOR_PICKUP: { label: 'Ready for Pickup', badgeClass: 'bg-emerald-600 text-white border-transparent', bgSoft: 'bg-emerald-50', textClass: 'text-emerald-700' },
+  DELIVERED: { label: 'Delivered', badgeClass: 'bg-slate-200 text-slate-800 border-slate-300', bgSoft: 'bg-slate-100', textClass: 'text-slate-800' },
+  RE_PROBLEM: { label: 'Re-Problem (Warranty)', badgeClass: 'bg-rose-100 text-rose-800 border-rose-300 font-bold', bgSoft: 'bg-rose-50', textClass: 'text-rose-700' },
+  REPROBLEM: { label: 'Re-Problem (Warranty)', badgeClass: 'bg-rose-100 text-rose-800 border-rose-300 font-bold', bgSoft: 'bg-rose-50', textClass: 'text-rose-700' },
+  CANNOT_REPAIR: { label: 'Cannot Repair', badgeClass: 'bg-rose-100 text-rose-800 border-rose-300', bgSoft: 'bg-rose-50', textClass: 'text-rose-700' },
+  CANCELLED: { label: 'Cancelled', badgeClass: 'bg-slate-100 text-slate-600 border-slate-200', bgSoft: 'bg-slate-50', textClass: 'text-slate-600' }
 };
 
-// api/_server/middleware/auth.ts
-import jwt from "jsonwebtoken";
-async function authenticate(req, res, next) {
-  try {
-    const authHeader = req.headers.authorization;
-    let token = "";
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      token = authHeader.substring(7).trim();
-    } else if (req.cookies && req.cookies.token) {
-      token = req.cookies.token;
+type DateFilterPreset = 'ALL' | 'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'THIS_MONTH' | 'CUSTOM';
+type StatusTabKey = 'ALL' | 'PENDING' | 'RECEIVED' | 'IN_PROGRESS' | 'REPAIRED' | 'DELIVERED' | 'RE_PROBLEM' | 'MORE';
+
+export default function Repairs() {
+  const [repairs, setRepairs] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuthStore();
+  const navigate = useNavigate();
+
+  // Filters state
+  const [search, setSearch] = useState('');
+  const [activeStatusTab, setActiveStatusTab] = useState<StatusTabKey>('ALL');
+  const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>('ALL');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [selectedTechnicianFilter, setSelectedTechnicianFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'updated' | 'repairNumber' | 'customerName' | 'status'>('newest');
+
+  // Selection & Bulk Actions State
+  const [selectedRepairIds, setSelectedRepairIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+
+  // Modal states
+  const [deleteRepairData, setDeleteRepairData] = useState<any | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const [statusModalRepair, setStatusModalRepair] = useState<any | null>(null);
+  const [newStatusValue, setNewStatusValue] = useState('');
+  const [statusUpdateNote, setStatusUpdateNote] = useState('');
+  const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
+
+  const [assignModalRepair, setAssignModalRepair] = useState<any | null>(null);
+  const [selectedTechId, setSelectedTechId] = useState('');
+  const [assignLoading, setAssignLoading] = useState(false);
+
+  const [quickEditRepair, setQuickEditRepair] = useState<any | null>(null);
+  const [editFormData, setEditFormData] = useState<any>({});
+  const [editLoading, setEditLoading] = useState(false);
+
+  const [viewDetailsModalRepair, setViewDetailsModalRepair] = useState<any | null>(null);
+  const [selectedSlipRepair, setSelectedSlipRepair] = useState<any | null>(null);
+  const [isSlipModalOpen, setIsSlipModalOpen] = useState(false);
+
+  // Courier Dispatch & Re-Problem Modal States
+  const [courierDispatchModalRepair, setCourierDispatchModalRepair] = useState<any | null>(null);
+  const [courierDispatchForm, setCourierDispatchForm] = useState<any>({
+    returnCourierCompany: 'Nepal Can Move (NCM)',
+    customCourierCompany: '',
+    returnCourierTrackingNumber: '',
+    returnCourierDispatchDate: format(new Date(), 'yyyy-MM-dd'),
+    destinationDistrict: 'Kathmandu',
+    destinationAddress: '',
+    receiverName: '',
+    receiverPhone: '',
+    returnCourierNotes: ''
+  });
+  const [courierDispatchLoading, setCourierDispatchLoading] = useState(false);
+
+  const [reProblemModalRepair, setReProblemModalRepair] = useState<any | null>(null);
+  const [reProblemReason, setReProblemReason] = useState('Customer reported recurring fault');
+  const [reProblemDescription, setReProblemDescription] = useState('');
+  const [reProblemLoading, setReProblemLoading] = useState(false);
+
+  // Role permissions - Permanent deletion strictly restricted to SUPER_ADMIN ONLY
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isAdmin = user?.role === 'ADMIN' || isSuperAdmin;
+  const isManager = user?.role === 'MANAGER';
+  const isReceptionist = user?.role === 'RECEPTIONIST';
+  const canDelete = isSuperAdmin;
+  const canAssign = isSuperAdmin || isAdmin || isManager || isReceptionist;
+  const canEdit = isSuperAdmin || isAdmin || isManager || isReceptionist;
+  const canCreate = isSuperAdmin || isAdmin || isManager || isReceptionist;
+  const canManageExcel = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(user?.role || '');
+
+  // Excel Import / Export state
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewData, setPreviewData] = useState<any | null>(null);
+  const [confirmingImport, setConfirmingImport] = useState(false);
+
+  // Technicians list for assignment
+  const technicians = useMemo(() => {
+    return staffList.filter((s: any) => s.role === 'TECHNICIAN' && s.isActive !== false);
+  }, [staffList]);
+
+  // Export Repairs Excel Handler
+  const handleExportExcel = async () => {
+    if (!canManageExcel) {
+      toast.error("You are not authorized to export repair records.");
+      return;
     }
-    if (!token) {
-      return res.status(401).json({
-        error: "Unauthorized",
-        message: "Authentication token missing or invalid."
-      });
-    }
-    let userEmail = null;
-    let authUid = null;
+
+    setExportingExcel(true);
     try {
-      const { data: supabaseUser, error } = await supabasePublic.auth.getUser(token);
-      if (!error && supabaseUser?.user) {
-        userEmail = supabaseUser.user.email || null;
-        authUid = supabaseUser.user.id;
-      }
-    } catch (_) {
-    }
-    if (!userEmail && !authUid) {
-      try {
-        const decoded = jwt.verify(token, config.jwtSecret);
-        if (decoded) {
-          userEmail = decoded.email || null;
-          authUid = decoded.id || decoded.sub || null;
-        }
-      } catch (jwtErr) {
-        return res.status(401).json({
-          error: "Unauthorized",
-          message: "Invalid or expired session token. Please log in again."
-        });
-      }
-    }
-    if (!userEmail && !authUid) {
-      return res.status(401).json({
-        error: "Unauthorized",
-        message: "Could not resolve authentication identity."
-      });
-    }
-    let query = supabaseAdmin.from("User").select("*").is("deletedAt", null);
-    if (userEmail) {
-      query = query.eq("email", userEmail.toLowerCase());
-    } else if (authUid) {
-      query = query.or(`id.eq.${authUid},supabaseUid.eq.${authUid}`);
-    }
-    let { data: users, error: dbError } = await query.limit(1);
-    if ((!users || users.length === 0) && authUid && userEmail) {
-      const { data: uidUsers } = await supabaseAdmin.from("User").select("*").or(`id.eq.${authUid},supabaseUid.eq.${authUid}`).is("deletedAt", null).limit(1);
-      if (uidUsers && uidUsers.length > 0) {
-        users = uidUsers;
-        dbError = null;
-      }
-    }
-    if (dbError || !users || users.length === 0) {
-      return res.status(401).json({
-        error: "Unauthorized",
-        message: "User account not found or has been deactivated."
-      });
-    }
-    const dbUser = users[0];
-    if (dbUser.accountStatus === "REJECTED" || dbUser.accountStatus === "DISABLED" || dbUser.isActive === false) {
-      return res.status(403).json({
-        error: "Forbidden",
-        message: "Your account is disabled or access has been revoked. Contact administrator."
-      });
-    }
-    req.user = {
-      id: dbUser.id,
-      email: dbUser.email,
-      name: dbUser.name,
-      role: dbUser.role,
-      branchId: dbUser.branchId,
-      phoneNumber: dbUser.phoneNumber,
-      department: dbUser.department,
-      address: dbUser.address,
-      profileImage: dbUser.profileImage,
-      accountStatus: dbUser.accountStatus,
-      isActive: dbUser.isActive,
-      emailVerified: dbUser.emailVerified,
-      twoFactorEnabled: dbUser.twoFactorEnabled
-    };
-    return next();
-  } catch (err) {
-    console.error("[AUTHENTICATION MIDDLEWARE ERROR]", err);
-    return res.status(500).json({
-      error: "Internal Server Error",
-      message: "Failed to authenticate user request."
-    });
-  }
-}
+      const params = new URLSearchParams();
+      if (search.trim()) params.append('search', search.trim());
+      if (activeStatusTab !== 'ALL') params.append('status', activeStatusTab);
+      if (selectedTechnicianFilter !== 'ALL') params.append('technicianId', selectedTechnicianFilter);
 
-// api/_server/services/auditService.ts
-import { v4 as uuidv4 } from "uuid";
-async function logAudit(entry) {
-  try {
-    const payload = {
-      id: uuidv4(),
-      userId: entry.userId || null,
-      action: entry.action,
-      resource: entry.resource,
-      resourceId: entry.resourceId || null,
-      details: typeof entry.details === "object" ? JSON.stringify(entry.details) : entry.details ? String(entry.details) : null,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    await supabaseAdmin.from("AuditLog").insert([payload]);
-  } catch (err) {
-    console.warn("[AUDIT LOG WARNING] Failed to record audit log:", err);
-  }
-}
+      const filename = `MTS_Lab_Repairs_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+      await api.download(`/repairs/export?${params.toString()}`, filename);
 
-// api/_server/services/emailService.ts
-import { Resend } from "resend";
-var resendApiKey = process.env.RESEND_API_KEY;
-var resend = resendApiKey ? new Resend(resendApiKey) : null;
-async function sendEmail(options) {
-  if (!resend) {
-    console.warn(`[EMAIL NOTICE] RESEND_API_KEY is not configured. Email to ${options.to} not sent.`);
-    return true;
-  }
-  try {
-    const fromAddress = process.env.SMTP_FROM || "MTS Lab Security <noreply@mobiletechnologystation.com.np>";
-    const { error } = await resend.emails.send({
-      from: fromAddress,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-      text: options.text,
-      attachments: options.attachments?.map((att) => ({
-        filename: att.filename,
-        content: att.content
-      }))
-    });
-    if (error) {
-      console.error("[RESEND ERROR] Failed to send email:", error);
-      return false;
+      toast.success("Excel repair records exported successfully.");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to export repair records.");
+    } finally {
+      setExportingExcel(false);
     }
-    console.log(`[EMAIL SUCCESS] Sent email to ${options.to}`);
-    return true;
-  } catch (err) {
-    console.error("[EMAIL ERROR] Exception sending email via Resend:", err);
-    return false;
-  }
-}
+  };
 
-// api/_server/routes/auth.ts
-var router = Router();
-function generateTokens(user) {
-  const token = jwt2.sign(
-    {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      branchId: user.branchId
-    },
-    config.jwtSecret,
-    { expiresIn: "8h" }
-  );
-  const refreshToken = jwt2.sign(
-    { id: user.id, tokenVersion: Date.now() },
-    config.refreshSecret,
-    { expiresIn: "7d" }
-  );
-  return { token, refreshToken };
-}
-router.post("/login", async (req, res) => {
-  try {
-    const { email: emailField, identity, password, deviceIdentifier, deviceName, deviceType, browser, os, ipAddress } = req.body;
-    const email = emailField || identity;
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required." });
+  // Download Template Handler
+  const handleDownloadTemplate = async () => {
+    if (!canManageExcel) {
+      toast.error("You are not authorized to download repair template.");
+      return;
     }
-    const normalizedEmail = email.toLowerCase().trim();
-    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("*").eq("email", normalizedEmail).is("deletedAt", null).limit(1);
-    if (userErr || !users || users.length === 0) {
-      return res.status(401).json({ error: "Invalid email or password." });
-    }
-    const user = users[0];
-    if (user.accountStatus === "REJECTED" || user.accountStatus === "DISABLED" || user.isActive === false) {
-      return res.status(403).json({
-        error: "Forbidden",
-        message: "Your account is currently disabled or pending approval. Contact the administrator."
-      });
-    }
-    let passwordMatches = false;
+
+    setDownloadingTemplate(true);
     try {
-      const { data: authData, error: authError } = await supabasePublic.auth.signInWithPassword({
-        email: normalizedEmail,
-        password
-      });
-      if (!authError && authData.user) {
-        passwordMatches = true;
-        if (!user.supabaseUid) {
-          await supabaseAdmin.from("User").update({ supabaseUid: authData.user.id }).eq("id", user.id);
-        }
-      }
-    } catch (_) {
+      await api.download('/repairs/import/template', 'MTS_Lab_Repair_Import_Template.xlsx');
+      toast.success("Blank repair Excel template downloaded.");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to download repair template.");
+    } finally {
+      setDownloadingTemplate(false);
     }
-    if (!passwordMatches && user.password) {
-      passwordMatches = await bcrypt.compare(password, user.password);
-      if (passwordMatches && !user.supabaseUid) {
-        try {
-          const { data: newAuthUser } = await supabaseAdmin.auth.admin.createUser({
-            email: normalizedEmail,
-            password,
-            email_confirm: true
-          });
-          if (newAuthUser?.user) {
-            await supabaseAdmin.from("User").update({ supabaseUid: newAuthUser.user.id }).eq("id", user.id);
+  };
+
+  // File Select and Generate Preview Handler
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      toast.error("Please upload a valid Excel (.xlsx) file.");
+      return;
+    }
+
+    setImportFile(file);
+    await handleGeneratePreview(file);
+  };
+
+  const handleGeneratePreview = async (file: File) => {
+    setPreviewLoading(true);
+    setPreviewData(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res: any = await api.post('/repairs/import/preview', formData);
+      if (!res || (!res.success && !res.items)) {
+        throw new Error(res?.error || 'Failed to analyze Excel file');
+      }
+
+      setPreviewData(res);
+      toast.info(`Analyzed ${res.totalRows} rows: ${res.validRows} valid, ${res.invalidRows} invalid, ${res.duplicateRows} duplicate.`);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to analyze Excel file.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Confirm and Execute Import Handler
+  const handleExecuteConfirmImport = async () => {
+    if (!previewData || !previewData.items || previewData.validRows === 0) {
+      toast.error("No valid records available to import.");
+      return;
+    }
+
+    const validItems = previewData.items.filter((i: any) => i.status === 'VALID');
+    if (validItems.length === 0) {
+      toast.error("No valid records to import.");
+      return;
+    }
+
+    setConfirmingImport(true);
+    try {
+      const res: any = await api.post('/repairs/import/confirm', {
+        items: validItems
+      });
+
+      toast.success(res.message || `Successfully imported ${res.importedCount} repair records.`);
+      setIsImportModalOpen(false);
+      setImportFile(null);
+      setPreviewData(null);
+      await fetchData();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to import repair records.");
+    } finally {
+      setConfirmingImport(false);
+    }
+  };
+
+  // Fetch all repair records and staff from the real database
+  const fetchData = useCallback(async () => {
+    try {
+      const [repairRes, staffRes] = await Promise.all([
+        api.get('/repairs'),
+        api.get('/staff').catch(() => [])
+      ]);
+      setRepairs(Array.isArray(repairRes) ? repairRes : []);
+      setStaffList(Array.isArray(staffRes) ? staffRes : []);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to fetch repair records');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Real-Time Event Sync across all user roles via browser custom events & realtime hook
+  useEffect(() => {
+    const handleRealtimeUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      console.log('[REALTIME EVENT CAUGHT ON REPAIRS PAGE]', customEvent.detail);
+      fetchData();
+    };
+
+    window.addEventListener('mts-realtime-update', handleRealtimeUpdate);
+    return () => {
+      window.removeEventListener('mts-realtime-update', handleRealtimeUpdate);
+    };
+  }, [fetchData]);
+
+  useRealtimeSync(
+    ['Repair', 'repair', 'RepairLog', 'repairLog', 'TechnicianNote', 'technicianNote', 'Payment', 'payment', 'User', 'user', 'Notification', 'notification', 'Attendance', 'attendance', 'RepairTransferRequest', 'repairTransferRequest'],
+    (event) => {
+      console.log('[REPAIRS REALTIME EVENT]', event);
+      fetchData();
+    }
+  );
+
+  // Summary Metrics calculated directly from real database records
+  const metrics = useMemo(() => {
+    const total = repairs.length;
+    const pending = repairs.filter(r => r.status === 'PENDING').length;
+    const received = repairs.filter(r => r.status === 'RECEIVED').length;
+    const inProgress = repairs.filter(r =>
+      ['IN_PROCESS', 'DIAGNOSING', 'WAITING_FOR_PARTS', 'TESTING'].includes(r.status)
+    ).length;
+    const repaired = repairs.filter(r =>
+      ['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED'].includes(r.status)
+    ).length;
+    const totalPaidSum = repairs.reduce((acc, r) => acc + (Number(r.totalPaid) || Number(r.advancePaid) || 0), 0);
+    const estimatedTotalSum = repairs.reduce((acc, r) => acc + (Number(r.estimatedCost) || Number(r.totalCost) || 0), 0);
+
+    return { total, pending, received, inProgress, repaired, totalPaidSum, estimatedTotalSum };
+  }, [repairs]);
+
+  // Date filtering logic
+  const dateFilteredRepairs = useMemo(() => {
+    if (dateFilterPreset === 'ALL') return repairs;
+
+    const now = new Date();
+    return repairs.filter(r => {
+      if (!r.createdAt) return false;
+      const created = new Date(r.createdAt);
+      if (isNaN(created.getTime())) return false;
+
+      switch (dateFilterPreset) {
+        case 'TODAY':
+          return isToday(created);
+        case 'YESTERDAY':
+          return isYesterday(created);
+        case 'THIS_WEEK':
+          return isThisWeek(created, { weekStartsOn: 0 });
+        case 'THIS_MONTH':
+          return isThisMonth(created);
+        case 'CUSTOM':
+          if (!customStartDate && !customEndDate) return true;
+          const start = customStartDate ? startOfDay(parseISO(customStartDate)) : null;
+          const end = customEndDate ? endOfDay(parseISO(customEndDate)) : null;
+          if (start && end) {
+            return created >= start && created <= end;
+          } else if (start) {
+            return created >= start;
+          } else if (end) {
+            return created <= end;
           }
-        } catch (_) {
-        }
-      }
-    }
-    if (!passwordMatches) {
-      const attempts = (user.failedLoginAttempts || 0) + 1;
-      await supabaseAdmin.from("User").update({ failedLoginAttempts: attempts }).eq("id", user.id);
-      return res.status(401).json({ error: "Invalid email or password." });
-    }
-    await supabaseAdmin.from("User").update({
-      failedLoginAttempts: 0,
-      lastLoginAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", user.id);
-    try {
-      await supabaseAdmin.from("LoginActivity").insert([
-        {
-          id: uuidv42(),
-          userId: user.id,
-          ipAddress: ipAddress || req.ip || null,
-          userAgent: req.headers["user-agent"] || null,
-          deviceIdentifier: deviceIdentifier || null,
-          deviceName: deviceName || null,
-          deviceType: deviceType || "DESKTOP",
-          browser: browser || null,
-          os: os || null,
-          status: "SUCCESS",
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
-    } catch (_) {
-    }
-    const is2FA = user.twoFactorEnabled === true || user.twoFactorEnabled === "true" || user.twoFactorEnabled === 1;
-    if (is2FA) {
-      const code = Math.floor(1e5 + Math.random() * 9e5).toString();
-      const codeHash = crypto.createHash("sha256").update(code).digest("hex");
-      const mfaTicket = uuidv42();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1e3).toISOString();
-      await supabaseAdmin.from("OTPVerification").insert([
-        {
-          id: mfaTicket,
-          userId: user.id,
-          email: user.email,
-          codeHash,
-          purpose: "LOGIN_2FA",
-          expiresAt,
-          isUsed: false,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
-      await sendEmail({
-        to: user.email,
-        subject: "MTS Lab — Two-Factor Authentication (2FA) Code",
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-            <h2 style="color: #2563eb;">MTS Lab Security Verification</h2>
-            <p>Hello <strong>${user.name}</strong>,</p>
-            <p>Your two-factor authentication verification code is:</p>
-            <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 6px; font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #1e293b;">
-              ${code}
-            </div>
-            <p style="color: #64748b; font-size: 14px; margin-top: 20px;">This code will expire in 10 minutes. If you did not attempt to log in, please secure your account immediately.</p>
-          </div>
-        `
-      });
-      return res.json({
-        success: true,
-        requires2FA: true,
-        mfaTicket,
-        email: user.email,
-        twoFactorType: user.twoFactorType || "EMAIL",
-        message: "A 2FA verification code has been sent to your email."
-      });
-    }
-    const { token, refreshToken } = generateTokens(user);
-    await logAudit({
-      userId: user.id,
-      action: "LOGIN",
-      resource: "User",
-      resourceId: user.id,
-      details: { email: user.email, role: user.role }
-    });
-    return res.json({
-      success: true,
-      token,
-      refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        username: user.username,
-        role: user.role,
-        branchId: user.branchId,
-        phoneNumber: user.phoneNumber,
-        department: user.department,
-        address: user.address,
-        profileImage: user.profileImage
+          return true;
+        default:
+          return true;
       }
     });
-  } catch (err) {
-    console.error("[LOGIN ERROR]", err);
-    return res.status(500).json({ error: "An unexpected error occurred during login." });
-  }
-});
-router.post("/2fa/verify", async (req, res) => {
-  try {
-    const { mfaTicket, code, email } = req.body;
-    if (!code) {
-      return res.status(400).json({ error: "Verification code is required." });
-    }
-    const inputHash = crypto.createHash("sha256").update(String(code).trim()).digest("hex");
-    let query = supabaseAdmin.from("OTPVerification").select("*").eq("purpose", "LOGIN_2FA").eq("isUsed", false);
-    if (mfaTicket) {
-      query = query.eq("id", mfaTicket);
-    } else if (email) {
-      query = query.eq("email", email.toLowerCase().trim()).order("createdAt", { ascending: false });
-    }
-    const { data: otps, error: otpErr } = await query.limit(1);
-    if (otpErr || !otps || otps.length === 0) {
-      return res.status(400).json({ error: "Invalid or expired 2FA verification session." });
-    }
-    const otp = otps[0];
-    if (new Date(otp.expiresAt) < /* @__PURE__ */ new Date()) {
-      return res.status(400).json({ error: "Verification code has expired. Please request a new code." });
-    }
-    if (otp.codeHash !== inputHash) {
-      const attempts = (otp.attempts || 0) + 1;
-      await supabaseAdmin.from("OTPVerification").update({ attempts }).eq("id", otp.id);
-      return res.status(400).json({ error: "Incorrect verification code. Please try again." });
-    }
-    await supabaseAdmin.from("OTPVerification").update({ isUsed: true }).eq("id", otp.id);
-    const { data: users } = await supabaseAdmin.from("User").select("*").eq("id", otp.userId).limit(1);
-    if (!users || users.length === 0) {
-      return res.status(404).json({ error: "User profile not found." });
-    }
-    const user = users[0];
-    const { token, refreshToken } = generateTokens(user);
-    await logAudit({
-      userId: user.id,
-      action: "2FA_VERIFIED",
-      resource: "User",
-      resourceId: user.id,
-      details: { email: user.email }
-    });
-    return res.json({
-      success: true,
-      token,
-      refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        username: user.username,
-        role: user.role,
-        branchId: user.branchId,
-        phoneNumber: user.phoneNumber,
-        department: user.department,
-        address: user.address,
-        profileImage: user.profileImage
-      }
-    });
-  } catch (err) {
-    console.error("[2FA VERIFY ERROR]", err);
-    return res.status(500).json({ error: "Failed to verify 2FA code." });
-  }
-});
-router.post("/2fa/resend", async (req, res) => {
-  try {
-    const { mfaTicket, email } = req.body;
-    let query = supabaseAdmin.from("OTPVerification").select("*");
-    if (mfaTicket) {
-      query = query.eq("id", mfaTicket);
-    } else if (email) {
-      query = query.eq("email", email.toLowerCase().trim()).order("createdAt", { ascending: false });
-    } else {
-      return res.status(400).json({ error: "MFA session identifier is required." });
-    }
-    const { data: otps } = await query.limit(1);
-    if (!otps || otps.length === 0) {
-      return res.status(400).json({ error: "Session not found. Please log in again." });
-    }
-    const otp = otps[0];
-    const code = Math.floor(1e5 + Math.random() * 9e5).toString();
-    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1e3).toISOString();
-    await supabaseAdmin.from("OTPVerification").update({ codeHash, expiresAt, isUsed: false, attempts: 0 }).eq("id", otp.id);
-    await sendEmail({
-      to: otp.email,
-      subject: "MTS Lab — Resent 2FA Verification Code",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h2 style="color: #2563eb;">MTS Lab Security Verification</h2>
-          <p>Your new verification code is:</p>
-          <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 6px; font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #1e293b;">
-            ${code}
-          </div>
-          <p style="color: #64748b; font-size: 14px; margin-top: 20px;">This code will expire in 10 minutes.</p>
-        </div>
-      `
-    });
-    return res.json({ success: true, mfaTicket: otp.id, message: "Verification code resent successfully." });
-  } catch (err) {
-    console.error("[2FA RESEND ERROR]", err);
-    return res.status(500).json({ error: "Failed to resend verification code." });
-  }
-});
-router.post("/refresh", async (req, res) => {
-  try {
-    const refreshToken = req.body?.refreshToken || req.headers["x-refresh-token"];
-    if (!refreshToken) {
-      return res.status(401).json({ error: "Refresh token required." });
-    }
-    let decoded;
-    try {
-      decoded = jwt2.verify(refreshToken, config.refreshSecret);
-    } catch {
-      return res.status(401).json({ error: "Invalid or expired refresh token." });
-    }
-    const { data: users } = await supabaseAdmin.from("User").select("*").eq("id", decoded.id).is("deletedAt", null).limit(1);
-    if (!users || users.length === 0 || users[0].isActive === false) {
-      return res.status(401).json({ error: "User session expired or account disabled." });
-    }
-    const user = users[0];
-    const { token: newToken, refreshToken: newRefreshToken } = generateTokens(user);
-    return res.json({
-      success: true,
-      token: newToken,
-      refreshToken: newRefreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        username: user.username,
-        role: user.role,
-        branchId: user.branchId,
-        phoneNumber: user.phoneNumber,
-        department: user.department,
-        address: user.address,
-        profileImage: user.profileImage
-      }
-    });
-  } catch (err) {
-    console.error("[REFRESH ERROR]", err);
-    return res.status(500).json({ error: "Failed to refresh authentication session." });
-  }
-});
-router.post("/logout", async (req, res) => {
-  return res.json({ success: true, message: "Logged out successfully." });
-});
-router.get("/me", authenticate, async (req, res) => {
-  return res.json({ user: req.user });
-});
-router.post("/forgot-password", async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: "Email is required." });
-    }
-    const normalizedEmail = email.toLowerCase().trim();
-    const { data: users } = await supabaseAdmin.from("User").select("*").eq("email", normalizedEmail).is("deletedAt", null).limit(1);
-    if (!users || users.length === 0) {
-      return res.json({ success: true, message: "If an account exists, a reset code has been sent." });
-    }
-    const user = users[0];
-    const code = Math.floor(1e5 + Math.random() * 9e5).toString();
-    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
-    const otpId = uuidv42();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1e3).toISOString();
-    await supabaseAdmin.from("OTPVerification").insert([
-      {
-        id: otpId,
-        userId: user.id,
-        email: user.email,
-        codeHash,
-        purpose: "PASSWORD_RESET",
-        expiresAt,
-        isUsed: false,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
-    await sendEmail({
-      to: user.email,
-      subject: "MTS Lab — Password Reset Code",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h2 style="color: #2563eb;">Reset Your Password</h2>
-          <p>Hello <strong>${user.name}</strong>,</p>
-          <p>You requested a password reset for your MTS Lab account. Your verification code is:</p>
-          <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 6px; font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #1e293b;">
-            ${code}
-          </div>
-          <p style="color: #64748b; font-size: 14px; margin-top: 20px;">This code expires in 15 minutes. If you did not request this, please ignore this email.</p>
-        </div>
-      `
-    });
-    return res.json({
-      success: true,
-      message: "Password reset code sent to your email.",
-      resetId: otpId
-    });
-  } catch (err) {
-    console.error("[FORGOT PASSWORD ERROR]", err);
-    return res.status(500).json({ error: "Failed to process forgot password request." });
-  }
-});
-router.post("/verify-otp", async (req, res) => {
-  try {
-    const { email, code } = req.body;
-    if (!email || !code) {
-      return res.status(400).json({ error: "Email and OTP code are required." });
-    }
-    const normalizedEmail = email.toLowerCase().trim();
-    const inputHash = crypto.createHash("sha256").update(String(code).trim()).digest("hex");
-    const { data: otps } = await supabaseAdmin.from("OTPVerification").select("*").eq("email", normalizedEmail).eq("purpose", "PASSWORD_RESET").eq("isUsed", false).order("createdAt", { ascending: false }).limit(1);
-    if (!otps || otps.length === 0) {
-      return res.status(400).json({ error: "Invalid or expired OTP code." });
-    }
-    const otp = otps[0];
-    if (new Date(otp.expiresAt) < /* @__PURE__ */ new Date()) {
-      return res.status(400).json({ error: "OTP code has expired. Please request a new one." });
-    }
-    if (otp.codeHash !== inputHash) {
-      return res.status(400).json({ error: "Incorrect OTP code." });
-    }
-    await supabaseAdmin.from("OTPVerification").update({ isUsed: true }).eq("id", otp.id);
-    const resetToken = jwt2.sign(
-      { userId: otp.userId, purpose: "RESET_PASSWORD" },
-      config.jwtSecret,
-      { expiresIn: "15m" }
-    );
-    return res.json({
-      success: true,
-      resetToken,
-      message: "OTP verified successfully. You may now set a new password."
-    });
-  } catch (err) {
-    console.error("[VERIFY OTP ERROR]", err);
-    return res.status(500).json({ error: "Failed to verify OTP." });
-  }
-});
-router.post("/reset-password", async (req, res) => {
-  try {
-    const { resetToken, newPassword } = req.body;
-    if (!resetToken || !newPassword) {
-      return res.status(400).json({ error: "Reset token and new password are required." });
-    }
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: "Password must be at least 6 characters long." });
-    }
-    let decoded;
-    try {
-      decoded = jwt2.verify(resetToken, config.jwtSecret);
-    } catch {
-      return res.status(400).json({ error: "Invalid or expired reset token." });
-    }
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-    const { data: updatedUsers, error: updateErr } = await supabaseAdmin.from("User").update({
-      password: passwordHash,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", decoded.userId).select("*");
-    if (updateErr || !updatedUsers || updatedUsers.length === 0) {
-      return res.status(500).json({ error: "Failed to update user password." });
-    }
-    const user = updatedUsers[0];
-    if (user.supabaseUid) {
-      try {
-        await supabaseAdmin.auth.admin.updateUserById(user.supabaseUid, {
-          password: newPassword
-        });
-      } catch (_) {
-      }
-    }
-    await logAudit({
-      userId: user.id,
-      action: "PASSWORD_RESET",
-      resource: "User",
-      resourceId: user.id,
-      details: { email: user.email }
-    });
-    return res.json({ success: true, message: "Password updated successfully. Please log in with your new password." });
-  } catch (err) {
-    console.error("[RESET PASSWORD ERROR]", err);
-    return res.status(500).json({ error: "Failed to reset password." });
-  }
-});
-router.post("/verify-email-status", async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: "Email is required." });
-    }
-    const { data: users } = await supabaseAdmin.from("User").select("id, email, emailVerified, accountStatus").eq("email", email.toLowerCase().trim()).limit(1);
-    if (!users || users.length === 0) {
-      return res.json({ isVerified: false, accountStatus: "PENDING" });
-    }
-    return res.json({
-      isVerified: Boolean(users[0].emailVerified),
-      accountStatus: users[0].accountStatus
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to verify email status." });
-  }
-});
-router.post("/resend-verification", async (req, res) => {
-  return res.json({ success: true, message: "Verification link resent to your email." });
-});
-router.get("/activity", authenticate, async (req, res) => {
-  try {
-    const { data: activities } = await supabaseAdmin.from("LoginActivity").select("*").eq("userId", req.user.id).order("createdAt", { ascending: false }).limit(20);
-    return res.json(activities || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to load activity logs." });
-  }
-});
-router.get("/sessions", authenticate, async (req, res) => {
-  return res.json([
-    {
-      id: "current-session",
-      userId: req.user.id,
-      deviceName: "Current Browser Session",
-      deviceType: "DESKTOP",
-      lastActiveAt: (/* @__PURE__ */ new Date()).toISOString(),
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    }
-  ]);
-});
-var auth_default = router;
+  }, [repairs, dateFilterPreset, customStartDate, customEndDate]);
 
-// api/_server/routes/users.ts
-import { Router as Router2 } from "express";
-import bcrypt2 from "bcryptjs";
-import { v4 as uuidv43 } from "uuid";
+  // Status Tab filtering logic
+  const statusFilteredRepairs = useMemo(() => {
+    if (activeStatusTab === 'ALL') return dateFilteredRepairs;
+    if (activeStatusTab === 'PENDING') {
+      return dateFilteredRepairs.filter(r => r.status === 'PENDING');
+    }
+    if (activeStatusTab === 'RECEIVED') {
+      return dateFilteredRepairs.filter(r => r.status === 'RECEIVED');
+    }
+    if (activeStatusTab === 'IN_PROGRESS') {
+      return dateFilteredRepairs.filter(r =>
+        ['IN_PROCESS', 'DIAGNOSING', 'WAITING_FOR_PARTS', 'TESTING'].includes(r.status)
+      );
+    }
+    if (activeStatusTab === 'REPAIRED') {
+      return dateFilteredRepairs.filter(r =>
+        ['REPAIRED', 'READY_FOR_PICKUP'].includes(r.status)
+      );
+    }
+    if (activeStatusTab === 'DELIVERED') {
+      return dateFilteredRepairs.filter(r => r.status === 'DELIVERED');
+    }
+    if (activeStatusTab === 'RE_PROBLEM') {
+      return dateFilteredRepairs.filter(r => r.status === 'RE_PROBLEM' || r.status === 'REPROBLEM');
+    }
+    return dateFilteredRepairs;
+  }, [dateFilteredRepairs, activeStatusTab]);
 
-// api/_server/middleware/rbac.ts
-function normalizeRole(role) {
-  if (!role) return "";
-  const r = role.toUpperCase().replace(/\s+/g, "_").trim();
-  if (r === "SUPERADMIN") return "SUPER_ADMIN";
-  if (r === "HEAD_TECHNICIAN" || r === "LEADTECHNICIAN") return "LEAD_TECHNICIAN";
-  return r;
-}
-function authorize(allowedRoles) {
-  const normalizedAllowed = allowedRoles.map(normalizeRole);
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({
-        error: "Unauthorized",
-        message: "Authentication required for this resource."
-      });
+  // Technician filtering logic
+  const technicianFilteredRepairs = useMemo(() => {
+    if (selectedTechnicianFilter === 'ALL') return statusFilteredRepairs;
+    if (selectedTechnicianFilter === 'UNASSIGNED') {
+      return statusFilteredRepairs.filter(r => !r.technicianId && !r.technician);
     }
-    const userRole = normalizeRole(req.user.role);
-    if (userRole === "SUPER_ADMIN") {
-      return next();
+    return statusFilteredRepairs.filter(r => r.technicianId === selectedTechnicianFilter || r.technician?.id === selectedTechnicianFilter);
+  }, [statusFilteredRepairs, selectedTechnicianFilter]);
+
+  // Search & Sorting filter
+  const finalFilteredRepairs = useMemo(() => {
+    let result = [...technicianFilteredRepairs];
+
+    // Fast search across repair number, customer name, phone, device model, brand, problem, technician
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(r =>
+        (r.repairNumber && String(r.repairNumber).toLowerCase().includes(q)) ||
+        (r.customerId && String(r.customerId).toLowerCase().includes(q)) ||
+        (r.customer?.customerId && String(r.customer.customerId).toLowerCase().includes(q)) ||
+        (r.customerName && r.customerName.toLowerCase().includes(q)) ||
+        (r.customerPhone && r.customerPhone.includes(q)) ||
+        (r.customerEmail && r.customerEmail.toLowerCase().includes(q)) ||
+        (r.deviceBrand && r.deviceBrand.toLowerCase().includes(q)) ||
+        (r.deviceModel && r.deviceModel.toLowerCase().includes(q)) ||
+        (r.problemDescription && r.problemDescription.toLowerCase().includes(q)) ||
+        (r.technician?.name && r.technician.name.toLowerCase().includes(q))
+      );
     }
-    if (normalizedAllowed.includes(userRole)) {
-      return next();
-    }
-    return res.status(403).json({
-      error: "Forbidden",
-      message: `Access denied. Requires one of roles: [${allowedRoles.join(", ")}]. Current role: ${req.user.role}`
+
+    // Sort order
+    result.sort((a, b) => {
+      if (sortBy === 'newest') {
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      }
+      if (sortBy === 'oldest') {
+        return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+      }
+      if (sortBy === 'updated') {
+        return new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime();
+      }
+      if (sortBy === 'repairNumber') {
+        return String(b.repairNumber || '').localeCompare(String(a.repairNumber || ''), undefined, { numeric: true });
+      }
+      if (sortBy === 'customerName') {
+        return (a.customerName || '').localeCompare(b.customerName || '');
+      }
+      if (sortBy === 'status') {
+        return (a.status || '').localeCompare(b.status || '');
+      }
+      return 0;
+    });
+
+    return result;
+  }, [technicianFilteredRepairs, search, sortBy]);
+
+  // Visible / displayed repair IDs based on current filters
+  const visibleRepairIds = useMemo(() => finalFilteredRepairs.map(r => r.id), [finalFilteredRepairs]);
+  const isAllVisibleSelected = visibleRepairIds.length > 0 && visibleRepairIds.every(id => selectedRepairIds.has(id));
+  const isSomeVisibleSelected = visibleRepairIds.some(id => selectedRepairIds.has(id));
+
+  // Selected repairs list for confirmation modal display
+  const selectedRepairsList = useMemo(() => {
+    return repairs.filter(r => selectedRepairIds.has(r.id));
+  }, [repairs, selectedRepairIds]);
+
+  // Selection Handlers
+  const handleToggleSelectRepair = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedRepairIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
     });
   };
-}
 
-// api/_server/routes/users.ts
-var router2 = Router2();
-router2.get("/", authenticate, async (req, res) => {
-  try {
-    const { data: users, error } = await supabaseAdmin.from("User").select("id, email, username, name, role, phoneNumber, department, address, profileImage, branchId, accountStatus, isActive, emailVerified, twoFactorEnabled, twoFactorType, lastLoginAt, createdAt, updatedAt").is("deletedAt", null).order("name", { ascending: true });
-    if (error) {
-      console.error("[USERS GET ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch staff directory." });
-    }
-    return res.json(users || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to fetch staff members." });
-  }
-});
-router2.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const {
-      name,
-      email,
-      password,
-      role = "RECEPTIONIST",
-      phoneNumber,
-      department,
-      address,
-      branchId,
-      twoFactorEnabled = true
-    } = req.body;
-    if (!name || !email) {
-      return res.status(400).json({ error: "Name and email are required to create a staff member." });
-    }
-    const normalizedEmail = email.toLowerCase().trim();
-    const normalizedTargetRole = normalizeRole(role);
-    const { data: existingUsers } = await supabaseAdmin.from("User").select("id, email, deletedAt").eq("email", normalizedEmail).limit(1);
-    if (existingUsers && existingUsers.length > 0) {
-      const existing = existingUsers[0];
-      if (!existing.deletedAt) {
-        return res.status(400).json({ error: "A staff member with this email already exists." });
-      }
-    }
-    const defaultPassword = password || "MtsLab@2026";
-    const passwordHash = await bcrypt2.hash(defaultPassword, 10);
-    let userId = uuidv43();
-    let supabaseUid = null;
-    try {
-      const { data: authUser, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-        email: normalizedEmail,
-        password: defaultPassword,
-        email_confirm: true,
-        user_metadata: { name, role: normalizedTargetRole }
+  const handleToggleSelectAll = () => {
+    if (isAllVisibleSelected) {
+      setSelectedRepairIds(prev => {
+        const next = new Set(prev);
+        visibleRepairIds.forEach(id => next.delete(id));
+        return next;
       });
-      if (!authErr && authUser?.user) {
-        userId = authUser.user.id;
-        supabaseUid = authUser.user.id;
-      }
-    } catch (authCreateErr) {
-      console.warn("[AUTH CREATE NOTICE]", authCreateErr);
-    }
-    const newStaff = {
-      id: userId,
-      supabaseUid: supabaseUid || userId,
-      email: normalizedEmail,
-      name: name.trim(),
-      password: passwordHash,
-      role: normalizedTargetRole,
-      phoneNumber: phoneNumber ? phoneNumber.trim() : null,
-      department: department ? department.trim() : null,
-      address: address ? address.trim() : null,
-      branchId: branchId || null,
-      accountStatus: "ACTIVE",
-      isActive: true,
-      emailVerified: true,
-      twoFactorEnabled: Boolean(twoFactorEnabled),
-      twoFactorType: "EMAIL",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: insertedUser, error: insertErr } = await supabaseAdmin.from("User").insert([newStaff]).select("*").single();
-    if (insertErr) {
-      console.error("[STAFF INSERT ERROR]", insertErr);
-      return res.status(500).json({ error: "Failed to create staff member profile." });
-    }
-    await logAudit({
-      userId: req.user.id,
-      action: "STAFF_CREATED",
-      resource: "User",
-      resourceId: insertedUser.id,
-      details: { email: insertedUser.email, role: insertedUser.role, createdBy: req.user.name }
-    });
-    return res.status(201).json(insertedUser);
-  } catch (err) {
-    console.error("[CREATE USER ERROR]", err);
-    return res.status(500).json({ error: "Failed to create staff account." });
-  }
-});
-router2.patch("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const {
-      name,
-      role,
-      phoneNumber,
-      department,
-      address,
-      branchId,
-      accountStatus,
-      isActive,
-      password,
-      twoFactorEnabled,
-      emailVerified
-    } = req.body;
-    const callerRole = normalizeRole(req.user.role);
-    const isSelf = req.user.id === id;
-    const isSuperAdminOrAdmin = callerRole === "SUPER_ADMIN" || callerRole === "ADMIN";
-    if (!isSelf && !isSuperAdminOrAdmin) {
-      return res.status(403).json({ error: "You are not authorized to modify this user account." });
-    }
-    const updatePayload = {
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    if (name !== void 0) updatePayload.name = name.trim();
-    if (phoneNumber !== void 0) updatePayload.phoneNumber = phoneNumber ? phoneNumber.trim() : null;
-    if (department !== void 0) updatePayload.department = department ? department.trim() : null;
-    if (address !== void 0) updatePayload.address = address ? address.trim() : null;
-    if (branchId !== void 0) updatePayload.branchId = branchId || null;
-    if (isSuperAdminOrAdmin) {
-      if (role !== void 0) updatePayload.role = normalizeRole(role);
-      if (accountStatus !== void 0) updatePayload.accountStatus = accountStatus;
-      if (isActive !== void 0) updatePayload.isActive = Boolean(isActive);
-      if (twoFactorEnabled !== void 0) updatePayload.twoFactorEnabled = Boolean(twoFactorEnabled);
-      if (emailVerified !== void 0) updatePayload.emailVerified = Boolean(emailVerified);
-    }
-    if (password) {
-      const passwordHash = await bcrypt2.hash(password, 10);
-      updatePayload.password = passwordHash;
-      try {
-        await supabaseAdmin.auth.admin.updateUserById(id, { password });
-      } catch (_) {
-      }
-    }
-    const { data: updated, error: updateErr } = await supabaseAdmin.from("User").update(updatePayload).eq("id", id).select("*").single();
-    if (updateErr) {
-      console.error("[USER UPDATE ERROR]", updateErr);
-      return res.status(500).json({ error: "Failed to update user profile." });
-    }
-    await logAudit({
-      userId: req.user.id,
-      action: "STAFF_UPDATED",
-      resource: "User",
-      resourceId: id,
-      details: updatePayload
-    });
-    return res.json(updated);
-  } catch (err) {
-    console.error("[USER UPDATE ERROR]", err);
-    return res.status(500).json({ error: "Failed to update staff record." });
-  }
-});
-var handle2FAToggle = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { enabled, twoFactorEnabled } = req.body;
-    const isEnabled = enabled !== void 0 ? Boolean(enabled) : Boolean(twoFactorEnabled);
-    const { data: updated, error } = await supabaseAdmin.from("User").update({
-      twoFactorEnabled: isEnabled,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to update 2FA configuration." });
-    }
-    return res.json({ success: true, message: `2FA ${isEnabled ? "enabled" : "disabled"} successfully.`, user: updated });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to toggle 2FA." });
-  }
-};
-router2.patch("/:id/2fa", authenticate, handle2FAToggle);
-router2.post("/:id/2fa", authenticate, handle2FAToggle);
-router2.patch("/:id/toggle-2fa", authenticate, handle2FAToggle);
-router2.post("/:id/toggle-2fa", authenticate, handle2FAToggle);
-var handleDirectVerifyEmail = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: updated, error } = await supabaseAdmin.from("User").update({
-      emailVerified: true,
-      accountStatus: "ACTIVE",
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to verify staff email." });
-    }
-    return res.json({ success: true, message: "Email directly verified successfully.", user: updated });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to verify email." });
-  }
-};
-router2.post("/:id/verify-email", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), handleDirectVerifyEmail);
-router2.patch("/:id/verify-email", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), handleDirectVerifyEmail);
-router2.post("/:id/direct-verify-email", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), handleDirectVerifyEmail);
-router2.patch("/:id/direct-verify-email", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), handleDirectVerifyEmail);
-router2.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (req.user.id === id) {
-      return res.status(400).json({ error: "You cannot delete your own account." });
-    }
-    const { data: user } = await supabaseAdmin.from("User").select("role, email").eq("id", id).single();
-    if (user && normalizeRole(user.role) === "SUPER_ADMIN" && normalizeRole(req.user.role) !== "SUPER_ADMIN") {
-      return res.status(403).json({ error: "Only a Super Admin can delete another Super Admin." });
-    }
-    const { error } = await supabaseAdmin.from("User").update({
-      deletedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      isActive: false,
-      accountStatus: "DISABLED"
-    }).eq("id", id);
-    if (error) {
-      return res.status(500).json({ error: "Failed to remove staff member." });
-    }
-    await logAudit({
-      userId: req.user.id,
-      action: "STAFF_DELETED",
-      resource: "User",
-      resourceId: id,
-      details: { deletedEmail: user?.email }
-    });
-    return res.json({ success: true, message: "Staff member account safely deactivated." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to delete staff member." });
-  }
-});
-var users_default = router2;
-
-// api/_server/routes/repairs.ts
-import { Router as Router3 } from "express";
-import { v4 as uuidv44 } from "uuid";
-import multer from "multer";
-
-// api/_server/services/excelService.ts
-import * as XLSX from "xlsx";
-function createExcelBuffer(sheetName, data) {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(data);
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-}
-function parseExcelBuffer(buffer) {
-  const wb = XLSX.read(buffer, { type: "buffer" });
-  const firstSheetName = wb.SheetNames[0];
-  const ws = wb.Sheets[firstSheetName];
-  return XLSX.utils.sheet_to_json(ws, { defval: "" });
-}
-
-// api/_server/routes/repairs.ts
-var router3 = Router3();
-var upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-var ALLOWED_REPAIR_COLUMNS = /* @__PURE__ */ new Set([
-  "customerId",
-  "customerName",
-  "customerPhone",
-  "customerEmail",
-  "customerAddress",
-  "deviceBrand",
-  "deviceModel",
-  "imeiNumber",
-  "deviceColor",
-  "deviceCondition",
-  "conditionNotes",
-  "problemDescription",
-  "accessoriesReceived",
-  "estimatedCost",
-  "advancePaid",
-  "totalPaid",
-  "paymentStatus",
-  "status",
-  "priority",
-  "technicianId",
-  "branchId",
-  "expectedCompletionDate",
-  "remarks",
-  "receivingMethod",
-  "isCourierIn",
-  "courierCompany",
-  "courierTrackingNumber",
-  "senderName",
-  "senderPhone",
-  "originDistrict",
-  "originAddress",
-  "isCourierOut",
-  "returnCourierCompany",
-  "returnCourierTrackingNumber",
-  "destinationDistrict",
-  "destinationAddress",
-  "receiverName",
-  "receiverPhone",
-  "returnCourierNotes",
-  "isReturnCourierDispatched",
-  "returnCourierDispatchedAt",
-  "returnCourierDispatchedById",
-  "returnCourierDispatchedByName",
-  "assignedAt",
-  "assignedById",
-  "assignedByName",
-  "hasBatteryWarranty",
-  "batteryWarrantyPeriod",
-  "batteryType",
-  "batteryHealth",
-  "batterySerial",
-  "batteryWarrantyExpiry",
-  "warrantyTerms",
-  "technicianNotes",
-  "sparePartsUsed"
-]);
-async function generateRepairNumber() {
-  const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
-  const { data: repairs } = await supabaseAdmin.from("Repair").select("repairNumber").ilike("repairNumber", `MTS-${currentYear}-%`).order("repairNumber", { ascending: false }).limit(20);
-  let maxNum = 1e3;
-  if (repairs && repairs.length > 0) {
-    for (const r of repairs) {
-      if (!r.repairNumber) continue;
-      const match = r.repairNumber.match(/(\d+)$/);
-      if (match && match[1]) {
-        const parsed = parseInt(match[1], 10);
-        if (!isNaN(parsed) && parsed > maxNum) {
-          maxNum = parsed;
-        }
-      }
-    }
-  }
-  const nextNum = maxNum + 1;
-  return `MTS-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
-}
-async function generateWarrantyNumber() {
-  const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
-  const { data: records } = await supabaseAdmin.from("BatteryWarranty").select("warrantyNumber").ilike("warrantyNumber", `BW-${currentYear}-%`).order("warrantyNumber", { ascending: false }).limit(10);
-  let maxNum = 0;
-  if (records && records.length > 0) {
-    for (const r of records) {
-      if (!r.warrantyNumber) continue;
-      const match = r.warrantyNumber.match(/(\d+)$/);
-      if (match && match[1]) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxNum) maxNum = num;
-      }
-    }
-  }
-  const nextNum = maxNum + 1;
-  return `BW-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
-}
-async function syncBatteryWarrantyFromRepair(repairData, reqUser) {
-  try {
-    const isWarrantyActive = repairData.hasBatteryWarranty === true || repairData.hasBatteryWarranty === "true" || Boolean(repairData.batteryWarrantyPeriod);
-    if (!isWarrantyActive) return;
-    const { data: existing } = await supabaseAdmin.from("BatteryWarranty").select("id").eq("repairId", repairData.id).limit(1);
-    const rawPeriod = String(repairData.batteryWarrantyPeriod || "6_MONTHS");
-    const months = rawPeriod.includes("12") ? 12 : rawPeriod.includes("3") ? 3 : 6;
-    const regDate = new Date(repairData.createdAt || Date.now());
-    const expDate = new Date(regDate);
-    expDate.setMonth(expDate.getMonth() + months);
-    if (existing && existing.length > 0) {
-      await supabaseAdmin.from("BatteryWarranty").update({
-        customerName: repairData.customerName,
-        customerPhone: repairData.customerPhone,
-        customerEmail: repairData.customerEmail || null,
-        customerAddress: repairData.customerAddress || null,
-        deviceBrand: repairData.deviceBrand,
-        deviceModel: repairData.deviceModel,
-        imeiNumber: repairData.imeiNumber ? String(repairData.imeiNumber).trim() : null,
-        batteryType: repairData.batteryType || "Original Replacement Battery",
-        warrantyPeriod: `${months} Months`,
-        expiryDate: expDate.toISOString(),
-        status: "ACTIVE",
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      }).eq("id", existing[0].id);
     } else {
-      const warrantyNumber = await generateWarrantyNumber();
-      await supabaseAdmin.from("BatteryWarranty").insert([
-        {
-          id: uuidv44(),
-          warrantyNumber,
-          repairId: repairData.id,
-          repairNumber: repairData.repairNumber,
-          customerId: repairData.customerId || null,
-          customerName: repairData.customerName,
-          customerPhone: repairData.customerPhone,
-          customerEmail: repairData.customerEmail || null,
-          customerAddress: repairData.customerAddress || null,
-          deviceBrand: repairData.deviceBrand,
-          deviceModel: repairData.deviceModel,
-          imeiNumber: repairData.imeiNumber ? String(repairData.imeiNumber).trim() : null,
-          batteryType: repairData.batteryType || "Original Replacement Battery",
-          warrantyPeriod: `${months} Months`,
-          registrationDate: regDate.toISOString(),
-          expiryDate: expDate.toISOString(),
-          status: "ACTIVE",
-          claimCount: 0,
-          createdById: reqUser?.id || null,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
-    }
-  } catch (syncErr) {
-    console.error("[SYNC BATTERY WARRANTY EXCEPTION]", syncErr);
-  }
-}
-router3.get("/", authenticate, async (req, res) => {
-  try {
-    const {
-      status,
-      technicianId,
-      branchId,
-      priority,
-      search,
-      receivingMethod,
-      isCourierIn,
-      isCourierOut,
-      startDate,
-      endDate,
-      limit = "100",
-      page = "1"
-    } = req.query;
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 100;
-    const offset = (pageNum - 1) * limitNum;
-    let query = supabaseAdmin.from("Repair").select("*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, role, email)", { count: "exact" });
-    const role = normalizeRole(req.user.role);
-    if (role === "TECHNICIAN" && !technicianId) {
-      query = query.eq("technicianId", req.user.id);
-    } else if (technicianId && technicianId !== "ALL") {
-      query = query.eq("technicianId", String(technicianId));
-    }
-    if (status && status !== "ALL") {
-      if (Array.isArray(status)) {
-        query = query.in("status", status);
-      } else {
-        query = query.eq("status", String(status));
-      }
-    }
-    if (priority && priority !== "ALL") {
-      query = query.eq("priority", String(priority));
-    }
-    if (branchId && branchId !== "ALL") {
-      query = query.eq("branchId", String(branchId));
-    }
-    if (receivingMethod && receivingMethod !== "ALL") {
-      query = query.eq("receivingMethod", String(receivingMethod));
-    }
-    if (isCourierIn !== void 0) {
-      query = query.eq("isCourierIn", isCourierIn === "true");
-    }
-    if (isCourierOut !== void 0) {
-      query = query.eq("isCourierOut", isCourierOut === "true");
-    }
-    if (startDate) {
-      query = query.gte("createdAt", String(startDate));
-    }
-    if (endDate) {
-      query = query.lte("createdAt", String(endDate));
-    }
-    if (search) {
-      const s = String(search).trim();
-      query = query.or(`repairNumber.ilike.%${s}%,customerName.ilike.%${s}%,customerPhone.ilike.%${s}%,deviceModel.ilike.%${s}%,imeiNumber.ilike.%${s}%`);
-    }
-    query = query.order("createdAt", { ascending: false }).range(offset, offset + limitNum - 1);
-    const { data: repairs, error } = await query;
-    if (error) {
-      console.error("[REPAIRS GET ERROR]", error);
-      return res.status(500).json({ error: "Failed to retrieve repairs list." });
-    }
-    return res.json(repairs || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to load repair records." });
-  }
-});
-router3.get("/export", authenticate, async (req, res) => {
-  try {
-    const { status, search, startDate, endDate } = req.query;
-    let query = supabaseAdmin.from("Repair").select("*, technician:User!Repair_technicianId_fkey(name)");
-    if (status && status !== "ALL") query = query.eq("status", String(status));
-    if (startDate) query = query.gte("createdAt", String(startDate));
-    if (endDate) query = query.lte("createdAt", String(endDate));
-    if (search) {
-      const s = String(search).trim();
-      query = query.or(`repairNumber.ilike.%${s}%,customerName.ilike.%${s}%,customerPhone.ilike.%${s}%`);
-    }
-    const { data: repairs } = await query.order("createdAt", { ascending: false });
-    const rows = (repairs || []).map((r) => ({
-      "Repair Number": r.repairNumber,
-      "Customer Name": r.customerName,
-      "Phone": r.customerPhone,
-      "Device Brand": r.deviceBrand,
-      "Device Model": r.deviceModel,
-      "IMEI": r.imeiNumber || "N/A",
-      "Problem": r.problemDescription,
-      "Status": r.status,
-      "Priority": r.priority || "MEDIUM",
-      "Estimated Cost": r.estimatedCost,
-      "Advance Paid": r.advancePaid,
-      "Total Paid": r.totalPaid,
-      "Technician": r.technician?.name || "Unassigned",
-      "Date": r.createdAt ? new Date(r.createdAt).toISOString().split("T")[0] : ""
-    }));
-    const buffer = createExcelBuffer("Repairs", rows);
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="MTS_Repairs_${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.xlsx"`);
-    return res.send(buffer);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to export repairs." });
-  }
-});
-router3.get("/import/template", authenticate, (req, res) => {
-  const sampleData = [
-    {
-      "Customer Name": "Ram Bahadur",
-      "Customer Phone": "9841234567",
-      "Customer Email": "ram@example.com",
-      "Customer Address": "New Road, Kathmandu",
-      "Device Brand": "Apple",
-      "Device Model": "iPhone 13 Pro",
-      "IMEI / Serial": "354892019283741",
-      "Problem Description": "Broken OLED screen, touch not working",
-      "Estimated Cost": 18500,
-      "Advance Paid": 5e3,
-      "Remarks": "Urgent repair requested by customer"
-    }
-  ];
-  const buffer = createExcelBuffer("Import Template", sampleData);
-  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.setHeader("Content-Disposition", 'attachment; filename="MTS_Lab_Repair_Import_Template.xlsx"');
-  return res.send(buffer);
-});
-router3.post("/import/preview", authenticate, upload.single("file"), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No Excel file provided for import preview." });
-    }
-    const rows = parseExcelBuffer(req.file.buffer);
-    const parsed = rows.map((r, idx) => ({
-      rowIndex: idx + 1,
-      customerName: r["Customer Name"] || r["customerName"] || "",
-      customerPhone: r["Customer Phone"] || r["customerPhone"] || r["Phone"] || "",
-      customerEmail: r["Customer Email"] || r["customerEmail"] || "",
-      customerAddress: r["Customer Address"] || r["customerAddress"] || "",
-      deviceBrand: r["Device Brand"] || r["deviceBrand"] || "Apple",
-      deviceModel: r["Device Model"] || r["deviceModel"] || "",
-      imeiNumber: r["IMEI / Serial"] || r["IMEI"] || r["imeiNumber"] || "",
-      problemDescription: r["Problem Description"] || r["problemDescription"] || "",
-      estimatedCost: parseFloat(r["Estimated Cost"] || r["estimatedCost"] || "0") || 0,
-      advancePaid: parseFloat(r["Advance Paid"] || r["advancePaid"] || "0") || 0,
-      remarks: r["Remarks"] || r["remarks"] || "",
-      isValid: Boolean((r["Customer Name"] || r["customerName"]) && (r["Customer Phone"] || r["customerPhone"]) && (r["Device Model"] || r["deviceModel"]))
-    }));
-    return res.json({
-      totalRows: parsed.length,
-      validRows: parsed.filter((p) => p.isValid).length,
-      invalidRows: parsed.filter((p) => !p.isValid).length,
-      preview: parsed
-    });
-  } catch (err) {
-    return res.status(400).json({ error: "Failed to parse Excel file. Ensure valid .xlsx format." });
-  }
-});
-router3.post("/import/confirm", authenticate, async (req, res) => {
-  try {
-    const { items } = req.body;
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: "No repair items to import." });
-    }
-    const importedRepairs = [];
-    for (const item of items) {
-      if (!item.customerName || !item.customerPhone || !item.deviceModel) continue;
-      const repairNumber = await generateRepairNumber();
-      const repairId = uuidv44();
-      const newRepair = {
-        id: repairId,
-        repairNumber,
-        customerName: item.customerName.trim(),
-        customerPhone: item.customerPhone.trim(),
-        customerEmail: item.customerEmail ? item.customerEmail.trim() : null,
-        customerAddress: item.customerAddress ? item.customerAddress.trim() : null,
-        deviceBrand: item.deviceBrand || "Apple",
-        deviceModel: item.deviceModel.trim(),
-        imeiNumber: item.imeiNumber ? String(item.imeiNumber).trim() : null,
-        problemDescription: item.problemDescription || "General diagnostic & repair",
-        estimatedCost: Number(item.estimatedCost || 0),
-        advancePaid: Number(item.advancePaid || 0),
-        totalPaid: Number(item.advancePaid || 0),
-        paymentStatus: Number(item.advancePaid || 0) > 0 ? Number(item.advancePaid) >= Number(item.estimatedCost) ? "PAID" : "PARTIAL" : "UNPAID",
-        status: "RECEIVED",
-        priority: "MEDIUM",
-        remarks: item.remarks || null,
-        createdById: req.user.id,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      const { data: created } = await supabaseAdmin.from("Repair").insert([newRepair]).select("*").single();
-      if (created) importedRepairs.push(created);
-    }
-    return res.json({ success: true, count: importedRepairs.length, message: `Successfully imported ${importedRepairs.length} repairs.` });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to process batch repair import." });
-  }
-});
-router3.get("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: repair, error } = await supabaseAdmin.from("Repair").select("*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, role, email, phoneNumber), notes:TechnicianNote(*), logs:RepairLog(*), payments:Payment(*)").eq("id", id).single();
-    if (error || !repair) {
-      return res.status(404).json({ error: "Repair record not found." });
-    }
-    return res.json(repair);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve repair details." });
-  }
-});
-router3.post("/", authenticate, async (req, res) => {
-  try {
-    const {
-      customerId,
-      customerName,
-      customerPhone,
-      customerEmail,
-      customerAddress,
-      deviceBrand,
-      deviceModel,
-      imeiNumber,
-      deviceColor,
-      deviceCondition,
-      conditionNotes,
-      problemDescription,
-      accessoriesReceived,
-      estimatedCost,
-      advancePaid,
-      technicianId,
-      branchId,
-      priority = "MEDIUM",
-      expectedCompletionDate,
-      remarks,
-      receivingMethod = "WALK_IN",
-      isCourierIn = false,
-      courierCompany,
-      courierTrackingNumber,
-      senderName,
-      senderPhone,
-      originDistrict,
-      originAddress,
-      hasBatteryWarranty = false,
-      batteryWarrantyPeriod,
-      batteryType,
-      batteryHealth,
-      batterySerial
-    } = req.body;
-    if (!customerName || !customerPhone || !deviceModel) {
-      return res.status(400).json({ error: "Customer name, phone, and device model are required." });
-    }
-    let resolvedCustomerId = customerId;
-    if (!resolvedCustomerId) {
-      const { data: existingCustomers } = await supabaseAdmin.from("Customer").select("id").eq("phone", customerPhone.trim()).limit(1);
-      if (existingCustomers && existingCustomers.length > 0) {
-        resolvedCustomerId = existingCustomers[0].id;
-      } else {
-        const newCusId = uuidv44();
-        const { data: createdCus } = await supabaseAdmin.from("Customer").insert([
-          {
-            id: newCusId,
-            customerId: `CUS-${Date.now().toString().slice(-5)}`,
-            name: customerName.trim(),
-            phone: customerPhone.trim(),
-            email: customerEmail ? customerEmail.trim() : null,
-            address: customerAddress ? customerAddress.trim() : null,
-            createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-          }
-        ]).select("id").single();
-        if (createdCus) resolvedCustomerId = createdCus.id;
-      }
-    }
-    const repairNumber = await generateRepairNumber();
-    const repairId = uuidv44();
-    const estCostNum = parseFloat(estimatedCost || 0) || 0;
-    const advPaidNum = parseFloat(advancePaid || 0) || 0;
-    const paymentStatus = advPaidNum >= estCostNum && estCostNum > 0 ? "PAID" : advPaidNum > 0 ? "PARTIAL" : "UNPAID";
-    const newRepair = {
-      id: repairId,
-      repairNumber,
-      customerId: resolvedCustomerId || null,
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
-      customerEmail: customerEmail ? customerEmail.trim() : null,
-      customerAddress: customerAddress ? customerAddress.trim() : null,
-      deviceBrand: deviceBrand || "Apple",
-      deviceModel: deviceModel.trim(),
-      imeiNumber: imeiNumber ? String(imeiNumber).trim() : null,
-      deviceColor: deviceColor || null,
-      deviceCondition: deviceCondition || "FAIR",
-      conditionNotes: conditionNotes || null,
-      problemDescription: problemDescription || "",
-      accessoriesReceived: accessoriesReceived || null,
-      estimatedCost: estCostNum,
-      advancePaid: advPaidNum,
-      totalPaid: advPaidNum,
-      paymentStatus,
-      status: "RECEIVED",
-      priority,
-      technicianId: technicianId || null,
-      branchId: branchId || req.user.branchId || null,
-      expectedCompletionDate: expectedCompletionDate || null,
-      remarks: remarks || null,
-      receivingMethod,
-      isCourierIn: Boolean(isCourierIn),
-      courierCompany: courierCompany || null,
-      courierTrackingNumber: courierTrackingNumber || null,
-      senderName: senderName || null,
-      senderPhone: senderPhone || null,
-      originDistrict: originDistrict || null,
-      originAddress: originAddress || null,
-      hasBatteryWarranty: Boolean(hasBatteryWarranty),
-      batteryWarrantyPeriod: batteryWarrantyPeriod || null,
-      batteryType: batteryType || null,
-      batteryHealth: batteryHealth || null,
-      batterySerial: batterySerial || null,
-      createdById: req.user.id,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: created, error } = await supabaseAdmin.from("Repair").insert([newRepair]).select("*").single();
-    if (error) {
-      console.error("[REPAIR CREATE ERROR]", error);
-      return res.status(500).json({ error: "Failed to create repair ticket." });
-    }
-    if (hasBatteryWarranty || batteryWarrantyPeriod) {
-      await syncBatteryWarrantyFromRepair(created, req.user);
-    }
-    await supabaseAdmin.from("RepairLog").insert([
-      {
-        id: uuidv44(),
-        repairId: created.id,
-        userId: req.user.id,
-        action: "CREATED",
-        status: "RECEIVED",
-        notes: `Repair intake recorded by ${req.user.name}. Initial payment: NPR ${advPaidNum}`,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
-    await logAudit({
-      userId: req.user.id,
-      action: "REPAIR_CREATED",
-      resource: "Repair",
-      resourceId: created.id,
-      details: { repairNumber: created.repairNumber, customerName: created.customerName }
-    });
-    return res.status(201).json(created);
-  } catch (err) {
-    console.error("[CREATE REPAIR ERROR]", err);
-    return res.status(500).json({ error: "Failed to register repair ticket." });
-  }
-});
-var handleRepairUpdate = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const rawBody = req.body || {};
-    const updateData = {};
-    for (const key of Object.keys(rawBody)) {
-      if (ALLOWED_REPAIR_COLUMNS.has(key)) {
-        updateData[key] = rawBody[key];
-      }
-    }
-    if (updateData.estimatedCost !== void 0) updateData.estimatedCost = parseFloat(updateData.estimatedCost) || 0;
-    if (updateData.advancePaid !== void 0) updateData.advancePaid = parseFloat(updateData.advancePaid) || 0;
-    if (updateData.totalPaid !== void 0) updateData.totalPaid = parseFloat(updateData.totalPaid) || 0;
-    updateData.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-    const { data: updated, error } = await supabaseAdmin.from("Repair").update(updateData).eq("id", id).select("*").single();
-    if (error) {
-      console.error("[REPAIR UPDATE ERROR]", error);
-      return res.status(400).json({ error: error.message });
-    }
-    if (rawBody.hasBatteryWarranty || rawBody.batteryWarrantyPeriod || updated.hasBatteryWarranty || updated.batteryWarrantyPeriod) {
-      await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody }, req.user);
-    }
-    if (rawBody.status) {
-      await supabaseAdmin.from("RepairLog").insert([
-        {
-          id: uuidv44(),
-          repairId: id,
-          userId: req.user.id,
-          action: "STATUS_UPDATED",
-          status: rawBody.status,
-          notes: rawBody.remarks || `Status updated to ${rawBody.status} by ${req.user.name}`,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
-    }
-    return res.json(updated);
-  } catch (err) {
-    console.error("[REPAIR UPDATE EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to update repair." });
-  }
-};
-router3.patch("/:id", authenticate, handleRepairUpdate);
-router3.put("/:id", authenticate, handleRepairUpdate);
-router3.patch("/:id/technician-update", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status, estimatedDeliveryDate, sparePartsUsed, technicianNotes } = req.body;
-    const { data: existingRepair, error: fetchErr } = await supabaseAdmin.from("Repair").select("*").eq("id", id).single();
-    if (fetchErr || !existingRepair) {
-      return res.status(404).json({ error: "Repair job not found." });
-    }
-    const updatePayload = {
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    if (status) updatePayload.status = status;
-    if (estimatedDeliveryDate) updatePayload.estimatedDeliveryDate = estimatedDeliveryDate;
-    if (sparePartsUsed !== void 0) updatePayload.sparePartsUsed = sparePartsUsed;
-    if (technicianNotes !== void 0) updatePayload.technicianNotes = technicianNotes;
-    const { data: updatedRepair, error: updateErr } = await supabaseAdmin.from("Repair").update(updatePayload).eq("id", id).select("*").single();
-    if (updateErr) {
-      console.error("[TECHNICIAN UPDATE ERROR]", updateErr);
-      return res.status(500).json({ error: "Failed to update repair progress." });
-    }
-    try {
-      await supabaseAdmin.from("Notification").insert([
-        {
-          id: uuidv44(),
-          title: `Repair Updated: #${updatedRepair.repairNumber || id.slice(0, 8)}`,
-          message: `${req.user?.name || "Technician"} updated repair status to ${status || existingRepair.status}. Note: ${technicianNotes || "No notes added"}`,
-          type: "REPAIR_UPDATE",
-          userId: existingRepair.createdById || null,
-          isRead: false,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
-    } catch (notifErr) {
-      console.warn("[NOTIFICATION DISPATCH WARN - NON FATAL]", notifErr);
-    }
-    return res.json({
-      success: true,
-      message: "Repair progress updated successfully.",
-      repair: updatedRepair
-    });
-  } catch (err) {
-    console.error("[TECHNICIAN UPDATE EXCEPTION]", err);
-    return res.status(500).json({ error: err?.message || "Server error updating repair." });
-  }
-});
-router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER", "LEAD_TECHNICIAN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { technicianId } = req.body;
-    const { data: tech } = await supabaseAdmin.from("User").select("name").eq("id", technicianId).single();
-    const { data: updated, error } = await supabaseAdmin.from("Repair").update({
-      technicianId: technicianId || null,
-      assignedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      assignedById: req.user.id,
-      assignedByName: req.user.name,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to assign technician." });
-    }
-    await supabaseAdmin.from("RepairLog").insert([
-      {
-        id: uuidv44(),
-        repairId: id,
-        userId: req.user.id,
-        action: "ASSIGNED",
-        status: updated.status,
-        notes: `Assigned to technician: ${tech?.name || "Unassigned"} by ${req.user.name}`,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to assign technician." });
-  }
-});
-router3.post("/:id/notes", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { note, isInternal = true } = req.body;
-    if (!note) {
-      return res.status(400).json({ error: "Note text is required." });
-    }
-    const newNote = {
-      id: uuidv44(),
-      repairId: id,
-      technicianId: req.user.id,
-      authorName: req.user.name,
-      authorRole: req.user.role,
-      note: note.trim(),
-      isInternal: Boolean(isInternal),
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: created, error } = await supabaseAdmin.from("TechnicianNote").insert([newNote]).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to save note." });
-    }
-    return res.status(201).json(created);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to add repair note." });
-  }
-});
-router3.get("/:id/notes", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: notes, error } = await supabaseAdmin.from("TechnicianNote").select("*").eq("repairId", id).order("createdAt", { ascending: false });
-    if (error) {
-      return res.status(500).json({ error: "Failed to fetch notes." });
-    }
-    return res.json(notes || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve notes." });
-  }
-});
-router3.post("/:id/alert", authenticate, async (req, res) => {
-  return res.json({ success: true, message: "Customer notification alert dispatched successfully." });
-});
-router3.post("/:id/transfer", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { targetTechnicianId, reason } = req.body;
-    const { data: tech } = await supabaseAdmin.from("User").select("name").eq("id", targetTechnicianId).single();
-    const { data: updated, error } = await supabaseAdmin.from("Repair").update({
-      technicianId: targetTechnicianId,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to transfer repair." });
-    }
-    await supabaseAdmin.from("RepairLog").insert([
-      {
-        id: uuidv44(),
-        repairId: id,
-        userId: req.user.id,
-        action: "TRANSFERRED",
-        status: updated.status,
-        notes: `Repair transferred to ${tech?.name || "Technician"}. Reason: ${reason || "Workload reallocation"}`,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to transfer repair ticket." });
-  }
-});
-
-// 14. POST /api/repairs/:id/courier-dispatch
-router3.post("/:id/courier-dispatch", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { courierCompany, trackingNumber, destinationDistrict, destinationAddress, receiverName, receiverPhone, notes } = req.body;
-    const { data: updated, error } = await supabaseAdmin.from("Repair").update({
-      isCourierOut: true,
-      returnCourierCompany: courierCompany,
-      returnCourierTrackingNumber: trackingNumber,
-      destinationDistrict,
-      destinationAddress,
-      receiverName,
-      receiverPhone,
-      returnCourierNotes: notes,
-      isReturnCourierDispatched: true,
-      returnCourierDispatchedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      returnCourierDispatchedById: req.user.id,
-      returnCourierDispatchedByName: req.user.name,
-      status: "DISPATCHED_VIA_COURIER",
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to dispatch repair shipment." });
-    }
-    return res.json({ success: true, message: "Repair successfully dispatched with courier tracking.", repair: updated });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to record courier dispatch." });
-  }
-});
-
-// 15. POST /api/repairs/:id/re-problem
-router3.post("/:id/re-problem", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { description } = req.body;
-    const { data: updated, error } = await supabaseAdmin.from("Repair").update({
-      status: "RE_PROBLEM",
-      remarks: `Warranty recurring problem: ${description}`,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to register re-problem status." });
-    }
-    return res.json({ success: true, message: "Repair marked as Re-Problem under warranty.", repair: updated });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update re-problem." });
-  }
-});
-
-// 16. DELETE /api/repairs/:id
-router3.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    await supabaseAdmin.from("RepairLog").delete().eq("repairId", id);
-    await supabaseAdmin.from("TechnicianNote").delete().eq("repairId", id);
-    await supabaseAdmin.from("Payment").delete().eq("repairId", id);
-    const { error } = await supabaseAdmin.from("Repair").delete().eq("id", id);
-    if (error) {
-      return res.status(500).json({ error: "Failed to delete repair." });
-    }
-    return res.json({ success: true, message: "Repair deleted successfully." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to delete repair record." });
-  }
-});
-
-// 17. POST /api/repairs/bulk-delete
-router3.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { ids } = req.body;
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: "No repair IDs specified." });
-    }
-    await supabaseAdmin.from("RepairLog").delete().in("repairId", ids);
-    await supabaseAdmin.from("TechnicianNote").delete().in("repairId", ids);
-    await supabaseAdmin.from("Payment").delete().in("repairId", ids);
-    const { error } = await supabaseAdmin.from("Repair").delete().in("id", ids);
-    if (error) {
-      return res.status(500).json({ error: "Failed to bulk delete repairs." });
-    }
-    return res.json({ success: true, message: `Successfully deleted ${ids.length} repair records.` });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to bulk delete repairs." });
-  }
-});
-
-var repairs_default = router3;
-
-// api/_server/routes/repairTransfers.ts
-import { Router as RouterTransfer } from "express";
-var routerTransfer = RouterTransfer();
-routerTransfer.get("/my-requests", authenticate, async (req, res) => {
-  try {
-    const { data: requests, error } = await supabaseAdmin.from("RepairTransferRequest").select("*").or(`senderId.eq.${req.user.id},receiverId.eq.${req.user.id}`).order("createdAt", { ascending: false });
-    if (error) {
-      return res.json([]);
-    }
-    return res.json(requests || []);
-  } catch {
-    return res.json([]);
-  }
-});
-var repairTransfers_default = routerTransfer;
-
-// api/_server/routes/customers.ts
-import { Router as Router4 } from "express";
-import { v4 as uuidv45 } from "uuid";
-var router4 = Router4();
-async function generateCustomerId() {
-  const { count } = await supabaseAdmin.from("Customer").select("*", { count: "exact", head: true });
-  const baseNum = (count || 0) + 101;
-  let candidate = `CUS-${baseNum.toString().padStart(5, "0")}`;
-  const { data: existing } = await supabaseAdmin.from("Customer").select("id").eq("customerId", candidate).limit(1);
-  if (!existing || existing.length === 0) {
-    return candidate;
-  }
-  const randomSuffix = Math.floor(100 + Math.random() * 900);
-  return `CUS-${(baseNum + randomSuffix).toString().padStart(5, "0")}`;
-}
-router4.get("/", authenticate, async (req, res) => {
-  try {
-    const { search, district, status = "ACTIVE", page = "1", limit = "50" } = req.query;
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 50;
-    const offset = (pageNum - 1) * limitNum;
-    let query = supabaseAdmin.from("Customer").select("*, repairs:Repair(count)", { count: "exact" });
-    if (status === "ACTIVE") {
-      query = query.eq("archived", false);
-    } else if (status === "ARCHIVED") {
-      query = query.eq("archived", true);
-    }
-    if (district && district !== "ALL") {
-      query = query.eq("district", String(district));
-    }
-    if (search) {
-      const s = String(search).trim();
-      query = query.or(`name.ilike.%${s}%,phone.ilike.%${s}%,customerId.ilike.%${s}%,email.ilike.%${s}%`);
-    }
-    query = query.order("createdAt", { ascending: false }).range(offset, offset + limitNum - 1);
-    const { data: customers, count, error } = await query;
-    if (error) {
-      console.error("[CUSTOMERS GET ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch customers." });
-    }
-    const formatted = (customers || []).map((c) => ({
-      ...c,
-      totalRepairs: Array.isArray(c.repairs) ? c.repairs[0]?.count || 0 : c.repairs?.count || 0
-    }));
-    return res.json({
-      customers: formatted,
-      total: count || 0,
-      page: pageNum,
-      limit: limitNum,
-      totalPages: Math.ceil((count || 0) / limitNum)
-    });
-  } catch (err) {
-    console.error("[CUSTOMERS LIST ERROR]", err);
-    return res.status(500).json({ error: "Failed to retrieve customer list." });
-  }
-});
-router4.get("/lookup", authenticate, async (req, res) => {
-  try {
-    const { phone, name, q } = req.query;
-    const queryTerm = phone || name || q || "";
-    if (!queryTerm || queryTerm.trim().length < 2) {
-      return res.json([]);
-    }
-    const searchTerm = queryTerm.trim();
-    const { data: customers, error } = await supabaseAdmin.from("Customer").select("id, customerId, name, phone, email, address, district, municipality, landmark").eq("archived", false).or(`phone.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%,customerId.ilike.%${searchTerm}%`).limit(10);
-    if (error) {
-      return res.status(500).json({ error: "Customer lookup failed." });
-    }
-    return res.json(customers || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to perform customer lookup." });
-  }
-});
-router4.get("/search", authenticate, async (req, res) => {
-  try {
-    const { q } = req.query;
-    if (!q || String(q).trim().length === 0) {
-      return res.json([]);
-    }
-    const term = String(q).trim();
-    const { data: customers, error } = await supabaseAdmin.from("Customer").select("*").eq("archived", false).or(`phone.ilike.%${term}%,name.ilike.%${term}%,customerId.ilike.%${term}%`).limit(15);
-    if (error) {
-      return res.status(500).json({ error: "Search failed." });
-    }
-    return res.json(customers || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to search customers." });
-  }
-});
-router4.get("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: customer, error } = await supabaseAdmin.from("Customer").select("*").eq("id", id).single();
-    if (error || !customer) {
-      return res.status(404).json({ error: "Customer not found." });
-    }
-    return res.json(customer);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve customer details." });
-  }
-});
-router4.get("/:id/repairs", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: repairs, error } = await supabaseAdmin.from("Repair").select("*, technician:User!Repair_technicianId_fkey(id, name, role)").eq("customerId", id).order("createdAt", { ascending: false });
-    if (error) {
-      console.error("[CUSTOMER REPAIRS ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch customer repair records." });
-    }
-    return res.json(repairs || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve customer repair history." });
-  }
-});
-router4.post("/", authenticate, async (req, res) => {
-  try {
-    const {
-      name,
-      phone,
-      alternativePhone,
-      email,
-      district,
-      municipality,
-      address,
-      landmark,
-      notes
-    } = req.body;
-    if (!name || !phone) {
-      return res.status(400).json({ error: "Customer name and phone number are required." });
-    }
-    const customerId = await generateCustomerId();
-    const newCustomer = {
-      id: uuidv45(),
-      customerId,
-      name: name.trim(),
-      phone: phone.trim(),
-      alternativePhone: alternativePhone ? alternativePhone.trim() : null,
-      email: email ? email.trim() : null,
-      district: district ? district.trim() : null,
-      municipality: municipality ? municipality.trim() : null,
-      address: address ? address.trim() : null,
-      landmark: landmark ? landmark.trim() : null,
-      notes: notes ? notes.trim() : null,
-      archived: false,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: created, error } = await supabaseAdmin.from("Customer").insert([newCustomer]).select("*").single();
-    if (error) {
-      console.error("[CUSTOMER CREATE ERROR]", error);
-      return res.status(500).json({ error: "Failed to create customer record." });
-    }
-    await logAudit({
-      userId: req.user.id,
-      action: "CUSTOMER_CREATED",
-      resource: "Customer",
-      resourceId: created.id,
-      details: { name: created.name, customerId: created.customerId, phone: created.phone }
-    });
-    return res.status(201).json(created);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to save customer." });
-  }
-});
-router4.patch("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const {
-      name,
-      phone,
-      alternativePhone,
-      email,
-      district,
-      municipality,
-      address,
-      landmark,
-      notes
-    } = req.body;
-    const updatePayload = {
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    if (name !== void 0) updatePayload.name = name.trim();
-    if (phone !== void 0) updatePayload.phone = phone.trim();
-    if (alternativePhone !== void 0) updatePayload.alternativePhone = alternativePhone ? alternativePhone.trim() : null;
-    if (email !== void 0) updatePayload.email = email ? email.trim() : null;
-    if (district !== void 0) updatePayload.district = district ? district.trim() : null;
-    if (municipality !== void 0) updatePayload.municipality = municipality ? municipality.trim() : null;
-    if (address !== void 0) updatePayload.address = address ? address.trim() : null;
-    if (landmark !== void 0) updatePayload.landmark = landmark ? landmark.trim() : null;
-    if (notes !== void 0) updatePayload.notes = notes ? notes.trim() : null;
-    const { data: updated, error } = await supabaseAdmin.from("Customer").update(updatePayload).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to update customer record." });
-    }
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update customer." });
-  }
-});
-router4.post("/:id/archive", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: updated, error } = await supabaseAdmin.from("Customer").update({
-      archived: true,
-      archivedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      archivedBy: req.user.name,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to archive customer." });
-    }
-    return res.json({ success: true, message: "Customer archived successfully.", customer: updated });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to archive customer." });
-  }
-});
-router4.post("/:id/restore", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: updated, error } = await supabaseAdmin.from("Customer").update({
-      archived: false,
-      archivedAt: null,
-      archivedBy: null,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to restore customer." });
-    }
-    return res.json({ success: true, message: "Customer restored successfully.", customer: updated });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to restore customer." });
-  }
-});
-router4.delete("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { error } = await supabaseAdmin.from("Customer").delete().eq("id", id);
-    if (error) {
-      return res.status(500).json({ error: "Failed to delete customer record." });
-    }
-    return res.json({ success: true, message: "Customer deleted successfully." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to delete customer." });
-  }
-});
-var customers_default = router4;
-
-// api/_server/routes/inventory.ts
-import { Router as Router5 } from "express";
-import { v4 as uuidv46 } from "uuid";
-var router5 = Router5();
-router5.get("/folders", authenticate, async (req, res) => {
-  try {
-    const { data: items } = await supabaseAdmin.from("InventoryItem").select("category, subcategory").not("category", "is", null);
-    const categories = Array.from(new Set((items || []).map((i) => i.category).filter(Boolean)));
-    const subcategories = Array.from(new Set((items || []).map((i) => i.subcategory).filter(Boolean)));
-    return res.json({
-      success: true,
-      folders: categories,
-      categories,
-      subcategories
-    });
-  } catch (err) {
-    return res.json({ success: true, folders: [], categories: [], subcategories: [] });
-  }
-});
-router5.get("/suppliers", authenticate, async (req, res) => {
-  try {
-    const { data: items } = await supabaseAdmin.from("InventoryItem").select("supplier").not("supplier", "is", null);
-    const suppliers = Array.from(new Set((items || []).map((i) => i.supplier).filter(Boolean)));
-    return res.json(suppliers);
-  } catch (err) {
-    return res.json([]);
-  }
-});
-router5.get("/locations", authenticate, async (req, res) => {
-  try {
-    const { data: items } = await supabaseAdmin.from("InventoryItem").select("storageLocation").not("storageLocation", "is", null);
-    const locations = Array.from(new Set((items || []).map((i) => i.storageLocation).filter(Boolean)));
-    return res.json(locations);
-  } catch (err) {
-    return res.json([]);
-  }
-});
-router5.get("/", authenticate, async (req, res) => {
-  try {
-    const { category, brand, status = "ACTIVE", search, limit = "200" } = req.query;
-    let query = supabaseAdmin.from("InventoryItem").select("*");
-    if (status && status !== "ALL") {
-      query = query.eq("status", String(status));
-    }
-    if (category && category !== "ALL") {
-      query = query.eq("category", String(category));
-    }
-    if (brand && brand !== "ALL") {
-      query = query.eq("brand", String(brand));
-    }
-    if (search) {
-      const s = String(search).trim();
-      query = query.or(`name.ilike.%${s}%,sku.ilike.%${s}%,model.ilike.%${s}%,compatibility.ilike.%${s}%`);
-    }
-    const { data: items, error } = await query.order("name", { ascending: true }).limit(parseInt(limit, 10) || 200);
-    if (error) {
-      console.error("[INVENTORY GET ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch inventory items." });
-    }
-    return res.json(items || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve inventory." });
-  }
-});
-router5.get("/stats", authenticate, async (req, res) => {
-  try {
-    const { data: items } = await supabaseAdmin.from("InventoryItem").select("currentStock, minStockLevel, purchasePrice, sellingPrice, status");
-    const totalItems = items?.length || 0;
-    let lowStockCount = 0;
-    let outOfStockCount = 0;
-    let totalStockQuantity = 0;
-    let totalStockValue = 0;
-    (items || []).forEach((item) => {
-      const stock = item.currentStock || 0;
-      const minStock = item.minStockLevel || 5;
-      const price = item.purchasePrice || item.sellingPrice || 0;
-      totalStockQuantity += stock;
-      totalStockValue += stock * price;
-      if (stock <= 0) {
-        outOfStockCount++;
-      } else if (stock <= minStock) {
-        lowStockCount++;
-      }
-    });
-    return res.json({
-      totalItems,
-      lowStockCount,
-      outOfStockCount,
-      totalStockQuantity,
-      totalStockValue
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to calculate inventory statistics." });
-  }
-});
-router5.get("/categories", authenticate, async (req, res) => {
-  try {
-    const { data: categories } = await supabaseAdmin.from("InventoryCategory").select("*").order("displayOrder", { ascending: true });
-    return res.json(categories || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to fetch categories." });
-  }
-});
-router5.post("/categories", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { name, description, icon } = req.body;
-    if (!name) return res.status(400).json({ error: "Category name is required." });
-    const newCat = {
-      id: uuidv46(),
-      name: name.trim(),
-      description: description || null,
-      icon: icon || null,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: created, error } = await supabaseAdmin.from("InventoryCategory").insert([newCat]).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to create category." });
-    return res.status(201).json(created);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to add inventory category." });
-  }
-});
-router5.get("/transactions/history", authenticate, async (req, res) => {
-  try {
-    const { itemId, limit = "50" } = req.query;
-    let query = supabaseAdmin.from("InventoryTransaction").select("*, item:InventoryItem(name, sku, category)");
-    if (itemId) {
-      query = query.eq("itemId", String(itemId));
-    }
-    const { data: transactions, error } = await query.order("createdAt", { ascending: false }).limit(parseInt(limit, 10) || 50);
-    if (error) {
-      return res.status(500).json({ error: "Failed to fetch inventory transactions." });
-    }
-    return res.json(transactions || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve transaction logs." });
-  }
-});
-router5.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { ids } = req.body;
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: "No item IDs provided." });
-    }
-    await supabaseAdmin.from("InventoryTransaction").delete().in("itemId", ids);
-    const { error } = await supabaseAdmin.from("InventoryItem").delete().in("id", ids);
-    if (error) return res.status(500).json({ error: "Failed to delete inventory items." });
-    return res.json({ success: true, message: `Successfully removed ${ids.length} items.` });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to process bulk delete." });
-  }
-});
-router5.get("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: item, error } = await supabaseAdmin.from("InventoryItem").select("*, transactions:InventoryTransaction(*)").eq("id", id).single();
-    if (error || !item) {
-      return res.status(404).json({ error: "Inventory item not found." });
-    }
-    return res.json(item);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve item." });
-  }
-});
-router5.post("/", authenticate, async (req, res) => {
-  try {
-    const {
-      name,
-      brand,
-      model,
-      sku,
-      category = "Spare Parts",
-      subcategory,
-      compatibility,
-      unit = "Piece",
-      currentStock = 0,
-      minStockLevel = 5,
-      maxStockLevel,
-      purchasePrice,
-      sellingPrice,
-      supplier,
-      storageLocation,
-      description,
-      notes,
-      imageUrl,
-      status = "ACTIVE"
-    } = req.body;
-    if (!name) {
-      return res.status(400).json({ error: "Item name is required." });
-    }
-    const initialStock = parseInt(currentStock || "0", 10) || 0;
-    const newItem = {
-      id: uuidv46(),
-      name: name.trim(),
-      brand: brand ? brand.trim() : null,
-      model: model ? model.trim() : null,
-      sku: sku ? sku.trim() : `SKU-${Date.now().toString().slice(-6)}`,
-      category: category.trim(),
-      subcategory: subcategory ? subcategory.trim() : null,
-      compatibility: compatibility ? compatibility.trim() : null,
-      unit: unit.trim(),
-      currentStock: initialStock,
-      minStockLevel: parseInt(minStockLevel || "5", 10) || 5,
-      maxStockLevel: maxStockLevel ? parseInt(maxStockLevel, 10) : null,
-      purchasePrice: purchasePrice !== void 0 && purchasePrice !== null && purchasePrice !== "" ? parseFloat(purchasePrice) : null,
-      sellingPrice: sellingPrice !== void 0 && sellingPrice !== null && sellingPrice !== "" ? parseFloat(sellingPrice) : null,
-      supplier: supplier ? supplier.trim() : null,
-      storageLocation: storageLocation ? storageLocation.trim() : null,
-      description: description ? description.trim() : null,
-      notes: notes ? notes.trim() : null,
-      imageUrl: imageUrl || null,
-      status,
-      createdById: req.user.id,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: created, error } = await supabaseAdmin.from("InventoryItem").insert([newItem]).select("*").single();
-    if (error) {
-      console.error("[INVENTORY CREATE ERROR]", error);
-      return res.status(500).json({ error: "Failed to create inventory item." });
-    }
-    if (initialStock > 0) {
-      await supabaseAdmin.from("InventoryTransaction").insert([
-        {
-          id: uuidv46(),
-          itemId: created.id,
-          type: "STOCK_IN",
-          quantity: initialStock,
-          previousStock: 0,
-          newStock: initialStock,
-          reason: "Initial Stock Setup",
-          performedById: req.user.id,
-          performedByName: req.user.name,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
-    }
-    await logAudit({
-      userId: req.user.id,
-      action: "INVENTORY_ITEM_CREATED",
-      resource: "InventoryItem",
-      resourceId: created.id,
-      details: { name: created.name, sku: created.sku, stock: created.currentStock }
-    });
-    return res.status(201).json(created);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to save inventory item." });
-  }
-});
-router5.patch("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    delete updateData.id;
-    delete updateData.transactions;
-    const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update(updateData).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to update inventory item." });
-    }
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update inventory." });
-  }
-});
-router5.post("/:id/stock-in", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { quantity, reason = "Stock replenishment", notes } = req.body;
-    const qty = parseInt(quantity, 10);
-    if (!qty || qty <= 0) {
-      return res.status(400).json({ error: "Valid positive quantity required." });
-    }
-    const { data: item } = await supabaseAdmin.from("InventoryItem").select("*").eq("id", id).single();
-    if (!item) return res.status(404).json({ error: "Item not found." });
-    const prevStock = item.currentStock || 0;
-    const newStock = prevStock + qty;
-    const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update({ currentStock: newStock, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to update stock." });
-    await supabaseAdmin.from("InventoryTransaction").insert([
-      {
-        id: uuidv46(),
-        itemId: id,
-        type: "STOCK_IN",
-        quantity: qty,
-        previousStock: prevStock,
-        newStock,
-        reason,
-        notes,
-        performedById: req.user.id,
-        performedByName: req.user.name,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
-    return res.json({ success: true, item: updated, newStock });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to process stock intake." });
-  }
-});
-router5.post("/:id/stock-out", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { quantity, reason = "Used for Repair", repairNumber, notes } = req.body;
-    const qty = parseInt(quantity, 10);
-    if (!qty || qty <= 0) {
-      return res.status(400).json({ error: "Valid positive quantity required." });
-    }
-    const { data: item } = await supabaseAdmin.from("InventoryItem").select("*").eq("id", id).single();
-    if (!item) return res.status(404).json({ error: "Item not found." });
-    const prevStock = item.currentStock || 0;
-    const newStock = Math.max(0, prevStock - qty);
-    const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update({ currentStock: newStock, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to deduct stock." });
-    await supabaseAdmin.from("InventoryTransaction").insert([
-      {
-        id: uuidv46(),
-        itemId: id,
-        type: "STOCK_OUT",
-        quantity: qty,
-        previousStock: prevStock,
-        newStock,
-        reason,
-        repairNumber: repairNumber || null,
-        notes,
-        performedById: req.user.id,
-        performedByName: req.user.name,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
-    return res.json({ success: true, item: updated, newStock });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to deduct inventory." });
-  }
-});
-router5.post("/:id/adjust-stock", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { newStock: targetStock, reason = "Audit Correction", notes } = req.body;
-    const newStock = parseInt(targetStock, 10);
-    if (isNaN(newStock) || newStock < 0) {
-      return res.status(400).json({ error: "Valid non-negative stock count required." });
-    }
-    const { data: item } = await supabaseAdmin.from("InventoryItem").select("*").eq("id", id).single();
-    if (!item) return res.status(404).json({ error: "Item not found." });
-    const prevStock = item.currentStock || 0;
-    const diff = newStock - prevStock;
-    const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update({ currentStock: newStock, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to adjust stock." });
-    await supabaseAdmin.from("InventoryTransaction").insert([
-      {
-        id: uuidv46(),
-        itemId: id,
-        type: "STOCK_ADJUSTMENT",
-        quantity: Math.abs(diff),
-        previousStock: prevStock,
-        newStock,
-        reason,
-        notes,
-        performedById: req.user.id,
-        performedByName: req.user.name,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
-    return res.json({ success: true, item: updated, newStock });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to adjust stock quantity." });
-  }
-});
-router5.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    await supabaseAdmin.from("InventoryTransaction").delete().eq("itemId", id);
-    const { error } = await supabaseAdmin.from("InventoryItem").delete().eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to delete inventory item." });
-    return res.json({ success: true, message: "Item deleted successfully." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to delete item." });
-  }
-});
-var inventory_default = router5;
-
-// api/_server/routes/couriers.ts
-import { Router as Router6 } from "express";
-import { v4 as uuidv47 } from "uuid";
-var router6 = Router6();
-router6.get("/", authenticate, async (req, res) => {
-  try {
-    const {
-      type,
-      status,
-      courierCompany,
-      district,
-      paymentStatus,
-      dateRange,
-      startDate,
-      endDate,
-      search,
-      sortBy = "latest"
-    } = req.query;
-    let query = supabaseAdmin.from("Repair").select("*").or("isCourierIn.eq.true,isCourierOut.eq.true,isReturnCourierDispatched.eq.true");
-    if (type === "INCOMING") {
-      query = query.eq("isCourierIn", true);
-    } else if (type === "OUTGOING") {
-      query = query.or("isCourierOut.eq.true,isReturnCourierDispatched.eq.true");
-    }
-    if (status && status !== "ALL") {
-      query = query.or(`courierStatus.eq.${status},courierInStatus.eq.${status},courierOutStatus.eq.${status}`);
-    }
-    if (courierCompany && courierCompany !== "ALL") {
-      query = query.or(`courierCompany.eq.${courierCompany},returnCourierCompany.eq.${courierCompany}`);
-    }
-    if (district && district !== "ALL") {
-      query = query.or(`originDistrict.eq.${district},destinationDistrict.eq.${district}`);
-    }
-    if (paymentStatus && paymentStatus !== "ALL") {
-      query = query.or(`courierInPaymentStatus.eq.${paymentStatus},courierOutPaymentStatus.eq.${paymentStatus}`);
-    }
-    if (startDate) {
-      query = query.gte("createdAt", new Date(String(startDate)).toISOString());
-    }
-    if (endDate) {
-      const end = new Date(String(endDate));
-      end.setHours(23, 59, 59, 999);
-      query = query.lte("createdAt", end.toISOString());
-    }
-    if (search) {
-      const s = String(search).trim();
-      query = query.or(`repairNumber.ilike.%${s}%,courierTrackingNumber.ilike.%${s}%,returnCourierTrackingNumber.ilike.%${s}%,customerName.ilike.%${s}%,customerPhone.ilike.%${s}%,senderName.ilike.%${s}%,receiverName.ilike.%${s}%,senderPhone.ilike.%${s}%,receiverPhone.ilike.%${s}%,imeiNumber.ilike.%${s}%`);
-    }
-    if (sortBy === "oldest") {
-      query = query.order("createdAt", { ascending: true });
-    } else if (sortBy === "customer") {
-      query = query.order("customerName", { ascending: true });
-    } else {
-      query = query.order("updatedAt", { ascending: false });
-    }
-    const { data: shipments, error } = await query;
-    if (error) {
-      console.error("[COURIERS GET ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch courier shipments." });
-    }
-    return res.json({
-      success: true,
-      shipments: shipments || []
-    });
-  } catch (err) {
-    console.error("[COURIERS GET EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to retrieve courier records." });
-  }
-});
-router6.get("/stats", authenticate, async (req, res) => {
-  try {
-    const { data: records, error } = await supabaseAdmin.from("Repair").select("isCourierIn, isCourierOut, isReturnCourierDispatched, courierStatus, courierInStatus, courierOutStatus, courierInCharge, courierOutCharge, createdAt").or("isCourierIn.eq.true,isCourierOut.eq.true,isReturnCourierDispatched.eq.true");
-    if (error) {
-      console.error("[COURIERS STATS ERROR]", error);
-    }
-    const list = records || [];
-    let incomingTotal = 0;
-    let outgoingTotal = 0;
-    let inTransit = 0;
-    let receivedAtLab = 0;
-    let readyForDispatch = 0;
-    let dispatched = 0;
-    let delivered = 0;
-    let totalCharges = 0;
-    const todayStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-    let incomingToday = 0;
-    let outgoingToday = 0;
-    list.forEach((r) => {
-      const isOut = r.isCourierOut || r.isReturnCourierDispatched || r.courierOutStatus;
-      const isIn = r.isCourierIn || !isOut && r.courierInStatus;
-      if (isIn) {
-        incomingTotal++;
-        if (r.createdAt && String(r.createdAt).startsWith(todayStr)) incomingToday++;
-      }
-      if (isOut) {
-        outgoingTotal++;
-        if (r.createdAt && String(r.createdAt).startsWith(todayStr)) outgoingToday++;
-      }
-      const currentStatus = String(r.courierOutStatus || r.courierInStatus || r.courierStatus || "").toUpperCase();
-      if (currentStatus === "IN_TRANSIT") inTransit++;
-      else if (currentStatus === "RECEIVED_AT_LAB" || currentStatus === "RECEIVED") receivedAtLab++;
-      else if (currentStatus === "READY_FOR_DISPATCH" || currentStatus === "READY") readyForDispatch++;
-      else if (currentStatus === "DISPATCHED" || currentStatus === "COURIER_DISPATCHED") dispatched++;
-      else if (currentStatus === "DELIVERED") delivered++;
-      if (r.courierInCharge) totalCharges += Number(r.courierInCharge) || 0;
-      if (r.courierOutCharge) totalCharges += Number(r.courierOutCharge) || 0;
-    });
-    return res.json({
-      totalShipments: list.length,
-      incomingTotal,
-      outgoingTotal,
-      incomingToday,
-      outgoingToday,
-      inTransit,
-      receivedAtLab,
-      readyForDispatch,
-      dispatched,
-      delivered,
-      totalCharges
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to compute courier statistics." });
-  }
-});
-router6.get("/eligible-repairs", authenticate, async (req, res) => {
-  try {
-    const { data: repairs, error } = await supabaseAdmin.from("Repair").select("id, repairNumber, customerName, customerPhone, customerAddress, deviceBrand, deviceModel, status, totalPaid, estimatedCost, customer:CustomerId(name, phone, address, district)").order("createdAt", { ascending: false }).limit(100);
-    if (error) {
-      console.error("[ELIGIBLE REPAIRS ERROR]", error);
-      return res.status(500).json({ error: "Failed to load eligible repair jobs." });
-    }
-    return res.json(repairs || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to load eligible repairs." });
-  }
-});
-router6.get("/filters-metadata", authenticate, async (req, res) => {
-  try {
-    const { data: repairs } = await supabaseAdmin.from("Repair").select("courierCompany, returnCourierCompany, originDistrict, destinationDistrict").or("isCourierIn.eq.true,isCourierOut.eq.true,isReturnCourierDispatched.eq.true");
-    const companies = /* @__PURE__ */ new Set();
-    const districts = /* @__PURE__ */ new Set();
-    (repairs || []).forEach((r) => {
-      if (r.courierCompany) companies.add(r.courierCompany);
-      if (r.returnCourierCompany) companies.add(r.returnCourierCompany);
-      if (r.originDistrict) districts.add(r.originDistrict);
-      if (r.destinationDistrict) districts.add(r.destinationDistrict);
-    });
-    return res.json({
-      courierCompanies: Array.from(companies),
-      districts: Array.from(districts)
-    });
-  } catch (err) {
-    return res.json({ courierCompanies: [], districts: [] });
-  }
-});
-router6.get("/search-customers", authenticate, async (req, res) => {
-  try {
-    const { query: queryTerm } = req.query;
-    if (!queryTerm) return res.json([]);
-    const term = String(queryTerm).trim();
-    const { data: customers } = await supabaseAdmin.from("Customer").select("id, name, phone, alternativePhone, address, district, municipality").or(`phone.ilike.%${term}%,name.ilike.%${term}%,alternativePhone.ilike.%${term}%`).limit(10);
-    return res.json(customers || []);
-  } catch (err) {
-    return res.json([]);
-  }
-});
-router6.post("/check-duplicate-awb", authenticate, async (req, res) => {
-  try {
-    const { trackingNumber } = req.body;
-    if (!trackingNumber) return res.json({ exists: false });
-    const awb = String(trackingNumber).trim();
-    const { data: existing } = await supabaseAdmin.from("Repair").select("id, repairNumber, customerName").or(`courierTrackingNumber.eq.${awb},returnCourierTrackingNumber.eq.${awb}`).limit(1);
-    return res.json({
-      exists: Boolean(existing && existing.length > 0),
-      duplicateRepair: existing?.[0] || null
-    });
-  } catch (err) {
-    return res.json({ exists: false });
-  }
-});
-router6.post("/incoming", authenticate, async (req, res) => {
-  try {
-    const {
-      existingRepairId,
-      courierCompany,
-      courierTrackingNumber,
-      originDistrict = "Kathmandu",
-      originAddress,
-      senderName,
-      senderPhone,
-      senderWhatsapp,
-      courierInCharge,
-      courierInPaymentStatus = "UNPAID",
-      courierDate,
-      courierReceivedDate,
-      courierNotes,
-      customerName,
-      customerPhone,
-      customerWhatsapp,
-      customerDistrict,
-      customerMunicipality,
-      customerAddress,
-      deviceBrand,
-      deviceModel,
-      imeiNumber,
-      deviceCondition,
-      problemDescription,
-      accessoriesReceived
-    } = req.body;
-    if (!courierCompany || !courierTrackingNumber) {
-      return res.status(400).json({ error: "Courier partner and tracking number are required." });
-    }
-    const userId = req.user?.id || "system";
-    const userName = req.user?.name || "Staff";
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    if (existingRepairId) {
-      const { data: existingRepair, error: fetchErr } = await supabaseAdmin.from("Repair").select("*").eq("id", existingRepairId).single();
-      if (fetchErr || !existingRepair) {
-        return res.status(404).json({ error: "Selected repair ticket was not found." });
-      }
-      const updatePayload = {
-        isCourierIn: true,
-        courierCompany: courierCompany.trim(),
-        courierTrackingNumber: courierTrackingNumber.trim(),
-        courierInStatus: "RECEIVED_AT_LAB",
-        courierStatus: "RECEIVED_AT_LAB",
-        originDistrict: originDistrict || existingRepair.originDistrict || "Kathmandu",
-        originAddress: originAddress || existingRepair.originAddress || null,
-        senderName: senderName || existingRepair.customerName || "Customer",
-        senderPhone: senderPhone || existingRepair.customerPhone || "",
-        senderWhatsapp: senderWhatsapp || null,
-        courierInPaymentStatus: courierInPaymentStatus || "UNPAID",
-        courierDate: courierDate || now,
-        courierReceivedDate: courierReceivedDate || now,
-        courierNotes: courierNotes || null,
-        updatedAt: now
-      };
-      if (courierInCharge !== void 0 && courierInCharge !== null && courierInCharge !== "") {
-        updatePayload.courierInCharge = Number(courierInCharge);
-      }
-      const { data: updatedRepair, error: updateErr } = await supabaseAdmin.from("Repair").update(updatePayload).eq("id", existingRepairId).select("*").single();
-      if (updateErr) {
-        console.error("[COURIER INCOMING UPDATE ERROR]", updateErr);
-        return res.status(500).json({ error: updateErr.message || "Failed to update repair courier details." });
-      }
-      try {
-        await supabaseAdmin.from("RepairLog").insert([
-          {
-            id: uuidv47(),
-            repairId: existingRepairId,
-            message: `Inbound courier shipment received via ${courierCompany} (AWB #${courierTrackingNumber}).`,
-            action: "COURIER_INBOUND_RECEIVED",
-            performedById: userId,
-            performedByName: userName,
-            createdAt: now
-          }
-        ]);
-      } catch (logErr) {
-        console.warn("[REPAIR LOG FAILED - NON FATAL]", logErr);
-      }
-      return res.json({
-        success: true,
-        message: `Inbound shipment linked to Repair #${existingRepair.repairNumber} successfully.`,
-        repair: updatedRepair
+      setSelectedRepairIds(prev => {
+        const next = new Set(prev);
+        visibleRepairIds.forEach(id => next.add(id));
+        return next;
       });
     }
-    if (!customerName || !customerPhone || !deviceModel) {
-      return res.status(400).json({ error: "Customer Name, Phone, and Device Model are required for new intake." });
-    }
-    let customerId = req.body.customerId;
-    if (!customerId) {
-      const { data: existingCust } = await supabaseAdmin.from("Customer").select("id").eq("phone", customerPhone.trim()).maybeSingle();
-      if (existingCust) {
-        customerId = existingCust.id;
-      } else {
-        const newCustomerId = uuidv47();
-        const { data: newCust, error: custErr } = await supabaseAdmin.from("Customer").insert([
-          {
-            id: newCustomerId,
-            name: customerName.trim(),
-            phone: customerPhone.trim(),
-            alternativePhone: customerWhatsapp || null,
-            district: customerDistrict || originDistrict || "Kathmandu",
-            municipality: customerMunicipality || null,
-            address: customerAddress || originAddress || null,
-            createdAt: now,
-            updatedAt: now
-          }
-        ]).select("id").single();
-        customerId = !custErr && newCust ? newCust.id : newCustomerId;
-      }
-    }
-    const generatedRepairNumber = `MTS-${(/* @__PURE__ */ new Date()).getFullYear()}-${Date.now().toString().slice(-6)}`;
-    const newRepairId = uuidv47();
-    const newRepairPayload = {
-      id: newRepairId,
-      repairNumber: generatedRepairNumber,
-      customerId: customerId || null,
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
-      deviceBrand: (deviceBrand || "apple").toLowerCase(),
-      deviceModel: deviceModel.trim(),
-      imeiNumber: imeiNumber || null,
-      deviceCondition: deviceCondition || "Good (Minor Wear)",
-      problemDescription: problemDescription || "Courier Intake - Diagnostics & Repair",
-      accessoriesReceived: accessoriesReceived || null,
-      status: "RECEIVED",
-      priority: "MEDIUM",
-      paymentStatus: "UNPAID",
-      receivingMethod: "COURIER",
-      isCourierIn: true,
-      courierCompany: courierCompany.trim(),
-      courierTrackingNumber: courierTrackingNumber.trim(),
-      courierInStatus: "RECEIVED_AT_LAB",
-      courierStatus: "RECEIVED_AT_LAB",
-      originDistrict: originDistrict || customerDistrict || "Kathmandu",
-      originAddress: originAddress || customerAddress || null,
-      senderName: senderName || customerName.trim(),
-      senderPhone: senderPhone || customerPhone.trim(),
-      senderWhatsapp: senderWhatsapp || null,
-      courierInPaymentStatus: courierInPaymentStatus || "UNPAID",
-      courierDate: courierDate || now,
-      courierReceivedDate: courierReceivedDate || now,
-      courierNotes: courierNotes || null,
-      createdById: userId,
-      createdAt: now,
-      updatedAt: now
-    };
-    if (courierInCharge !== void 0 && courierInCharge !== null && courierInCharge !== "") {
-      newRepairPayload.courierInCharge = Number(courierInCharge);
-    }
-    const { data: createdRepair, error: createErr } = await supabaseAdmin.from("Repair").insert([newRepairPayload]).select("*").single();
-    if (createErr) {
-      console.error("[COURIER INCOMING CREATE ERROR]", createErr);
-      return res.status(500).json({ error: createErr.message || "Failed to create repair from courier intake." });
-    }
-    try {
-      await supabaseAdmin.from("RepairLog").insert([
-        {
-          id: uuidv47(),
-          repairId: newRepairId,
-          message: `Device intake registered via courier (${courierCompany}, AWB #${courierTrackingNumber}).`,
-          action: "COURIER_INBOUND_CREATED",
-          performedById: userId,
-          performedByName: userName,
-          createdAt: now
-        }
-      ]);
-    } catch (logErr) {
-      console.warn("[REPAIR LOG FAILED - NON FATAL]", logErr);
-    }
-    return res.status(201).json({
-      success: true,
-      message: `Inbound courier registered under Repair Job #${generatedRepairNumber}`,
-      repair: createdRepair
-    });
-  } catch (err) {
-    console.error("[COURIER INCOMING EXCEPTION]", err);
-    return res.status(500).json({ error: err?.message || "Server error recording incoming courier parcel." });
-  }
-});
-router6.post("/outgoing", authenticate, async (req, res) => {
-  try {
-    const {
-      repairId,
-      receiverName,
-      receiverPhone,
-      receiverWhatsapp,
-      destinationDistrict,
-      destinationAddress,
-      returnCourierCompany,
-      returnCourierTrackingNumber,
-      returnCourierDispatchDate,
-      courierOutCharge,
-      courierOutPaymentStatus = "UNPAID",
-      returnCourierNotes
-    } = req.body;
-    if (!repairId) {
-      return res.status(400).json({ error: "Repair ID is required for outgoing dispatch." });
-    }
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const userId = req.user?.id || "system";
-    const userName = req.user?.name || "Staff";
-    const updatePayload = {
-      isCourierOut: true,
-      receiverName: receiverName || null,
-      receiverPhone: receiverPhone || null,
-      receiverWhatsapp: receiverWhatsapp || null,
-      destinationDistrict: destinationDistrict || null,
-      destinationAddress: destinationAddress || null,
-      returnCourierCompany: returnCourierCompany ? returnCourierCompany.trim() : null,
-      returnCourierTrackingNumber: returnCourierTrackingNumber ? returnCourierTrackingNumber.trim() : null,
-      returnCourierNotes: returnCourierNotes || null,
-      returnCourierDispatchDate: returnCourierDispatchDate || now,
-      isReturnCourierDispatched: true,
-      returnCourierDispatchedAt: now,
-      returnCourierDispatchedById: userId,
-      returnCourierDispatchedByName: userName,
-      courierOutPaymentStatus: courierOutPaymentStatus || "UNPAID",
-      courierOutStatus: "DISPATCHED",
-      courierStatus: "DISPATCHED",
-      status: "DISPATCHED_VIA_COURIER",
-      updatedAt: now
-    };
-    if (courierOutCharge !== void 0 && courierOutCharge !== null && courierOutCharge !== "") {
-      updatePayload.courierOutCharge = Number(courierOutCharge);
-    }
-    const { data: updated, error } = await supabaseAdmin.from("Repair").update(updatePayload).eq("id", repairId).select("*").single();
-    if (error) {
-      console.error("[COURIER OUTGOING ERROR]", error);
-      return res.status(500).json({ error: error.message || "Failed to dispatch courier." });
-    }
-    try {
-      await supabaseAdmin.from("RepairLog").insert([
-        {
-          id: uuidv47(),
-          repairId,
-          message: `Device dispatched to customer via ${returnCourierCompany} (AWB #${returnCourierTrackingNumber}).`,
-          action: "COURIER_OUTBOUND_DISPATCHED",
-          performedById: userId,
-          performedByName: userName,
-          createdAt: now
-        }
-      ]);
-    } catch (logErr) {
-      console.warn("[REPAIR LOG FAILED - NON FATAL]", logErr);
-    }
-    return res.json({
-      success: true,
-      message: "Shipment dispatched successfully.",
-      repair: updated
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to record outgoing dispatch." });
-  }
-});
-router6.patch("/:id/status", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status, courierType, notes } = req.body;
-    if (!status) {
-      return res.status(400).json({ error: "Status is required." });
-    }
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const updatePayload = {
-      courierStatus: status,
-      updatedAt: now
-    };
-    if (courierType === "INCOMING") {
-      updatePayload.courierInStatus = status;
-    } else {
-      updatePayload.courierOutStatus = status;
-      if (status === "DELIVERED") {
-        updatePayload.status = "DELIVERED";
-      }
-    }
-    const { data: updated, error } = await supabaseAdmin.from("Repair").update(updatePayload).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to update status." });
-    try {
-      await supabaseAdmin.from("RepairLog").insert([
-        {
-          id: uuidv47(),
-          repairId: id,
-          message: `Logistics status updated to ${status}${notes ? `: ${notes}` : ""}`,
-          action: "COURIER_STATUS_UPDATED",
-          performedById: req.user?.id || "system",
-          performedByName: req.user?.name || "Staff",
-          createdAt: now
-        }
-      ]);
-    } catch (logErr) {
-      console.warn("[REPAIR LOG FAILED - NON FATAL]", logErr);
-    }
-    return res.json({
-      success: true,
-      message: "Courier status updated.",
-      repair: updated
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update courier status." });
-  }
-});
-router6.post("/bulk-status", authenticate, async (req, res) => {
-  try {
-    const { repairIds, ids, status, courierType, notes } = req.body;
-    const targetIds = repairIds || ids;
-    if (!targetIds || !Array.isArray(targetIds) || targetIds.length === 0) {
-      return res.status(400).json({ error: "No shipment IDs provided." });
-    }
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const updatePayload = {
-      courierStatus: status,
-      updatedAt: now
-    };
-    if (courierType === "INCOMING") {
-      updatePayload.courierInStatus = status;
-    } else {
-      updatePayload.courierOutStatus = status;
-    }
-    const { error } = await supabaseAdmin.from("Repair").update(updatePayload).in("id", targetIds);
-    if (error) return res.status(500).json({ error: "Failed to bulk update status." });
-    return res.json({
-      success: true,
-      message: `Updated ${targetIds.length} shipments.`
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to perform bulk status update." });
-  }
-});
-router6.post("/bulk-archive", authenticate, async (req, res) => {
-  try {
-    const { repairIds, ids } = req.body;
-    const targetIds = repairIds || ids;
-    if (!targetIds || !Array.isArray(targetIds) || targetIds.length === 0) {
-      return res.status(400).json({ error: "No IDs provided." });
-    }
-    const { error } = await supabaseAdmin.from("Repair").update({
-      courierStatus: "ARCHIVED",
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).in("id", targetIds);
-    if (error) return res.status(500).json({ error: "Failed to archive shipments." });
-    return res.json({
-      success: true,
-      message: `Archived ${targetIds.length} courier records.`
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to archive shipments." });
-  }
-});
-router6.delete("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { error } = await supabaseAdmin.from("Repair").update({
-      isCourierIn: false,
-      isCourierOut: false,
-      isReturnCourierDispatched: false,
-      courierStatus: "ARCHIVED",
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to remove courier shipment." });
-    return res.json({ success: true, message: "Courier record archived successfully." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to delete shipment." });
-  }
-});
-var couriers_default = router6;
-
-// api/_server/routes/batteryWarranties.ts
-import { Router as Router7 } from "express";
-import { v4 as uuidv48 } from "uuid";
-import multer2 from "multer";
-var router7 = Router7();
-var upload2 = multer2({ storage: multer2.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-var otpStore = {};
-async function generateWarrantyNumber2() {
-  const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
-  const { data: records } = await supabaseAdmin.from("BatteryWarranty").select("warrantyNumber").ilike("warrantyNumber", `BW-${currentYear}-%`).order("warrantyNumber", { ascending: false }).limit(10);
-  let maxNum = 0;
-  if (records && records.length > 0) {
-    for (const r of records) {
-      if (!r.warrantyNumber) continue;
-      const match = r.warrantyNumber.match(/(\d+)$/);
-      if (match && match[1]) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxNum) maxNum = num;
-      }
-    }
-  }
-  const nextNum = maxNum + 1;
-  return `BW-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
-}
-async function generateClaimNumber() {
-  const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
-  const { data: records } = await supabaseAdmin.from("BatteryWarrantyClaim").select("claimNumber").ilike("claimNumber", `BWC-${currentYear}-%`).order("claimNumber", { ascending: false }).limit(10);
-  let maxNum = 0;
-  if (records && records.length > 0) {
-    for (const r of records) {
-      if (!r.claimNumber) continue;
-      const match = r.claimNumber.match(/(\d+)$/);
-      if (match && match[1]) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > maxNum) maxNum = num;
-      }
-    }
-  }
-  const nextNum = maxNum + 1;
-  return `BWC-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
-}
-router7.get("/", authenticate, async (req, res) => {
-  try {
-    const { status, brand, search, startDate, endDate } = req.query;
-    let query = supabaseAdmin.from("BatteryWarranty").select("*");
-    if (status && status !== "ALL") {
-      query = query.eq("status", String(status));
-    }
-    if (brand && brand !== "ALL") {
-      query = query.eq("deviceBrand", String(brand));
-    }
-    if (startDate) {
-      query = query.gte("registrationDate", String(startDate));
-    }
-    if (endDate) {
-      query = query.lte("registrationDate", String(endDate));
-    }
-    if (search) {
-      const s = String(search).trim();
-      query = query.or(`warrantyNumber.ilike.%${s}%,customerName.ilike.%${s}%,customerPhone.ilike.%${s}%,deviceModel.ilike.%${s}%,imeiNumber.ilike.%${s}%`);
-    }
-    const { data: warranties, error } = await query.order("createdAt", { ascending: false });
-    if (error) {
-      console.error("[BATTERY WARRANTIES ERROR]", error);
-      return res.status(500).json({ error: error.message || "Failed to fetch battery warranties." });
-    }
-    const { data: allClaims } = await supabaseAdmin.from("BatteryWarrantyClaim").select("*");
-    const combined = (warranties || []).map((w) => ({
-      ...w,
-      claims: (allClaims || []).filter((c) => c.warrantyId === w.id)
-    }));
-    return res.json(combined);
-  } catch (err) {
-    console.error("[BATTERY WARRANTIES EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to load warranties." });
-  }
-});
-router7.get("/export", authenticate, async (req, res) => {
-  try {
-    const { status, search } = req.query;
-    let query = supabaseAdmin.from("BatteryWarranty").select("*");
-    if (status && status !== "ALL") query = query.eq("status", String(status));
-    const { data: warranties } = await query.order("createdAt", { ascending: false });
-    const rows = (warranties || []).map((w) => ({
-      "Warranty Number": w.warrantyNumber,
-      "Customer Name": w.customerName,
-      "Phone": w.customerPhone,
-      "Email": w.customerEmail || "\u2014",
-      "Device Model": `${w.deviceBrand} ${w.deviceModel}`,
-      "IMEI": w.imeiNumber || "\u2014",
-      "Battery Type": w.batteryType || "Original OEM",
-      "Warranty Period": w.warrantyPeriod || "6 Months",
-      "Registration Date": w.registrationDate ? new Date(w.registrationDate).toISOString().split("T")[0] : "",
-      "Expiry Date": w.expiryDate ? new Date(w.expiryDate).toISOString().split("T")[0] : "",
-      "Status": w.status,
-      "Claims Count": w.claimCount || 0
-    }));
-    const buffer = createExcelBuffer("Battery Warranties", rows);
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="MTS_Battery_Warranties_${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.xlsx"`);
-    return res.send(buffer);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to export battery warranties." });
-  }
-});
-router7.get("/import/template", authenticate, (req, res) => {
-  const sample = [
-    {
-      "Customer Name": "Hari Sharma",
-      "Customer Phone": "9801234567",
-      "Customer Email": "hari@example.com",
-      "Customer Address": "Patan, Lalitpur",
-      "Device Brand": "Apple",
-      "Device Model": "iPhone 12",
-      "IMEI Number": "356891029384756",
-      "Battery Type": "Original High Capacity 2815mAh",
-      "Warranty Months": 6
-    }
-  ];
-  const buffer = createExcelBuffer("Warranty Template", sample);
-  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.setHeader("Content-Disposition", 'attachment; filename="MTS_Lab_Battery_Warranty_Template.xlsx"');
-  return res.send(buffer);
-});
-router7.post("/import/preview", authenticate, upload2.single("file"), (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: "No Excel file provided." });
-    const rows = parseExcelBuffer(req.file.buffer);
-    const parsed = rows.map((r, idx) => ({
-      rowIndex: idx + 1,
-      customerName: r["Customer Name"] || r["customerName"] || "",
-      customerPhone: r["Customer Phone"] || r["customerPhone"] || "",
-      customerEmail: r["Customer Email"] || r["customerEmail"] || "",
-      customerAddress: r["Customer Address"] || r["customerAddress"] || "",
-      deviceBrand: r["Device Brand"] || r["deviceBrand"] || "Apple",
-      deviceModel: r["Device Model"] || r["deviceModel"] || "",
-      imeiNumber: r["IMEI Number"] || r["imeiNumber"] || "",
-      batteryType: r["Battery Type"] || r["batteryType"] || "Standard",
-      warrantyPeriod: `${r["Warranty Months"] || 6} Months`,
-      isValid: Boolean((r["Customer Name"] || r["customerName"]) && (r["Customer Phone"] || r["customerPhone"]) && (r["Device Model"] || r["deviceModel"]))
-    }));
-    return res.json({
-      totalRows: parsed.length,
-      validRows: parsed.filter((p) => p.isValid).length,
-      invalidRows: parsed.filter((p) => !p.isValid).length,
-      preview: parsed
-    });
-  } catch (err) {
-    return res.status(400).json({ error: "Failed to parse Excel file." });
-  }
-});
-router7.post("/import/confirm", authenticate, async (req, res) => {
-  try {
-    const { items } = req.body;
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: "No items to import." });
-    }
-    const imported = [];
-    for (const item of items) {
-      if (!item.customerName || !item.customerPhone || !item.deviceModel) continue;
-      const warrantyNumber = await generateWarrantyNumber2();
-      const regDate = /* @__PURE__ */ new Date();
-      const expDate = /* @__PURE__ */ new Date();
-      expDate.setMonth(expDate.getMonth() + 6);
-      const newWarranty = {
-        id: uuidv48(),
-        warrantyNumber,
-        customerName: item.customerName.trim(),
-        customerPhone: item.customerPhone.trim(),
-        customerEmail: item.customerEmail ? item.customerEmail.trim() : null,
-        customerAddress: item.customerAddress ? item.customerAddress.trim() : null,
-        deviceBrand: item.deviceBrand || "Apple",
-        deviceModel: item.deviceModel.trim(),
-        imeiNumber: item.imeiNumber ? String(item.imeiNumber).trim() : null,
-        batteryType: item.batteryType || "Original OEM",
-        warrantyPeriod: item.warrantyPeriod || "6 Months",
-        registrationDate: regDate.toISOString(),
-        expiryDate: expDate.toISOString(),
-        status: "ACTIVE",
-        claimCount: 0,
-        createdById: req.user.id,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      const { data: created } = await supabaseAdmin.from("BatteryWarranty").insert([newWarranty]).select("*").single();
-      if (created) imported.push(created);
-    }
-    return res.json({ success: true, count: imported.length, message: `Imported ${imported.length} warranties.` });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to commit warranty import." });
-  }
-});
-router7.get("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: warranty, error } = await supabaseAdmin.from("BatteryWarranty").select("*").eq("id", id).single();
-    if (error || !warranty) {
-      return res.status(404).json({ error: "Battery warranty not found." });
-    }
-    const { data: claims } = await supabaseAdmin.from("BatteryWarrantyClaim").select("*").eq("warrantyId", id);
-    return res.json({ ...warranty, claims: claims || [] });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to fetch warranty record." });
-  }
-});
-router7.post("/", authenticate, async (req, res) => {
-  try {
-    const {
-      repairId,
-      repairNumber,
-      customerId,
-      customerName,
-      customerPhone,
-      customerEmail,
-      customerAddress,
-      deviceBrand,
-      deviceModel,
-      imeiNumber,
-      batteryType = "Original OEM Battery",
-      warrantyMonths = 6,
-      terms
-    } = req.body;
-    if (!customerName || !customerPhone || !deviceModel) {
-      return res.status(400).json({ error: "Customer name, phone, and device model are required." });
-    }
-    const warrantyNumber = await generateWarrantyNumber2();
-    const regDate = /* @__PURE__ */ new Date();
-    const expDate = /* @__PURE__ */ new Date();
-    expDate.setMonth(expDate.getMonth() + parseInt(String(warrantyMonths), 10));
-    const newWarranty = {
-      id: uuidv48(),
-      warrantyNumber,
-      repairId: repairId || null,
-      repairNumber: repairNumber || null,
-      customerId: customerId || null,
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
-      customerEmail: customerEmail ? customerEmail.trim() : null,
-      customerAddress: customerAddress ? customerAddress.trim() : null,
-      deviceBrand: deviceBrand || "Apple",
-      deviceModel: deviceModel.trim(),
-      imeiNumber: imeiNumber ? String(imeiNumber).trim() : null,
-      batteryType,
-      warrantyPeriod: `${warrantyMonths} Months`,
-      registrationDate: regDate.toISOString(),
-      expiryDate: expDate.toISOString(),
-      status: "ACTIVE",
-      claimCount: 0,
-      terms: terms || null,
-      createdById: req.user.id,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: created, error } = await supabaseAdmin.from("BatteryWarranty").insert([newWarranty]).select("*").single();
-    if (error) {
-      console.error("[CREATE WARRANTY ERROR]", error);
-      return res.status(500).json({ error: "Failed to issue warranty." });
-    }
-    return res.status(201).json(created);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to register battery warranty." });
-  }
-});
-var handleWarrantyUpdate = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    delete updateData.id;
-    delete updateData.claims;
-    const { data: updated, error } = await supabaseAdmin.from("BatteryWarranty").update(updateData).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-    return res.json({ success: true, data: updated });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update warranty." });
-  }
-};
-router7.put("/:id", authenticate, handleWarrantyUpdate);
-router7.patch("/:id", authenticate, handleWarrantyUpdate);
-router7.all("/:id/edit", authenticate, handleWarrantyUpdate);
-router7.post("/:id/claim", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { issueDescription, actionTaken = "FREE_REPLACEMENT", notes } = req.body;
-    const { data: warranty } = await supabaseAdmin.from("BatteryWarranty").select("*").eq("id", id).single();
-    if (!warranty) return res.status(404).json({ error: "Warranty not found." });
-    const claimNumber = await generateClaimNumber();
-    const newClaim = {
-      id: uuidv48(),
-      claimNumber,
-      warrantyId: id,
-      repairNumber: warranty.repairNumber || null,
-      customerName: warranty.customerName,
-      customerPhone: warranty.customerPhone,
-      deviceBrand: warranty.deviceBrand,
-      deviceModel: warranty.deviceModel,
-      claimDate: (/* @__PURE__ */ new Date()).toISOString(),
-      issueDescription: issueDescription || "Battery degraded / health dropped below 80%",
-      status: "APPROVED",
-      actionTaken,
-      notes: notes || null,
-      processedById: req.user.id,
-      processedByName: req.user.name,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: createdClaim, error: claimErr } = await supabaseAdmin.from("BatteryWarrantyClaim").insert([newClaim]).select("*").single();
-    if (claimErr) return res.status(500).json({ error: "Failed to register warranty claim." });
-    const updatedClaimCount = (warranty.claimCount || 0) + 1;
-    await supabaseAdmin.from("BatteryWarranty").update({
-      claimCount: updatedClaimCount,
-      lastClaimDate: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id);
-    return res.status(201).json({ success: true, message: "Warranty claim processed.", claim: createdClaim });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to record warranty claim." });
-  }
-});
-router7.post("/:id/send-email", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { email } = req.body;
-    const { data: warranty } = await supabaseAdmin.from("BatteryWarranty").select("*").eq("id", id).single();
-    if (!warranty) return res.status(404).json({ error: "Warranty not found." });
-    const targetEmail = email || warranty.customerEmail;
-    if (!targetEmail) return res.status(400).json({ error: "No email address available for customer." });
-    await sendEmail({
-      to: targetEmail,
-      subject: `MTS Lab — Battery Warranty Certificate (${warranty.warrantyNumber})`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h2 style="color: #2563eb;">MTS Mobile Lab — Official Warranty Certificate</h2>
-          <p>Dear <strong>${warranty.customerName}</strong>,</p>
-          <p>Thank you for choosing MTS Mobile Lab. Your battery warranty has been successfully registered.</p>
-          <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 15px 0;">
-            <p><strong>Warranty ID:</strong> ${warranty.warrantyNumber}</p>
-            <p><strong>Device:</strong> ${warranty.deviceBrand} ${warranty.deviceModel}</p>
-            <p><strong>Battery Type:</strong> ${warranty.batteryType}</p>
-            <p><strong>Valid Until:</strong> ${new Date(warranty.expiryDate).toLocaleDateString()}</p>
-          </div>
-          <p style="color: #64748b; font-size: 13px;">Please retain this email or warranty ID for any future warranty service or claim.</p>
-        </div>
-      `
-    });
-    return res.json({ success: true, message: "Warranty certificate email sent successfully." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to send warranty email." });
-  }
-});
-router7.post("/delete-2fa/request", authenticate, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const userEmail = req.user.email || "mtsmobilelab@gmail.com";
-    const generatedCode = Math.floor(1e5 + Math.random() * 9e5).toString();
-    const expiresAt = Date.now() + 5 * 60 * 1e3;
-    otpStore[userId] = { code: generatedCode, expiresAt };
-    console.log(`[2FA OTP GENERATED] For User: ${userEmail}, OTP: ${generatedCode}`);
-    let masked = userEmail;
-    if (userEmail.includes("@")) {
-      const [name, domain] = userEmail.split("@");
-      masked = `${name.slice(0, 2)}***${name.slice(-1)}@${domain}`;
-    }
-    try {
-      await sendEmail({
-        to: userEmail,
-        subject: "MTS Lab — Super Admin 2FA Deletion Code",
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 24px; border: 1px solid #fee2e2; border-radius: 12px; background-color: #fff;">
-            <div style="text-align: center; margin-bottom: 20px;">
-              <span style="font-size: 24px; font-weight: bold; color: #dc2626;">MTS Lab Security Alert</span>
-            </div>
-            <p style="color: #374151; font-size: 14px;">A request was made to permanently delete battery warranty records.</p>
-            <p style="color: #374151; font-size: 14px;">Your 6-digit verification code is:</p>
-            <div style="background-color: #fef2f2; border: 2px dashed #f87171; border-radius: 8px; text-align: center; padding: 16px; margin: 20px 0;">
-              <span style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #991b1b; font-family: monospace;">${generatedCode}</span>
-            </div>
-            <p style="color: #6b7280; font-size: 12px; text-align: center;">This code will expire in 5 minutes. If you did not initiate this deletion, please secure your account immediately.</p>
-          </div>
-        `
-      });
-    } catch (emailErr) {
-      console.error("[2FA EMAIL SEND WARNING]", emailErr);
-    }
-    return res.json({
-      success: true,
-      message: "2FA verification code sent to your registered email.",
-      emailMasked: masked
-    });
-  } catch (err) {
-    console.error("[2FA REQUEST ERROR]", err);
-    return res.status(500).json({ error: "Failed to generate 2FA code." });
-  }
-});
-router7.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { ids, code } = req.body;
-    const userId = req.user.id;
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: "No warranty IDs provided for deletion." });
-    }
-    const trimmedCode = String(code || "").trim();
-    const storedOtp = otpStore[userId];
-    const isMasterBypass = trimmedCode === "007007";
-    const isOtpValid = storedOtp && storedOtp.code === trimmedCode && storedOtp.expiresAt > Date.now();
-    if (!isOtpValid && !isMasterBypass) {
-      return res.status(401).json({ error: "Invalid or expired 2FA code. Please request a new code or use backup PIN." });
-    }
-    delete otpStore[userId];
-    await supabaseAdmin.from("BatteryWarrantyClaim").delete().in("warrantyId", ids);
-    const { error } = await supabaseAdmin.from("BatteryWarranty").delete().in("id", ids);
-    if (error) {
-      console.error("[BULK DELETE ERROR]", error);
-      return res.status(500).json({ error: error.message || "Failed to delete warranty records." });
-    }
-    return res.json({
-      success: true,
-      message: `Successfully and permanently deleted ${ids.length} warranty record(s).`
-    });
-  } catch (err) {
-    console.error("[BULK DELETE EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to execute bulk deletion." });
-  }
-});
-router7.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    await supabaseAdmin.from("BatteryWarrantyClaim").delete().eq("warrantyId", id);
-    const { error } = await supabaseAdmin.from("BatteryWarranty").delete().eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to delete warranty." });
-    return res.json({ success: true, message: "Warranty deleted successfully." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to delete warranty." });
-  }
-});
-var batteryWarranties_default = router7;
-
-// api/_server/routes/attendance.ts
-import { Router as Router8 } from "express";
-import { v4 as uuidv49 } from "uuid";
-var router8 = Router8();
-var AUTHORIZED_STAFF_ROLES = [
-  "SUPER_ADMIN",
-  "ADMIN",
-  "MANAGER",
-  "RECEPTIONIST",
-  "TECHNICIAN",
-  "LEAD_TECHNICIAN",
-  "HEAD_TECHNICIAN",
-  "TECHNICAL_ASSISTANT",
-  "STAFF"
-];
-function getNepalTimeDetails() {
-  const now = /* @__PURE__ */ new Date();
-  const utc = now.getTime() + now.getTimezoneOffset() * 6e4;
-  const nptDate = new Date(utc + 345 * 6e4);
-  const hours = nptDate.getHours();
-  const minutes = nptDate.getMinutes();
-  const seconds = nptDate.getSeconds();
-  const totalMinutes = hours * 60 + minutes;
-  const isWithinWindow = totalMinutes >= 600 && totalMinutes <= 635;
-  const dateString = nptDate.toISOString().split("T")[0];
-  const timeString = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  return {
-    nptDate,
-    dateString,
-    timeString,
-    hours,
-    minutes,
-    totalMinutes,
-    isWithinWindow,
-    windowStart: "10:00:00",
-    windowEnd: "10:35:00"
   };
-}
-async function fetchSafeStaffUsers() {
-  try {
-    const { data: users, error } = await supabaseAdmin.from("User").select("*").in("role", AUTHORIZED_STAFF_ROLES).order("name", { ascending: true });
-    if (error) {
-      console.error("[SUPABASE USER QUERY ERROR]", error);
-      return [];
-    }
-    return (users || []).filter((u) => {
-      const status = (u.status || "ACTIVE").toUpperCase();
-      return status !== "SUSPENDED" && status !== "INACTIVE" && status !== "DELETED";
-    });
-  } catch (err) {
-    console.error("[SAFE USER FETCH EXCEPTION]", err);
-    return [];
-  }
-}
-router8.get("/server-time", (req, res) => {
-  const time = getNepalTimeDetails();
-  return res.json({
-    iso: time.nptDate.toISOString(),
-    timestamp: time.nptDate.getTime(),
-    dateString: time.dateString,
-    timeString: time.timeString,
-    isWithinWindow: time.isWithinWindow,
-    windowRange: "10:00 AM – 10:35 AM NPT"
-  });
-});
-router8.get("/pending-requests", authenticate, async (req, res) => {
-  try {
-    const { data: records } = await supabaseAdmin.from("Attendance").select("*").eq("status", "PENDING").order("createdAt", { ascending: false });
-    const staffList = await fetchSafeStaffUsers();
-    const userMap = /* @__PURE__ */ new Map();
-    staffList.forEach((u) => userMap.set(u.id, u));
-    const formatted = (records || []).map((r) => ({
-      ...r,
-      user: userMap.get(r.userId) || { name: "Staff Member", role: "TECHNICIAN" }
-    }));
-    return res.json(formatted);
-  } catch (err) {
-    return res.json([]);
-  }
-});
-var handleRosterRequest = async (req, res) => {
-  try {
-    const time = getNepalTimeDetails();
-    const todayStr = req.query.date || time.dateString;
-    const staffList = await fetchSafeStaffUsers();
-    const { data: attendanceRecords } = await supabaseAdmin.from("Attendance").select("*").eq("date", todayStr);
-    const attendanceMap = /* @__PURE__ */ new Map();
-    (attendanceRecords || []).forEach((rec) => {
-      attendanceMap.set(rec.userId, rec);
-    });
-    let dispatchCount = 0;
+
+  const handleClearSelection = () => {
+    setSelectedRepairIds(new Set());
+  };
+
+  // Handlers for Modals & Actions
+
+  // 1. Single Delete Repair (Authorized for SUPER_ADMIN, ADMIN & RECEPTIONIST)
+  const handleDeleteRepair = async () => {
+    if (!deleteRepairData || !canDelete) return;
+    setDeleteLoading(true);
     try {
-      const { data: broadcastLogs } = await supabaseAdmin.from("AttendanceBroadcast").select("id").eq("date", todayStr);
-      dispatchCount = broadcastLogs?.length || 0;
+      await api.delete(`/repairs/${deleteRepairData.id}`);
+      toast.success(`Repair #${deleteRepairData.repairNumber} deleted successfully.`);
+      setRepairs(prev => prev.filter(r => r.id !== deleteRepairData.id));
+      setSelectedRepairIds(prev => {
+        const next = new Set(prev);
+        next.delete(deleteRepairData.id);
+        return next;
+      });
+      setDeleteRepairData(null);
+    } catch (err: any) {
+      console.error('[DELETE ERROR]', err);
+      toast.error(err.message || 'Unable to delete the selected repair. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // 2. Bulk Delete Execution (Authorized for SUPER_ADMIN, ADMIN & RECEPTIONIST)
+  const handleBulkDeleteRepairs = async () => {
+    if (selectedRepairIds.size === 0 || !canDelete) return;
+    setBulkDeleteLoading(true);
+    const idsToDelete = Array.from(selectedRepairIds);
+
+    try {
+      const res = await api.post('/repairs/bulk-delete', { ids: idsToDelete });
+
+      toast.success(res?.message || `Successfully deleted ${idsToDelete.length} repair record(s).`);
+      setRepairs(prev => prev.filter(r => !selectedRepairIds.has(r.id)));
+      setSelectedRepairIds(new Set());
+      setIsBulkDeleteModalOpen(false);
+    } catch (err: any) {
+      console.error('[BULK DELETE ERROR]', err);
+      toast.error(err?.message || 'Unable to delete the selected repair(s). Please try again.');
+    } finally {
+      setBulkDeleteLoading(false);
+    }
+  };
+
+  // 2. Status Update
+  const handleOpenStatusModal = (repair: any) => {
+    setStatusModalRepair(repair);
+    setNewStatusValue(repair.status || 'RECEIVED');
+    setStatusUpdateNote('');
+  };
+
+  const handleSaveStatusUpdate = async () => {
+    if (!statusModalRepair || !newStatusValue) return;
+    setStatusUpdateLoading(true);
+    try {
+      const payload: any = { status: newStatusValue };
+      if (statusUpdateNote.trim()) {
+        payload.note = statusUpdateNote.trim();
+      }
+      const updated = await api.patch(`/repairs/${statusModalRepair.id}`, payload);
+      toast.success(`Status updated to ${newStatusValue.replace(/_/g, ' ')}`);
+      setRepairs(prev => prev.map(r => r.id === statusModalRepair.id ? { ...r, ...updated } : r));
+      setStatusModalRepair(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update repair status');
+    } finally {
+      setStatusUpdateLoading(false);
+    }
+  };
+
+  // 3. Assign / Reassign Technician
+  const handleOpenAssignModal = (repair: any) => {
+    setAssignModalRepair(repair);
+    setSelectedTechId(repair.technicianId || repair.technician?.id || 'UNASSIGNED');
+  };
+
+  const handleSaveTechnicianAssignment = async () => {
+    if (!assignModalRepair) return;
+    setAssignLoading(true);
+    try {
+      const techId = selectedTechId === 'UNASSIGNED' ? null : selectedTechId;
+      const updated = await api.post(`/repairs/${assignModalRepair.id}/assign`, { technicianId: techId });
+      toast.success(techId ? 'Technician assigned successfully' : 'Technician unassigned');
+      setRepairs(prev => prev.map(r => r.id === assignModalRepair.id ? { ...r, ...updated } : r));
+      setAssignModalRepair(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to assign technician');
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  // 4. Quick Edit Repair Modal
+  const handleOpenQuickEdit = (repair: any) => {
+    setQuickEditRepair(repair);
+  };
+
+  // 5. Courier Return Dispatch Handlers
+  const handleOpenCourierDispatch = (repair: any) => {
+    setCourierDispatchModalRepair(repair);
+    setCourierDispatchForm({
+      returnCourierCompany: repair.returnCourierCompany || repair.courierCompany || 'Sundar Courier',
+      customCourierCompany: '',
+      returnCourierTrackingNumber: repair.returnCourierTrackingNumber || '',
+      returnCourierDispatchDate: format(new Date(), 'yyyy-MM-dd'),
+      destinationDistrict: repair.destinationDistrict || repair.originDistrict || repair.customer?.district || 'Kathmandu',
+      destinationAddress: repair.destinationAddress || repair.originAddress || repair.customerAddress || '',
+      receiverName: repair.receiverName || repair.senderName || repair.customerName || '',
+      receiverPhone: repair.receiverPhone || repair.senderPhone || repair.customerPhone || '',
+      returnCourierNotes: repair.returnCourierNotes || ''
+    });
+  };
+
+  const handleSaveCourierDispatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!courierDispatchModalRepair) return;
+
+    const company = courierDispatchForm.returnCourierCompany === 'Other Courier'
+      ? courierDispatchForm.customCourierCompany
+      : courierDispatchForm.returnCourierCompany;
+
+    if (!company?.trim()) {
+      toast.error('Courier Company is required');
+      return;
+    }
+    if (!courierDispatchForm.returnCourierTrackingNumber?.trim()) {
+      toast.error('Consignment / Tracking Number is required');
+      return;
+    }
+
+    setCourierDispatchLoading(true);
+    try {
+      const res = await api.post(`/repairs/${courierDispatchModalRepair.id}/courier-dispatch`, {
+        returnCourierCompany: company.trim(),
+        returnCourierTrackingNumber: courierDispatchForm.returnCourierTrackingNumber.trim(),
+        returnCourierDispatchDate: courierDispatchForm.returnCourierDispatchDate,
+        destinationDistrict: courierDispatchForm.destinationDistrict.trim(),
+        destinationAddress: courierDispatchForm.destinationAddress.trim(),
+        receiverName: courierDispatchForm.receiverName.trim(),
+        receiverPhone: courierDispatchForm.receiverPhone.trim(),
+        returnCourierNotes: courierDispatchForm.returnCourierNotes.trim()
+      });
+
+      const updated = res.repair || res;
+      toast.success(`Repaired device dispatched via ${company} (Tracking #${courierDispatchForm.returnCourierTrackingNumber.trim()})`);
+      setRepairs(prev => prev.map(r => r.id === courierDispatchModalRepair.id ? { ...r, ...updated } : r));
+      setCourierDispatchModalRepair(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to dispatch courier return');
+    } finally {
+      setCourierDispatchLoading(false);
+    }
+  };
+
+  // 6. Re-Problem Intake Handlers
+  const handleOpenReProblem = (repair: any) => {
+    setReProblemModalRepair(repair);
+    setReProblemReason('Customer reported recurring fault');
+    setReProblemDescription('');
+  };
+
+  const handleSaveReProblem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reProblemModalRepair) return;
+
+    setReProblemLoading(true);
+    try {
+      const res = await api.post(`/repairs/${reProblemModalRepair.id}/re-problem`, {
+        problemReason: reProblemReason.trim(),
+        description: reProblemDescription.trim()
+      });
+
+      const updated = res.repair || res;
+      toast.success(`Re-Problem recorded for Repair #${reProblemModalRepair.repairNumber}. Status updated to RE_PROBLEM.`);
+      setRepairs(prev => prev.map(r => r.id === reProblemModalRepair.id ? { ...r, ...updated } : r));
+      setReProblemModalRepair(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to record re-problem');
+    } finally {
+      setReProblemLoading(false);
+    }
+  };
+
+  // Helper to format dates
+  const formatDateSafe = (dateString?: string, formatStr = 'MMM dd, yyyy') => {
+    if (!dateString) return '—';
+    try {
+      const d = new Date(dateString);
+      return isNaN(d.getTime()) ? '—' : format(d, formatStr);
     } catch {
-      dispatchCount = 0;
+      return '—';
     }
-    const roster = staffList.map((u) => {
-      const record = attendanceMap.get(u.id);
-      return {
-        userId: u.id,
-        id: u.id,
-        name: u.name || u.email?.split("@")[0] || "Staff Member",
-        email: u.email,
-        role: u.role || "TECHNICIAN",
-        department: u.department || "Repair Lab",
-        phone: u.phone || "",
-        avatarUrl: u.avatarUrl || u.profileImage || null,
-        date: todayStr,
-        status: record ? record.status : "NOT_MARKED",
-        checkInTime: record ? record.checkInTime || record.time || null : null,
-        checkOutTime: record ? record.checkOutTime : null,
-        notes: record ? record.notes : null,
-        attendanceId: record ? record.id : null,
-        user: {
-          id: u.id,
-          name: u.name || u.email?.split("@")[0] || "Staff Member",
-          email: u.email,
-          role: u.role || "TECHNICIAN",
-          department: u.department || "Repair Lab",
-          profileImage: u.avatarUrl || u.profileImage || null
-        },
-        attendance: record ? {
-          id: record.id,
-          status: record.status,
-          checkInTime: record.checkInTime || record.time || null,
-          checkOutTime: record.checkOutTime || null,
-          markedByName: record.markedByName || "Administrator",
-          markedAt: record.checkInTime || record.createdAt || record.date,
-          notes: record.notes
-        } : null
-      };
-    });
-    const presentToday = roster.filter((r) => ["PRESENT", "LATE", "HALF_DAY"].includes(r.status)).length;
-    const absentToday = roster.filter((r) => r.status === "ABSENT").length;
-    const rate = roster.length > 0 ? Math.round(presentToday / roster.length * 100) : 100;
-    return res.json({
-      success: true,
-      roster,
-      windowInfo: {
-        isWithinWindow: time.isWithinWindow,
-        currentTimeNPT: time.timeString,
-        windowStart: "10:00 AM",
-        windowEnd: "10:35 AM",
-        dispatchCount,
-        maxDispatches: 3,
-        canManagerDispatch: time.isWithinWindow && dispatchCount < 3
-      },
-      stats: {
-        totalStaff: roster.length,
-        presentToday,
-        presentCount: presentToday,
-        absentToday,
-        absentCount: absentToday,
-        attendanceRate: rate,
-        pendingCount: roster.filter((r) => r.status === "PENDING").length,
-        notMarkedCount: roster.filter((r) => r.status === "NOT_MARKED").length
-      }
-    });
-  } catch (err) {
-    console.error("[ATTENDANCE ROSTER EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to generate attendance roster." });
-  }
-};
-router8.get("/roster", authenticate, handleRosterRequest);
-router8.get("/today", authenticate, handleRosterRequest);
-router8.get("/monthly-report", authenticate, async (req, res) => {
-  try {
-    const { month } = req.query;
-    const currentMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const staffList = await fetchSafeStaffUsers();
-    const { data: records } = await supabaseAdmin.from("Attendance").select("*").gte("date", `${currentMonth}-01`).lte("date", `${currentMonth}-31`);
-    const userLogsMap = /* @__PURE__ */ new Map();
-    (records || []).forEach((r) => {
-      const existing = userLogsMap.get(r.userId) || [];
-      existing.push(r);
-      userLogsMap.set(r.userId, existing);
-    });
-    let totalPresentAll = 0;
-    let totalAbsentAll = 0;
-    const report = staffList.map((u) => {
-      const logs = userLogsMap.get(u.id) || [];
-      const presentDays = logs.filter((l) => ["PRESENT", "LATE", "HALF_DAY"].includes(l.status)).length;
-      const absentDays = logs.filter((l) => l.status === "ABSENT").length;
-      const pendingDays = logs.filter((l) => l.status === "PENDING").length;
-      const rejectedDays = logs.filter((l) => l.status === "REJECTED").length;
-      totalPresentAll += presentDays;
-      totalAbsentAll += absentDays;
-      const totalActiveDays = presentDays + absentDays;
-      const attendanceRate = totalActiveDays > 0 ? Math.round(presentDays / totalActiveDays * 100) : null;
-      let statusTag = "NO_DATA";
-      if (attendanceRate !== null) {
-        if (attendanceRate >= 90) statusTag = "EXCELLENT";
-        else if (attendanceRate >= 75) statusTag = "GOOD";
-        else if (attendanceRate >= 60) statusTag = "AVERAGE";
-        else statusTag = "NEEDS_ATTENTION";
-      }
-      return {
-        user: {
-          id: u.id,
-          name: u.name || u.email?.split("@")[0] || "Staff Member",
-          email: u.email,
-          role: u.role || "TECHNICIAN",
-          department: u.department || "Repair Lab",
-          profileImage: u.avatarUrl || u.profileImage || null
-        },
-        presentDays,
-        absentDays,
-        pendingDays,
-        rejectedDays,
-        attendanceRate,
-        statusTag,
-        logs
-      };
-    });
-    const avgRate = staffList.length > 0 && totalPresentAll + totalAbsentAll > 0 ? Math.round(totalPresentAll / (totalPresentAll + totalAbsentAll) * 100) : 100;
-    return res.json({
-      success: true,
-      report,
-      stats: {
-        totalStaff: staffList.length,
-        presentToday: totalPresentAll,
-        absentToday: totalAbsentAll,
-        attendanceRate: avgRate
-      }
-    });
-  } catch (err) {
-    console.error("[MONTHLY REPORT EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to load monthly report." });
-  }
-});
-router8.get("/staff/:userId/monthly", authenticate, async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { month } = req.query;
-    const currentMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const { data: records } = await supabaseAdmin.from("Attendance").select("*").eq("userId", userId).gte("date", `${currentMonth}-01`).lte("date", `${currentMonth}-31`).order("date", { ascending: true });
-    const logs = records || [];
-    const presentCount = logs.filter((l) => ["PRESENT", "LATE", "HALF_DAY"].includes(l.status)).length;
-    const absentCount = logs.filter((l) => l.status === "ABSENT").length;
-    const pendingCount = logs.filter((l) => l.status === "PENDING").length;
-    const rejectedCount = logs.filter((l) => l.status === "REJECTED").length;
-    const rate = presentCount + absentCount > 0 ? Math.round(presentCount / (presentCount + absentCount) * 100) : null;
-    const [y, m] = currentMonth.split("-").map(Number);
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-    const dailyLogs = [];
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dStr = `${currentMonth}-${String(day).padStart(2, "0")}`;
-      const rec = logs.find((l) => l.date === dStr);
-      const isFuture = dStr > todayStr;
-      const isToday = dStr === todayStr;
-      dailyLogs.push({
-        date: dStr,
-        dayOfWeek: new Date(y, m - 1, day).toLocaleString("en", { weekday: "short" }),
-        isToday,
-        isFuture,
-        status: rec ? rec.status : isFuture ? "FUTURE" : "NOT_MARKED",
-        record: rec ? {
-          ...rec,
-          formattedCheckInTime: rec.checkInTime || rec.time || "—",
-          markedBy: rec.markedByName || "Administrator"
-        } : null
-      });
-    }
-    return res.json({
-      success: true,
-      dailyLogs,
-      stats: {
-        presentCount,
-        absentCount,
-        pendingCount,
-        rejectedCount,
-        attendanceRate: rate
-      }
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to load staff monthly calendar." });
-  }
-});
-router8.post("/dispatch-request", authenticate, authorize(["MANAGER", "SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const time = getNepalTimeDetails();
-    const isSuperAdmin = req.user?.role === "SUPER_ADMIN";
-    if (!isSuperAdmin && !time.isWithinWindow) {
-      return res.status(403).json({
-        error: `Manager attendance dispatch is only allowed between 10:00 AM and 10:35 AM NPT. (Current NPT: ${time.timeString})`
-      });
-    }
-    const { data: existingDispatches } = await supabaseAdmin.from("AttendanceBroadcast").select("id").eq("date", time.dateString);
-    const currentCount = existingDispatches?.length || 0;
-    if (!isSuperAdmin && currentCount >= 3) {
-      return res.status(429).json({
-        error: "Daily limit reached: Manager can only send attendance requests up to 3 times per day."
-      });
-    }
-    try {
-      await supabaseAdmin.from("AttendanceBroadcast").insert([
-        {
-          id: uuidv49(),
-          dispatchedById: req.user.id,
-          dispatchedByName: req.user.name,
-          date: time.dateString,
-          time: time.timeString,
-          broadcastNumber: currentCount + 1,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
-    } catch (e) {
-      console.warn("[BROADCAST LOG FAIL NON FATAL]", e);
-    }
-    const { data: managerRecord } = await supabaseAdmin.from("Attendance").select("id").eq("userId", req.user.id).eq("date", time.dateString).maybeSingle();
-    if (!managerRecord) {
-      await supabaseAdmin.from("Attendance").insert([
-        {
-          id: uuidv49(),
-          userId: req.user.id,
-          date: time.dateString,
-          status: "PRESENT",
-          markedById: req.user.id,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
-    } else {
-      await supabaseAdmin.from("Attendance").update({
-        status: "PRESENT",
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      }).eq("id", managerRecord.id);
-    }
-    const staffUsers = await fetchSafeStaffUsers();
-    for (const staff of staffUsers.filter((u) => u.id !== req.user.id)) {
-      const { data: exists } = await supabaseAdmin.from("Attendance").select("id, status").eq("userId", staff.id).eq("date", time.dateString).maybeSingle();
-      if (!exists) {
-        await supabaseAdmin.from("Attendance").insert([
-          {
-            id: uuidv49(),
-            userId: staff.id,
-            date: time.dateString,
-            status: "PENDING",
-            markedById: req.user.id,
-            createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-          }
-        ]);
-      }
-    }
-    return res.json({
-      success: true,
-      message: `Attendance request dispatched to all staff (${currentCount + 1}/3). You have been auto-marked PRESENT.`,
-      dispatchCount: currentCount + 1,
-      maxDispatches: 3
-    });
-  } catch (err) {
-    console.error("[DISPATCH REQUEST ERROR]", err);
-    return res.status(500).json({ error: "Failed to broadcast attendance request." });
-  }
-});
-router8.post("/mark", authenticate, async (req, res) => {
-  try {
-    const {
-      type,
-      status: explicitStatus,
-      notes,
-      userId: targetUserId,
-      date: targetDate,
-      time: targetTime
-    } = req.body;
-    const time = getNepalTimeDetails();
-    const effectiveDate = targetDate || time.dateString;
-    const effectiveTime = targetTime || time.timeString;
-    const effectiveUserId = targetUserId || req.user.id;
-    const isSuperAdmin = req.user?.role === "SUPER_ADMIN" || req.user?.role === "ADMIN";
-    const isManager = req.user?.role === "MANAGER";
-    const staffList = await fetchSafeStaffUsers();
-    const isRegisteredStaff = staffList.some((s) => s.id === effectiveUserId);
-    if (!isRegisteredStaff && !isSuperAdmin) {
-      return res.status(403).json({
-        error: "Attendance can only be recorded for staff members registered in Staff Management."
-      });
-    }
-    const { data: existing } = await supabaseAdmin.from("Attendance").select("*").eq("userId", effectiveUserId).eq("date", effectiveDate).limit(1);
-    const existingRecord = existing?.[0];
-    if (isSuperAdmin || isManager && explicitStatus && time.isWithinWindow) {
-      const finalStatus = explicitStatus || "PRESENT";
-      const updatePayload = {
-        status: finalStatus,
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      if (notes) updatePayload.notes = notes.trim();
-      if (existingRecord) {
-        const { data: updated, error } = await supabaseAdmin.from("Attendance").update(updatePayload).eq("id", existingRecord.id).select("*").single();
-        if (error) throw error;
-        return res.json({ success: true, message: `Staff attendance updated to ${finalStatus}.`, record: updated });
-      } else {
-        const newRecord = {
-          id: uuidv49(),
-          userId: effectiveUserId,
-          date: effectiveDate,
-          status: finalStatus,
-          markedById: req.user.id,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        if (notes) newRecord.notes = notes.trim();
-        const { data: created, error } = await supabaseAdmin.from("Attendance").insert([newRecord]).select("*").single();
-        if (error) throw error;
-        return res.status(201).json({ success: true, message: `Staff attendance marked as ${finalStatus}.`, record: created });
-      }
-    }
-    if (type === "CHECK_IN" || type === "IN") {
-      if (existingRecord && existingRecord.status === "PRESENT") {
-        return res.status(400).json({ error: "Check-in already completed for today." });
-      }
-      if (existingRecord) {
-        const { data: updated, error: error2 } = await supabaseAdmin.from("Attendance").update({
-          status: "PRESENT",
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        }).eq("id", existingRecord.id).select("*").single();
-        if (error2) throw error2;
-        return res.json({ success: true, message: "Check-in confirmed successfully.", record: updated });
-      }
-      const newRecord = {
-        id: uuidv49(),
-        userId: effectiveUserId,
-        date: effectiveDate,
-        status: "PRESENT",
-        markedById: req.user.id,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      const { data: created, error } = await supabaseAdmin.from("Attendance").insert([newRecord]).select("*").single();
-      if (error) throw error;
-      return res.status(201).json({ success: true, message: "Check-in recorded.", record: created });
-    }
-    return res.status(400).json({ error: "Invalid attendance parameters." });
-  } catch (err) {
-    console.error("[ATTENDANCE MARK ERROR]", err);
-    return res.status(500).json({ error: err?.message || "Failed to mark attendance." });
-  }
-});
-router8.get("/my", authenticate, async (req, res) => {
-  try {
-    const time = getNepalTimeDetails();
-    const todayStr = time.dateString;
-    const { data: todayRecord } = await supabaseAdmin.from("Attendance").select("*").eq("userId", req.user.id).eq("date", todayStr).limit(1);
-    const { data: recentRecords } = await supabaseAdmin.from("Attendance").select("*").eq("userId", req.user.id).order("date", { ascending: false }).limit(30);
-    return res.json({
-      success: true,
-      today: todayRecord?.[0] || null,
-      recent: recentRecords || [],
-      history: recentRecords || []
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to fetch personal attendance." });
-  }
-});
-router8.get("/history", authenticate, async (req, res) => {
-  try {
-    const { userId, status, month, startDate, endDate, limit = "100" } = req.query;
-    let query = supabaseAdmin.from("Attendance").select("*");
-    if (userId && userId !== "ALL") query = query.eq("userId", String(userId));
-    if (status && status !== "ALL") query = query.eq("status", String(status));
-    if (month) {
-      query = query.gte("date", `${month}-01`).lte("date", `${month}-31`);
-    } else if (startDate || endDate) {
-      if (startDate) query = query.gte("date", String(startDate));
-      if (endDate) query = query.lte("date", String(endDate));
-    }
-    const { data: records, error } = await query.order("date", { ascending: false }).limit(parseInt(limit, 10) || 100);
-    if (error) return res.status(500).json({ error: "Failed to fetch attendance history." });
-    const staffList = await fetchSafeStaffUsers();
-    const userMap = /* @__PURE__ */ new Map();
-    staffList.forEach((u) => userMap.set(u.id, u));
-    const enriched = (records || []).map((r) => ({
-      ...r,
-      user: userMap.get(r.userId) || { name: "Staff Member", role: "TECHNICIAN" }
-    }));
-    return res.json(enriched);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve attendance logs." });
-  }
-});
-router8.patch("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-    const { data: updated, error } = await supabaseAdmin.from("Attendance").update({
-      status,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to update record." });
-    return res.json({ success: true, message: "Attendance record corrected.", record: updated });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update attendance log." });
-  }
-});
-router8.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { error } = await supabaseAdmin.from("Attendance").delete().eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to delete attendance record." });
-    return res.json({ success: true, message: "Attendance record deleted." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to delete log." });
-  }
-});
-router8.get("/export", authenticate, async (req, res) => {
-  try {
-    const { month } = req.query;
-    const targetMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const { data: records } = await supabaseAdmin.from("Attendance").select("*").gte("date", `${targetMonth}-01`).lte("date", `${targetMonth}-31`).order("date", { ascending: false });
-    const staffList = await fetchSafeStaffUsers();
-    const userMap = /* @__PURE__ */ new Map();
-    staffList.forEach((u) => userMap.set(u.id, u));
-    const rows = (records || []).map((r) => {
-      const u = userMap.get(r.userId) || {};
-      return {
-        "Date": r.date,
-        "Staff Name": u.name || "Staff",
-        "Role": u.role || "TECHNICIAN",
-        "Department": u.department || "Repair Lab",
-        "Status": r.status,
-        "Notes": r.notes || "—"
-      };
-    });
-    return res.json({ success: true, rows });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to export attendance records." });
-  }
-});
-router8.delete("/staff/:userId", authenticate, authorize(["SUPER_ADMIN"]), async (req, res) => {
-  try {
-    const { userId } = req.params;
-    if (!userId) {
-      return res.status(400).json({ error: "Staff User ID is required." });
-    }
-    if (userId === req.user.id) {
-      return res.status(400).json({ error: "You cannot delete your own Super Admin account from attendance." });
-    }
-    await supabaseAdmin.from("Attendance").delete().eq("userId", userId);
-    await supabaseAdmin.from("Staff").delete().or(`id.eq.${userId},userId.eq.${userId}`);
-    const { error: userDelErr } = await supabaseAdmin.from("User").delete().eq("id", userId);
-    if (userDelErr) {
-      console.error("[USER TABLE DELETE ERROR]", userDelErr);
-      return res.status(500).json({ error: "Failed to delete user account." });
-    }
-    return res.json({
-      success: true,
-      message: "Staff member and all their records have been permanently removed."
-    });
-  } catch (err) {
-    console.error("[STAFF DELETE EXCEPTION]", err);
-    return res.status(500).json({ error: err?.message || "Server error removing staff records." });
-  }
-});
-var attendance_default = router8;
+  };
 
-// api/_server/routes/repairDamage.ts
-import { Router as Router9 } from "express";
-import { v4 as uuidv410 } from "uuid";
-var router9 = Router9();
-async function generateRecordNumber() {
-  const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
-  const { data: records } = await supabaseAdmin.from("RepairRelatedDamage").select("recordNumber").ilike("recordNumber", `RRD-${currentYear}-%`).order("recordNumber", { ascending: false }).limit(10);
-  let maxNum = 0;
-  if (records && records.length > 0) {
-    for (const r of records) {
-      if (!r.recordNumber) continue;
-      const match = r.recordNumber.match(/(\d+)$/);
-      if (match && match[1]) {
-        const parsed = parseInt(match[1], 10);
-        if (!isNaN(parsed) && parsed > maxNum) maxNum = parsed;
-      }
-    }
-  }
-  const nextNum = maxNum + 1;
-  return `RRD-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
+  return (
+    <div className="space-y-6 pb-28">
+      {/* Top Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Repair Management</h1>
+            <Badge variant="outline" className="font-semibold text-xs border-slate-300 bg-white text-slate-700">
+              {user?.role?.replace(/_/g, ' ')}
+            </Badge>
+          </div>
+          <p className="text-slate-500 text-sm mt-1">
+            Real-time multi-brand repair records, instant assignment, status transitions, and payments.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <DashboardRefreshButton
+            onRefresh={fetchData}
+            size="default"
+            label="Refresh"
+          />
+
+          <Button
+            variant="outline"
+            onClick={() => generateRepairReport(finalFilteredRepairs, `REPAIR REPORT (${dateFilterPreset})`)}
+            className="h-10 rounded-xl border-slate-200 font-semibold gap-2 shadow-sm text-slate-700 hover:bg-slate-50"
+            disabled={finalFilteredRepairs.length === 0}
+          >
+            <Download className="h-4 w-4" /> Print Report
+          </Button>
+
+          {canManageExcel && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadTemplate}
+                disabled={downloadingTemplate}
+                className="h-10 rounded-xl border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50 gap-2 shadow-sm text-xs"
+                title="Download blank standard Excel template for repairs"
+              >
+                {downloadingTemplate ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4 text-slate-500" />}
+                <span className="hidden sm:inline">Download</span> Template
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setImportFile(null);
+                  setPreviewData(null);
+                  setIsImportModalOpen(true);
+                }}
+                className="h-10 rounded-xl border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50 gap-2 shadow-sm text-xs"
+              >
+                <Upload className="h-4 w-4 text-indigo-600" />
+                Import Excel
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportExcel}
+                disabled={exportingExcel || repairs.length === 0}
+                className="h-10 rounded-xl border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-semibold gap-2 shadow-sm text-xs"
+              >
+                {exportingExcel ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 text-emerald-600" />}
+                Export Excel
+              </Button>
+            </>
+          )}
+
+          {canCreate && (
+            <Link to="/dashboard/repairs/new">
+              <Button className="h-10 rounded-xl bg-slate-900 hover:bg-black text-white font-semibold shadow-md gap-2 px-4">
+                <Plus className="h-4 w-4" /> Register Repair
+              </Button>
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* 1. Dashboard Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {/* Total Repairs */}
+        <Card
+          onClick={() => setActiveStatusTab('ALL')}
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'ALL' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'
+            }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'ALL' ? 'text-slate-300' : 'text-slate-500'}`}>
+              Total Repairs
+            </span>
+            <Layers className={`h-4 w-4 ${activeStatusTab === 'ALL' ? 'text-slate-300' : 'text-slate-400'}`} />
+          </div>
+          <div className="mt-2 text-2xl font-black">{metrics.total}</div>
+          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'ALL' ? 'text-slate-300' : 'text-slate-400'}`}>
+            Est. {formatNPR(metrics.estimatedTotalSum)}
+          </div>
+        </Card>
+
+        {/* Pending */}
+        <Card
+          onClick={() => setActiveStatusTab('PENDING')}
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'PENDING' ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-200 bg-white text-slate-900'
+            }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'PENDING' ? 'text-amber-100' : 'text-amber-700'}`}>
+              Pending
+            </span>
+            <AlertCircle className={`h-4 w-4 ${activeStatusTab === 'PENDING' ? 'text-amber-100' : 'text-amber-500'}`} />
+          </div>
+          <div className="mt-2 text-2xl font-black">{metrics.pending}</div>
+          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'PENDING' ? 'text-amber-100' : 'text-slate-400'}`}>
+            Awaiting triage
+          </div>
+        </Card>
+
+        {/* Received */}
+        <Card
+          onClick={() => setActiveStatusTab('RECEIVED')}
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'RECEIVED' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 bg-white text-slate-900'
+            }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'RECEIVED' ? 'text-sky-100' : 'text-sky-700'}`}>
+              Received
+            </span>
+            <Smartphone className={`h-4 w-4 ${activeStatusTab === 'RECEIVED' ? 'text-sky-100' : 'text-sky-500'}`} />
+          </div>
+          <div className="mt-2 text-2xl font-black">{metrics.received}</div>
+          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'RECEIVED' ? 'text-sky-100' : 'text-slate-400'}`}>
+            Checked in at desk
+          </div>
+        </Card>
+
+        {/* In Progress */}
+        <Card
+          onClick={() => setActiveStatusTab('IN_PROGRESS')}
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'IN_PROGRESS' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-900'
+            }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'IN_PROGRESS' ? 'text-indigo-100' : 'text-indigo-700'}`}>
+              In Progress
+            </span>
+            <Wrench className={`h-4 w-4 ${activeStatusTab === 'IN_PROGRESS' ? 'text-indigo-100' : 'text-indigo-500'}`} />
+          </div>
+          <div className="mt-2 text-2xl font-black">{metrics.inProgress}</div>
+          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'IN_PROGRESS' ? 'text-indigo-100' : 'text-slate-400'}`}>
+            On bench / Diagnosing
+          </div>
+        </Card>
+
+        {/* Repaired */}
+        <Card
+          onClick={() => setActiveStatusTab('REPAIRED')}
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md col-span-2 sm:col-span-1 ${activeStatusTab === 'REPAIRED' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-200 bg-white text-slate-900'
+            }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'REPAIRED' ? 'text-emerald-100' : 'text-emerald-700'}`}>
+              Repaired / Ready
+            </span>
+            <CheckCircle2 className={`h-4 w-4 ${activeStatusTab === 'REPAIRED' ? 'text-emerald-100' : 'text-emerald-500'}`} />
+          </div>
+          <div className="mt-2 text-2xl font-black">{metrics.repaired}</div>
+          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'REPAIRED' ? 'text-emerald-100' : 'text-slate-400'}`}>
+            Ready for customer
+          </div>
+        </Card>
+      </div>
+
+      {/* 2. Filter Toolbar: Date Filter & Status Views */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
+        {/* Status Tabs Navigation */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
+          {[
+            { key: 'ALL', label: 'All Jobs', count: dateFilteredRepairs.length },
+            { key: 'PENDING', label: 'Pending', count: dateFilteredRepairs.filter(r => r.status === 'PENDING').length },
+            { key: 'RECEIVED', label: 'Received', count: dateFilteredRepairs.filter(r => r.status === 'RECEIVED').length },
+            { key: 'IN_PROGRESS', label: 'In Progress', count: dateFilteredRepairs.filter(r => ['IN_PROCESS', 'DIAGNOSING', 'WAITING_FOR_PARTS', 'TESTING'].includes(r.status)).length },
+            { key: 'REPAIRED', label: 'Repaired', count: dateFilteredRepairs.filter(r => ['REPAIRED', 'READY_FOR_PICKUP'].includes(r.status)).length },
+            { key: 'DELIVERED', label: 'Delivered', count: dateFilteredRepairs.filter(r => r.status === 'DELIVERED').length },
+            { key: 'RE_PROBLEM', label: 'Re-Problem', count: dateFilteredRepairs.filter(r => r.status === 'RE_PROBLEM' || r.status === 'REPROBLEM').length },
+          ].map((tab) => {
+            const isActive = activeStatusTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveStatusTab(tab.key as StatusTabKey)}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${isActive
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-slate-100/80 hover:bg-slate-200 text-slate-700'
+                  }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${isActive ? 'bg-slate-800 text-slate-200' : 'bg-slate-200 text-slate-700'
+                  }`}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Date Filter & Search Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+          {/* Search Box */}
+          <div className="md:col-span-4 relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search repair #, customer, phone, model, tech..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-10 pl-9 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Date Filter Presets */}
+          <div className="md:col-span-5 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Date:</span>
+            {[
+              { key: 'ALL', label: 'All' },
+              { key: 'TODAY', label: 'Today' },
+              { key: 'YESTERDAY', label: 'Yesterday' },
+              { key: 'THIS_WEEK', label: 'This Week' },
+              { key: 'THIS_MONTH', label: 'This Month' },
+              { key: 'CUSTOM', label: 'Custom' }
+            ].map(preset => {
+              const isSelected = dateFilterPreset === preset.key;
+              return (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => setDateFilterPreset(preset.key as DateFilterPreset)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${isSelected
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                    }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sort & Technician Filter Dropdowns */}
+          <div className="md:col-span-3 flex items-center gap-2 justify-end">
+            <Select value={selectedTechnicianFilter} onValueChange={setSelectedTechnicianFilter}>
+              <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-medium w-full sm:w-36">
+                <SelectValue placeholder="Technician" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="ALL">All Technicians</SelectItem>
+                <SelectItem value="UNASSIGNED">Unassigned</SelectItem>
+                {technicians.map((t: any) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
+              <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-medium w-full sm:w-32">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
+                <SelectItem value="updated">Recently Updated</SelectItem>
+                <SelectItem value="repairNumber">Job Number</SelectItem>
+                <SelectItem value="customerName">Customer (A-Z)</SelectItem>
+                <SelectItem value="status">Status</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Custom Date Range Picker (shown when CUSTOM preset selected) */}
+        {dateFilterPreset === 'CUSTOM' && (
+          <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs font-semibold text-slate-600">From:</Label>
+              <Input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="h-9 w-40 rounded-xl border-slate-200 text-xs"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs font-semibold text-slate-600">To:</Label>
+              <Input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="h-9 w-40 rounded-xl border-slate-200 text-xs"
+              />
+            </div>
+            {(customStartDate || customEndDate) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setCustomStartDate('');
+                  setCustomEndDate('');
+                }}
+                className="h-9 text-xs text-slate-500 hover:text-slate-900 rounded-xl"
+              >
+                Clear Range
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 3. Professional Repair Table & Responsive Cards */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-32 gap-3 bg-white rounded-3xl border border-slate-200">
+          <Loader2 className="h-10 w-10 text-slate-400 animate-spin" />
+          <p className="text-slate-500 font-semibold text-sm">Loading authorized repair records...</p>
+        </div>
+      ) : finalFilteredRepairs.length === 0 ? (
+        <div className="text-center py-24 bg-white rounded-3xl border border-dashed border-slate-300">
+          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Smartphone className="h-8 w-8 text-slate-400" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-800">No repair records found</h3>
+          <p className="text-slate-500 text-sm max-w-sm mx-auto mt-1">
+            Try adjusting your search criteria, date filter, or status tab.
+          </p>
+          {canCreate && (
+            <Link to="/dashboard/repairs/new" className="inline-block mt-4">
+              <Button size="sm" className="rounded-xl bg-slate-900 text-white font-semibold">
+                <Plus className="h-4 w-4 mr-1" /> Register New Repair
+              </Button>
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Sticky Bulk Action Bar */}
+          {canDelete && selectedRepairIds.size > 0 && (
+            <div className="sticky top-20 z-30 bg-slate-900 text-white px-4 sm:px-6 py-3 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 border border-slate-800 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleToggleSelectAll}
+                  className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${isAllVisibleSelected
+                    ? 'bg-white border-white text-slate-900'
+                    : isSomeVisibleSelected
+                      ? 'bg-slate-700 border-slate-500 text-white'
+                      : 'border-slate-600 bg-slate-800 text-white hover:bg-slate-700'
+                    }`}
+                  title={isAllVisibleSelected ? "Deselect all visible repairs" : "Select all visible repairs"}
+                >
+                  {isAllVisibleSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                  {!isAllVisibleSelected && isSomeVisibleSelected && <Minus className="w-3.5 h-3.5 stroke-[3]" />}
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-sm text-white">
+                    {selectedRepairIds.size} {selectedRepairIds.size === 1 ? 'Repair' : 'Repairs'} Selected
+                  </span>
+                  <span className="text-xs text-slate-400 hidden sm:inline">
+                    (out of {finalFilteredRepairs.length} displayed)
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearSelection}
+                  className="h-8 px-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold"
+                >
+                  Clear Selection
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={() => setIsBulkDeleteModalOpen(true)}
+                  className="h-8 px-3.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/20 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Selected ({selectedRepairIds.size})</span>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Desktop Table View */}
+          <div className="hidden lg:block bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-700">
+                <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+                  <tr>
+                    {canDelete && (
+                      <th className="py-3.5 px-4 w-10 text-center">
+                        <button
+                          type="button"
+                          onClick={handleToggleSelectAll}
+                          className={`w-4 h-4 rounded border flex items-center justify-center transition-colors cursor-pointer mx-auto ${isAllVisibleSelected
+                            ? 'bg-slate-900 border-slate-900 text-white'
+                            : isSomeVisibleSelected
+                              ? 'bg-slate-200 border-slate-400 text-slate-800'
+                              : 'border-slate-300 bg-white hover:border-slate-400'
+                            }`}
+                          title={isAllVisibleSelected ? "Deselect all visible repairs" : "Select all visible repairs"}
+                          aria-label={isAllVisibleSelected ? "Deselect all visible repairs" : "Select all visible repairs"}
+                        >
+                          {isAllVisibleSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          {!isAllVisibleSelected && isSomeVisibleSelected && <Minus className="w-3 h-3 stroke-[3]" />}
+                        </button>
+                      </th>
+                    )}
+                    <th className="py-3.5 px-4">Repair #</th>
+                    <th className="py-3.5 px-4">Date</th>
+                    <th className="py-3.5 px-4">Customer</th>
+                    <th className="py-3.5 px-4">Device / Model</th>
+                    <th className="py-3.5 px-4">Problem</th>
+                    <th className="py-3.5 px-4">Technician</th>
+                    <th className="py-3.5 px-4">Status</th>
+                    <th className="py-3.5 px-4">Payment</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {finalFilteredRepairs.map((repair) => {
+                    const statusInfo = statusConfig[repair.status] || {
+                      label: repair.status?.replace(/_/g, ' ') || 'Unknown',
+                      badgeClass: 'bg-slate-100 text-slate-700',
+                      bgSoft: 'bg-slate-50',
+                      textClass: 'text-slate-700'
+                    };
+
+                    const isUnpaid = !repair.paymentStatus || repair.paymentStatus === 'UNPAID';
+                    const isPartial = repair.paymentStatus === 'PARTIAL';
+                    const isPaid = repair.paymentStatus === 'PAID';
+                    const isSelected = selectedRepairIds.has(repair.id);
+
+                    return (
+                      <tr key={repair.id} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-indigo-50/40' : ''}`}>
+                        {/* Row Selection Checkbox */}
+                        {canDelete && (
+                          <td className="py-3.5 px-4 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={(e) => handleToggleSelectRepair(repair.id, e)}
+                              className={`w-4 h-4 rounded border flex items-center justify-center transition-colors cursor-pointer mx-auto ${isSelected
+                                ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
+                                : 'border-slate-300 bg-white hover:border-slate-400'
+                                }`}
+                              aria-label={`Select repair #${repair.repairNumber}`}
+                            >
+                              {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                            </button>
+                          </td>
+                        )}
+
+                        {/* Repair No */}
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
+                              className="hover:underline text-indigo-600 flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <span>#{repair.repairNumber}</span>
+                            </button>
+                            {(repair.receivingMethod === 'COURIER' || repair.isCourierIn) && (
+                              <Badge className="bg-amber-500 text-white font-bold text-[9px] px-1.5 py-0.5 shadow-xs flex items-center gap-0.5">
+                                <Truck className="w-2.5 h-2.5" />
+                                <span>COURIER</span>
+                              </Badge>
+                            )}
+                            {repair.priority === 'URGENT' && (
+                              <Badge className="bg-rose-600 text-white font-black text-[9px] px-1.5 py-0.5 animate-pulse shadow-xs">
+                                URGENT
+                              </Badge>
+                            )}
+                            {repair.priority === 'HIGH' && (
+                              <Badge className="bg-amber-500 text-white font-bold text-[9px] px-1.5 py-0.5 shadow-xs">
+                                HIGH
+                              </Badge>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Date Created */}
+                        <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-600">
+                          <div>{formatDateSafe(repair.createdAt, 'MMM dd, yyyy')}</div>
+                          <div className="text-[10px] text-slate-400">{formatDateSafe(repair.createdAt, 'hh:mm a')}</div>
+                        </td>
+
+                        {/* Customer */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-900 truncate max-w-[140px]">{repair.customerName}</div>
+                          <div className="text-xs text-slate-500 font-mono flex items-center gap-1">
+                            <Phone className="h-3 w-3 text-slate-400 inline" />
+                            <span>{repair.customerPhone}</span>
+                          </div>
+                        </td>
+
+                        {/* Device / Model */}
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-900 truncate max-w-[150px]">
+                            {repair.deviceBrand} {repair.deviceModel}
+                          </div>
+                          {repair.imeiNumber && (
+                            <div className="text-[10px] text-slate-400 font-mono truncate max-w-[120px]">
+                              IMEI: {repair.imeiNumber}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Problem */}
+                        <td className="py-3.5 px-4">
+                          <div className="text-xs text-slate-600 truncate max-w-[160px]" title={repair.problemDescription}>
+                            {repair.problemDescription || 'No description'}
+                          </div>
+                        </td>
+
+                        {/* Technician */}
+                        <td className="py-3.5 px-4">
+                          {repair.technician?.name ? (
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold uppercase">
+                                {repair.technician.name.charAt(0)}
+                              </div>
+                              <span className="text-xs font-semibold text-slate-800 truncate max-w-[100px]">
+                                {repair.technician.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleOpenAssignModal(repair)}
+                              className="text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded-lg border border-amber-200 inline-flex items-center gap-1"
+                            >
+                              <User className="h-3 w-3" /> Assign
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <Badge
+                            onClick={() => handleOpenStatusModal(repair)}
+                            className={`cursor-pointer font-bold text-[11px] px-2.5 py-0.5 rounded-lg border shadow-none ${statusInfo.badgeClass}`}
+                          >
+                            {statusInfo.label}
+                          </Badge>
+                        </td>
+
+                        {/* Payment */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div className="font-mono text-xs font-bold text-slate-900">
+                            {formatRepairCost(repair.totalCost ?? repair.estimatedCost)}
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className={`text-[9px] font-bold uppercase px-1.5 py-0.2 rounded ${isPaid ? 'bg-emerald-100 text-emerald-800' :
+                              isPartial ? 'bg-amber-100 text-amber-800' :
+                                'bg-slate-100 text-slate-600'
+                              }`}
+                          >
+                            {repair.paymentStatus || 'UNPAID'}
+                          </Badge>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
+                              className="h-8 px-2.5 rounded-lg text-slate-700 hover:bg-slate-100 text-xs font-semibold"
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" /> View
+                            </Button>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger render={
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-500 hover:bg-slate-100" />
+                              }>
+                                <MoreVertical className="h-4 w-4" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="rounded-2xl w-48 shadow-xl border-slate-200 p-1.5">
+                                <DropdownMenuItem
+                                  onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
+                                  className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2"
+                                >
+                                  <Eye className="h-3.5 w-3.5" /> Full Details Page
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenQuickEdit(repair)}
+                                  className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2"
+                                >
+                                  <Edit3 className="h-3.5 w-3.5" /> Edit Repair Info
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenStatusModal(repair)}
+                                  className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2"
+                                >
+                                  <PackageCheck className="h-3.5 w-3.5" /> Update Status
+                                </DropdownMenuItem>
+
+                                {canAssign && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenAssignModal(repair)}
+                                    className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2"
+                                  >
+                                    <User className="h-3.5 w-3.5" /> Assign Specialist
+                                  </DropdownMenuItem>
+                                )}
+
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedSlipRepair(repair);
+                                    setIsSlipModalOpen(true);
+                                  }}
+                                  className="h-9 px-3 rounded-xl font-semibold text-xs cursor-pointer gap-2 text-slate-800"
+                                >
+                                  <FileText className="h-3.5 w-3.5 text-emerald-600" /> Print Service Slip
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                  onClick={() => generateRepairReport([repair], `REPAIR JOB #${repair.repairNumber}`)}
+                                  className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2"
+                                >
+                                  <Printer className="h-3.5 w-3.5" /> Print Job Sheet
+                                </DropdownMenuItem>
+
+                                {/* Courier Dispatch Option */}
+                                {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenCourierDispatch(repair)}
+                                    className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-blue-700 hover:bg-blue-50"
+                                  >
+                                    <Truck className="h-3.5 w-3.5 text-blue-600" /> Dispatch Courier Return
+                                  </DropdownMenuItem>
+                                )}
+
+                                {/* Re-Problem Option */}
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenReProblem(repair)}
+                                  className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-rose-700 hover:bg-rose-50"
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5 text-rose-600" /> Report Re-Problem
+                                </DropdownMenuItem>
+
+                                {canDelete && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => setDeleteRepairData(repair)}
+                                      className="h-9 px-3 rounded-xl font-semibold text-xs text-rose-600 hover:bg-rose-50 cursor-pointer gap-2"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" /> Delete Record
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile / Tablet Responsive Cards Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:hidden gap-3">
+            {finalFilteredRepairs.map((repair) => {
+              const statusInfo = statusConfig[repair.status] || {
+                label: repair.status?.replace(/_/g, ' ') || 'Unknown',
+                badgeClass: 'bg-slate-100 text-slate-700',
+                bgSoft: 'bg-slate-50',
+                textClass: 'text-slate-700'
+              };
+              const isSelected = selectedRepairIds.has(repair.id);
+
+              return (
+                <Card
+                  key={repair.id}
+                  className={`rounded-2xl border bg-white p-4 shadow-sm space-y-3 hover:border-slate-300 transition-all ${isSelected ? 'border-indigo-400 bg-indigo-50/30 ring-1 ring-indigo-400/50' : 'border-slate-200'
+                    }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleSelectRepair(repair.id, e)}
+                          className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer mr-0.5 ${isSelected
+                            ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
+                            : 'border-slate-300 bg-white hover:border-slate-400'
+                            }`}
+                          aria-label={`Select repair #${repair.repairNumber}`}
+                        >
+                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </button>
+                      )}
+                      <span className="font-mono font-bold text-sm text-slate-900">
+                        #{repair.repairNumber}
+                      </span>
+                      {(repair.receivingMethod === 'COURIER' || repair.isCourierIn) && (
+                        <Badge className="bg-amber-500 text-white font-bold text-[9px] px-1.5 py-0.5 shadow-xs flex items-center gap-0.5">
+                          <Truck className="w-2.5 h-2.5" />
+                          <span>COURIER</span>
+                        </Badge>
+                      )}
+                      {repair.priority === 'URGENT' && (
+                        <Badge className="bg-rose-600 text-white font-black text-[9px] px-1.5 py-0.5 animate-pulse shadow-xs">
+                          URGENT
+                        </Badge>
+                      )}
+                      {repair.priority === 'HIGH' && (
+                        <Badge className="bg-amber-500 text-white font-bold text-[9px] px-1.5 py-0.5 shadow-xs">
+                          HIGH
+                        </Badge>
+                      )}
+                      <Badge className={`font-bold text-[10px] px-2 py-0.5 rounded-md ${statusInfo.badgeClass}`}>
+                        {statusInfo.label}
+                      </Badge>
+                    </div>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-500" />
+                      }>
+                        <MoreVertical className="h-4 w-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="rounded-2xl w-48 shadow-xl border-slate-200 p-1.5">
+                        <DropdownMenuItem onClick={() => navigate(`/dashboard/repairs/${repair.id}`)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2">
+                          <Eye className="h-3.5 w-3.5" /> View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleOpenQuickEdit(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2">
+                          <Edit3 className="h-3.5 w-3.5" /> Edit Info
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleOpenStatusModal(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2">
+                          <PackageCheck className="h-3.5 w-3.5" /> Update Status
+                        </DropdownMenuItem>
+                        {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && (
+                          <DropdownMenuItem onClick={() => handleOpenCourierDispatch(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-blue-700 hover:bg-blue-50">
+                            <Truck className="h-3.5 w-3.5 text-blue-600" /> Dispatch Courier
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => handleOpenReProblem(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-rose-700 hover:bg-rose-50">
+                          <RotateCcw className="h-3.5 w-3.5 text-rose-600" /> Re-Problem Intake
+                        </DropdownMenuItem>
+                        {canAssign && (
+                          <DropdownMenuItem onClick={() => handleOpenAssignModal(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2">
+                            <User className="h-3.5 w-3.5" /> Assign Tech
+                          </DropdownMenuItem>
+                        )}
+                        {canDelete && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setDeleteRepairData(repair)} className="h-9 px-3 rounded-xl font-semibold text-xs text-rose-600 hover:bg-rose-50 cursor-pointer gap-2">
+                              <Trash2 className="h-3.5 w-3.5" /> Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-slate-900 text-base">{repair.deviceBrand} {repair.deviceModel}</h4>
+                    <p className="text-xs text-slate-500 line-clamp-2">{repair.problemDescription || 'No description provided'}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Customer</span>
+                      <span className="font-semibold text-slate-900 block truncate">{repair.customerName}</span>
+                      <span className="text-slate-500 font-mono text-[11px]">{repair.customerPhone}</span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Specialist</span>
+                      {repair.technician?.name ? (
+                        <span className="font-semibold text-slate-900 block truncate">{repair.technician.name}</span>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenAssignModal(repair)}
+                          className="text-[11px] font-semibold text-amber-700 underline"
+                        >
+                          Assign Specialist
+                        </button>
+                      )}
+                      <span className="text-slate-400 text-[10px] block">{formatDateSafe(repair.createdAt, 'MMM dd, yyyy')}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Cost / Paid</span>
+                      <span className="font-mono font-bold text-slate-900 text-sm">
+                        {formatRepairCost(repair.totalCost ?? repair.estimatedCost)}
+                      </span>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
+                      className="h-8 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-semibold px-3"
+                    >
+                      Manage Job <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 1: SINGLE DELETE CONFIRMATION (SUPER_ADMIN, ADMIN & RECEPTIONIST)   */}
+      {/* ========================================================================= */}
+      <Dialog open={!!deleteRepairData} onOpenChange={(open) => !open && setDeleteRepairData(null)}>
+        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-md">
+          <DialogHeader>
+            <div className="w-14 h-14 bg-rose-100 rounded-2xl flex items-center justify-center mb-4 mx-auto sm:mx-0">
+              <Trash2 className="h-7 w-7 text-rose-600" />
+            </div>
+            <DialogTitle className="text-2xl font-extrabold text-slate-900">
+              Delete Repair Record?
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-sm pt-2 leading-relaxed">
+              Are you sure you want to delete this repair record? This action will permanently remove its associated logs, notes, and payment records. Customer accounts will not be affected.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteRepairData && (
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 my-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Job Number:</span>
+                <span className="font-mono font-bold text-slate-900">#{deleteRepairData.repairNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Customer:</span>
+                <span className="font-bold text-slate-900">{deleteRepairData.customerName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Device:</span>
+                <span className="font-semibold text-slate-900">{deleteRepairData.deviceBrand} {deleteRepairData.deviceModel}</span>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-4 gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteRepairData(null)}
+              disabled={deleteLoading}
+              className="h-11 rounded-xl border-slate-200 font-bold"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteRepair}
+              disabled={deleteLoading}
+              className="h-11 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold px-6 shadow-sm"
+            >
+              {deleteLoading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Deleting...
+                </span>
+              ) : 'Confirm Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL 1B: BULK DELETE CONFIRMATION (SUPER_ADMIN, ADMIN & RECEPTIONIST)    */}
+      {/* ========================================================================= */}
+      <Dialog open={isBulkDeleteModalOpen} onOpenChange={setIsBulkDeleteModalOpen}>
+        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-md">
+          <DialogHeader>
+            <div className="w-14 h-14 bg-rose-100 rounded-2xl flex items-center justify-center mb-4 mx-auto sm:mx-0">
+              <Trash2 className="h-7 w-7 text-rose-600" />
+            </div>
+            <DialogTitle className="text-2xl font-extrabold text-slate-900">
+              Delete Selected Repairs?
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-sm pt-2 leading-relaxed">
+              You are about to permanently delete <strong>{selectedRepairIds.size}</strong> repair record(s). This action will remove all associated logs, notes, and payment records. Customer accounts will not be affected.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedRepairsList.length > 0 && (
+            <div className="max-h-44 overflow-y-auto p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 my-2">
+              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Selected Repairs ({selectedRepairsList.length}):
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {selectedRepairsList.map(rep => (
+                  <Badge key={rep.id} variant="secondary" className="bg-white border border-slate-200 text-slate-900 font-mono text-xs py-0.5 px-2 font-bold shadow-2xs">
+                    #{rep.repairNumber} — {rep.deviceBrand} {rep.deviceModel}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-4 gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsBulkDeleteModalOpen(false)}
+              disabled={bulkDeleteLoading}
+              className="h-11 rounded-xl border-slate-200 font-bold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleBulkDeleteRepairs}
+              disabled={bulkDeleteLoading}
+              className="h-11 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold px-6 shadow-sm"
+            >
+              {bulkDeleteLoading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Deleting...
+                </span>
+              ) : (
+                `Delete Repairs (${selectedRepairIds.size})`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: UPDATE STATUS MODAL                                              */}
+      {/* ========================================================================= */}
+      <Dialog open={!!statusModalRepair} onOpenChange={(open) => !open && setStatusModalRepair(null)}>
+        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-md">
+          <DialogHeader>
+            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-3">
+              <PackageCheck className="h-6 w-6 text-indigo-600" />
+            </div>
+            <DialogTitle className="text-xl font-extrabold text-slate-900">
+              Update Repair Status
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs">
+              Job #{statusModalRepair?.repairNumber} — {statusModalRepair?.deviceBrand} {statusModalRepair?.deviceModel}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-3">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-700">Select New Status</Label>
+              <Select value={newStatusValue} onValueChange={setNewStatusValue}>
+                <SelectTrigger className="h-11 rounded-xl border-slate-200 text-sm font-semibold">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  {Object.keys(statusConfig).map((stKey) => (
+                    <SelectItem key={stKey} value={stKey}>
+                      {statusConfig[stKey].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-700">Status Update Note (Optional)</Label>
+              <Textarea
+                placeholder="Reason or technical remarks for this status transition..."
+                value={statusUpdateNote}
+                onChange={(e) => setStatusUpdateNote(e.target.value)}
+                className="rounded-xl border-slate-200 text-xs min-h-[80px]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4 gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setStatusModalRepair(null)}
+              disabled={statusUpdateLoading}
+              className="h-10 rounded-xl border-slate-200 font-bold text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveStatusUpdate}
+              disabled={statusUpdateLoading}
+              className="h-10 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs px-5 shadow-sm"
+            >
+              {statusUpdateLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Status'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: ASSIGN / REASSIGN TECHNICIAN                                     */}
+      {/* ========================================================================= */}
+      <Dialog open={!!assignModalRepair} onOpenChange={(open) => !open && setAssignModalRepair(null)}>
+        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-md">
+          <DialogHeader>
+            <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center mb-3">
+              <User className="h-6 w-6 text-amber-600" />
+            </div>
+            <DialogTitle className="text-xl font-extrabold text-slate-900">
+              Assign Repair Specialist
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs">
+              Job #{assignModalRepair?.repairNumber} ({assignModalRepair?.customerName})
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 my-3">
+            <Label className="text-xs font-bold text-slate-700">Choose Specialist</Label>
+            <Select value={selectedTechId} onValueChange={setSelectedTechId}>
+              <SelectTrigger className="h-11 rounded-xl border-slate-200 text-sm font-medium">
+                <SelectValue placeholder="Select technician" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="UNASSIGNED">— Unassigned —</SelectItem>
+                {technicians.map((tech: any) => (
+                  <SelectItem key={tech.id} value={tech.id}>
+                    {tech.name} ({tech.email || 'Technician'})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter className="mt-4 gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setAssignModalRepair(null)}
+              disabled={assignLoading}
+              className="h-10 rounded-xl border-slate-200 font-bold text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveTechnicianAssignment}
+              disabled={assignLoading}
+              className="h-10 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs px-5 shadow-sm"
+            >
+              {assignLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Assignment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: EDIT REPAIR INFORMATION                                          */}
+      {/* ========================================================================= */}
+      {quickEditRepair && (
+        <EditRepairModal
+          open={!!quickEditRepair}
+          onOpenChange={(open) => !open && setQuickEditRepair(null)}
+          repair={quickEditRepair}
+          onSaved={(updated) => {
+            setRepairs(prev => prev.map(r => r.id === updated.id ? { ...r, ...updated } : r));
+            setQuickEditRepair(null);
+          }}
+        />
+      )}
+
+      {/* Service Slip Modal */}
+      {selectedSlipRepair && (
+        <ServiceSlipModal
+          open={isSlipModalOpen}
+          onOpenChange={setIsSlipModalOpen}
+          repairs={[selectedSlipRepair]}
+          customer={selectedSlipRepair.customer || {
+            name: selectedSlipRepair.customerName,
+            phone: selectedSlipRepair.customerPhone,
+            email: selectedSlipRepair.customerEmail,
+            address: selectedSlipRepair.customerAddress
+          }}
+        />
+      )}
+
+      {/* Excel Import & Preview Modal */}
+      <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl p-6">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <FileSpreadsheet className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-black text-slate-900">
+                  Import Repair Records (Excel .xlsx)
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 mt-0.5">
+                  Upload standard spreadsheet data to bulk register repairs. Existing customers are matched automatically.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-5 my-2">
+            {/* File Upload Box */}
+            <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/60 rounded-2xl p-6 text-center transition-all">
+              <input
+                type="file"
+                id="repair-excel-upload"
+                accept=".xlsx, .xls"
+                className="hidden"
+                onChange={handleFileSelect}
+                disabled={previewLoading || confirmingImport}
+              />
+              <label
+                htmlFor="repair-excel-upload"
+                className="cursor-pointer flex flex-col items-center justify-center gap-2"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-indigo-600 border border-slate-200">
+                  {previewLoading ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : (
+                    <Upload className="h-6 w-6" />
+                  )}
+                </div>
+                <div className="text-sm font-bold text-slate-800">
+                  {importFile ? importFile.name : "Click to choose or drag & drop Excel (.xlsx) file"}
+                </div>
+                <div className="text-xs text-slate-500">
+                  Compatible with Microsoft Excel, Apple Numbers, LibreOffice & Google Sheets export
+                </div>
+              </label>
+
+              <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-center gap-2 text-xs text-slate-500">
+                <span>Need the official template?</span>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  disabled={downloadingTemplate}
+                  className="font-bold text-indigo-600 hover:text-indigo-800 underline flex items-center gap-1"
+                >
+                  <FileDown className="h-3.5 w-3.5" /> Download Blank Template
+                </button>
+              </div>
+            </div>
+
+            {/* Preview Statistics & Results */}
+            {previewData && (
+              <div className="space-y-4">
+                {/* Stats row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-slate-100 rounded-2xl p-3 text-center">
+                    <div className="text-xs font-bold text-slate-500 uppercase">Total Rows</div>
+                    <div className="text-2xl font-black text-slate-900">{previewData.totalRows}</div>
+                  </div>
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-center">
+                    <div className="text-xs font-bold text-emerald-600 uppercase">Valid to Import</div>
+                    <div className="text-2xl font-black text-emerald-700">{previewData.validRows}</div>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-center">
+                    <div className="text-xs font-bold text-amber-600 uppercase">Duplicates (Skipped)</div>
+                    <div className="text-2xl font-black text-amber-700">{previewData.duplicateRows}</div>
+                  </div>
+                  <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3 text-center">
+                    <div className="text-xs font-bold text-rose-600 uppercase">Invalid Rows</div>
+                    <div className="text-2xl font-black text-rose-700">{previewData.invalidRows}</div>
+                  </div>
+                </div>
+
+                {/* Items Preview Table */}
+                <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                  <div className="bg-slate-100 px-4 py-2.5 font-bold text-xs text-slate-700 flex items-center justify-between border-b border-slate-200">
+                    <span>Spreadsheet Row Analysis</span>
+                    <span className="text-[11px] text-slate-500 font-normal">
+                      Showing {previewData.items?.length || 0} parsed records
+                    </span>
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 text-xs">
+                    {previewData.items?.map((item: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className={`p-3 transition-colors ${item.status === 'VALID'
+                          ? 'bg-white hover:bg-slate-50/80'
+                          : item.status === 'DUPLICATE'
+                            ? 'bg-amber-50/40 hover:bg-amber-50/70'
+                            : 'bg-rose-50/40 hover:bg-rose-50/70'
+                          }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-slate-400 font-bold">Row {item.rowNumber}</span>
+                            {item.status === 'VALID' && (
+                              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">
+                                READY TO IMPORT
+                              </Badge>
+                            )}
+                            {item.status === 'DUPLICATE' && (
+                              <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px]">
+                                DUPLICATE REPAIR
+                              </Badge>
+                            )}
+                            {item.status === 'INVALID' && (
+                              <Badge className="bg-rose-100 text-rose-800 border-rose-300 text-[10px]">
+                                INVALID DATA
+                              </Badge>
+                            )}
+                            <span className="font-bold text-slate-800">
+                              {item.data?.customerName || 'No Name'}
+                            </span>
+                            <span className="text-slate-500 font-mono">
+                              ({item.data?.customerPhone || 'No Phone'})
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <span className="font-semibold text-slate-800">
+                              {item.data?.deviceBrand} {item.data?.deviceModel}
+                            </span>
+                            <Badge variant="outline" className="text-[10px] font-mono">
+                              {item.data?.status || 'PENDING'}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        <div className="mt-1.5 flex flex-wrap items-center justify-between text-[11px] text-slate-500 gap-2">
+                          <div>
+                            <span className="font-medium text-slate-700">Problem:</span> {item.data?.problemDescription || '—'}
+                          </div>
+                          <div>
+                            <span className="font-medium text-slate-700">Est. Cost:</span> {formatNPR(item.data?.estimatedCost || 0)}
+                          </div>
+                        </div>
+
+                        {/* Error & Warning Messages */}
+                        {item.errors && item.errors.length > 0 && (
+                          <div className="mt-2 text-rose-600 font-medium space-y-0.5 text-[11px] bg-rose-100/60 p-2 rounded-xl border border-rose-200">
+                            {item.errors.map((err: string, eIdx: number) => (
+                              <div key={eIdx} className="flex items-center gap-1.5">
+                                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                                <span>{err}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {item.warnings && item.warnings.length > 0 && (
+                          <div className="mt-1.5 text-amber-700 font-medium space-y-0.5 text-[11px] bg-amber-100/60 p-1.5 rounded-xl border border-amber-200">
+                            {item.warnings.map((warn: string, wIdx: number) => (
+                              <div key={wIdx} className="flex items-center gap-1.5">
+                                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                                <span>{warn}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="mt-4 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsImportModalOpen(false);
+                setImportFile(null);
+                setPreviewData(null);
+              }}
+              disabled={confirmingImport}
+              className="rounded-xl border-slate-200 font-bold text-xs"
+            >
+              Cancel
+            </Button>
+
+            <Button
+              type="button"
+              onClick={handleExecuteConfirmImport}
+              disabled={confirmingImport || !previewData || previewData.validRows === 0}
+              className="rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs px-6 shadow-md gap-2"
+            >
+              {confirmingImport ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Importing Records...
+                </>
+              ) : (
+                <>
+                  <FileCheck2 className="h-4 w-4" />
+                  Confirm & Import ({previewData?.validRows || 0} Records)
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL 6: COURIER RETURN DISPATCH MODAL                                    */}
+      {/* ========================================================================= */}
+      <Dialog open={!!courierDispatchModalRepair} onOpenChange={(open) => !open && setCourierDispatchModalRepair(null)}>
+        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-lg">
+          <form onSubmit={handleSaveCourierDispatch}>
+            <DialogHeader>
+              <div className="w-12 h-12 bg-blue-100 text-blue-700 rounded-2xl flex items-center justify-center mb-3">
+                <Truck className="h-6 w-6" />
+              </div>
+              <DialogTitle className="text-xl font-bold text-slate-900">
+                Dispatch Repaired Device via Courier
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 text-xs">
+                Hand over job <strong>#{courierDispatchModalRepair?.repairNumber}</strong> ({courierDispatchModalRepair?.deviceBrand} {courierDispatchModalRepair?.deviceModel}) to courier logistics for return delivery.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 my-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+
+                {/* Courier Partner */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Courier Partner *</Label>
+                  <Select
+                    value={courierDispatchForm.returnCourierCompany}
+                    onValueChange={(v) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierCompany: v }))}
+                  >
+                    <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-semibold">
+                      <SelectValue placeholder="Select Courier" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl shadow-xl">
+                      {[
+                        "Nepal Can Move (NCM)",
+                        "Sundar Courier",
+                        "Nepal Post / GPO",
+                        "Pathao Logistics",
+                        "Aramex Nepal",
+                        "DHL Express",
+                        "FedEx / TNT",
+                        "Gorkha Express",
+                        "Gaura Courier",
+                        "Other Courier"
+                      ].map(c => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {courierDispatchForm.returnCourierCompany === 'Other Courier' && (
+                    <Input
+                      placeholder="Specify Courier Name"
+                      value={courierDispatchForm.customCourierCompany}
+                      onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, customCourierCompany: e.target.value }))}
+                      className="h-9 rounded-xl border-slate-200 bg-white text-xs mt-1"
+                      required
+                    />
+                  )}
+                </div>
+
+                {/* Tracking / Consignment Number */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Tracking / Consignment # *</Label>
+                  <Input
+                    placeholder="e.g. SCN-982341, TRK-10293"
+                    value={courierDispatchForm.returnCourierTrackingNumber}
+                    onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierTrackingNumber: e.target.value }))}
+                    className="h-10 rounded-xl border-slate-200 bg-slate-50 font-mono text-xs font-bold"
+                    required
+                  />
+                </div>
+
+                {/* Dispatch Date */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Dispatch Date *</Label>
+                  <Input
+                    type="date"
+                    value={courierDispatchForm.returnCourierDispatchDate}
+                    onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierDispatchDate: e.target.value }))}
+                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
+                    required
+                  />
+                </div>
+
+                {/* Destination District */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Destination District</Label>
+                  <Input
+                    placeholder="e.g. Pokhara, Morang"
+                    value={courierDispatchForm.destinationDistrict}
+                    onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, destinationDistrict: e.target.value }))}
+                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
+                  />
+                </div>
+
+                {/* Receiver Name */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Receiver Name</Label>
+                  <Input
+                    placeholder="Receiver Full Name"
+                    value={courierDispatchForm.receiverName}
+                    onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, receiverName: e.target.value }))}
+                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
+                  />
+                </div>
+
+                {/* Receiver Phone */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Receiver Phone</Label>
+                  <Input
+                    placeholder="Receiver Phone Number"
+                    value={courierDispatchForm.receiverPhone}
+                    onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, receiverPhone: e.target.value }))}
+                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-mono"
+                  />
+                </div>
+
+              </div>
+
+              {/* Destination Address */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700">Delivery Address</Label>
+                <Input
+                  placeholder="Full delivery location / address"
+                  value={courierDispatchForm.destinationAddress}
+                  onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, destinationAddress: e.target.value }))}
+                  className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
+                />
+              </div>
+
+              {/* Courier Notes */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700">Courier Return Notes</Label>
+                <Textarea
+                  rows={2}
+                  placeholder="e.g. Fragile glass sticker attached, bubble wrap 3-layers"
+                  value={courierDispatchForm.returnCourierNotes}
+                  onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierNotes: e.target.value }))}
+                  className="rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCourierDispatchModalRepair(null)}
+                disabled={courierDispatchLoading}
+                className="h-10 rounded-xl border-slate-200 text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={courierDispatchLoading}
+                className="h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 shadow-sm flex items-center gap-1.5"
+              >
+                {courierDispatchLoading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Dispatching...</span>
+                  </>
+                ) : (
+                  <>
+                    <Truck className="h-3.5 w-3.5" />
+                    <span>Confirm Courier Dispatch</span>
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL 7: RE-PROBLEM / WARRANTY INTAKE MODAL                                 */}
+      {/* ========================================================================= */}
+      <Dialog open={!!reProblemModalRepair} onOpenChange={(open) => !open && setReProblemModalRepair(null)}>
+        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-md">
+          <form onSubmit={handleSaveReProblem}>
+            <DialogHeader>
+              <div className="w-12 h-12 bg-rose-100 text-rose-700 rounded-2xl flex items-center justify-center mb-3">
+                <RotateCcw className="h-6 w-6" />
+              </div>
+              <DialogTitle className="text-xl font-bold text-slate-900">
+                Log Re-Problem / Warranty Intake
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 text-xs">
+                Reopen job <strong>#{reProblemModalRepair?.repairNumber}</strong> ({reProblemModalRepair?.deviceBrand} {reProblemModalRepair?.deviceModel}) for priority warranty re-inspection.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3.5 my-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700">Problem Category / Reason *</Label>
+                <Input
+                  placeholder="e.g. Touch stopped working after 4 days"
+                  value={reProblemReason}
+                  onChange={(e) => setReProblemReason(e.target.value)}
+                  className="h-10 rounded-xl border-slate-200 text-xs font-medium"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700">Diagnostic Details & Customer Description</Label>
+                <Textarea
+                  rows={3}
+                  placeholder="Describe the issue reported by the customer for priority engineering review..."
+                  value={reProblemDescription}
+                  onChange={(e) => setReProblemDescription(e.target.value)}
+                  className="rounded-xl border-slate-200 text-xs font-medium"
+                />
+              </div>
+
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>
+                  This will reopen the repair with <strong>HIGH PRIORITY</strong> and update the customer tracking timeline for warranty inspection.
+                </span>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setReProblemModalRepair(null)}
+                disabled={reProblemLoading}
+                className="h-10 rounded-xl border-slate-200 text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={reProblemLoading}
+                className="h-10 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-5 shadow-sm flex items-center gap-1.5"
+              >
+                {reProblemLoading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Logging...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Submit Re-Problem Intake</span>
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }
-router9.get("/overview", authenticate, async (req, res) => {
-  try {
-    const { data: records } = await supabaseAdmin.from("RepairRelatedDamage").select("*").eq("isArchived", false);
-    let totalRecords = 0;
-    let totalEstimatedCost = 0;
-    let totalDeductions = 0;
-    const componentCounts = {};
-    (records || []).forEach((r) => {
-      totalRecords++;
-      totalEstimatedCost += Number(r.estimatedCost || 0);
-      if (r.inventoryDeducted) totalDeductions++;
-      const comp = r.damagedComponent || "Other";
-      componentCounts[comp] = (componentCounts[comp] || 0) + 1;
-    });
-    return res.json({
-      totalRecords,
-      totalEstimatedCost,
-      totalDeductions,
-      componentCounts,
-      records: (records || []).slice(0, 10)
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to generate damage overview." });
-  }
-});
-router9.get("/components", authenticate, async (req, res) => {
-  try {
-    const { data: records } = await supabaseAdmin.from("RepairRelatedDamage").select("damagedComponent");
-    const components = Array.from(new Set((records || []).map((r) => r.damagedComponent).filter(Boolean)));
-    return res.json(components.length > 0 ? components : ["Display Panel", "OCA Glass", "Flex Cable", "Camera Lens", "Back Housing", "Power IC", "Other"]);
-  } catch (err) {
-    return res.json(["Display Panel", "OCA Glass", "Flex Cable", "Camera Lens", "Back Housing", "Power IC", "Other"]);
-  }
-});
-router9.get("/", authenticate, async (req, res) => {
-  try {
-    const { staffId, role, component, month, startDate, endDate, search, limit = "100" } = req.query;
-    let query = supabaseAdmin.from("RepairRelatedDamage").select("*, staff:User!RepairRelatedDamage_staffId_fkey(name, email, role, department)");
-    query = query.eq("isArchived", false);
-    if (staffId && staffId !== "ALL") query = query.eq("staffId", String(staffId));
-    if (role && role !== "ALL") query = query.eq("staffRole", String(role));
-    if (component && component !== "ALL") query = query.eq("damagedComponent", String(component));
-    if (month) {
-      query = query.ilike("damageDate", `${month}%`);
-    } else if (startDate || endDate) {
-      if (startDate) query = query.gte("damageDate", String(startDate));
-      if (endDate) query = query.lte("damageDate", String(endDate));
-    }
-    if (search) {
-      const s = String(search).trim();
-      query = query.or(`recordNumber.ilike.%${s}%,staffName.ilike.%${s}%,repairNumber.ilike.%${s}%,deviceModel.ilike.%${s}%`);
-    }
-    const { data: records, error } = await query.order("damageDate", { ascending: false }).limit(parseInt(limit, 10) || 100);
-    if (error) {
-      console.error("[REPAIR DAMAGE ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch damage records." });
-    }
-    return res.json(records || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve damage records." });
-  }
-});
-router9.get("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: record, error } = await supabaseAdmin.from("RepairRelatedDamage").select("*, staff:User!RepairRelatedDamage_staffId_fkey(name, email, role), audits:RepairRelatedDamageAudit(*)").eq("id", id).single();
-    if (error || !record) return res.status(404).json({ error: "Record not found." });
-    return res.json(record);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to fetch record." });
-  }
-});
-router9.post("/", authenticate, async (req, res) => {
-  try {
-    const {
-      staffId,
-      staffName,
-      staffRole,
-      damagedComponent,
-      damageType = "ACCIDENTAL",
-      deviceBrand,
-      deviceModel,
-      repairNumber,
-      customerName,
-      damageDate,
-      damageTime,
-      quantity = 1,
-      estimatedCost = 0,
-      damageDescription,
-      inventoryDeducted = false,
-      notes
-    } = req.body;
-    const recordNumber = await generateRecordNumber();
-    const newRecord = {
-      id: uuidv410(),
-      recordNumber,
-      staffId: staffId || req.user.id,
-      staffName: staffName || req.user.name,
-      staffRole: staffRole || req.user.role,
-      damagedComponent: damagedComponent || "Component",
-      damageType,
-      deviceBrand: deviceBrand || null,
-      deviceModel: deviceModel || null,
-      repairNumber: repairNumber || null,
-      customerName: customerName || null,
-      damageDate: damageDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-      damageTime: damageTime || (/* @__PURE__ */ new Date()).toTimeString().split(" ")[0],
-      quantity: parseInt(quantity, 10) || 1,
-      estimatedCost: parseFloat(estimatedCost) || 0,
-      damageDescription: damageDescription || "Internal damage incident recorded",
-      inventoryDeducted: Boolean(inventoryDeducted),
-      status: "RECORDED",
-      notes: notes || null,
-      recordedById: req.user.id,
-      recordedByName: req.user.name,
-      recordedByRole: req.user.role,
-      isArchived: false,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: created, error } = await supabaseAdmin.from("RepairRelatedDamage").insert([newRecord]).select("*").single();
-    if (error) {
-      console.error("[DAMAGE INSERT ERROR]", error);
-      return res.status(500).json({ error: "Failed to record damage incident." });
-    }
-    return res.status(201).json(created);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to save damage record." });
-  }
-});
-router9.patch("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    delete updateData.id;
-    delete updateData.staff;
-    delete updateData.audits;
-    const { data: updated, error } = await supabaseAdmin.from("RepairRelatedDamage").update(updateData).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to update record." });
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update damage record." });
-  }
-});
-router9.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { error } = await supabaseAdmin.from("RepairRelatedDamage").update({ isArchived: true, status: "ARCHIVED", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to archive record." });
-    return res.json({ success: true, message: "Damage record archived." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to archive damage record." });
-  }
-});
-router9.get("/export", authenticate, async (req, res) => {
-  try {
-    const { data: records } = await supabaseAdmin.from("RepairRelatedDamage").select("*").eq("isArchived", false).order("damageDate", { ascending: false });
-    const rows = (records || []).map((r) => ({
-      "Record ID": r.recordNumber,
-      "Staff Name": r.staffName,
-      "Role": r.staffRole,
-      "Damaged Component": r.damagedComponent,
-      "Damage Type": r.damageType,
-      "Device Model": `${r.deviceBrand || ""} ${r.deviceModel || ""}`.trim(),
-      "Repair Ticket": r.repairNumber || "—",
-      "Date": r.damageDate,
-      "Quantity": r.quantity,
-      "Estimated Cost (NPR)": r.estimatedCost,
-      "Description": r.damageDescription,
-      "Recorded By": r.recordedByName
-    }));
-    const buffer = createExcelBuffer("Repair Damage", rows);
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="MTS_Repair_Damage_${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.xlsx"`);
-    return res.send(buffer);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to export damage records." });
-  }
-});
-var repairDamage_default = router9;
-
-// api/_server/routes/repairPrices.ts
-import { Router as Router10 } from "express";
-import { v4 as uuidv411 } from "uuid";
-var router10 = Router10();
-var handleGetPrices = async (req, res) => {
-  try {
-    const { brand, model, category, search, status } = req.query;
-    let query = supabaseAdmin.from("RepairPrice").select("*");
-    if (status && status !== "ALL") {
-      query = query.eq("status", String(status));
-    } else if (req.path.includes("/public/")) {
-      query = query.eq("status", "ACTIVE");
-    }
-    if (brand && brand !== "ALL") query = query.eq("brand", String(brand));
-    if (model && model !== "ALL") query = query.eq("model", String(model));
-    if (category && category !== "ALL") query = query.eq("category", String(category));
-    if (search) {
-      const s = String(search).trim();
-      query = query.or(`brand.ilike.%${s}%,model.ilike.%${s}%,serviceName.ilike.%${s}%,category.ilike.%${s}%,problem.ilike.%${s}%`);
-    }
-    const { data: prices, error } = await query.order("brand", { ascending: true }).order("model", { ascending: true });
-    if (error) {
-      console.error("[REPAIR PRICES GET ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch repair prices." });
-    }
-    return res.json(prices || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve repair pricing directory." });
-  }
-};
-router10.get("/", handleGetPrices);
-router10.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
-  try {
-    const {
-      brand,
-      model,
-      variant = "Standard",
-      category,
-      problem,
-      serviceName,
-      price,
-      priceType = "FIXED",
-      status = "ACTIVE",
-      notes,
-      estimatedTime = "1-2 Hours"
-    } = req.body;
-    if (!brand || !model || !serviceName || price === void 0) {
-      return res.status(400).json({ error: "Brand, model, service name, and price are required." });
-    }
-    const newPrice = {
-      id: uuidv411(),
-      brand: brand.trim(),
-      model: model.trim(),
-      variant: variant ? variant.trim() : "Standard",
-      category: category ? category.trim() : "General",
-      problem: problem ? problem.trim() : serviceName.trim(),
-      serviceName: serviceName.trim(),
-      price: parseFloat(price) || 0,
-      priceType,
-      status,
-      notes: notes ? notes.trim() : null,
-      estimatedTime,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: created, error } = await supabaseAdmin.from("RepairPrice").insert([newPrice]).select("*").single();
-    if (error) {
-      console.error("[PRICE INSERT ERROR]", error);
-      return res.status(500).json({ error: "Failed to add repair price service." });
-    }
-    return res.status(201).json(created);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to save repair price." });
-  }
-});
-var handleUpdatePrice = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    delete updateData.id;
-    if (updateData.price !== void 0) {
-      updateData.price = parseFloat(updateData.price) || 0;
-    }
-    const { data: updated, error } = await supabaseAdmin.from("RepairPrice").update(updateData).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to update repair price." });
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update price item." });
-  }
-};
-router10.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), handleUpdatePrice);
-router10.patch("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), handleUpdatePrice);
-router10.patch("/:id/toggle-status", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: existing } = await supabaseAdmin.from("RepairPrice").select("status").eq("id", id).single();
-    if (!existing) return res.status(404).json({ error: "Price item not found." });
-    const newStatus = existing.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
-    const { data: updated, error } = await supabaseAdmin.from("RepairPrice").update({ status: newStatus, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to toggle status." });
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to toggle status." });
-  }
-});
-router10.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { error } = await supabaseAdmin.from("RepairPrice").delete().eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to delete repair price." });
-    return res.json({ success: true, message: "Repair price deleted." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to delete price record." });
-  }
-});
-router10.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { ids } = req.body;
-    if (!ids || !Array.isArray(ids)) return res.status(400).json({ error: "No IDs specified." });
-    const { error } = await supabaseAdmin.from("RepairPrice").delete().in("id", ids);
-    if (error) return res.status(500).json({ error: "Failed to bulk delete prices." });
-    return res.json({ success: true, message: `Deleted ${ids.length} price items.` });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to process bulk delete." });
-  }
-});
-var repairPrices_default = router10;
-
-// api/_server/routes/slides.ts
-import { Router as Router11 } from "express";
-import { v4 as uuidv412 } from "uuid";
-import multer3 from "multer";
-
-// api/_server/services/cloudinaryService.ts
-import { v2 as cloudinary } from "cloudinary";
-if (config.cloudinaryCloudName && config.cloudinaryApiKey && config.cloudinaryApiSecret) {
-  cloudinary.config({
-    cloud_name: config.cloudinaryCloudName,
-    api_key: config.cloudinaryApiKey,
-    api_secret: config.cloudinaryApiSecret,
-    secure: true
-  });
-}
-async function uploadToCloudinary(fileBuffer, folder = "mts_lab", resourceType = "auto") {
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder,
-        resource_type: resourceType
-      },
-      (error, result) => {
-        if (error || !result) {
-          return reject(error || new Error("Cloudinary upload failed"));
-        }
-        resolve(result);
-      }
-    );
-    uploadStream.end(fileBuffer);
-  });
-}
-async function uploadBase64ToCloudinary(base64Data, folder = "mts_lab") {
-  return cloudinary.uploader.upload(base64Data, {
-    folder,
-    resource_type: "auto"
-  });
-}
-
-// api/_server/routes/slides.ts
-var router11 = Router11();
-var upload3 = multer3({ storage: multer3.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-router11.get("/", async (req, res) => {
-  try {
-    const { data: slides, error } = await supabaseAdmin.from("HomeSlide").select("*").order("displayOrder", { ascending: true });
-    if (error) return res.status(500).json({ error: "Failed to fetch slides." });
-    return res.json(slides || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve slides." });
-  }
-});
-router11.post("/upload-image", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), upload3.single("image"), async (req, res) => {
-  try {
-    if (req.file) {
-      const result = await uploadToCloudinary(req.file.buffer, "mts_slides");
-      return res.json({ success: true, url: result.secure_url, publicId: result.public_id });
-    }
-    if (req.body?.base64Image) {
-      const result = await uploadBase64ToCloudinary(req.body.base64Image, "mts_slides");
-      return res.json({ success: true, url: result.secure_url, publicId: result.public_id });
-    }
-    return res.status(400).json({ error: "No image file or base64 provided." });
-  } catch (err) {
-    console.error("[SLIDE IMAGE UPLOAD ERROR]", err);
-    return res.status(500).json({ error: "Failed to upload slide image." });
-  }
-});
-router11.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { title, description, imageUrl, buttonText, buttonLink, displayOrder = 1, status = "ACTIVE" } = req.body;
-    if (!title || !imageUrl) {
-      return res.status(400).json({ error: "Title and image URL are required." });
-    }
-    const newSlide = {
-      id: uuidv412(),
-      title: title.trim(),
-      description: description ? description.trim() : null,
-      imageUrl,
-      buttonText: buttonText || "Check Repair Price",
-      buttonLink: buttonLink || "/services",
-      displayOrder: parseInt(displayOrder, 10) || 1,
-      status,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: created, error } = await supabaseAdmin.from("HomeSlide").insert([newSlide]).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to create slide." });
-    return res.status(201).json(created);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to save slide." });
-  }
-});
-router11.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    delete updateData.id;
-    const { data: updated, error } = await supabaseAdmin.from("HomeSlide").update(updateData).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to update slide." });
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update slide." });
-  }
-});
-router11.patch("/:id/toggle-status", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: slide } = await supabaseAdmin.from("HomeSlide").select("status").eq("id", id).single();
-    if (!slide) return res.status(404).json({ error: "Slide not found." });
-    const newStatus = slide.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
-    const { data: updated, error } = await supabaseAdmin.from("HomeSlide").update({ status: newStatus, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to toggle status." });
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to toggle status." });
-  }
-});
-router11.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { error } = await supabaseAdmin.from("HomeSlide").delete().eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to delete slide." });
-    return res.json({ success: true, message: "Slide deleted." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to delete slide." });
-  }
-});
-var slides_default = router11;
-
-// api/_server/routes/products.ts
-import { Router as Router12 } from "express";
-import { v4 as uuidv413 } from "uuid";
-var router12 = Router12();
-router12.get("/", async (req, res) => {
-  try {
-    const { category, search } = req.query;
-    let query = supabaseAdmin.from("Product").select("*");
-    if (category && category !== "ALL") {
-      query = query.eq("category", String(category));
-    }
-    if (search) {
-      const s = String(search).trim();
-      query = query.or(`name.ilike.%${s}%,description.ilike.%${s}%,category.ilike.%${s}%`);
-    }
-    const { data: products, error } = await query.order("createdAt", { ascending: false });
-    if (error) return res.status(500).json({ error: "Failed to fetch products." });
-    return res.json(products || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve products." });
-  }
-});
-router12.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { name, description, price, discountPrice, stockQuantity = 0, category = "Accessories", imageUrl, isFeatured = false, isBestSeller = false } = req.body;
-    if (!name || price === void 0) {
-      return res.status(400).json({ error: "Product name and price are required." });
-    }
-    const newProduct = {
-      id: uuidv413(),
-      name: name.trim(),
-      description: description ? description.trim() : null,
-      price: parseFloat(price) || 0,
-      discountPrice: discountPrice ? parseFloat(discountPrice) : null,
-      stockQuantity: parseInt(stockQuantity, 10) || 0,
-      category: category.trim(),
-      imageUrl: imageUrl || null,
-      isFeatured: Boolean(isFeatured),
-      isBestSeller: Boolean(isBestSeller),
-      rating: 4.8,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: created, error } = await supabaseAdmin.from("Product").insert([newProduct]).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to save product." });
-    return res.status(201).json(created);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to create product." });
-  }
-});
-router12.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    delete updateData.id;
-    if (updateData.price !== void 0) updateData.price = parseFloat(updateData.price) || 0;
-    if (updateData.discountPrice !== void 0) updateData.discountPrice = updateData.discountPrice ? parseFloat(updateData.discountPrice) : null;
-    if (updateData.stockQuantity !== void 0) updateData.stockQuantity = parseInt(updateData.stockQuantity, 10) || 0;
-    const { data: updated, error } = await supabaseAdmin.from("Product").update(updateData).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to update product." });
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update product record." });
-  }
-});
-router12.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { error } = await supabaseAdmin.from("Product").delete().eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to delete product." });
-    return res.json({ success: true, message: "Product deleted." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to delete product." });
-  }
-});
-var products_default = router12;
-
-// api/_server/routes/notifications.ts
-import { Router as Router13 } from "express";
-var router13 = Router13();
-router13.get("/", authenticate, async (req, res) => {
-  try {
-    const { data: notifications, error } = await supabaseAdmin.from("Notification").select("*").or(`userId.eq.${req.user.id},userId.is.null`).order("createdAt", { ascending: false }).limit(50);
-    if (error) return res.status(500).json({ error: "Failed to fetch notifications." });
-    return res.json(notifications || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve notifications." });
-  }
-});
-router13.post("/:id/read", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { error } = await supabaseAdmin.from("Notification").update({ isRead: true, readAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to mark notification as read." });
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update notification status." });
-  }
-});
-router13.post("/mark-all-read", authenticate, async (req, res) => {
-  try {
-    const { error } = await supabaseAdmin.from("Notification").update({ isRead: true, readAt: (/* @__PURE__ */ new Date()).toISOString() }).or(`userId.eq.${req.user.id},userId.is.null`);
-    if (error) return res.status(500).json({ error: "Failed to mark all notifications as read." });
-    return res.json({ success: true, message: "All notifications marked as read." });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to process mark all read." });
-  }
-});
-var notifications_default = router13;
-
-// api/_server/routes/superAdmin.ts
-import { Router as Router14 } from "express";
-import { v4 as uuidv414 } from "uuid";
-var router14 = Router14();
-router14.get("/audit-logs", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { action, resource, userId, page = "1", limit = "50", startDate, endDate } = req.query;
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 50;
-    const offset = (pageNum - 1) * limitNum;
-    let query = supabaseAdmin.from("AuditLog").select("*", { count: "exact" });
-    if (action && action !== "ALL") query = query.eq("action", String(action));
-    if (resource && resource !== "ALL") query = query.eq("resource", String(resource));
-    if (userId && userId !== "ALL") query = query.eq("userId", String(userId));
-    if (startDate) query = query.gte("createdAt", String(startDate));
-    if (endDate) query = query.lte("createdAt", String(endDate));
-    const { data: logs, count, error } = await query.order("createdAt", { ascending: false }).range(offset, offset + limitNum - 1);
-    if (error) {
-      console.error("[AUDIT LOGS ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch audit logs." });
-    }
-    return res.json({
-      logs: logs || [],
-      total: count || 0,
-      page: pageNum,
-      limit: limitNum,
-      totalPages: Math.ceil((count || 0) / limitNum)
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve system audit logs." });
-  }
-});
-router14.get("/deletion-history", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { data: logs, error } = await supabaseAdmin.from("AuditLog").select("*").ilike("action", "%DELETE%").order("createdAt", { ascending: false }).limit(100);
-    if (error) return res.status(500).json({ error: "Failed to fetch deletion history." });
-    return res.json(logs || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve deletion records." });
-  }
-});
-router14.post("/delete-data", authenticate, authorize(["SUPER_ADMIN"]), async (req, res) => {
-  try {
-    const { table, ids, reason } = req.body;
-    if (!table || !ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: "Table name and target ID list are required." });
-    }
-    const validTables = ["Repair", "Customer", "BatteryWarranty", "InventoryItem", "Attendance", "RepairRelatedDamage", "RepairPrice", "Product", "HomeSlide"];
-    if (!validTables.includes(table)) {
-      return res.status(400).json({ error: `Deletion not permitted on table ${table}.` });
-    }
-    const { error } = await supabaseAdmin.from(table).delete().in("id", ids);
-    if (error) return res.status(500).json({ error: `Failed to delete from ${table}: ${error.message}` });
-    await logAudit({
-      userId: req.user.id,
-      action: `SUPERADMIN_BULK_DELETE_${table.toUpperCase()}`,
-      resource: table,
-      details: { deletedCount: ids.length, ids, reason: reason || "Administrative cleanup" }
-    });
-    return res.json({ success: true, message: `Safely removed ${ids.length} records from ${table}.` });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to execute data deletion." });
-  }
-});
-router14.get("/share/history", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { data: shares } = await supabaseAdmin.from("AppletShare").select("*").order("createdAt", { ascending: false }).limit(50);
-    return res.json(shares || []);
-  } catch (err) {
-    return res.json([]);
-  }
-});
-router14.post("/share/applet", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { title, description, permissions, expiresAt } = req.body;
-    const shareId = uuidv414();
-    const shareToken = uuidv414().replace(/-/g, "");
-    const newShare = {
-      id: shareId,
-      shareToken,
-      title: title || "MTS Lab Share Link",
-      description: description || null,
-      permissions: permissions || ["READ"],
-      expiresAt: expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3).toISOString(),
-      createdById: req.user.id,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    await supabaseAdmin.from("AppletShare").insert([newShare]);
-    return res.status(201).json({ success: true, shareToken, url: `/share/${shareToken}` });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to create share link." });
-  }
-});
-var superAdmin_default = router14;
-
-// api/_server/routes/upload.ts
-import { Router as Router15 } from "express";
-import multer4 from "multer";
-var router15 = Router15();
-var upload4 = multer4({ storage: multer4.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-router15.post("/", authenticate, upload4.single("file"), async (req, res) => {
-  try {
-    const folder = req.query.folder || req.body?.folder || "mts_lab";
-    if (req.file) {
-      const result = await uploadToCloudinary(req.file.buffer, folder);
-      return res.json({
-        url: result.secure_url,
-        publicId: result.public_id,
-        format: result.format,
-        bytes: result.bytes,
-        resourceType: result.resource_type
-      });
-    }
-    if (req.body?.base64Image || req.body?.image) {
-      const b64 = req.body.base64Image || req.body.image;
-      const result = await uploadBase64ToCloudinary(b64, folder);
-      return res.json({
-        url: result.secure_url,
-        publicId: result.public_id,
-        format: result.format
-      });
-    }
-    return res.status(400).json({ error: "No file or image content provided." });
-  } catch (err) {
-    console.error("[UPLOAD ERROR]", err);
-    return res.status(500).json({ error: "Failed to upload asset to Cloudinary." });
-  }
-});
-var upload_default = router15;
-
-// api/_server/routes/public.ts
-import { Router as Router16 } from "express";
-var router16 = Router16();
-var handlePublicTrack = async (req, res) => {
-  try {
-    const rawRepairNumber = req.body?.repairNumber || req.query?.repairNumber || req.body?.ticketNumber || req.query?.ticketNumber || "";
-    const rawPhone = req.body?.phone || req.query?.phone || req.body?.customerPhone || req.query?.customerPhone || "";
-    const cleanRepairNumber = String(rawRepairNumber).trim().replace(/^#+/, "").trim();
-    const cleanPhone = String(rawPhone).trim().replace(/\D/g, "");
-    if (!cleanRepairNumber && !cleanPhone) {
-      return res.status(400).json({ error: "Please enter a Repair Job Number or Registered Phone Number." });
-    }
-    const selectFields = `
-      id,
-      repairNumber,
-      customerId,
-      customerName,
-      customerPhone,
-      deviceBrand,
-      deviceModel,
-      problemDescription,
-      status,
-      priority,
-      expectedCompletionDate,
-      estimatedCost,
-      advancePaid,
-      totalPaid,
-      paymentStatus,
-      isCourierIn,
-      isCourierOut,
-      courierStatus,
-      courierCompany,
-      returnCourierCompany,
-      returnCourierTrackingNumber,
-      hasBatteryWarranty,
-      batteryWarrantyPeriod,
-      batteryType,
-      createdAt,
-      updatedAt,
-      completedAt,
-      deliveredAt,
-      logs:RepairLog(action, status, notes, createdAt)
-    `;
-    let repairRecord = null;
-    if (cleanRepairNumber) {
-      const { data } = await supabaseAdmin.from("Repair").select(selectFields).or(`repairNumber.eq.${cleanRepairNumber},repairNumber.ilike.%${cleanRepairNumber}%`).order("createdAt", { ascending: false }).limit(1).maybeSingle();
-      if (data) {
-        repairRecord = data;
-      }
-    }
-    if (!repairRecord && cleanPhone) {
-      const { data: directMatch } = await supabaseAdmin.from("Repair").select(selectFields).ilike("customerPhone", `%${cleanPhone}%`).order("createdAt", { ascending: false }).limit(1).maybeSingle();
-      if (directMatch) {
-        repairRecord = directMatch;
-      } else {
-        const { data: customerData } = await supabaseAdmin.from("Customer").select("id").ilike("phone", `%${cleanPhone}%`).limit(1).maybeSingle();
-        if (customerData) {
-          const { data: customerRepair } = await supabaseAdmin.from("Repair").select(selectFields).eq("customerId", customerData.id).order("createdAt", { ascending: false }).limit(1).maybeSingle();
-          if (customerRepair) {
-            repairRecord = customerRepair;
-          }
-        }
-      }
-    }
-    if (!repairRecord) {
-      return res.status(404).json({ error: "No repair records found matching your tracking information." });
-    }
-    const sanitizedName = repairRecord.customerName ? `${repairRecord.customerName.charAt(0)}*** ${repairRecord.customerName.split(" ").slice(-1)[0] || ""}`.trim() : "Customer";
-    const sanitizedRecord = {
-      ...repairRecord,
-      customerName: sanitizedName,
-      customerPhone: cleanPhone ? `${cleanPhone.slice(0, 3)}****${cleanPhone.slice(-3)}` : void 0
-    };
-    return res.json({
-      success: true,
-      repair: sanitizedRecord,
-      ...sanitizedRecord
-    });
-  } catch (err) {
-    console.error("[PUBLIC TRACK EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to retrieve tracking details." });
-  }
-};
-router16.get("/track", handlePublicTrack);
-router16.post("/track", handlePublicTrack);
-router16.get("/public/track", handlePublicTrack);
-router16.post("/public/track", handlePublicTrack);
-router16.get("/manager/stats", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
-  try {
-    const { data: repairs } = await supabaseAdmin.from("Repair").select("technicianId, status, priority, estimatedCost, advancePaid, totalPaid");
-    let totalRepairs = 0;
-    let pending = 0;
-    let assigned = 0;
-    let inProgress = 0;
-    let repaired = 0;
-    let ready = 0;
-    let delivered = 0;
-    let reproblem = 0;
-    let unassigned = 0;
-    let urgentCount = 0;
-    let highCount = 0;
-    let totalRevenue = 0;
-    (repairs || []).forEach((r) => {
-      totalRepairs++;
-      totalRevenue += Number(r.totalPaid || r.advancePaid || 0);
-      const s = (r.status || "").toUpperCase();
-      if (!r.technicianId && s !== "DELIVERED" && s !== "CANCELLED") unassigned++;
-      if (r.technicianId && s !== "DELIVERED" && s !== "CANCELLED") assigned++;
-      if (["PENDING", "RECEIVED"].includes(s)) pending++;
-      if (["IN_PROCESS", "DIAGNOSING", "TESTING", "WAITING_FOR_PARTS", "IN_PROGRESS", "REPAIRING"].includes(s)) inProgress++;
-      if (["REPAIRED"].includes(s)) repaired++;
-      if (["READY_FOR_PICKUP", "READY_FOR_DELIVERY"].includes(s)) ready++;
-      if (["DELIVERED", "COMPLETED"].includes(s)) delivered++;
-      if (["RE_PROBLEM", "REPROBLEM"].includes(s)) reproblem++;
-      if (r.priority === "URGENT") urgentCount++;
-      if (r.priority === "HIGH") highCount++;
-    });
-    return res.json({
-      totalRepairs,
-      pending,
-      assigned,
-      inProgress,
-      repaired,
-      ready,
-      delivered,
-      reproblem,
-      unassigned,
-      urgentCount,
-      highCount,
-      totalRevenue
-    });
-  } catch (err) {
-    console.error("[MANAGER STATS ERROR]", err);
-    return res.status(500).json({ error: "Failed to compute manager stats." });
-  }
-});
-router16.get("/manager/workload", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
-  try {
-    const { data: staff } = await supabaseAdmin.from("User").select("id, name, role, department").in("role", ["TECHNICIAN", "LEAD_TECHNICIAN", "HEAD_TECHNICIAN", "TECHNICAL_ASSISTANT"]).is("deletedAt", null);
-    const { data: repairs } = await supabaseAdmin.from("Repair").select("technicianId, status, priority").not("status", "in", '("COMPLETED","DELIVERED","CANCELLED")');
-    const workloadMap = {};
-    (staff || []).forEach((s) => {
-      workloadMap[s.id] = {
-        pendingCount: 0,
-        inProgressCount: 0,
-        repairedCount: 0,
-        readyCount: 0,
-        urgentCount: 0,
-        totalActive: 0
-      };
-    });
-    (repairs || []).forEach((r) => {
-      if (r.technicianId && workloadMap[r.technicianId]) {
-        const item = workloadMap[r.technicianId];
-        const s = (r.status || "").toUpperCase();
-        item.totalActive++;
-        if (["PENDING", "RECEIVED"].includes(s)) item.pendingCount++;
-        if (["IN_PROCESS", "DIAGNOSING", "TESTING", "WAITING_FOR_PARTS", "IN_PROGRESS"].includes(s)) item.inProgressCount++;
-        if (s === "REPAIRED") item.repairedCount++;
-        if (s === "READY_FOR_PICKUP") item.readyCount++;
-        if (r.priority === "URGENT") item.urgentCount++;
-      }
-    });
-    const workload = (staff || []).map((s) => ({
-      technician: {
-        id: s.id,
-        name: s.name,
-        role: s.role,
-        department: s.department
-      },
-      ...workloadMap[s.id]
-    }));
-    return res.json(workload);
-  } catch (err) {
-    console.error("[MANAGER WORKLOAD ERROR]", err);
-    return res.status(500).json({ error: "Failed to calculate technician workloads." });
-  }
-});
-router16.get("/dashboard/stats", authenticate, async (req, res) => {
-  try {
-    const { data: repairs } = await supabaseAdmin.from("Repair").select("status, priority, totalPaid, advancePaid, estimatedCost");
-    const { count: totalCustomers } = await supabaseAdmin.from("Customer").select("*", { count: "exact", head: true });
-    const { count: totalStaff } = await supabaseAdmin.from("User").select("*", { count: "exact", head: true }).is("deletedAt", null);
-    let activeRepairs = 0;
-    let completedRepairs = 0;
-    let totalRevenue = 0;
-    (repairs || []).forEach((r) => {
-      totalRevenue += Number(r.totalPaid || r.advancePaid || 0);
-      if (["COMPLETED", "DELIVERED"].includes((r.status || "").toUpperCase())) {
-        completedRepairs++;
-      } else {
-        activeRepairs++;
-      }
-    });
-    return res.json({
-      activeRepairs,
-      completedRepairs,
-      totalCustomers: totalCustomers || 0,
-      totalStaff: totalStaff || 0,
-      totalRevenue
-    });
-  } catch (err) {
-    console.error("[DASHBOARD STATS ERROR]", err);
-    return res.status(500).json({ error: "Failed to retrieve dashboard overview." });
-  }
-});
-var public_default = router16;
-
-// api/_server/routes/events.ts
-import { Router as Router17 } from "express";
-import jwt3 from "jsonwebtoken";
-var router17 = Router17();
-router17.get("/", (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace("Bearer ", "");
-  let isAuthenticated = false;
-  if (token) {
-    try {
-      jwt3.verify(token, config.jwtSecret);
-      isAuthenticated = true;
-    } catch (_) {
-      isAuthenticated = true;
-    }
-  }
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.flushHeaders();
-  res.write(`event: connected
-data: ${JSON.stringify({ status: "connected", transport: "supabase-realtime", message: "Real-time sync via Supabase WebSocket channel." })}
-
-`);
-  res.write(`event: ping
-data: ${JSON.stringify({ ts: Date.now() })}
-
-`);
-  req.on("close", () => {
-    res.end();
-  });
-  const closeTimer = setTimeout(() => {
-    try {
-      res.write(`event: ping
-data: ${JSON.stringify({ ts: Date.now() })}
-
-`);
-      res.end();
-    } catch (_) {
-    }
-  }, 2e4);
-  req.on("close", () => {
-    clearTimeout(closeTimer);
-  });
-});
-var events_default = router17;
-
-// api/_server/app.ts
-export function createApp() {
-  const app2 = express();
-  app2.use(express.json({ limit: "20mb" }));
-  app2.use(express.urlencoded({ extended: true, limit: "20mb" }));
-  app2.use(cookieParser());
-  app2.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-refresh-token, X-Requested-With, Accept");
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    if (req.method === "OPTIONS") {
-      return res.status(200).end();
-    }
-    next();
-  });
-  app2.use("/api/auth", auth_default);
-  app2.use("/api/users", users_default);
-  app2.use("/api/staff", users_default);
-  app2.use("/api/repairs", repairs_default);
-  app2.use("/api/repair-transfers", repairTransfers_default);
-  app2.use("/api/customers", customers_default);
-  app2.use("/api/inventory", inventory_default);
-  app2.use("/api/couriers", couriers_default);
-  app2.use("/api/battery-warranties", batteryWarranties_default);
-  app2.use("/api/battery-warranty", batteryWarranties_default);
-  app2.use("/api/warranties", batteryWarranties_default);
-  app2.use("/api/attendance", attendance_default);
-  app2.use("/api/repair-damage", repairDamage_default);
-  app2.use("/api/repair-prices", repairPrices_default);
-  app2.use("/api/public/repair-prices", repairPrices_default);
-  app2.use("/api/slides", slides_default);
-  app2.use("/api/admin/slides", slides_default);
-  app2.use("/api/products", products_default);
-  app2.use("/api/public/products", products_default);
-  app2.use("/api/notifications", notifications_default);
-  app2.use("/api/admin", superAdmin_default);
-  app2.use("/api/share", superAdmin_default);
-  app2.use("/api/access-requests", superAdmin_default);
-  app2.use("/api/approved-devices", superAdmin_default);
-  app2.get("/api/inventory/folders", (req, res) => res.json([]));
-  app2.get("/api/inventory/suppliers", (req, res) => res.json([]));
-  app2.get("/api/inventory/locations", (req, res) => res.json([]));
-  app2.get("/api/repair-prices/folders", (req, res) => res.json([]));
-  app2.get("/api/access-requests", (req, res) => res.json([]));
-  app2.get("/api/approved-devices", (req, res) => res.json([]));
-  app2.use("/api/upload", upload_default);
-  app2.use("/api/events", events_default);
-  app2.use("/api", public_default);
-  app2.use("/api/public", public_default);
-  app2.get("/api/health", (req, res) => {
-    res.json({ status: "healthy", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
-  });
-  app2.all("/api/*", (req, res) => {
-    res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.path}` });
-  });
-  app2.use((err, req, res, next) => {
-    console.error("[API UNHANDLED ERROR]", err);
-    if (res.headersSent) {
-      return next(err);
-    }
-    res.status(err.status || 500).json({
-      error: "Internal Server Error",
-      message: err.message || "An unexpected error occurred."
-    });
-  });
-  return app2;
-}
-
-// api/_server/index.ts
-var app = createApp();
-var index_default = app;
-export {
-  index_default as default
-};
