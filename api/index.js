@@ -3356,20 +3356,32 @@ function getNepalTimeDetails() {
 }
 async function fetchSafeStaffUsers() {
   try {
-    const { data: users, error } = await supabaseAdmin.from("User").select("*").in("role", AUTHORIZED_STAFF_ROLES).order("name", { ascending: true });
-    if (error) {
-      console.error("[SUPABASE USER QUERY ERROR]", error);
-      return [];
+    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("*").in("role", AUTHORIZED_STAFF_ROLES).eq("status", "ACTIVE").order("name", { ascending: true });
+    if (!userErr && Array.isArray(users) && users.length > 0) {
+      return users.filter((u) => {
+        const email = (u.email || "").toLowerCase();
+        return !email.endsWith(".local") && !email.includes("2fatest") && !email.includes("test_admin");
+      });
     }
-    return (users || []).filter((u) => {
-      const status = (u.status || "ACTIVE").toUpperCase();
-      const role = (u.role || "").toUpperCase();
-      const email = (u.email || "").toLowerCase();
-      const isStaffRole = AUTHORIZED_STAFF_ROLES.includes(role);
-      const isActive = status === "ACTIVE";
-      const isRealAccount = !email.endsWith(".local") && !email.includes("2fatest") && !email.includes("test_admin");
-      return isStaffRole && isActive && isRealAccount;
-    });
+    const { data: staffMembers, error: staffErr } = await supabaseAdmin.from("Staff").select("*").order("name", { ascending: true });
+    if (!staffErr && Array.isArray(staffMembers) && staffMembers.length > 0) {
+      return staffMembers.filter((s) => {
+        const status = (s.status || "ACTIVE").toUpperCase();
+        const email = (s.email || "").toLowerCase();
+        const isReal = !email.endsWith(".local") && !email.includes("2fatest") && !email.includes("test_admin");
+        return status === "ACTIVE" && isReal;
+      }).map((s) => ({
+        id: s.userId || s.id,
+        name: s.name || "Staff Member",
+        email: s.email || "",
+        role: s.role || "TECHNICIAN",
+        department: s.department || "Repair Lab",
+        phone: s.phone || "",
+        avatarUrl: s.avatarUrl || s.profileImage || null,
+        status: s.status || "ACTIVE"
+      }));
+    }
+    return [];
   } catch (err) {
     console.error("[SAFE USER FETCH EXCEPTION]", err);
     return [];
@@ -3850,6 +3862,34 @@ router8.get("/export", authenticate, async (req, res) => {
     return res.json({ success: true, rows });
   } catch (err) {
     return res.status(500).json({ error: "Failed to export attendance records." });
+  }
+});
+router8.delete("/staff/:userId", authenticate, authorize(["SUPER_ADMIN"]), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ error: "Staff User ID is required." });
+    }
+    if (userId === req.user.id) {
+      return res.status(400).json({ error: "You cannot delete your own Super Admin account from attendance." });
+    }
+    const { error: attDelErr } = await supabaseAdmin.from("Attendance").delete().eq("userId", userId);
+    if (attDelErr) {
+      console.error("[STAFF ATTENDANCE PURGE ERROR]", attDelErr);
+      return res.status(500).json({ error: "Failed to purge staff attendance records." });
+    }
+    await supabaseAdmin.from("Staff").delete().or(`id.eq.${userId},userId.eq.${userId}`);
+    const { error: userDelErr } = await supabaseAdmin.from("User").delete().eq("id", userId);
+    if (userDelErr) {
+      console.warn("[USER TABLE PURGE WARN - NON FATAL]", userDelErr);
+    }
+    return res.json({
+      success: true,
+      message: "Staff member and all their attendance records have been permanently removed."
+    });
+  } catch (err) {
+    console.error("[STAFF DELETE EXCEPTION]", err);
+    return res.status(500).json({ error: err?.message || "Server error removing staff records." });
   }
 });
 var attendance_default = router8;
