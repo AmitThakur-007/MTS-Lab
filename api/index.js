@@ -3320,6 +3320,17 @@ var batteryWarranties_default = router7;
 import { Router as Router8 } from "express";
 import { v4 as uuidv49 } from "uuid";
 var router8 = Router8();
+var AUTHORIZED_STAFF_ROLES = [
+  "SUPER_ADMIN",
+  "ADMIN",
+  "MANAGER",
+  "RECEPTIONIST",
+  "TECHNICIAN",
+  "LEAD_TECHNICIAN",
+  "HEAD_TECHNICIAN",
+  "TECHNICAL_ASSISTANT",
+  "STAFF"
+];
 function getNepalTimeDetails() {
   const now = /* @__PURE__ */ new Date();
   const utc = now.getTime() + now.getTimezoneOffset() * 6e4;
@@ -3345,12 +3356,31 @@ function getNepalTimeDetails() {
 }
 async function fetchSafeStaffUsers() {
   try {
-    const { data: users, error } = await supabaseAdmin.from("User").select("*").order("name", { ascending: true });
-    if (error) {
-      console.error("[SUPABASE USER QUERY ERROR]", error);
+    const { data: staffMembers, error: staffErr } = await supabaseAdmin.from("Staff").select("*").order("name", { ascending: true });
+    if (!staffErr && Array.isArray(staffMembers) && staffMembers.length > 0) {
+      return staffMembers.filter((s) => s.status !== "INACTIVE" && s.status !== "SUSPENDED").map((s) => ({
+        id: s.userId || s.id,
+        name: s.name || "Staff Member",
+        email: s.email || "",
+        role: s.role || "TECHNICIAN",
+        department: s.department || "Repair Lab",
+        phone: s.phone || "",
+        avatarUrl: s.avatarUrl || s.profileImage || null,
+        status: s.status || "ACTIVE"
+      }));
+    }
+    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("*").order("name", { ascending: true });
+    if (userErr) {
+      console.error("[SUPABASE USER QUERY ERROR]", userErr);
       return [];
     }
-    return (users || []).filter((u) => u.status !== "SUSPENDED" && u.status !== "INACTIVE");
+    return (users || []).filter((u) => {
+      const status = (u.status || "ACTIVE").toUpperCase();
+      const role = (u.role || "").toUpperCase();
+      const isStaffRole = AUTHORIZED_STAFF_ROLES.includes(role);
+      const isActive = status !== "SUSPENDED" && status !== "INACTIVE" && status !== "DELETED";
+      return isStaffRole && isActive;
+    });
   } catch (err) {
     console.error("[SAFE USER FETCH EXCEPTION]", err);
     return [];
@@ -3412,7 +3442,7 @@ var handleRosterRequest = async (req, res) => {
         avatarUrl: u.avatarUrl || u.profileImage || null,
         date: todayStr,
         status: record ? record.status : "NOT_MARKED",
-        checkInTime: record ? record.checkInTime : null,
+        checkInTime: record ? record.checkInTime || record.time || null : null,
         checkOutTime: record ? record.checkOutTime : null,
         notes: record ? record.notes : null,
         attendanceId: record ? record.id : null,
@@ -3427,10 +3457,10 @@ var handleRosterRequest = async (req, res) => {
         attendance: record ? {
           id: record.id,
           status: record.status,
-          checkInTime: record.checkInTime,
-          checkOutTime: record.checkOutTime,
+          checkInTime: record.checkInTime || record.time || null,
+          checkOutTime: record.checkOutTime || null,
           markedByName: record.markedByName || "Administrator",
-          markedAt: record.checkInTime || record.date,
+          markedAt: record.checkInTime || record.createdAt || record.date,
           notes: record.notes
         } : null
       };
@@ -3563,7 +3593,7 @@ router8.get("/staff/:userId/monthly", authenticate, async (req, res) => {
         status: rec ? rec.status : isFuture ? "FUTURE" : "NOT_MARKED",
         record: rec ? {
           ...rec,
-          formattedCheckInTime: rec.checkInTime || "\u2014",
+          formattedCheckInTime: rec.checkInTime || rec.time || "\u2014",
           markedBy: rec.markedByName || "Administrator"
         } : null
       });
@@ -3621,9 +3651,7 @@ router8.post("/dispatch-request", authenticate, authorize(["MANAGER", "SUPER_ADM
           id: uuidv49(),
           userId: req.user.id,
           date: time.dateString,
-          checkInTime: time.timeString,
           status: "PRESENT",
-          notes: "Auto-marked PRESENT via Daily Attendance Broadcast Dispatch",
           markedById: req.user.id,
           createdAt: (/* @__PURE__ */ new Date()).toISOString(),
           updatedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -3632,8 +3660,6 @@ router8.post("/dispatch-request", authenticate, authorize(["MANAGER", "SUPER_ADM
     } else {
       await supabaseAdmin.from("Attendance").update({
         status: "PRESENT",
-        checkInTime: time.timeString,
-        notes: "Confirmed PRESENT via Broadcast Dispatch",
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       }).eq("id", managerRecord.id);
     }
@@ -3647,7 +3673,6 @@ router8.post("/dispatch-request", authenticate, authorize(["MANAGER", "SUPER_ADM
             userId: staff.id,
             date: time.dateString,
             status: "PENDING",
-            notes: `Attendance requested by Manager (Attempt #${currentCount + 1})`,
             markedById: req.user.id,
             createdAt: (/* @__PURE__ */ new Date()).toISOString(),
             updatedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -3682,20 +3707,22 @@ router8.post("/mark", authenticate, async (req, res) => {
     const effectiveUserId = targetUserId || req.user.id;
     const isSuperAdmin = req.user?.role === "SUPER_ADMIN" || req.user?.role === "ADMIN";
     const isManager = req.user?.role === "MANAGER";
+    const staffList = await fetchSafeStaffUsers();
+    const isRegisteredStaff = staffList.some((s) => s.id === effectiveUserId);
+    if (!isRegisteredStaff && !isSuperAdmin) {
+      return res.status(403).json({
+        error: "Attendance can only be recorded for staff members registered in Staff Management."
+      });
+    }
     const { data: existing } = await supabaseAdmin.from("Attendance").select("*").eq("userId", effectiveUserId).eq("date", effectiveDate).limit(1);
     const existingRecord = existing?.[0];
     if (isSuperAdmin || isManager && explicitStatus && time.isWithinWindow) {
       const finalStatus = explicitStatus || "PRESENT";
       const updatePayload = {
         status: finalStatus,
-        notes: notes ? notes.trim() : isSuperAdmin ? `Directly marked by Super Admin (${req.user.name})` : "Marked by Manager",
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
-      if (type === "CHECK_OUT" || explicitStatus === "CHECK_OUT") {
-        updatePayload.checkOutTime = effectiveTime;
-      } else {
-        if (!existingRecord?.checkInTime) updatePayload.checkInTime = effectiveTime;
-      }
+      if (notes) updatePayload.notes = notes.trim();
       if (existingRecord) {
         const { data: updated, error } = await supabaseAdmin.from("Attendance").update(updatePayload).eq("id", existingRecord.id).select("*").single();
         if (error) throw error;
@@ -3705,27 +3732,24 @@ router8.post("/mark", authenticate, async (req, res) => {
           id: uuidv49(),
           userId: effectiveUserId,
           date: effectiveDate,
-          checkInTime: effectiveTime,
           status: finalStatus,
-          notes: notes ? notes.trim() : `Directly marked by Super Admin (${req.user.name})`,
           markedById: req.user.id,
           createdAt: (/* @__PURE__ */ new Date()).toISOString(),
           updatedAt: (/* @__PURE__ */ new Date()).toISOString()
         };
+        if (notes) newRecord.notes = notes.trim();
         const { data: created, error } = await supabaseAdmin.from("Attendance").insert([newRecord]).select("*").single();
         if (error) throw error;
         return res.status(201).json({ success: true, message: `Staff attendance marked as ${finalStatus}.`, record: created });
       }
     }
     if (type === "CHECK_IN" || type === "IN") {
-      if (existingRecord && existingRecord.checkInTime && existingRecord.status === "PRESENT") {
+      if (existingRecord && existingRecord.status === "PRESENT") {
         return res.status(400).json({ error: "Check-in already completed for today." });
       }
       if (existingRecord) {
         const { data: updated, error: error2 } = await supabaseAdmin.from("Attendance").update({
-          checkInTime: effectiveTime,
           status: "PRESENT",
-          notes: notes || "Confirmed presence in response to request",
           updatedAt: (/* @__PURE__ */ new Date()).toISOString()
         }).eq("id", existingRecord.id).select("*").single();
         if (error2) throw error2;
@@ -3735,9 +3759,7 @@ router8.post("/mark", authenticate, async (req, res) => {
         id: uuidv49(),
         userId: effectiveUserId,
         date: effectiveDate,
-        checkInTime: effectiveTime,
         status: "PRESENT",
-        notes: notes || null,
         markedById: req.user.id,
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -3751,8 +3773,6 @@ router8.post("/mark", authenticate, async (req, res) => {
         return res.status(400).json({ error: "No check-in record found for today." });
       }
       const { data: updated, error } = await supabaseAdmin.from("Attendance").update({
-        checkOutTime: effectiveTime,
-        notes: notes ? `${existingRecord.notes || ""} | ${notes}`.trim() : existingRecord.notes,
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       }).eq("id", existingRecord.id).select("*").single();
       if (error) throw error;
@@ -3812,7 +3832,6 @@ router8.patch("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (
     const { status, notes, reason } = req.body;
     const { data: updated, error } = await supabaseAdmin.from("Attendance").update({
       status,
-      notes: notes || `Corrected by Admin (${req.user.name}): ${reason || ""}`,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     }).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to update record." });
@@ -3846,8 +3865,6 @@ router8.get("/export", authenticate, async (req, res) => {
         "Staff Name": u.name || "Staff",
         "Role": u.role || "TECHNICIAN",
         "Department": u.department || "Repair Lab",
-        "Check In": r.checkInTime || "\u2014",
-        "Check Out": r.checkOutTime || "\u2014",
         "Status": r.status,
         "Notes": r.notes || "\u2014"
       };

@@ -7,6 +7,18 @@ import { createExcelBuffer } from '../services/excelService';
 
 const router = Router();
 
+const AUTHORIZED_STAFF_ROLES = [
+  'SUPER_ADMIN',
+  'ADMIN',
+  'MANAGER',
+  'RECEPTIONIST',
+  'TECHNICIAN',
+  'LEAD_TECHNICIAN',
+  'HEAD_TECHNICIAN',
+  'TECHNICAL_ASSISTANT',
+  'STAFF'
+];
+
 function getNepalTimeDetails() {
   const now = new Date();
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
@@ -36,20 +48,50 @@ function getNepalTimeDetails() {
   };
 }
 
-// Safe user helper to avoid failing when column names differ
+/**
+ * Helper to fetch only staff registered in Staff Management / User accounts
+ */
 async function fetchSafeStaffUsers() {
   try {
-    const { data: users, error } = await supabaseAdmin
+    // 1. Check if dedicated Staff table exists
+    const { data: staffMembers, error: staffErr } = await supabaseAdmin
+      .from('Staff')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (!staffErr && Array.isArray(staffMembers) && staffMembers.length > 0) {
+      return staffMembers
+        .filter((s: any) => s.status !== 'INACTIVE' && s.status !== 'SUSPENDED')
+        .map((s: any) => ({
+          id: s.userId || s.id,
+          name: s.name || 'Staff Member',
+          email: s.email || '',
+          role: s.role || 'TECHNICIAN',
+          department: s.department || 'Repair Lab',
+          phone: s.phone || '',
+          avatarUrl: s.avatarUrl || s.profileImage || null,
+          status: s.status || 'ACTIVE'
+        }));
+    }
+
+    // 2. Fallback directly to User table with role filters
+    const { data: users, error: userErr } = await supabaseAdmin
       .from('User')
       .select('*')
       .order('name', { ascending: true });
 
-    if (error) {
-      console.error('[SUPABASE USER QUERY ERROR]', error);
+    if (userErr) {
+      console.error('[SUPABASE USER QUERY ERROR]', userErr);
       return [];
     }
 
-    return (users || []).filter((u: any) => u.status !== 'SUSPENDED' && u.status !== 'INACTIVE');
+    return (users || []).filter((u: any) => {
+      const status = (u.status || 'ACTIVE').toUpperCase();
+      const role = (u.role || '').toUpperCase();
+      const isStaffRole = AUTHORIZED_STAFF_ROLES.includes(role);
+      const isActive = status !== 'SUSPENDED' && status !== 'INACTIVE' && status !== 'DELETED';
+      return isStaffRole && isActive;
+    });
   } catch (err) {
     console.error('[SAFE USER FETCH EXCEPTION]', err);
     return [];
@@ -105,7 +147,7 @@ const handleRosterRequest = async (req: AuthRequest, res: Response) => {
     const time = getNepalTimeDetails();
     const todayStr = (req.query.date as string) || time.dateString;
 
-    // 1. Fetch staff safely
+    // 1. Fetch authorized staff registered in staff management
     const staffList = await fetchSafeStaffUsers();
 
     // 2. Fetch today's attendance records
@@ -143,7 +185,7 @@ const handleRosterRequest = async (req: AuthRequest, res: Response) => {
         avatarUrl: u.avatarUrl || u.profileImage || null,
         date: todayStr,
         status: record ? record.status : 'NOT_MARKED',
-        checkInTime: record ? record.checkInTime : null,
+        checkInTime: record ? (record.checkInTime || record.time || null) : null,
         checkOutTime: record ? record.checkOutTime : null,
         notes: record ? record.notes : null,
         attendanceId: record ? record.id : null,
@@ -158,10 +200,10 @@ const handleRosterRequest = async (req: AuthRequest, res: Response) => {
         attendance: record ? {
           id: record.id,
           status: record.status,
-          checkInTime: record.checkInTime,
-          checkOutTime: record.checkOutTime,
+          checkInTime: record.checkInTime || record.time || null,
+          checkOutTime: record.checkOutTime || null,
           markedByName: record.markedByName || 'Administrator',
-          markedAt: record.checkInTime || record.date,
+          markedAt: record.checkInTime || record.createdAt || record.date,
           notes: record.notes
         } : null
       };
@@ -211,7 +253,7 @@ router.get('/monthly-report', authenticate, async (req: AuthRequest, res: Respon
     const { month } = req.query;
     const currentMonth = (month as string) || new Date().toISOString().slice(0, 7);
 
-    // 1. Fetch staff safely with select('*')
+    // 1. Fetch authorized staff list
     const staffList = await fetchSafeStaffUsers();
 
     // 2. Fetch all logs for this month
@@ -336,7 +378,7 @@ router.get('/staff/:userId/monthly', authenticate, async (req: AuthRequest, res:
         status: rec ? rec.status : isFuture ? 'FUTURE' : 'NOT_MARKED',
         record: rec ? {
           ...rec,
-          formattedCheckInTime: rec.checkInTime || '—',
+          formattedCheckInTime: rec.checkInTime || rec.time || '—',
           markedBy: rec.markedByName || 'Administrator'
         } : null
       });
@@ -414,9 +456,7 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
           id: uuidv4(),
           userId: req.user!.id,
           date: time.dateString,
-          checkInTime: time.timeString,
           status: 'PRESENT',
-          notes: 'Auto-marked PRESENT via Daily Attendance Broadcast Dispatch',
           markedById: req.user!.id,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -425,8 +465,6 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
     } else {
       await supabaseAdmin.from('Attendance').update({
         status: 'PRESENT',
-        checkInTime: time.timeString,
-        notes: 'Confirmed PRESENT via Broadcast Dispatch',
         updatedAt: new Date().toISOString()
       }).eq('id', managerRecord.id);
     }
@@ -449,7 +487,6 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
             userId: staff.id,
             date: time.dateString,
             status: 'PENDING',
-            notes: `Attendance requested by Manager (Attempt #${currentCount + 1})`,
             markedById: req.user!.id,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
@@ -491,6 +528,15 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
     const isSuperAdmin = req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'ADMIN';
     const isManager = req.user?.role === 'MANAGER';
 
+    // Verify target is an authorized staff member
+    const staffList = await fetchSafeStaffUsers();
+    const isRegisteredStaff = staffList.some((s: any) => s.id === effectiveUserId);
+    if (!isRegisteredStaff && !isSuperAdmin) {
+      return res.status(403).json({
+        error: 'Attendance can only be recorded for staff members registered in Staff Management.'
+      });
+    }
+
     const { data: existing } = await supabaseAdmin
       .from('Attendance')
       .select('*')
@@ -505,15 +551,10 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
       const finalStatus = explicitStatus || 'PRESENT';
       const updatePayload: any = {
         status: finalStatus,
-        notes: notes ? notes.trim() : (isSuperAdmin ? `Directly marked by Super Admin (${req.user!.name})` : 'Marked by Manager'),
         updatedAt: new Date().toISOString()
       };
 
-      if (type === 'CHECK_OUT' || explicitStatus === 'CHECK_OUT') {
-        updatePayload.checkOutTime = effectiveTime;
-      } else {
-        if (!existingRecord?.checkInTime) updatePayload.checkInTime = effectiveTime;
-      }
+      if (notes) updatePayload.notes = notes.trim();
 
       if (existingRecord) {
         const { data: updated, error } = await supabaseAdmin
@@ -526,17 +567,17 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
         if (error) throw error;
         return res.json({ success: true, message: `Staff attendance updated to ${finalStatus}.`, record: updated });
       } else {
-        const newRecord = {
+        const newRecord: any = {
           id: uuidv4(),
           userId: effectiveUserId,
           date: effectiveDate,
-          checkInTime: effectiveTime,
           status: finalStatus,
-          notes: notes ? notes.trim() : `Directly marked by Super Admin (${req.user!.name})`,
           markedById: req.user!.id,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
+
+        if (notes) newRecord.notes = notes.trim();
 
         const { data: created, error } = await supabaseAdmin
           .from('Attendance')
@@ -551,7 +592,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
 
     // CASE B: REGULAR STAFF SELF CHECK-IN
     if (type === 'CHECK_IN' || type === 'IN') {
-      if (existingRecord && existingRecord.checkInTime && existingRecord.status === 'PRESENT') {
+      if (existingRecord && existingRecord.status === 'PRESENT') {
         return res.status(400).json({ error: 'Check-in already completed for today.' });
       }
 
@@ -559,9 +600,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
         const { data: updated, error } = await supabaseAdmin
           .from('Attendance')
           .update({
-            checkInTime: effectiveTime,
             status: 'PRESENT',
-            notes: notes || 'Confirmed presence in response to request',
             updatedAt: new Date().toISOString(),
           })
           .eq('id', existingRecord.id)
@@ -576,9 +615,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
         id: uuidv4(),
         userId: effectiveUserId,
         date: effectiveDate,
-        checkInTime: effectiveTime,
         status: 'PRESENT',
-        notes: notes || null,
         markedById: req.user!.id,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -603,8 +640,6 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
       const { data: updated, error } = await supabaseAdmin
         .from('Attendance')
         .update({
-          checkOutTime: effectiveTime,
-          notes: notes ? `${existingRecord.notes || ''} | ${notes}`.trim() : existingRecord.notes,
           updatedAt: new Date().toISOString(),
         })
         .eq('id', existingRecord.id)
@@ -706,7 +741,6 @@ router.patch('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (r
       .from('Attendance')
       .update({
         status,
-        notes: notes || `Corrected by Admin (${req.user!.name}): ${reason || ''}`,
         updatedAt: new Date().toISOString()
       })
       .eq('id', id)
@@ -761,8 +795,6 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
         'Staff Name': u.name || 'Staff',
         'Role': u.role || 'TECHNICIAN',
         'Department': u.department || 'Repair Lab',
-        'Check In': r.checkInTime || '—',
-        'Check Out': r.checkOutTime || '—',
         'Status': r.status,
         'Notes': r.notes || '—',
       };
