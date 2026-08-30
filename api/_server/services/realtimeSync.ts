@@ -5,7 +5,6 @@ export async function broadcastServerChange(entityName: string, action: 'CREATE'
     try {
         const channel = supabaseAdmin.channel('mts_app_db_changes');
 
-        // Ensure channel is joined properly with subscription promise resolution
         if (channel.state !== 'joined') {
             await new Promise((resolve) => {
                 channel.subscribe((status: string) => {
@@ -18,7 +17,6 @@ export async function broadcastServerChange(entityName: string, action: 'CREATE'
 
         const entityLower = entityName.toLowerCase();
 
-        // Send standard sync/delete broadcast events that your frontend listens to
         await channel.send({
             type: 'broadcast',
             event: action === 'DELETE' ? `${entityLower}_delete` : `${entityLower}_sync`,
@@ -31,7 +29,6 @@ export async function broadcastServerChange(entityName: string, action: 'CREATE'
             }
         });
 
-        // Also send a generic db_event for global catchers
         await channel.send({
             type: 'broadcast',
             event: 'db_event',

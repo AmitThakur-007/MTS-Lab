@@ -1,8 +1,9 @@
+// src/services/realtime.ts
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export interface RealtimeEvent {
-  entity: string; // 'repair' | 'user' | 'technicianNote' | 'repairLog' | 'payment' | 'accessRequest' | 'product' | 'repairPrice' | 'homeSlide' | 'session' | 'notification' | 'auditLog';
+  entity: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'SYNC';
   id?: string;
   data?: any;
@@ -48,14 +49,13 @@ class RealtimeService {
     try {
       if (!supabase) return;
 
-      // Enable self: true so that server-sent broadcasts are received by the active tab/client
+      // CRITICAL FIX: Enable self: true so that broadcast events echo back to the sender
       this.supabaseChannel = supabase.channel('mts_app_db_changes', {
         config: {
           broadcast: { self: true },
         },
       });
 
-      // Listen to server broadcast payloads (bypasses RLS completely)
       this.supabaseChannel
         .on('broadcast', { event: '*' }, ({ event, payload }: { event: string; payload: any }) => {
           console.log(`[SUPABASE BROADCAST RECEIVED] Event: ${event}`, payload);
@@ -75,7 +75,7 @@ class RealtimeService {
           if (status === 'SUBSCRIBED') {
             this.supabaseConnected = true;
             this.updateAggregateStatus();
-            console.log('[REALTIME] Connected to Supabase Realtime Channel successfully with self-broadcast enabled');
+            console.log('[REALTIME] Connected to Supabase channel with self-broadcast active.');
           } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
             this.supabaseConnected = false;
             this.updateAggregateStatus();
@@ -102,7 +102,7 @@ class RealtimeService {
       const directToken = localStorage.getItem('token') || localStorage.getItem('auth_token');
       if (directToken) return directToken;
     } catch (e) {
-      // ignore parsing errors
+      // ignore
     }
     return null;
   }
@@ -217,7 +217,7 @@ class RealtimeService {
             this.handleIncomingEvent(parsed);
           }
         } catch (err) {
-          // ignore non-JSON keep-alives
+          // ignore
         }
       });
 
@@ -260,7 +260,6 @@ class RealtimeService {
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: event }));
     }
 
-    // Force universal notification to all listeners so any active dashboard updates immediately
     this.listeners.forEach((entitySet) => {
       entitySet.forEach((listener) => {
         try {
@@ -314,10 +313,6 @@ class RealtimeService {
 
 export const realtimeService = new RealtimeService();
 
-/**
- * Custom React Hook for Real-time Database Synchronization.
- * Debounces incoming entity updates so rapid successive mutations don't trigger cascading refetches.
- */
 export function useRealtimeSync(
   entities: string | string[],
   onEventOrRefetch?: (event: RealtimeEvent) => void,
@@ -346,7 +341,6 @@ export function useRealtimeSync(
     const unsubscribeEvents = realtimeService.subscribe(entities, (event) => {
       if (!callbackRef.current) return;
 
-      // Debounce rapid bursts across identical tables
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
