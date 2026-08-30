@@ -180,6 +180,79 @@ function sanitizeLogMessage(msg: string): string {
   return sanitized.trim();
 }
 
+/**
+ * Clean customer-facing descriptions for status updates in the Diagnostic Activity Trace
+ */
+function getCustomerFriendlyLogDetails(action: string, status?: string, notes?: string) {
+  const state = (status || action || '').toUpperCase();
+
+  if (state.includes('RECEIVED') || state.includes('CREATED') || state === 'CREATED') {
+    return {
+      title: 'Device Received',
+      desc: 'Device securely cataloged and checked into MTS Lab inventory.'
+    };
+  }
+  if (state.includes('DIAGNOSING')) {
+    return {
+      title: 'Diagnosis In Progress',
+      desc: 'Certified micro-engineers are inspecting the device hardware and circuitry.'
+    };
+  }
+  if (state.includes('PROCESS') || state.includes('REPAIR') || state.includes('RESTORATION')) {
+    return {
+      title: 'Restoration In Progress',
+      desc: notes && !notes.toLowerCase().includes('status updated') ? sanitizeLogMessage(notes) : 'Active hardware restoration and component replacement under way.'
+    };
+  }
+  if (state.includes('WAITING_FOR_PARTS')) {
+    return {
+      title: 'Sourcing Genuine Parts',
+      desc: 'Awaiting official Grade-A replacement components from inventory logistics.'
+    };
+  }
+  if (state.includes('TEST') || state.includes('QA')) {
+    return {
+      title: 'QA & Stress Testing',
+      desc: 'Performing rigorous 36-point benchmark and touch functionality validation.'
+    };
+  }
+  if (state.includes('REPAIRED')) {
+    return {
+      title: 'Repair Completed',
+      desc: 'Device successfully restored and passed quality checkpoints.'
+    };
+  }
+  if (state.includes('READY') || state.includes('PICKUP')) {
+    return {
+      title: 'Ready for Collection',
+      desc: 'Device sanitized and packaged ready for counter pickup or courier dispatch.'
+    };
+  }
+  if (state.includes('COURIER_DISPATCHED')) {
+    return {
+      title: 'Return Courier Dispatched',
+      desc: 'Device securely handed over to logistics partner for delivery to your district.'
+    };
+  }
+  if (state.includes('DELIVERED')) {
+    return {
+      title: 'Delivered Successfully',
+      desc: 'Device handed over to customer with standard service warranty.'
+    };
+  }
+  if (state.includes('RE_PROBLEM')) {
+    return {
+      title: 'Warranty Re-Inspection',
+      desc: 'Device reopened for priority post-service technical evaluation.'
+    };
+  }
+
+  return {
+    title: 'Status Update',
+    desc: notes && !notes.toLowerCase().includes('status updated') ? sanitizeLogMessage(notes) : 'Device status updated to reflect current laboratory progress.'
+  };
+}
+
 const TRACKING_REALTIME_ENTITIES = ['repair', 'repairLog'];
 
 export default function Tracking() {
@@ -192,7 +265,6 @@ export default function Tracking() {
   const [copied, setCopied] = useState(false);
 
   const executeTracking = useCallback(async (repNo: string, phone: string) => {
-    // Strip leading hash (#) and non-numeric phone chars
     const cleanRepNo = (repNo || '').trim().replace(/^#+/, '').trim();
     const cleanPhone = (phone || '').trim().replace(/\D/g, '');
 
@@ -209,7 +281,6 @@ export default function Tracking() {
 
       const res: any = await api.get(`/track?${params.toString()}`);
 
-      // Robustly normalize data shape whether API returns an array or an object
       let normalizedData: any = null;
 
       if (Array.isArray(res)) {
@@ -237,7 +308,6 @@ export default function Tracking() {
     }
   }, []);
 
-  // Auto-fetch if query param is present on page load (e.g. from WhatsApp/SMS notification link)
   useEffect(() => {
     const urlRepairNo = searchParams.get('repairNumber')?.trim() || searchParams.get('job')?.trim() || searchParams.get('ticket')?.trim();
     const urlPhone = searchParams.get('phone')?.trim();
@@ -257,7 +327,6 @@ export default function Tracking() {
     executeTracking(repairNumber, phoneNumber);
   };
 
-  // Real-time synchronization
   const handleRealtimeEvent = useCallback((event: any) => {
     if (trackingData) {
       const activeRep = trackingData.devices?.[selectedDeviceIndex] || trackingData;
@@ -770,38 +839,54 @@ export default function Tracking() {
 
                 </div>
 
-                {/* Granular History Logs */}
-                <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden">
-                  <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <History className="w-4 h-4 text-slate-700" />
-                      <h3 className="font-bold text-slate-900 text-sm sm:text-base">Diagnostic Activity Trace</h3>
+                {/* Diagnostic Activity Trace (Responsive Across Laptop, iPad, Tablet, Smartphone, TV) */}
+                <Card className="rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm bg-white overflow-hidden w-full">
+                  <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50/70">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center shrink-0">
+                        <History className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900 text-sm sm:text-base">Diagnostic Activity Trace</h3>
+                        <p className="text-xs text-slate-500">Live timestamped progress tracker for your repair service</p>
+                      </div>
                     </div>
-                    <span className="text-xs text-slate-500">Live Timestamped</span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100 self-start sm:self-auto">
+                      <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                      Live Timestamped
+                    </span>
                   </div>
 
-                  <CardContent className="p-4 sm:p-5">
+                  <CardContent className="p-4 sm:p-6 lg:p-8">
                     {activeRepair.logs && activeRepair.logs.length > 0 ? (
-                      <div className="relative pl-5 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                      <div className="relative pl-5 sm:pl-7 space-y-6 before:absolute before:left-[11px] sm:before:left-[15px] before:top-2 before:bottom-2 before:w-0.5 before:bg-indigo-100">
                         {activeRepair.logs.map((log: any, idx: number) => {
-                          const logStatus = statusConfig[log.status] || statusConfig.RECEIVED;
+                          const logStatus = statusConfig[log.status] || statusConfig[log.action] || statusConfig.RECEIVED;
+                          const friendlyInfo = getCustomerFriendlyLogDetails(log.action, log.status, log.notes);
+                          const isLatest = idx === 0;
+
                           return (
-                            <div key={idx} className="relative">
+                            <div key={idx} className="relative flex items-start group">
+                              {/* Timeline Dot Icon */}
                               <div className={cn(
-                                "absolute -left-[25px] top-1 w-3 h-3 rounded-full border-2 border-white shadow-xs",
-                                idx === 0 ? "bg-indigo-600 ring-2 ring-indigo-100" : "bg-slate-400"
-                              )} />
-                              <div className="space-y-0.5">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className={cn("text-xs font-bold uppercase tracking-wider", logStatus.textColor)}>
-                                    {logStatus.label}
+                                "absolute -left-[25px] sm:-left-[31px] flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white shadow-sm transition-transform group-hover:scale-110",
+                                isLatest ? "bg-indigo-600 text-white ring-4 ring-indigo-50" : "bg-slate-200 text-slate-600"
+                              )}>
+                                <span className="w-2 h-2 rounded-full bg-current"></span>
+                              </div>
+
+                              {/* Content Card (Fully Responsive for SmartPhones, Tablets, iPads, Laptops, and TVs) */}
+                              <div className="ml-2 sm:ml-4 flex-1 bg-slate-50/80 hover:bg-slate-50 transition-colors rounded-xl p-4 sm:p-5 border border-slate-200/70 shadow-2xs">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1.5">
+                                  <span className={cn("text-xs sm:text-sm font-bold uppercase tracking-wider", logStatus.textColor || "text-indigo-600")}>
+                                    {friendlyInfo.title}
                                   </span>
-                                  <span className="text-[11px] text-slate-400">
-                                    {new Date(log.createdAt).toLocaleString('en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                  <span className="text-[11px] sm:text-xs font-medium text-slate-400 bg-white px-2.5 py-0.5 rounded-md border border-slate-200/60 self-start sm:self-auto font-mono">
+                                    {new Date(log.createdAt).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                 </div>
-                                <p className="text-xs text-slate-700 font-medium">
-                                  {sanitizeLogMessage(log.notes || log.message)}
+                                <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
+                                  {friendlyInfo.desc}
                                 </p>
                               </div>
                             </div>
@@ -809,7 +894,11 @@ export default function Tracking() {
                         })}
                       </div>
                     ) : (
-                      <p className="text-center py-4 text-slate-400 text-xs">Awaiting diagnostic trace logs...</p>
+                      <div className="py-12 text-center">
+                        <Clock className="w-10 h-10 text-slate-300 mx-auto mb-3 animate-spin" style={{ animationDuration: '6s' }} />
+                        <p className="text-sm font-medium text-slate-600">Awaiting diagnostic trace logs...</p>
+                        <p className="text-xs text-slate-400 mt-1">Updates will appear here automatically as technicians update your device.</p>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
