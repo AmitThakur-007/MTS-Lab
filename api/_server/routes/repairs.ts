@@ -6,6 +6,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize, normalizeRole } from '../middleware/rbac';
 import { logAudit } from '../services/auditService';
 import { createExcelBuffer, parseExcelBuffer } from '../services/excelService';
+import { broadcastServerChange } from '../services/realtimeSync';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -165,11 +166,14 @@ async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
           updatedAt: new Date().toISOString(),
         })
         .eq('id', existing[0].id);
+
+      await broadcastServerChange('BatteryWarranty', 'UPDATE', existing[0].id);
     } else {
+      const warrantyId = uuidv4();
       const warrantyNumber = await generateWarrantyNumber();
       await supabaseAdmin.from('BatteryWarranty').insert([
         {
-          id: uuidv4(),
+          id: warrantyId,
           warrantyNumber,
           repairId: repairData.id,
           repairNumber: repairData.repairNumber,
@@ -192,6 +196,8 @@ async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
           updatedAt: new Date().toISOString(),
         },
       ]);
+
+      await broadcastServerChange('BatteryWarranty', 'CREATE', warrantyId);
     }
   } catch (syncErr) {
     console.error('[SYNC BATTERY WARRANTY EXCEPTION]', syncErr);
@@ -427,7 +433,10 @@ router.post('/import/confirm', authenticate, async (req: AuthRequest, res: Respo
       };
 
       const { data: created } = await supabaseAdmin.from('Repair').insert([newRepair]).select('*').single();
-      if (created) importedRepairs.push(created);
+      if (created) {
+        importedRepairs.push(created);
+        await broadcastServerChange('Repair', 'CREATE', created.id, created);
+      }
     }
 
     return res.json({ success: true, count: importedRepairs.length, message: `Successfully imported ${importedRepairs.length} repairs.` });
@@ -528,7 +537,10 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
           .select('id')
           .single();
 
-        if (createdCus) resolvedCustomerId = createdCus.id;
+        if (createdCus) {
+          resolvedCustomerId = createdCus.id;
+          await broadcastServerChange('Customer', 'CREATE', newCusId);
+        }
       }
     }
 
@@ -594,9 +606,10 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       await syncBatteryWarrantyFromRepair(created, req.user);
     }
 
+    const logId = uuidv4();
     await supabaseAdmin.from('RepairLog').insert([
       {
-        id: uuidv4(),
+        id: logId,
         repairId: created.id,
         userId: req.user!.id,
         action: 'CREATED',
@@ -605,6 +618,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         createdAt: new Date().toISOString(),
       },
     ]);
+    await broadcastServerChange('RepairLog', 'CREATE', logId);
 
     await logAudit({
       userId: req.user!.id,
@@ -613,6 +627,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       resourceId: created.id,
       details: { repairNumber: created.repairNumber, customerName: created.customerName },
     });
+
+    await broadcastServerChange('Repair', 'CREATE', created.id, created);
 
     return res.status(201).json(created);
   } catch (err: any) {
@@ -660,9 +676,10 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
     }
 
     if (rawBody.status) {
+      const logId = uuidv4();
       await supabaseAdmin.from('RepairLog').insert([
         {
-          id: uuidv4(),
+          id: logId,
           repairId: id,
           userId: req.user!.id,
           action: 'STATUS_UPDATED',
@@ -671,7 +688,10 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
           createdAt: new Date().toISOString(),
         },
       ]);
+      await broadcastServerChange('RepairLog', 'CREATE', logId);
     }
+
+    await broadcastServerChange('Repair', 'UPDATE', id, updated);
 
     return res.json(updated);
   } catch (err: any) {
@@ -722,9 +742,10 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
 
     // Create real-time notification alert for admins/managers
     try {
+      const notifId = uuidv4();
       await supabaseAdmin.from('Notification').insert([
         {
-          id: uuidv4(),
+          id: notifId,
           title: `Repair Updated: #${updatedRepair.repairNumber || id.slice(0, 8)}`,
           message: `${req.user?.name || 'Technician'} updated repair status to ${status || existingRepair.status}. Note: ${technicianNotes || 'No notes added'}`,
           type: 'REPAIR_UPDATE',
@@ -733,9 +754,12 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
           createdAt: new Date().toISOString()
         }
       ]);
+      await broadcastServerChange('Notification', 'CREATE', notifId);
     } catch (notifErr) {
       console.warn('[NOTIFICATION DISPATCH WARN - NON FATAL]', notifErr);
     }
+
+    await broadcastServerChange('Repair', 'UPDATE', id, updatedRepair);
 
     return res.json({
       success: true,
@@ -773,9 +797,10 @@ router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MAN
       return res.status(500).json({ error: 'Failed to assign technician.' });
     }
 
+    const logId = uuidv4();
     await supabaseAdmin.from('RepairLog').insert([
       {
-        id: uuidv4(),
+        id: logId,
         repairId: id,
         userId: req.user!.id,
         action: 'ASSIGNED',
@@ -784,6 +809,8 @@ router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MAN
         createdAt: new Date().toISOString(),
       },
     ]);
+    await broadcastServerChange('RepairLog', 'CREATE', logId);
+    await broadcastServerChange('Repair', 'UPDATE', id, updated);
 
     return res.json(updated);
   } catch (err: any) {
@@ -801,8 +828,9 @@ router.post('/:id/notes', authenticate, async (req: AuthRequest, res: Response) 
       return res.status(400).json({ error: 'Note text is required.' });
     }
 
+    const noteId = uuidv4();
     const newNote = {
-      id: uuidv4(),
+      id: noteId,
       repairId: id,
       technicianId: req.user!.id,
       authorName: req.user!.name,
@@ -817,6 +845,8 @@ router.post('/:id/notes', authenticate, async (req: AuthRequest, res: Response) 
     if (error) {
       return res.status(500).json({ error: 'Failed to save note.' });
     }
+
+    await broadcastServerChange('TechnicianNote', 'CREATE', noteId, created);
 
     return res.status(201).json(created);
   } catch (err: any) {
@@ -871,9 +901,10 @@ router.post('/:id/transfer', authenticate, async (req: AuthRequest, res: Respons
       return res.status(500).json({ error: 'Failed to transfer repair.' });
     }
 
+    const logId = uuidv4();
     await supabaseAdmin.from('RepairLog').insert([
       {
-        id: uuidv4(),
+        id: logId,
         repairId: id,
         userId: req.user!.id,
         action: 'TRANSFERRED',
@@ -882,6 +913,8 @@ router.post('/:id/transfer', authenticate, async (req: AuthRequest, res: Respons
         createdAt: new Date().toISOString(),
       },
     ]);
+    await broadcastServerChange('RepairLog', 'CREATE', logId);
+    await broadcastServerChange('Repair', 'UPDATE', id, updated);
 
     return res.json(updated);
   } catch (err: any) {
@@ -943,6 +976,8 @@ router.post('/:id/courier-dispatch', authenticate, async (req: AuthRequest, res:
       return res.status(500).json({ error: 'Failed to dispatch repair shipment.' });
     }
 
+    await broadcastServerChange('Repair', 'UPDATE', id, updated);
+
     return res.json({ success: true, message: 'Repair successfully dispatched with courier tracking.', repair: updated });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to record courier dispatch.' });
@@ -970,6 +1005,8 @@ router.post('/:id/re-problem', authenticate, async (req: AuthRequest, res: Respo
       return res.status(500).json({ error: 'Failed to register re-problem status.' });
     }
 
+    await broadcastServerChange('Repair', 'UPDATE', id, updated);
+
     return res.json({ success: true, message: 'Repair marked as Re-Problem under warranty.', repair: updated });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to update re-problem.' });
@@ -988,6 +1025,8 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
     if (error) {
       return res.status(500).json({ error: 'Failed to delete repair.' });
     }
+
+    await broadcastServerChange('Repair', 'DELETE', id);
 
     return res.json({ success: true, message: 'Repair deleted successfully.' });
   } catch (err: any) {
@@ -1010,6 +1049,10 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
 
     if (error) {
       return res.status(500).json({ error: 'Failed to bulk delete repairs.' });
+    }
+
+    for (const id of ids) {
+      await broadcastServerChange('Repair', 'DELETE', id);
     }
 
     return res.json({ success: true, message: `Successfully deleted ${ids.length} repair records.` });
