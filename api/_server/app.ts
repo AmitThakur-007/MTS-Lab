@@ -4902,7 +4902,7 @@ data: ${JSON.stringify({ ts: Date.now() })}
 var events_default = router17;
 
 // api/_server/app.ts
-export function createApp() {
+function createApp() {
   const app2 = express();
   app2.use(express.json({ limit: "20mb" }));
   app2.use(express.urlencoded({ extended: true, limit: "20mb" }));
