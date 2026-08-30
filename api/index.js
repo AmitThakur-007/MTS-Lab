@@ -3356,32 +3356,15 @@ function getNepalTimeDetails() {
 }
 async function fetchSafeStaffUsers() {
   try {
-    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("*").in("role", AUTHORIZED_STAFF_ROLES).eq("status", "ACTIVE").order("name", { ascending: true });
-    if (!userErr && Array.isArray(users) && users.length > 0) {
-      return users.filter((u) => {
-        const email = (u.email || "").toLowerCase();
-        return !email.endsWith(".local") && !email.includes("2fatest") && !email.includes("test_admin");
-      });
+    const { data: users, error } = await supabaseAdmin.from("User").select("*").in("role", AUTHORIZED_STAFF_ROLES).order("name", { ascending: true });
+    if (error) {
+      console.error("[SUPABASE USER QUERY ERROR]", error);
+      return [];
     }
-    const { data: staffMembers, error: staffErr } = await supabaseAdmin.from("Staff").select("*").order("name", { ascending: true });
-    if (!staffErr && Array.isArray(staffMembers) && staffMembers.length > 0) {
-      return staffMembers.filter((s) => {
-        const status = (s.status || "ACTIVE").toUpperCase();
-        const email = (s.email || "").toLowerCase();
-        const isReal = !email.endsWith(".local") && !email.includes("2fatest") && !email.includes("test_admin");
-        return status === "ACTIVE" && isReal;
-      }).map((s) => ({
-        id: s.userId || s.id,
-        name: s.name || "Staff Member",
-        email: s.email || "",
-        role: s.role || "TECHNICIAN",
-        department: s.department || "Repair Lab",
-        phone: s.phone || "",
-        avatarUrl: s.avatarUrl || s.profileImage || null,
-        status: s.status || "ACTIVE"
-      }));
-    }
-    return [];
+    return (users || []).filter((u) => {
+      const status = (u.status || "ACTIVE").toUpperCase();
+      return status !== "SUSPENDED" && status !== "INACTIVE" && status !== "DELETED";
+    });
   } catch (err) {
     console.error("[SAFE USER FETCH EXCEPTION]", err);
     return [];

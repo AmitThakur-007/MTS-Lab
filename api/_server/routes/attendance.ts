@@ -49,52 +49,25 @@ function getNepalTimeDetails() {
 }
 
 /**
- * Helper to fetch ONLY the exact active staff members from the User/Staff tables
+ * Robust helper to fetch active staff members from the User table without restrictive email filters
  */
 async function fetchSafeStaffUsers() {
   try {
-    // 1. Query the User table directly for users with authorized staff roles and active status
-    const { data: users, error: userErr } = await supabaseAdmin
+    const { data: users, error } = await supabaseAdmin
       .from('User')
       .select('*')
       .in('role', AUTHORIZED_STAFF_ROLES)
-      .eq('status', 'ACTIVE')
       .order('name', { ascending: true });
 
-    if (!userErr && Array.isArray(users) && users.length > 0) {
-      return users.filter((u: any) => {
-        const email = (u.email || '').toLowerCase();
-        return !email.endsWith('.local') && !email.includes('2fatest') && !email.includes('test_admin');
-      });
+    if (error) {
+      console.error('[SUPABASE USER QUERY ERROR]', error);
+      return [];
     }
 
-    // 2. Fallback: Query the Staff directory table if User table query returns nothing
-    const { data: staffMembers, error: staffErr } = await supabaseAdmin
-      .from('Staff')
-      .select('*')
-      .order('name', { ascending: true });
-
-    if (!staffErr && Array.isArray(staffMembers) && staffMembers.length > 0) {
-      return staffMembers
-        .filter((s: any) => {
-          const status = (s.status || 'ACTIVE').toUpperCase();
-          const email = (s.email || '').toLowerCase();
-          const isReal = !email.endsWith('.local') && !email.includes('2fatest') && !email.includes('test_admin');
-          return status === 'ACTIVE' && isReal;
-        })
-        .map((s: any) => ({
-          id: s.userId || s.id,
-          name: s.name || 'Staff Member',
-          email: s.email || '',
-          role: s.role || 'TECHNICIAN',
-          department: s.department || 'Repair Lab',
-          phone: s.phone || '',
-          avatarUrl: s.avatarUrl || s.profileImage || null,
-          status: s.status || 'ACTIVE'
-        }));
-    }
-
-    return [];
+    return (users || []).filter((u: any) => {
+      const status = (u.status || 'ACTIVE').toUpperCase();
+      return status !== 'SUSPENDED' && status !== 'INACTIVE' && status !== 'DELETED';
+    });
   } catch (err) {
     console.error('[SAFE USER FETCH EXCEPTION]', err);
     return [];
@@ -150,10 +123,8 @@ const handleRosterRequest = async (req: AuthRequest, res: Response) => {
     const time = getNepalTimeDetails();
     const todayStr = (req.query.date as string) || time.dateString;
 
-    // 1. Fetch authorized staff registered in staff management
     const staffList = await fetchSafeStaffUsers();
 
-    // 2. Fetch today's attendance records
     const { data: attendanceRecords } = await supabaseAdmin
       .from('Attendance')
       .select('*')
