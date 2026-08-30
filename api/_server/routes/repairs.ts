@@ -627,22 +627,21 @@ router.post('/:id/alert', authenticate, async (req: AuthRequest, res: Response) 
     ]);
     await broadcastServerChange('RepairLog', 'CREATE', logId);
 
-    if (updatedRepair.technicianId) {
-      const notifId = uuidv4();
-      await supabaseAdmin.from('Notification').insert([
-        {
-          id: notifId,
-          title: `🚨 Urgent Alert: Job #${updatedRepair.repairNumber}`,
-          message: message || `High priority escalation requested by ${req.user!.name}`,
-          type: 'URGENT_ALERT',
-          userId: updatedRepair.technicianId,
-          isRead: false,
-          createdAt: new Date().toISOString()
-        }
-      ]);
-      await broadcastServerChange('Notification', 'CREATE', notifId);
-    }
-
+    const notifId = uuidv4();
+    await supabaseAdmin.from('Notification').insert([
+      {
+        id: notifId,
+        title: `🚨 Urgent Alert: Job #${updatedRepair.repairNumber}`,
+        message: message || `High priority escalation requested by ${req.user!.name}`,
+        type: 'URGENT_ALERT',
+        userId: updatedRepair.technicianId || null,
+        repairId: id,
+        repairNumber: updatedRepair.repairNumber,
+        isRead: false,
+        createdAt: new Date().toISOString()
+      }
+    ]);
+    await broadcastServerChange('Notification', 'CREATE', notifId);
     await broadcastServerChange('Repair', 'UPDATE', id, updatedRepair);
 
     return res.json({
