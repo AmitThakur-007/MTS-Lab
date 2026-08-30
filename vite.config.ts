@@ -13,6 +13,21 @@ export default defineConfig(() => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('lucide-react')) {
+                return 'vendor-lucide';
+              }
+              if (id.includes('date-fns')) {
+                return 'vendor-datefns';
+              }
+              return 'vendor';
+            }
+          },
+        },
+      },
     },
     resolve: {
       alias: {
