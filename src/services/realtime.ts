@@ -48,12 +48,55 @@ class RealtimeService {
     try {
       if (!supabase) return;
 
-      this.supabaseChannel = supabase.channel('mts_app_realtime', {
-        config: {
-          broadcast: { self: false }
-        }
+      // Listen to native Supabase PostgreSQL changes directly across all tables
+      this.supabaseChannel = supabase.channel('mts_app_db_changes');
+
+      // Subscribe to standard Postgres changes for core application tables
+      const tablesToTrack = [
+        'Repair', 'repair',
+        'Attendance', 'attendance',
+        'Notification', 'notification',
+        'TechnicianNote', 'technicianNote',
+        'RepairLog', 'repairLog',
+        'Payment', 'payment',
+        'User', 'user',
+        'RepairTransferRequest', 'repairTransferRequest'
+      ];
+
+      tablesToTrack.forEach((tableName) => {
+        this.supabaseChannel.on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: tableName,
+          },
+          (payload: any) => {
+            const eventType = payload.eventType; // INSERT, UPDATE, DELETE
+            const actionMap: Record<string, 'CREATE' | 'UPDATE' | 'DELETE'> = {
+              INSERT: 'CREATE',
+              UPDATE: 'UPDATE',
+              DELETE: 'DELETE'
+            };
+
+            const mappedAction = actionMap[eventType] || 'UPDATE';
+            const recordData = payload.new || payload.old || {};
+            const recordId = recordData.id || payload.old?.id;
+
+            console.log(`[SUPABASE REALTIME] Table ${tableName} change detected (${eventType}):`, payload);
+
+            this.handleIncomingEvent({
+              entity: tableName.toLowerCase(),
+              action: mappedAction,
+              id: recordId,
+              data: recordData,
+              timestamp: Date.now()
+            });
+          }
+        );
       });
 
+      // Also listen to custom broadcast channels for backward compatibility
       this.supabaseChannel
         .on('broadcast', { event: 'db_event' }, ({ payload }: { payload: RealtimeEvent }) => {
           if (payload && payload.entity) {
@@ -85,7 +128,7 @@ class RealtimeService {
           if (status === 'SUBSCRIBED') {
             this.supabaseConnected = true;
             this.updateAggregateStatus();
-            console.log('[REALTIME] Connected to Supabase Realtime Channel');
+            console.log('[REALTIME] Connected to Supabase Realtime Channel successfully');
           } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
             this.supabaseConnected = false;
             this.updateAggregateStatus();
@@ -223,7 +266,6 @@ class RealtimeService {
         this.lastActivityTime = Date.now();
         try {
           const parsed: RealtimeEvent = JSON.parse(event.data);
-          // Prevent connection handshake events from triggering component refetches
           if (parsed && parsed.entity && parsed.action !== 'SYNC') {
             this.handleIncomingEvent(parsed);
           }
@@ -263,7 +305,6 @@ class RealtimeService {
   }
 
   private handleIncomingEvent(event: RealtimeEvent) {
-    // Ignore internal transport events
     if (!event || !event.entity || event.entity === 'sync' || event.entity === 'ping') {
       return;
     }
@@ -385,7 +426,7 @@ export function useRealtimeSync(
         if (callbackRef.current) {
           callbackRef.current(event);
         }
-      }, 300);
+      }, 200);
     });
 
     return () => {
