@@ -6,14 +6,14 @@ const getEnvVar = (viteKey: string, nodeKey: string, fallback: string = ''): str
     if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env[viteKey]) {
       return String((import.meta as any).env[viteKey]);
     }
-  } catch (_) {}
+  } catch (_) { }
 
   try {
     if (typeof process !== 'undefined' && process.env) {
       if (process.env[nodeKey]) return String(process.env[nodeKey]);
       if (process.env[viteKey]) return String(process.env[viteKey]);
     }
-  } catch (_) {}
+  } catch (_) { }
 
   return fallback;
 };
@@ -29,6 +29,9 @@ let supabaseInstance: SupabaseClient | null = null;
 
 export function getSupabaseClient(): SupabaseClient {
   if (!supabaseInstance) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.error('[SUPABASE ERROR] Missing Supabase URL or Anon Key configuration.');
+    }
     supabaseInstance = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         persistSession: typeof window !== 'undefined',
@@ -93,7 +96,10 @@ export async function syncRepairToSupabase(repair: any) {
   if (!repair || !repair.id) return;
   try {
     const sanitized = sanitizeRepairForSupabase(repair);
-    const channel = supabase.channel('repairs_realtime');
+    const channel = supabase.channel('mts_app_db_changes');
+    if (channel.state !== 'joined') {
+      await channel.subscribe();
+    }
     await channel.send({
       type: 'broadcast',
       event: 'repair_sync',
@@ -110,7 +116,10 @@ export async function syncRepairToSupabase(repair: any) {
 export async function deleteRepairFromSupabase(repairId: string) {
   if (!repairId) return;
   try {
-    const channel = supabase.channel('repairs_realtime');
+    const channel = supabase.channel('mts_app_db_changes');
+    if (channel.state !== 'joined') {
+      await channel.subscribe();
+    }
     await channel.send({
       type: 'broadcast',
       event: 'repair_delete',
@@ -127,12 +136,16 @@ export async function deleteRepairFromSupabase(repairId: string) {
 export async function syncEntityToSupabase(entityName: string, id: string, data: any) {
   if (!entityName || !id || !data) return;
   try {
-    const channel = supabase.channel(`${entityName}_realtime`);
+    const channel = supabase.channel('mts_app_db_changes');
+    if (channel.state !== 'joined') {
+      await channel.subscribe();
+    }
     await channel.send({
       type: 'broadcast',
-      event: `${entityName}_sync`,
+      event: `${entityName.toLowerCase()}_sync`,
       payload: {
         ...data,
+        entity: entityName.toLowerCase(),
         id: String(id),
         updatedAt: data.updatedAt ? new Date(data.updatedAt).toISOString() : new Date().toISOString(),
         lastSyncTimestamp: Date.now()
@@ -149,11 +162,14 @@ export async function syncEntityToSupabase(entityName: string, id: string, data:
 export async function deleteEntityFromSupabase(entityName: string, id: string) {
   if (!entityName || !id) return;
   try {
-    const channel = supabase.channel(`${entityName}_realtime`);
+    const channel = supabase.channel('mts_app_db_changes');
+    if (channel.state !== 'joined') {
+      await channel.subscribe();
+    }
     await channel.send({
       type: 'broadcast',
-      event: `${entityName}_delete`,
-      payload: { id: String(id), timestamp: Date.now() }
+      event: `${entityName.toLowerCase()}_delete`,
+      payload: { entity: entityName.toLowerCase(), id: String(id), timestamp: Date.now() }
     });
   } catch (err) {
     console.warn(`[SUPABASE REALTIME] Delete ${entityName} notice:`, err);
