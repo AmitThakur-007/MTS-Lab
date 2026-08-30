@@ -48,101 +48,25 @@ class RealtimeService {
     try {
       if (!supabase) return;
 
-      // Use a consistent channel name across client and server broadcasts
-      this.supabaseChannel = supabase.channel('mts_app_db_changes');
-
-      // Subscribe to standard Postgres changes for core application tables
-      const tablesToTrack = [
-        'Repair', 'repair',
-        'Attendance', 'attendance',
-        'Notification', 'notification',
-        'TechnicianNote', 'technicianNote',
-        'RepairLog', 'repairLog',
-        'Payment', 'payment',
-        'User', 'user',
-        'RepairTransferRequest', 'repairtransferrequest',
-        'Customer', 'customer',
-        'InventoryItem', 'inventoryitem',
-        'BatteryWarranty', 'batterywarranty'
-      ];
-
-      tablesToTrack.forEach((tableName) => {
-        this.supabaseChannel.on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: tableName,
-          },
-          (payload: any) => {
-            const eventType = payload.eventType; // INSERT, UPDATE, DELETE
-            const actionMap: Record<string, 'CREATE' | 'UPDATE' | 'DELETE'> = {
-              INSERT: 'CREATE',
-              UPDATE: 'UPDATE',
-              DELETE: 'DELETE'
-            };
-
-            const mappedAction = actionMap[eventType] || 'UPDATE';
-            const recordData = payload.new || payload.old || {};
-            const recordId = recordData.id || payload.old?.id;
-
-            console.log(`[SUPABASE REALTIME] Table ${tableName} change detected (${eventType}):`, payload);
-
-            this.handleIncomingEvent({
-              entity: tableName.toLowerCase(),
-              action: mappedAction,
-              id: recordId,
-              data: recordData,
-              timestamp: Date.now()
-            });
-          }
-        );
+      // Enable self: true so that server-sent broadcasts are received by the active tab/client
+      this.supabaseChannel = supabase.channel('mts_app_db_changes', {
+        config: {
+          broadcast: { self: true },
+        },
       });
 
-      // Listen to custom broadcast channels for instant cross-tab & cross-role synchronization
+      // Listen to server broadcast payloads (bypasses RLS completely)
       this.supabaseChannel
-        .on('broadcast', { event: 'db_event' }, ({ payload }: { payload: RealtimeEvent }) => {
+        .on('broadcast', { event: '*' }, ({ event, payload }: { event: string; payload: any }) => {
+          console.log(`[SUPABASE BROADCAST RECEIVED] Event: ${event}`, payload);
           if (payload && payload.entity) {
             this.handleIncomingEvent(payload);
-          }
-        })
-        .on('broadcast', { event: 'repair_sync' }, ({ payload }: { payload: any }) => {
-          if (payload?.id) {
+          } else if (payload?.id) {
             this.handleIncomingEvent({
-              entity: 'repair',
-              action: 'UPDATE',
+              entity: event.replace('_sync', '').replace('_delete', '').toLowerCase() || 'repair',
+              action: event.includes('delete') ? 'DELETE' : 'UPDATE',
               id: payload.id,
               data: payload,
-              timestamp: Date.now()
-            });
-          }
-        })
-        .on('broadcast', { event: 'repair_delete' }, ({ payload }: { payload: any }) => {
-          if (payload?.id) {
-            this.handleIncomingEvent({
-              entity: 'repair',
-              action: 'DELETE',
-              id: payload.id,
-              timestamp: Date.now()
-            });
-          }
-        })
-        .on('broadcast', { event: '*' }, ({ event, payload }: { event: string; payload: any }) => {
-          if (event && event.includes('_sync') && payload) {
-            const entityName = event.replace('_sync', '').toLowerCase();
-            this.handleIncomingEvent({
-              entity: entityName,
-              action: 'UPDATE',
-              id: payload.id,
-              data: payload,
-              timestamp: Date.now()
-            });
-          } else if (event && event.includes('_delete') && payload) {
-            const entityName = event.replace('_delete', '').toLowerCase();
-            this.handleIncomingEvent({
-              entity: entityName,
-              action: 'DELETE',
-              id: payload.id,
               timestamp: Date.now()
             });
           }
@@ -151,7 +75,7 @@ class RealtimeService {
           if (status === 'SUBSCRIBED') {
             this.supabaseConnected = true;
             this.updateAggregateStatus();
-            console.log('[REALTIME] Connected to Supabase Realtime Channel successfully');
+            console.log('[REALTIME] Connected to Supabase Realtime Channel successfully with self-broadcast enabled');
           } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
             this.supabaseConnected = false;
             this.updateAggregateStatus();
@@ -331,8 +255,6 @@ class RealtimeService {
     if (!event || !event.entity || event.entity === 'sync' || event.entity === 'ping') {
       return;
     }
-
-    const rawEntity = (event.entity || '').toLowerCase();
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: event }));
