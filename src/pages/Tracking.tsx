@@ -858,48 +858,50 @@ export default function Tracking() {
                   </div>
 
                   <CardContent className="p-4 sm:p-6 lg:p-8">
-                    {activeRepair.logs && activeRepair.logs.length > 0 ? (
-                      <div className="relative pl-5 sm:pl-7 space-y-6 before:absolute before:left-[11px] sm:before:left-[15px] before:top-2 before:bottom-2 before:w-0.5 before:bg-indigo-100">
-                        {activeRepair.logs.map((log: any, idx: number) => {
-                          const logStatus = statusConfig[log.status] || statusConfig[log.action] || statusConfig.RECEIVED;
-                          const friendlyInfo = getCustomerFriendlyLogDetails(log.action, log.status, log.notes);
-                          const isLatest = idx === 0;
+                    {(() => {
+                      const repairLogs = activeRepair?.logs || trackingData?.logs || activeRepair?.repairLogs || [];
 
-                          return (
-                            <div key={idx} className="relative flex items-start group">
-                              {/* Timeline Dot Icon */}
-                              <div className={cn(
-                                "absolute -left-[25px] sm:-left-[31px] flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white shadow-sm transition-transform group-hover:scale-110",
-                                isLatest ? "bg-indigo-600 text-white ring-4 ring-indigo-50" : "bg-slate-200 text-slate-600"
-                              )}>
-                                <span className="w-2 h-2 rounded-full bg-current"></span>
-                              </div>
+                      return repairLogs.length > 0 ? (
+                        <div className="relative pl-5 sm:pl-7 space-y-6 before:absolute before:left-[11px] sm:before:left-[15px] before:top-2 before:bottom-2 before:w-0.5 before:bg-indigo-100">
+                          {repairLogs.map((log: any, idx: number) => {
+                            const logStatus = statusConfig[log.status] || statusConfig[log.action] || statusConfig.RECEIVED;
+                            const friendlyInfo = getCustomerFriendlyLogDetails(log.action, log.status, log.notes || log.message);
+                            const isLatest = idx === 0;
 
-                              {/* Content Card (Fully Responsive for SmartPhones, Tablets, iPads, Laptops, and TVs) */}
-                              <div className="ml-2 sm:ml-4 flex-1 bg-slate-50/80 hover:bg-slate-50 transition-colors rounded-xl p-4 sm:p-5 border border-slate-200/70 shadow-2xs">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1.5">
-                                  <span className={cn("text-xs sm:text-sm font-bold uppercase tracking-wider", logStatus.textColor || "text-indigo-600")}>
-                                    {friendlyInfo.title}
-                                  </span>
-                                  <span className="text-[11px] sm:text-xs font-medium text-slate-400 bg-white px-2.5 py-0.5 rounded-md border border-slate-200/60 self-start sm:self-auto font-mono">
-                                    {new Date(log.createdAt).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                  </span>
+                            return (
+                              <div key={log.id || idx} className="relative flex items-start group">
+                                <div className={cn(
+                                  "absolute -left-[25px] sm:-left-[31px] flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-white shadow-sm transition-transform group-hover:scale-110",
+                                  isLatest ? "bg-indigo-600 text-white ring-4 ring-indigo-50" : "bg-slate-200 text-slate-600"
+                                )}>
+                                  <span className="w-2 h-2 rounded-full bg-current"></span>
                                 </div>
-                                <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
-                                  {friendlyInfo.desc}
-                                </p>
+
+                                <div className="ml-2 sm:ml-4 flex-1 bg-slate-50/80 hover:bg-slate-50 transition-colors rounded-xl p-4 sm:p-5 border border-slate-200/70 shadow-2xs">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1.5">
+                                    <span className={cn("text-xs sm:text-sm font-bold uppercase tracking-wider", logStatus.textColor || "text-indigo-600")}>
+                                      {friendlyInfo.title}
+                                    </span>
+                                    <span className="text-[11px] sm:text-xs font-medium text-slate-400 bg-white px-2.5 py-0.5 rounded-md border border-slate-200/60 font-mono">
+                                      {new Date(log.createdAt || log.timestamp || Date.now()).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
+                                    {friendlyInfo.desc}
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="py-12 text-center">
-                        <Clock className="w-10 h-10 text-slate-300 mx-auto mb-3 animate-spin" style={{ animationDuration: '6s' }} />
-                        <p className="text-sm font-medium text-slate-600">Awaiting diagnostic trace logs...</p>
-                        <p className="text-xs text-slate-400 mt-1">Updates will appear here automatically as technicians update your device.</p>
-                      </div>
-                    )}
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="py-12 text-center">
+                          <Clock className="w-10 h-10 text-slate-300 mx-auto mb-3 animate-spin" style={{ animationDuration: '6s' }} />
+                          <p className="text-sm font-medium text-slate-600">Awaiting diagnostic trace logs...</p>
+                          <p className="text-xs text-slate-400 mt-1">Updates will appear here automatically as technicians update your device.</p>
+                        </div>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 

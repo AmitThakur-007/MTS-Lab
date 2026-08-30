@@ -47,8 +47,7 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       createdAt,
       updatedAt,
       completedAt,
-      deliveredAt,
-      logs:RepairLog(action, status, notes, message, createdAt)
+      deliveredAt
     `;
 
     let repairRecord: any = null;
@@ -110,16 +109,34 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
     }
 
-    // GUARANTEED FALLBACK: If embedded logs relation returns empty, query RepairLog explicitly by repairId
-    if (!repairRecord.logs || repairRecord.logs.length === 0) {
-      const { data: explicitLogs } = await supabaseAdmin
-        .from('RepairLog')
-        .select('action, status, notes, message, createdAt')
+    // ROBUST FALLBACK QUERY: Explicitly query RepairLog and TechnicianNote so the activity trace always populates
+    const { data: explicitLogs } = await supabaseAdmin
+      .from('RepairLog')
+      .select('id, action, status, notes, message, createdAt')
+      .eq('repairId', repairRecord.id)
+      .order('createdAt', { ascending: false });
+
+    // Fallback or combine with Technician notes if logs table is empty for this specific record
+    let combinedLogs = explicitLogs || [];
+    if (combinedLogs.length === 0) {
+      const { data: techNotes } = await supabaseAdmin
+        .from('TechnicianNote')
+        .select('id, note, createdAt')
         .eq('repairId', repairRecord.id)
         .order('createdAt', { ascending: false });
 
-      repairRecord.logs = explicitLogs || [];
+      if (techNotes && techNotes.length > 0) {
+        combinedLogs = techNotes.map(n => ({
+          id: n.id,
+          action: 'NOTE_ADDED',
+          status: repairRecord.status,
+          notes: n.note,
+          createdAt: n.createdAt
+        }));
+      }
     }
+
+    repairRecord.logs = combinedLogs;
 
     // Ensure logs are sorted newest first
     if (repairRecord.logs && Array.isArray(repairRecord.logs)) {
