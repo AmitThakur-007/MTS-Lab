@@ -18,16 +18,16 @@ async function doRefreshToken(): Promise<string | null> {
   refreshPromise = (async () => {
     try {
       const { token, refreshToken, setToken, setRefreshToken, updateUser, logout } = useAuthStore.getState();
-      
-      const refreshHeaders: any = { 
+
+      const refreshHeaders: any = {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       };
       if (refreshToken) {
         refreshHeaders['x-refresh-token'] = refreshToken;
       }
-      
-      const refreshRes = await fetch(`${API_BASE}/auth/refresh`, { 
+
+      const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
         headers: refreshHeaders,
         body: JSON.stringify({ refreshToken }),
@@ -43,7 +43,7 @@ async function doRefreshToken(): Promise<string | null> {
           console.warn("[REFRESH PARSE] Non-JSON session refresh response:", refreshText);
           throw new Error("Invalid session refresh response from server.");
         }
-        
+
         const { token: newToken, refreshToken: newRefreshToken, user: updatedUser } = refreshData;
         if (newToken) {
           setToken(newToken);
@@ -56,7 +56,7 @@ async function doRefreshToken(): Promise<string | null> {
           return newToken;
         }
       }
-      
+
       if (refreshRes.status === 401 || refreshRes.status === 403) {
         // Check if this is specifically an inactivity expiry vs. other auth failure
         try {
@@ -78,7 +78,7 @@ async function doRefreshToken(): Promise<string | null> {
         logout();
         return null;
       }
-      
+
       return null;
     } catch (err) {
       console.warn("[REFRESH RESILIENCE NOTICE] Network interruption during session refresh; preserving session.");
@@ -94,7 +94,7 @@ async function doRefreshToken(): Promise<string | null> {
 
 async function request(endpoint: string, options: any = {}) {
   const { token } = useAuthStore.getState();
-  
+
   const headers = {
     ...options.headers,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -102,8 +102,8 @@ async function request(endpoint: string, options: any = {}) {
 
   let res;
   try {
-    res = await fetch(`${API_BASE}${endpoint}`, { 
-      ...options, 
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
       headers,
       credentials: 'include'
     });
@@ -147,8 +147,8 @@ async function request(endpoint: string, options: any = {}) {
         Authorization: `Bearer ${newToken}`,
       };
       try {
-        res = await fetch(`${API_BASE}${endpoint}`, { 
-          ...options, 
+        res = await fetch(`${API_BASE}${endpoint}`, {
+          ...options,
           headers: retryHeaders,
           credentials: 'include'
         });
@@ -167,8 +167,8 @@ async function request(endpoint: string, options: any = {}) {
       errorData = rawText ? JSON.parse(rawText) : {};
     } catch {
       // Server or reverse proxy returned plain text (e.g. "Rate exceeded.", "Bad Gateway")
-      errorData = { 
-        message: rawText && rawText.length < 300 ? rawText : `Server returned status ${res.status}: ${res.statusText}` 
+      errorData = {
+        message: rawText && rawText.length < 300 ? rawText : `Server returned status ${res.status}: ${res.statusText}`
       };
     }
 
@@ -305,7 +305,7 @@ export const api = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   }),
-  delete: (endpoint: string, data?: any) => request(endpoint, { 
+  delete: (endpoint: string, data?: any) => request(endpoint, {
     method: 'DELETE',
     headers: data ? { 'Content-Type': 'application/json' } : {},
     body: data ? JSON.stringify(data) : undefined

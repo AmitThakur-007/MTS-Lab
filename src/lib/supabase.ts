@@ -49,6 +49,7 @@ export function getSupabaseClient(): SupabaseClient {
 }
 
 export const supabase = getSupabaseClient();
+export default supabase;
 
 /**
  * Sanitize repair object for Supabase Realtime synchronization
