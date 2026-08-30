@@ -1034,7 +1034,9 @@ var ALLOWED_REPAIR_COLUMNS = /* @__PURE__ */ new Set([
   "batteryHealth",
   "batterySerial",
   "batteryWarrantyExpiry",
-  "warrantyTerms"
+  "warrantyTerms",
+  "technicianNotes",
+  "sparePartsUsed"
 ]);
 async function generateRepairNumber() {
   const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
@@ -1524,6 +1526,51 @@ var handleRepairUpdate = async (req, res) => {
 };
 router3.patch("/:id", authenticate, handleRepairUpdate);
 router3.put("/:id", authenticate, handleRepairUpdate);
+router3.patch("/:id/technician-update", authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, estimatedDeliveryDate, sparePartsUsed, technicianNotes } = req.body;
+    const { data: existingRepair, error: fetchErr } = await supabaseAdmin.from("Repair").select("*").eq("id", id).single();
+    if (fetchErr || !existingRepair) {
+      return res.status(404).json({ error: "Repair job not found." });
+    }
+    const updatePayload = {
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (status) updatePayload.status = status;
+    if (estimatedDeliveryDate) updatePayload.estimatedDeliveryDate = estimatedDeliveryDate;
+    if (sparePartsUsed !== void 0) updatePayload.sparePartsUsed = sparePartsUsed;
+    if (technicianNotes !== void 0) updatePayload.technicianNotes = technicianNotes;
+    const { data: updatedRepair, error: updateErr } = await supabaseAdmin.from("Repair").update(updatePayload).eq("id", id).select("*").single();
+    if (updateErr) {
+      console.error("[TECHNICIAN UPDATE ERROR]", updateErr);
+      return res.status(500).json({ error: "Failed to update repair progress." });
+    }
+    try {
+      await supabaseAdmin.from("Notification").insert([
+        {
+          id: uuidv44(),
+          title: `Repair Updated: #${updatedRepair.repairNumber || id.slice(0, 8)}`,
+          message: `${req.user?.name || "Technician"} updated repair status to ${status || existingRepair.status}. Note: ${technicianNotes || "No notes added"}`,
+          type: "REPAIR_UPDATE",
+          userId: existingRepair.createdById || null,
+          isRead: false,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+    } catch (notifErr) {
+      console.warn("[NOTIFICATION DISPATCH WARN - NON FATAL]", notifErr);
+    }
+    return res.json({
+      success: true,
+      message: "Repair progress updated successfully.",
+      repair: updatedRepair
+    });
+  } catch (err) {
+    console.error("[TECHNICIAN UPDATE EXCEPTION]", err);
+    return res.status(500).json({ error: err?.message || "Server error updating repair." });
+  }
+});
 router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER", "LEAD_TECHNICIAN"]), async (req, res) => {
   try {
     const { id } = req.params;
@@ -1622,6 +1669,17 @@ router3.post("/:id/transfer", authenticate, async (req, res) => {
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to transfer repair ticket." });
+  }
+});
+router3.get("/repair-transfers/my-requests", authenticate, async (req, res) => {
+  try {
+    const { data: requests, error } = await supabaseAdmin.from("RepairTransferRequest").select("*").or(`senderId.eq.${req.user.id},receiverId.eq.${req.user.id}`).order("createdAt", { ascending: false });
+    if (error) {
+      return res.json([]);
+    }
+    return res.json(requests || []);
+  } catch {
+    return res.json([]);
   }
 });
 router3.post("/:id/courier-dispatch", authenticate, async (req, res) => {

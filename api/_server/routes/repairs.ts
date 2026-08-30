@@ -64,7 +64,9 @@ const ALLOWED_REPAIR_COLUMNS = new Set([
   'batteryHealth',
   'batterySerial',
   'batteryWarrantyExpiry',
-  'warrantyTerms'
+  'warrantyTerms',
+  'technicianNotes',
+  'sparePartsUsed'
 ]);
 
 // Helper to generate next unique sequential repair number (e.g. MTS-2026-0001)
@@ -681,6 +683,71 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
 router.patch('/:id', authenticate, handleRepairUpdate);
 router.put('/:id', authenticate, handleRepairUpdate);
 
+// 8.1. PATCH /api/repairs/:id/technician-update (Dedicated technician progress update route)
+router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, estimatedDeliveryDate, sparePartsUsed, technicianNotes } = req.body;
+
+    const { data: existingRepair, error: fetchErr } = await supabaseAdmin
+      .from('Repair')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !existingRepair) {
+      return res.status(404).json({ error: 'Repair job not found.' });
+    }
+
+    const updatePayload: any = {
+      updatedAt: new Date().toISOString()
+    };
+
+    if (status) updatePayload.status = status;
+    if (estimatedDeliveryDate) updatePayload.estimatedDeliveryDate = estimatedDeliveryDate;
+    if (sparePartsUsed !== undefined) updatePayload.sparePartsUsed = sparePartsUsed;
+    if (technicianNotes !== undefined) updatePayload.technicianNotes = technicianNotes;
+
+    const { data: updatedRepair, error: updateErr } = await supabaseAdmin
+      .from('Repair')
+      .update(updatePayload)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (updateErr) {
+      console.error('[TECHNICIAN UPDATE ERROR]', updateErr);
+      return res.status(500).json({ error: 'Failed to update repair progress.' });
+    }
+
+    // Create real-time notification alert for admins/managers
+    try {
+      await supabaseAdmin.from('Notification').insert([
+        {
+          id: uuidv4(),
+          title: `Repair Updated: #${updatedRepair.repairNumber || id.slice(0, 8)}`,
+          message: `${req.user?.name || 'Technician'} updated repair status to ${status || existingRepair.status}. Note: ${technicianNotes || 'No notes added'}`,
+          type: 'REPAIR_UPDATE',
+          userId: existingRepair.createdById || null,
+          isRead: false,
+          createdAt: new Date().toISOString()
+        }
+      ]);
+    } catch (notifErr) {
+      console.warn('[NOTIFICATION DISPATCH WARN - NON FATAL]', notifErr);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Repair progress updated successfully.',
+      repair: updatedRepair
+    });
+  } catch (err: any) {
+    console.error('[TECHNICIAN UPDATE EXCEPTION]', err);
+    return res.status(500).json({ error: err?.message || 'Server error updating repair.' });
+  }
+});
+
 // 9. POST /api/repairs/:id/assign
 router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LEAD_TECHNICIAN']), async (req: AuthRequest, res: Response) => {
   try {
@@ -819,6 +886,25 @@ router.post('/:id/transfer', authenticate, async (req: AuthRequest, res: Respons
     return res.json(updated);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to transfer repair ticket.' });
+  }
+});
+
+// 13.1 GET /api/repair-transfers/my-requests (Repair transfer requests list endpoint)
+router.get('/repair-transfers/my-requests', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { data: requests, error } = await supabaseAdmin
+      .from('RepairTransferRequest')
+      .select('*')
+      .or(`senderId.eq.${req.user!.id},receiverId.eq.${req.user!.id}`)
+      .order('createdAt', { ascending: false });
+
+    if (error) {
+      return res.json([]);
+    }
+
+    return res.json(requests || []);
+  } catch {
+    return res.json([]);
   }
 });
 
