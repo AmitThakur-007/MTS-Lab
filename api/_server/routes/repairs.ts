@@ -588,7 +588,7 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
   }
 });
 
-// Urgent Alert & Priority Escalation Endpoint
+// Urgent Alert & Priority Escalation Endpoint (Explicitly updates priority field)
 router.post('/:id/alert', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -816,7 +816,7 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
 
     await broadcastServerChange('Repair', 'DELETE', id);
 
-    return res.json({ success: true, message: 'Repair listed successfully deleted.' });
+    return res.json({ success: true, message: 'Repair deleted successfully.' });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to delete repair record.' });
   }
