@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Smartphone, 
-  Clock, 
-  CircleCheck as CheckCircle2, 
-  MessageSquare, 
+import {
+  Smartphone,
+  Clock,
+  CircleCheck as CheckCircle2,
+  MessageSquare,
   Wrench,
   Loader2,
   ChevronRight,
@@ -30,23 +30,23 @@ import {
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
@@ -99,14 +99,14 @@ type StatusFilterTab = 'ALL' | 'URGENT' | 'HIGH' | 'ACTIVE' | 'IN_PROCESS' | 'TE
  */
 export function getPriorityMeta(repair: any) {
   const p = String(repair?.priority || '').toUpperCase().trim();
-  const isUrgent = p === 'URGENT' || 
-                   repair?.isUrgent === true || 
-                   String(repair?.problemDescription || '').toLowerCase().includes('urgent') ||
-                   String(repair?.remarks || '').toLowerCase().includes('urgent');
+  const isUrgent = p === 'URGENT' ||
+    repair?.isUrgent === true ||
+    String(repair?.problemDescription || '').toLowerCase().includes('urgent') ||
+    String(repair?.remarks || '').toLowerCase().includes('urgent');
 
   const isHigh = !isUrgent && (
-    p === 'HIGH' || 
-    p === 'PRIORITY' || 
+    p === 'HIGH' ||
+    p === 'PRIORITY' ||
     String(repair?.problemDescription || '').toLowerCase().includes('priority') ||
     String(repair?.remarks || '').toLowerCase().includes('priority')
   );
@@ -155,7 +155,7 @@ export function getPriorityMeta(repair: any) {
 export default function TechnicianDashboard() {
   const { token, user } = useAuthStore();
   const navigate = useNavigate();
-  
+
   // Core Data
   const [repairs, setRepairs] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
@@ -240,7 +240,7 @@ export default function TechnicianDashboard() {
       if (repairsData.status === 'fulfilled') {
         setRepairs(Array.isArray(repairsData.value) ? repairsData.value : []);
       }
-      
+
       if (staffData.status === 'fulfilled') {
         const techStaff = (Array.isArray(staffData.value) ? staffData.value : []).filter(
           (s: any) => ['TECHNICIAN', 'LEAD_TECHNICIAN'].includes(s.role) && s.id !== user?.id && s.isActive !== false
@@ -492,7 +492,7 @@ export default function TechnicianDashboard() {
     const testing = repairs.filter(r => r.status === 'TESTING');
     const repaired = repairs.filter(r => ['REPAIRED', 'READY_FOR_PICKUP'].includes(r.status));
     const reProblem = repairs.filter(r => r.status === 'RE_PROBLEM' || r.status === 'REPROBLEM');
-    
+
     return {
       activeCount: active.length,
       inProgressCount: inProgress.length,
@@ -530,7 +530,7 @@ export default function TechnicianDashboard() {
     // Search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      list = list.filter(r => 
+      list = list.filter(r =>
         (r.repairNumber && r.repairNumber.toLowerCase().includes(q)) ||
         (r.customerName && r.customerName.toLowerCase().includes(q)) ||
         (r.customerPhone && r.customerPhone.toLowerCase().includes(q)) ||
@@ -576,7 +576,7 @@ export default function TechnicianDashboard() {
 
   return (
     <div className="space-y-6 pb-24 max-w-7xl mx-auto px-2 sm:px-4">
-      
+
       {/* ========================================================================= */}
       {/* HEADER SECTION                                                            */}
       {/* ========================================================================= */}
@@ -628,7 +628,7 @@ export default function TechnicianDashboard() {
       </div>
 
       {/* ========================================================================= */}
-      {/* 🚨 HIGH PRIORITY & PRIORITY REPAIRS ACTION QUEUE BANNER                    */}
+      {/* 🚨 HIGH PRIORITY & PRIORITY REPAIRS ACTION QUEUE BANNER                     */}
       {/* ========================================================================= */}
       {highPriorityRepairs.length > 0 && (
         <div className="bg-gradient-to-r from-rose-500/15 via-red-500/10 to-amber-500/10 border-2 border-rose-500/40 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
@@ -805,12 +805,12 @@ export default function TechnicianDashboard() {
       </div>
 
       {/* ========================================================================= */}
-      {/* ATTENDANCE & REPAIR-RELATED DAMAGE PERSONAL SUMMARY CARDS                  */}
+      {/* ATTENDANCE & REPAIR-RELATED DAMAGE PERSONAL SUMMARY CARDS                 */}
       {/* ========================================================================= */}
       <UserOverviewCards />
       <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          
+
           {/* Scrollable Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full no-scrollbar">
             {[
@@ -849,7 +849,7 @@ export default function TechnicianDashboard() {
                   <span>{tab.label}</span>
                   <span className={cn(
                     "text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold",
-                    isSelected 
+                    isSelected
                       ? (tab.color === 'urgent' ? "bg-rose-800 text-white" : (tab.color === 'priority' ? "bg-amber-700 text-white" : "bg-slate-800 text-slate-200"))
                       : (tab.color === 'urgent' ? "bg-rose-200 text-rose-800" : (tab.color === 'priority' ? "bg-amber-200 text-amber-900" : "bg-slate-200 text-slate-700"))
                   )}>
@@ -947,7 +947,7 @@ export default function TechnicianDashboard() {
                     priorityMeta.cardBorder
                   )}>
                     <CardHeader className={cn("p-4 sm:p-5 pb-3 space-y-3", priorityMeta.headerBg)}>
-                      
+
                       {/* Top Badges Row */}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1009,7 +1009,7 @@ export default function TechnicianDashboard() {
                     </CardHeader>
 
                     <CardContent className="p-4 sm:p-5 pt-0 space-y-3.5">
-                      
+
                       {/* Timing & Attribution Information */}
                       <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-100 space-y-1.5">
                         {/* Primary Assignment Elapsed Time */}
