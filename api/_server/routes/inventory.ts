@@ -4,6 +4,7 @@ import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { logAudit } from '../services/auditService';
+import { broadcastServerChange } from '../services/realtimeSync';
 
 const router = Router();
 
@@ -225,6 +226,10 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
 
     if (error) return res.status(500).json({ error: 'Failed to delete inventory items.' });
 
+    for (const id of ids) {
+      await broadcastServerChange('InventoryItem', 'DELETE', id);
+    }
+
     return res.json({ success: true, message: `Successfully removed ${ids.length} items.` });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to process bulk delete.' });
@@ -343,6 +348,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       details: { name: created.name, sku: created.sku, stock: created.currentStock },
     });
 
+    await broadcastServerChange('InventoryItem', 'CREATE', created.id, created);
+
     return res.status(201).json(created);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to save inventory item.' });
@@ -367,6 +374,8 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     if (error) {
       return res.status(500).json({ error: 'Failed to update inventory item.' });
     }
+
+    await broadcastServerChange('InventoryItem', 'UPDATE', id, updated);
 
     return res.json(updated);
   } catch (err: any) {
@@ -415,6 +424,8 @@ router.post('/:id/stock-in', authenticate, async (req: AuthRequest, res: Respons
         createdAt: new Date().toISOString(),
       },
     ]);
+
+    await broadcastServerChange('InventoryItem', 'UPDATE', id, updated);
 
     return res.json({ success: true, item: updated, newStock });
   } catch (err: any) {
@@ -465,6 +476,8 @@ router.post('/:id/stock-out', authenticate, async (req: AuthRequest, res: Respon
       },
     ]);
 
+    await broadcastServerChange('InventoryItem', 'UPDATE', id, updated);
+
     return res.json({ success: true, item: updated, newStock });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to deduct inventory.' });
@@ -513,6 +526,8 @@ router.post('/:id/adjust-stock', authenticate, async (req: AuthRequest, res: Res
       },
     ]);
 
+    await broadcastServerChange('InventoryItem', 'UPDATE', id, updated);
+
     return res.json({ success: true, item: updated, newStock });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to adjust stock quantity.' });
@@ -527,6 +542,8 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
     const { error } = await supabaseAdmin.from('InventoryItem').delete().eq('id', id);
 
     if (error) return res.status(500).json({ error: 'Failed to delete inventory item.' });
+
+    await broadcastServerChange('InventoryItem', 'DELETE', id);
 
     return res.json({ success: true, message: 'Item deleted successfully.' });
   } catch (err: any) {

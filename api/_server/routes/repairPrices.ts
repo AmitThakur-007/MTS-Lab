@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { broadcastServerChange } from '../services/realtimeSync';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -87,6 +88,8 @@ router.post('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER']), a
       return res.status(500).json({ error: 'Failed to add repair price service.' });
     }
 
+    await broadcastServerChange('RepairPrice', 'CREATE', created.id, created);
+
     return res.status(201).json(created);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to save repair price.' });
@@ -112,6 +115,8 @@ const handleUpdatePrice = async (req: AuthRequest, res: Response) => {
       .single();
 
     if (error) return res.status(500).json({ error: 'Failed to update repair price.' });
+
+    await broadcastServerChange('RepairPrice', 'UPDATE', id, updated);
 
     return res.json(updated);
   } catch (err: any) {
@@ -139,6 +144,8 @@ router.patch('/:id/toggle-status', authenticate, authorize(['SUPER_ADMIN', 'ADMI
 
     if (error) return res.status(500).json({ error: 'Failed to toggle status.' });
 
+    await broadcastServerChange('RepairPrice', 'UPDATE', id, updated);
+
     return res.json(updated);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to toggle status.' });
@@ -152,6 +159,8 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
     const { error } = await supabaseAdmin.from('RepairPrice').delete().eq('id', id);
 
     if (error) return res.status(500).json({ error: 'Failed to delete repair price.' });
+
+    await broadcastServerChange('RepairPrice', 'DELETE', id);
 
     return res.json({ success: true, message: 'Repair price deleted.' });
   } catch (err: any) {
@@ -167,6 +176,10 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
 
     const { error } = await supabaseAdmin.from('RepairPrice').delete().in('id', ids);
     if (error) return res.status(500).json({ error: 'Failed to bulk delete prices.' });
+
+    for (const id of ids) {
+      await broadcastServerChange('RepairPrice', 'DELETE', id);
+    }
 
     return res.json({ success: true, message: `Deleted ${ids.length} price items.` });
   } catch (err: any) {

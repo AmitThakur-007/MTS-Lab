@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { broadcastServerChange } from '../services/realtimeSync';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { supabaseAdmin } from '../config/supabase';
@@ -241,7 +242,10 @@ router.post('/import/confirm', authenticate, async (req: AuthRequest, res: Respo
       };
 
       const { data: created } = await supabaseAdmin.from('BatteryWarranty').insert([newWarranty]).select('*').single();
-      if (created) imported.push(created);
+      if (created) {
+        imported.push(created);
+        await broadcastServerChange('BatteryWarranty', 'CREATE', created.id, created);
+      }
     }
 
     return res.json({ success: true, count: imported.length, message: `Imported ${imported.length} warranties.` });
@@ -335,6 +339,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ error: 'Failed to issue warranty.' });
     }
 
+    await broadcastServerChange('BatteryWarranty', 'CREATE', created.id, created);
+
     return res.status(201).json(created);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to register battery warranty.' });
@@ -359,6 +365,8 @@ const handleWarrantyUpdate = async (req: AuthRequest, res: Response) => {
     if (error) {
       return res.status(400).json({ error: error.message });
     }
+
+    await broadcastServerChange('BatteryWarranty', 'UPDATE', id, updated);
 
     return res.json({ success: true, data: updated });
   } catch (err: any) {
@@ -417,6 +425,9 @@ router.post('/:id/claim', authenticate, async (req: AuthRequest, res: Response) 
         updatedAt: new Date().toISOString(),
       })
       .eq('id', id);
+
+    await broadcastServerChange('BatteryWarrantyClaim', 'CREATE', createdClaim.id, createdClaim);
+    await broadcastServerChange('BatteryWarranty', 'UPDATE', id);
 
     return res.status(201).json({ success: true, message: 'Warranty claim processed.', claim: createdClaim });
   } catch (err: any) {
@@ -551,6 +562,10 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
       return res.status(500).json({ error: error.message || 'Failed to delete warranty records.' });
     }
 
+    for (const id of ids) {
+      await broadcastServerChange('BatteryWarranty', 'DELETE', id);
+    }
+
     return res.json({
       success: true,
       message: `Successfully and permanently deleted ${ids.length} warranty record(s).`,
@@ -569,6 +584,8 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
     const { error } = await supabaseAdmin.from('BatteryWarranty').delete().eq('id', id);
 
     if (error) return res.status(500).json({ error: 'Failed to delete warranty.' });
+
+    await broadcastServerChange('BatteryWarranty', 'DELETE', id);
 
     return res.json({ success: true, message: 'Warranty deleted successfully.' });
   } catch (err: any) {

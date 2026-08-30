@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { broadcastServerChange } from '../services/realtimeSync';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -225,6 +226,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       details: { name: created.name, customerId: created.customerId, phone: created.phone },
     });
 
+    await broadcastServerChange('Customer', 'CREATE', created.id, created);
+
     return res.status(201).json(created);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to save customer.' });
@@ -272,6 +275,8 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ error: 'Failed to update customer record.' });
     }
 
+    await broadcastServerChange('Customer', 'UPDATE', id, updated);
+
     return res.json(updated);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to update customer.' });
@@ -297,6 +302,8 @@ router.post('/:id/archive', authenticate, async (req: AuthRequest, res: Response
     if (error) {
       return res.status(500).json({ error: 'Failed to archive customer.' });
     }
+
+    await broadcastServerChange('Customer', 'UPDATE', id, updated);
 
     return res.json({ success: true, message: 'Customer archived successfully.', customer: updated });
   } catch (err: any) {
@@ -324,6 +331,8 @@ router.post('/:id/restore', authenticate, async (req: AuthRequest, res: Response
       return res.status(500).json({ error: 'Failed to restore customer.' });
     }
 
+    await broadcastServerChange('Customer', 'UPDATE', id, updated);
+
     return res.json({ success: true, message: 'Customer restored successfully.', customer: updated });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to restore customer.' });
@@ -339,6 +348,8 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     if (error) {
       return res.status(500).json({ error: 'Failed to delete customer record.' });
     }
+
+    await broadcastServerChange('Customer', 'DELETE', id);
 
     return res.json({ success: true, message: 'Customer deleted successfully.' });
   } catch (err: any) {

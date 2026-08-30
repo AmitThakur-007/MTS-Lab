@@ -4,6 +4,7 @@ import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { createExcelBuffer } from '../services/excelService';
+import { broadcastServerChange } from '../services/realtimeSync';
 
 const router = Router();
 
@@ -464,6 +465,8 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
       }
     }
 
+    await broadcastServerChange('Attendance', 'CREATE', 'dispatch');
+
     return res.json({
       success: true,
       message: `Attendance request dispatched to all staff (${currentCount + 1}/3). You have been auto-marked PRESENT.`,
@@ -532,6 +535,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
           .single();
 
         if (error) throw error;
+        await broadcastServerChange('Attendance', 'UPDATE', existingRecord.id, updated);
         return res.json({ success: true, message: `Staff attendance updated to ${finalStatus}.`, record: updated });
       } else {
         const newRecord: any = {
@@ -553,6 +557,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
           .single();
 
         if (error) throw error;
+        await broadcastServerChange('Attendance', 'CREATE', created.id, created);
         return res.status(201).json({ success: true, message: `Staff attendance marked as ${finalStatus}.`, record: created });
       }
     }
@@ -574,6 +579,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
           .single();
 
         if (error) throw error;
+        await broadcastServerChange('Attendance', 'UPDATE', existingRecord.id, updated);
         return res.json({ success: true, message: 'Check-in confirmed successfully.', record: updated });
       }
 
@@ -594,6 +600,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
         .single();
 
       if (error) throw error;
+      await broadcastServerChange('Attendance', 'CREATE', created.id, created);
       return res.status(201).json({ success: true, message: 'Check-in recorded.', record: created });
     }
 
@@ -695,6 +702,7 @@ router.patch('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (r
       .single();
 
     if (error) return res.status(500).json({ error: 'Failed to update record.' });
+    await broadcastServerChange('Attendance', 'UPDATE', id, updated);
     return res.json({ success: true, message: 'Attendance record corrected.', record: updated });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to update attendance log.' });
@@ -710,6 +718,7 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
     const { error } = await supabaseAdmin.from('Attendance').delete().eq('id', id);
 
     if (error) return res.status(500).json({ error: 'Failed to delete attendance record.' });
+    await broadcastServerChange('Attendance', 'DELETE', id);
     return res.json({ success: true, message: 'Attendance record deleted.' });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to delete log.' });
@@ -790,6 +799,9 @@ router.delete('/staff/:userId', authenticate, authorize(['SUPER_ADMIN']), async 
       console.error('[USER TABLE DELETE ERROR]', userDelErr);
       return res.status(500).json({ error: 'Failed to delete user account.' });
     }
+
+    await broadcastServerChange('User', 'DELETE', userId);
+    await broadcastServerChange('Attendance', 'DELETE', userId);
 
     return res.json({
       success: true,

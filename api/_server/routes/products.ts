@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { broadcastServerChange } from '../services/realtimeSync';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -59,6 +60,8 @@ router.post('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: 
     const { data: created, error } = await supabaseAdmin.from('Product').insert([newProduct]).select('*').single();
     if (error) return res.status(500).json({ error: 'Failed to save product.' });
 
+    await broadcastServerChange('Product', 'CREATE', created.id, created);
+
     return res.status(201).json(created);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to create product.' });
@@ -85,6 +88,8 @@ router.put('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req
 
     if (error) return res.status(500).json({ error: 'Failed to update product.' });
 
+    await broadcastServerChange('Product', 'UPDATE', id, updated);
+
     return res.json(updated);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to update product record.' });
@@ -97,6 +102,8 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
     const { id } = req.params;
     const { error } = await supabaseAdmin.from('Product').delete().eq('id', id);
     if (error) return res.status(500).json({ error: 'Failed to delete product.' });
+
+    await broadcastServerChange('Product', 'DELETE', id);
 
     return res.json({ success: true, message: 'Product deleted.' });
   } catch (err: any) {

@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize, normalizeRole } from '../middleware/rbac';
+import { broadcastServerChange } from '../services/realtimeSync';
 import { logAudit } from '../services/auditService';
 
 const router = Router();
@@ -125,6 +126,8 @@ router.post('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: 
       details: { email: insertedUser.email, role: insertedUser.role, createdBy: req.user!.name },
     });
 
+    await broadcastServerChange('User', 'CREATE', insertedUser.id, insertedUser);
+
     return res.status(201).json(insertedUser);
   } catch (err: any) {
     console.error('[CREATE USER ERROR]', err);
@@ -207,6 +210,8 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       details: updatePayload,
     });
 
+    await broadcastServerChange('User', 'UPDATE', id, updated);
+
     return res.json(updated);
   } catch (err: any) {
     console.error('[USER UPDATE ERROR]', err);
@@ -234,6 +239,8 @@ const handle2FAToggle = async (req: AuthRequest, res: Response) => {
     if (error) {
       return res.status(500).json({ error: 'Failed to update 2FA configuration.' });
     }
+
+    await broadcastServerChange('User', 'UPDATE', id, updated);
 
     return res.json({ success: true, message: `2FA ${isEnabled ? 'enabled' : 'disabled'} successfully.`, user: updated });
   } catch (err: any) {
@@ -264,6 +271,8 @@ const handleDirectVerifyEmail = async (req: AuthRequest, res: Response) => {
     if (error) {
       return res.status(500).json({ error: 'Failed to verify staff email.' });
     }
+
+    await broadcastServerChange('User', 'UPDATE', id, updated);
 
     return res.json({ success: true, message: 'Email directly verified successfully.', user: updated });
   } catch (err: any) {
@@ -310,6 +319,8 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
       resourceId: id,
       details: { deletedEmail: user?.email },
     });
+
+    await broadcastServerChange('User', 'DELETE', id);
 
     return res.json({ success: true, message: 'Staff member account safely deactivated.' });
   } catch (err: any) {

@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
+import { broadcastServerChange } from '../services/realtimeSync';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -84,6 +85,10 @@ router.post('/delete-data', authenticate, authorize(['SUPER_ADMIN']), async (req
       resource: table,
       details: { deletedCount: ids.length, ids, reason: reason || 'Administrative cleanup' },
     });
+
+    for (const id of ids) {
+      await broadcastServerChange(table, 'DELETE', id);
+    }
 
     return res.json({ success: true, message: `Safely removed ${ids.length} records from ${table}.` });
   } catch (err: any) {

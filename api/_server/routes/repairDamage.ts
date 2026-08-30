@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { broadcastServerChange } from '../services/realtimeSync';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -193,6 +194,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ error: 'Failed to record damage incident.' });
     }
 
+    await broadcastServerChange('RepairRelatedDamage', 'CREATE', created.id, created);
+
     return res.status(201).json(created);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to save damage record.' });
@@ -217,6 +220,8 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 
     if (error) return res.status(500).json({ error: 'Failed to update record.' });
 
+    await broadcastServerChange('RepairRelatedDamage', 'UPDATE', id, updated);
+
     return res.json(updated);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to update damage record.' });
@@ -233,6 +238,8 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
       .eq('id', id);
 
     if (error) return res.status(500).json({ error: 'Failed to archive record.' });
+
+    await broadcastServerChange('RepairRelatedDamage', 'DELETE', id);
 
     return res.json({ success: true, message: 'Damage record archived.' });
   } catch (err: any) {

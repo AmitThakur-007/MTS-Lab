@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { broadcastServerChange } from '../services/realtimeSync';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 
@@ -33,6 +34,8 @@ router.post('/:id/read', authenticate, async (req: AuthRequest, res: Response) =
 
     if (error) return res.status(500).json({ error: 'Failed to mark notification as read.' });
 
+    await broadcastServerChange('Notification', 'UPDATE', id);
+
     return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to update notification status.' });
@@ -48,6 +51,8 @@ router.post('/mark-all-read', authenticate, async (req: AuthRequest, res: Respon
       .or(`userId.eq.${req.user!.id},userId.is.null`);
 
     if (error) return res.status(500).json({ error: 'Failed to mark all notifications as read.' });
+
+    await broadcastServerChange('Notification', 'UPDATE', 'bulk');
 
     return res.json({ success: true, message: 'All notifications marked as read.' });
   } catch (err: any) {

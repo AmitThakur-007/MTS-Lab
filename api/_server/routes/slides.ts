@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { broadcastServerChange } from '../services/realtimeSync';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { supabaseAdmin } from '../config/supabase';
@@ -70,6 +71,8 @@ router.post('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: 
     const { data: created, error } = await supabaseAdmin.from('HomeSlide').insert([newSlide]).select('*').single();
     if (error) return res.status(500).json({ error: 'Failed to create slide.' });
 
+    await broadcastServerChange('HomeSlide', 'CREATE', created.id, created);
+
     return res.status(201).json(created);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to save slide.' });
@@ -91,6 +94,8 @@ router.put('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req
       .single();
 
     if (error) return res.status(500).json({ error: 'Failed to update slide.' });
+
+    await broadcastServerChange('HomeSlide', 'UPDATE', id, updated);
 
     return res.json(updated);
   } catch (err: any) {
@@ -115,6 +120,8 @@ router.patch('/:id/toggle-status', authenticate, authorize(['SUPER_ADMIN', 'ADMI
 
     if (error) return res.status(500).json({ error: 'Failed to toggle status.' });
 
+    await broadcastServerChange('HomeSlide', 'UPDATE', id, updated);
+
     return res.json(updated);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to toggle status.' });
@@ -127,6 +134,8 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
     const { id } = req.params;
     const { error } = await supabaseAdmin.from('HomeSlide').delete().eq('id', id);
     if (error) return res.status(500).json({ error: 'Failed to delete slide.' });
+
+    await broadcastServerChange('HomeSlide', 'DELETE', id);
 
     return res.json({ success: true, message: 'Slide deleted.' });
   } catch (err: any) {

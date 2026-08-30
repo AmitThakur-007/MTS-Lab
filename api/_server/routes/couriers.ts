@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../services/auditService';
+import { broadcastServerChange } from '../services/realtimeSync';
 
 const router = Router();
 
@@ -360,6 +361,8 @@ router.post('/incoming', authenticate, async (req: AuthRequest, res: Response) =
         console.warn('[REPAIR LOG FAILED - NON FATAL]', logErr);
       }
 
+      await broadcastServerChange('Repair', 'UPDATE', existingRepairId, updatedRepair);
+
       return res.json({
         success: true,
         message: `Inbound shipment linked to Repair #${existingRepair.repairNumber} successfully.`,
@@ -475,6 +478,8 @@ router.post('/incoming', authenticate, async (req: AuthRequest, res: Response) =
       console.warn('[REPAIR LOG FAILED - NON FATAL]', logErr);
     }
 
+    await broadcastServerChange('Repair', 'CREATE', newRepairId, createdRepair);
+
     return res.status(201).json({
       success: true,
       message: `Inbound courier registered under Repair Job #${generatedRepairNumber}`,
@@ -569,6 +574,8 @@ router.post('/outgoing', authenticate, async (req: AuthRequest, res: Response) =
       console.warn('[REPAIR LOG FAILED - NON FATAL]', logErr);
     }
 
+    await broadcastServerChange('Repair', 'UPDATE', repairId, updated);
+
     return res.json({
       success: true,
       message: 'Shipment dispatched successfully.',
@@ -631,6 +638,8 @@ router.patch('/:id/status', authenticate, async (req: AuthRequest, res: Response
       console.warn('[REPAIR LOG FAILED - NON FATAL]', logErr);
     }
 
+    await broadcastServerChange('Repair', 'UPDATE', id, updated);
+
     return res.json({
       success: true,
       message: 'Courier status updated.',
@@ -672,6 +681,10 @@ router.post('/bulk-status', authenticate, async (req: AuthRequest, res: Response
 
     if (error) return res.status(500).json({ error: 'Failed to bulk update status.' });
 
+    for (const id of targetIds) {
+      await broadcastServerChange('Repair', 'UPDATE', id);
+    }
+
     return res.json({
       success: true,
       message: `Updated ${targetIds.length} shipments.`
@@ -703,6 +716,10 @@ router.post('/bulk-archive', authenticate, async (req: AuthRequest, res: Respons
 
     if (error) return res.status(500).json({ error: 'Failed to archive shipments.' });
 
+    for (const id of targetIds) {
+      await broadcastServerChange('Repair', 'UPDATE', id);
+    }
+
     return res.json({
       success: true,
       message: `Archived ${targetIds.length} courier records.`
@@ -730,6 +747,8 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       .eq('id', id);
 
     if (error) return res.status(500).json({ error: 'Failed to remove courier shipment.' });
+
+    await broadcastServerChange('Repair', 'UPDATE', id);
 
     return res.json({ success: true, message: 'Courier record archived successfully.' });
   } catch (err: any) {
