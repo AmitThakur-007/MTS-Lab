@@ -110,6 +110,11 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
     }
 
+    // Ensure logs are sorted newest first if they were returned unordered
+    if (repairRecord.logs && Array.isArray(repairRecord.logs)) {
+      repairRecord.logs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
     // Mask sensitive name and phone for privacy in public portal
     const sanitizedName = repairRecord.customerName
       ? `${repairRecord.customerName.charAt(0)}*** ${repairRecord.customerName.split(' ').slice(-1)[0] || ''}`.trim()

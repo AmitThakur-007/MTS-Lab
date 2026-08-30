@@ -2,13 +2,6 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 
-// api/_server/routes/auth.ts
-import { Router } from "express";
-import bcrypt from "bcryptjs";
-import jwt2 from "jsonwebtoken";
-import crypto from "crypto";
-import { v4 as uuidv42 } from "uuid";
-
 // api/_server/config/supabase.ts
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
@@ -200,6 +193,12 @@ async function sendEmail(options) {
 }
 
 // api/_server/routes/auth.ts
+import { Router } from "express";
+import bcrypt from "bcryptjs";
+import jwt2 from "jsonwebtoken";
+import crypto from "crypto";
+import { v4 as uuidv42 } from "uuid";
+
 var router = Router();
 function generateTokens(user) {
   const token = jwt2.sign(
@@ -4712,6 +4711,10 @@ var handlePublicTrack = async (req, res) => {
     if (!repairRecord) {
       return res.status(404).json({ error: "No repair records found matching your tracking information." });
     }
+    // Sort logs descending to ensure the trace is properly ordered
+    if (repairRecord.logs && Array.isArray(repairRecord.logs)) {
+      repairRecord.logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
     const sanitizedName = repairRecord.customerName ? `${repairRecord.customerName.charAt(0)}*** ${repairRecord.customerName.split(" ").slice(-1)[0] || ""}`.trim() : "Customer";
     const sanitizedRecord = {
       ...repairRecord,
@@ -4917,6 +4920,11 @@ function createApp() {
     }
     next();
   });
+
+  // Mount public tracking endpoints at the top to prevent 404 route matching issues
+  app2.use("/api", public_default);
+  app2.use("/api/public", public_default);
+
   app2.use("/api/auth", auth_default);
   app2.use("/api/users", users_default);
   app2.use("/api/staff", users_default);
@@ -4949,8 +4957,7 @@ function createApp() {
   app2.get("/api/approved-devices", (req, res) => res.json([]));
   app2.use("/api/upload", upload_default);
   app2.use("/api/events", events_default);
-  app2.use("/api", public_default);
-  app2.use("/api/public", public_default);
+
   app2.get("/api/health", (req, res) => {
     res.json({ status: "healthy", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   });

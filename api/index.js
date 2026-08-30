@@ -1,16 +1,16 @@
 // api/_server/app.ts
 import express from "express";
 import cookieParser from "cookie-parser";
-import { Router } from "express";
-import bcrypt from "bcryptjs";
-import jwt2 from "jsonwebtoken";
-import crypto from "crypto";
-import { v4 as uuidv42 } from "uuid";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
 import { Resend } from "resend";
+import { Router } from "express";
+import bcrypt from "bcryptjs";
+import jwt2 from "jsonwebtoken";
+import crypto from "crypto";
+import { v4 as uuidv42 } from "uuid";
 import { Router as Router2 } from "express";
 import bcrypt2 from "bcryptjs";
 import { v4 as uuidv43 } from "uuid";
@@ -4649,6 +4649,9 @@ var handlePublicTrack = async (req, res) => {
     if (!repairRecord) {
       return res.status(404).json({ error: "No repair records found matching your tracking information." });
     }
+    if (repairRecord.logs && Array.isArray(repairRecord.logs)) {
+      repairRecord.logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
     const sanitizedName = repairRecord.customerName ? `${repairRecord.customerName.charAt(0)}*** ${repairRecord.customerName.split(" ").slice(-1)[0] || ""}`.trim() : "Customer";
     const sanitizedRecord = {
       ...repairRecord,
@@ -4848,6 +4851,8 @@ function createApp() {
     }
     next();
   });
+  app22.use("/api", public_default);
+  app22.use("/api/public", public_default);
   app22.use("/api/auth", auth_default);
   app22.use("/api/users", users_default);
   app22.use("/api/staff", users_default);
@@ -4880,8 +4885,6 @@ function createApp() {
   app22.get("/api/approved-devices", (req, res) => res.json([]));
   app22.use("/api/upload", upload_default);
   app22.use("/api/events", events_default);
-  app22.use("/api", public_default);
-  app22.use("/api/public", public_default);
   app22.get("/api/health", (req, res) => {
     res.json({ status: "healthy", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   });
