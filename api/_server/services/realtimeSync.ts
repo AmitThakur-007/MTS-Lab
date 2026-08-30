@@ -5,9 +5,15 @@ export async function broadcastServerChange(entityName: string, action: 'CREATE'
     try {
         const channel = supabaseAdmin.channel('mts_app_db_changes');
 
-        // Ensure channel is joined
+        // Ensure channel is joined properly with subscription promise resolution
         if (channel.state !== 'joined') {
-            await channel.subscribe();
+            await new Promise((resolve) => {
+                channel.subscribe((status: string) => {
+                    if (status === 'SUBSCRIBED') {
+                        resolve(true);
+                    }
+                });
+            });
         }
 
         const entityLower = entityName.toLowerCase();
