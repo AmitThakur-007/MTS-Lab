@@ -182,14 +182,18 @@ export default function RepairDetails() {
     if (!alertMessage.trim() || sendingAlert) return;
     setSendingAlert(true);
     try {
+      // Dispatch alert and explicitly pass priority
       const res = await api.post(`/repairs/${id}/alert`, {
         message: alertMessage.trim(),
-        priority: alertPriority
+        priority: alertPriority,
+        isUrgent: alertPriority === 'URGENT'
       });
-      if (res.repair) {
-        setRepair(res.repair);
-      }
-      toast.success("Priority alert dispatched to assigned technician in real-time");
+
+      const updatedRepair = res.repair || res;
+      setRepair(updatedRepair);
+      await syncRepairToRtdb(updatedRepair);
+
+      toast.success("Priority alert dispatched and status updated in real-time");
       setIsAlertDialogOpen(false);
       setAlertMessage('');
       fetchData();
@@ -234,6 +238,7 @@ export default function RepairDetails() {
     try {
       const res = await api.patch(`/repairs/${id}`, { priority });
       setRepair(res);
+      await syncRepairToRtdb(res);
       toast.success(`Priority updated to ${priority}`);
       fetchData();
     } catch (err: any) {
@@ -376,6 +381,11 @@ export default function RepairDetails() {
                   HIGH PRIORITY
                 </Badge>
               )}
+              {(!repair.priority || repair.priority === 'NORMAL' || repair.priority === 'MEDIUM') && (
+                <Badge variant="outline" className="bg-slate-100 text-slate-700 font-bold border-slate-300">
+                  {repair.priority || 'MEDIUM'} PRIORITY
+                </Badge>
+              )}
             </div>
             <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-slate-900 truncate">
               {repair.deviceBrand} {repair.deviceModel}
@@ -387,7 +397,7 @@ export default function RepairDetails() {
           {/* Priority selector for managers/admins */}
           {['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(user?.role || '') && (
             <Select
-              value={repair.priority || 'NORMAL'}
+              value={repair.priority || 'MEDIUM'}
               onValueChange={handleUpdatePriority}
               disabled={updating}
             >
@@ -396,6 +406,7 @@ export default function RepairDetails() {
               </SelectTrigger>
               <SelectContent className="rounded-xl">
                 <SelectItem value="NORMAL" className="font-bold text-xs">Normal Priority</SelectItem>
+                <SelectItem value="MEDIUM" className="font-bold text-xs text-slate-700">Medium Priority</SelectItem>
                 <SelectItem value="HIGH" className="font-bold text-xs text-amber-600">High Priority</SelectItem>
                 <SelectItem value="URGENT" className="font-bold text-xs text-rose-600">Urgent Priority</SelectItem>
               </SelectContent>
