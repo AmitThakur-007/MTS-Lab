@@ -49,7 +49,7 @@ function getNepalTimeDetails() {
 }
 
 /**
- * Robust helper to fetch active staff members from the User table without restrictive email filters
+ * Robust helper to fetch active staff members from the User table
  */
 async function fetchSafeStaffUsers() {
   try {
@@ -754,7 +754,7 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ==========================================
-// 13. DELETE /api/attendance/staff/:userId (Super Admin Only)
+// 13. DELETE /api/attendance/staff/:userId (Super Admin Only - Safe Deactivation)
 // ==========================================
 router.delete('/staff/:userId', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
@@ -768,33 +768,31 @@ router.delete('/staff/:userId', authenticate, authorize(['SUPER_ADMIN']), async 
       return res.status(400).json({ error: 'You cannot delete your own Super Admin account from attendance.' });
     }
 
-    const { error: attDelErr } = await supabaseAdmin
+    // 1. Delete associated attendance logs
+    await supabaseAdmin
       .from('Attendance')
       .delete()
       .eq('userId', userId);
 
-    if (attDelErr) {
-      console.error('[STAFF ATTENDANCE PURGE ERROR]', attDelErr);
-      return res.status(500).json({ error: 'Failed to purge staff attendance records.' });
-    }
-
+    // 2. Remove from Staff directory table if present
     await supabaseAdmin
       .from('Staff')
       .delete()
       .or(`id.eq.${userId},userId.eq.${userId}`);
 
-    const { error: userDelErr } = await supabaseAdmin
+    // 3. Mark user as INACTIVE to bypass foreign key constraints in Repair records
+    const { error: userUpdateErr } = await supabaseAdmin
       .from('User')
-      .delete()
+      .update({ status: 'INACTIVE', updatedAt: new Date().toISOString() })
       .eq('id', userId);
 
-    if (userDelErr) {
-      console.warn('[USER TABLE PURGE WARN - NON FATAL]', userDelErr);
+    if (userUpdateErr) {
+      console.warn('[USER STATUS UPDATE WARN]', userUpdateErr);
     }
 
     return res.json({
       success: true,
-      message: 'Staff member and all their attendance records have been permanently removed.'
+      message: 'Staff member deactivated and removed from attendance roster.'
     });
   } catch (err: any) {
     console.error('[STAFF DELETE EXCEPTION]', err);

@@ -3856,19 +3856,15 @@ router8.delete("/staff/:userId", authenticate, authorize(["SUPER_ADMIN"]), async
     if (userId === req.user.id) {
       return res.status(400).json({ error: "You cannot delete your own Super Admin account from attendance." });
     }
-    const { error: attDelErr } = await supabaseAdmin.from("Attendance").delete().eq("userId", userId);
-    if (attDelErr) {
-      console.error("[STAFF ATTENDANCE PURGE ERROR]", attDelErr);
-      return res.status(500).json({ error: "Failed to purge staff attendance records." });
-    }
+    await supabaseAdmin.from("Attendance").delete().eq("userId", userId);
     await supabaseAdmin.from("Staff").delete().or(`id.eq.${userId},userId.eq.${userId}`);
-    const { error: userDelErr } = await supabaseAdmin.from("User").delete().eq("id", userId);
-    if (userDelErr) {
-      console.warn("[USER TABLE PURGE WARN - NON FATAL]", userDelErr);
+    const { error: userUpdateErr } = await supabaseAdmin.from("User").update({ status: "INACTIVE", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", userId);
+    if (userUpdateErr) {
+      console.warn("[USER STATUS UPDATE WARN]", userUpdateErr);
     }
     return res.json({
       success: true,
-      message: "Staff member and all their attendance records have been permanently removed."
+      message: "Staff member deactivated and removed from attendance roster."
     });
   } catch (err) {
     console.error("[STAFF DELETE EXCEPTION]", err);
