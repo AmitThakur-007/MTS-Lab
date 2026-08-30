@@ -60,7 +60,7 @@ class RealtimeService {
         'RepairLog', 'repairLog',
         'Payment', 'payment',
         'User', 'user',
-        'RepairTransferRequest', 'repairTransferRequest',
+        'RepairTransferRequest', 'repairtransferrequest',
         'Customer', 'customer',
         'InventoryItem', 'inventoryitem',
         'BatteryWarranty', 'batterywarranty'
@@ -338,32 +338,15 @@ class RealtimeService {
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: event }));
     }
 
-    const targetEntities = new Set<string>();
-    targetEntities.add(rawEntity);
-
-    if (['techniciannote', 'repairlog', 'payment'].includes(rawEntity)) {
-      targetEntities.add('repair');
-    }
-    if (['accessrequest', 'approveddevice', 'session'].includes(rawEntity)) {
-      targetEntities.add('user');
-      targetEntities.add('accessrequest');
-    }
-    if (['batterywarranty', 'batterywarrantyclaim'].includes(rawEntity)) {
-      targetEntities.add('batterywarranty');
-      targetEntities.add('batterywarrantyclaim');
-    }
-
-    targetEntities.forEach((ent) => {
-      const entitySet = this.listeners.get(ent);
-      if (entitySet) {
-        entitySet.forEach((listener) => {
-          try {
-            listener(event);
-          } catch (err) {
-            console.error('[REALTIME LISTENER ERROR]', err);
-          }
-        });
-      }
+    // Force universal notification to all listeners so any active dashboard updates immediately
+    this.listeners.forEach((entitySet) => {
+      entitySet.forEach((listener) => {
+        try {
+          listener(event);
+        } catch (err) {
+          console.error('[REALTIME LISTENER ERROR]', err);
+        }
+      });
     });
 
     this.globalListeners.forEach((listener) => {
@@ -449,7 +432,7 @@ export function useRealtimeSync(
         if (callbackRef.current) {
           callbackRef.current(event);
         }
-      }, 200);
+      }, 150);
     });
 
     return () => {
