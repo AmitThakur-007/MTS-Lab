@@ -1,4 +1,3 @@
-// src/services/realtime.ts
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
@@ -49,33 +48,51 @@ class RealtimeService {
     try {
       if (!supabase) return;
 
-      // CRITICAL FIX: Enable self: true so that broadcast events echo back to the sender
       this.supabaseChannel = supabase.channel('mts_app_db_changes', {
         config: {
           broadcast: { self: true },
         },
       });
 
-      this.supabaseChannel
-        .on('broadcast', { event: '*' }, ({ event, payload }: { event: string; payload: any }) => {
-          console.log(`[SUPABASE BROADCAST RECEIVED] Event: ${event}`, payload);
-          if (payload && payload.entity) {
-            this.handleIncomingEvent(payload);
-          } else if (payload?.id) {
+      // Listen to native postgres table changes if enabled on supabase backend
+      const tablesToTrack = ['Repair', 'repair', 'Customer', 'customer', 'TechnicianNote', 'techniciannote', 'RepairLog', 'repairlog', 'Notification', 'notification'];
+
+      tablesToTrack.forEach((tableName) => {
+        this.supabaseChannel.on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: tableName },
+          (payload: any) => {
+            const eventType = payload.eventType;
+            const actionMap: Record<string, 'CREATE' | 'UPDATE' | 'DELETE'> = {
+              INSERT: 'CREATE',
+              UPDATE: 'UPDATE',
+              DELETE: 'DELETE'
+            };
+            const mappedAction = actionMap[eventType] || 'UPDATE';
+            const recordData = payload.new || payload.old || {};
+            const recordId = recordData.id || payload.old?.id;
+
             this.handleIncomingEvent({
-              entity: event.replace('_sync', '').replace('_delete', '').toLowerCase() || 'repair',
-              action: event.includes('delete') ? 'DELETE' : 'UPDATE',
-              id: payload.id,
-              data: payload,
+              entity: tableName.toLowerCase(),
+              action: mappedAction,
+              id: recordId,
+              data: recordData,
               timestamp: Date.now()
             });
+          }
+        );
+      });
+
+      this.supabaseChannel
+        .on('broadcast', { event: '*' }, ({ payload }: { payload: any }) => {
+          if (payload && payload.entity) {
+            this.handleIncomingEvent(payload);
           }
         })
         .subscribe((status: string) => {
           if (status === 'SUBSCRIBED') {
             this.supabaseConnected = true;
             this.updateAggregateStatus();
-            console.log('[REALTIME] Connected to Supabase channel with self-broadcast active.');
           } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
             this.supabaseConnected = false;
             this.updateAggregateStatus();
@@ -94,16 +111,9 @@ class RealtimeService {
         const parsed = JSON.parse(mtsStorage);
         if (parsed?.state?.token) return parsed.state.token;
       }
-      const authStorage = localStorage.getItem('auth-storage');
-      if (authStorage) {
-        const parsed = JSON.parse(authStorage);
-        if (parsed?.state?.token) return parsed.state.token;
-      }
       const directToken = localStorage.getItem('token') || localStorage.getItem('auth_token');
       if (directToken) return directToken;
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) { }
     return null;
   }
 
@@ -117,30 +127,17 @@ class RealtimeService {
       this.setStatus('disconnected');
     });
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        const isStale = Date.now() - this.lastActivityTime > 120000;
-        if (!this.eventSource || this.eventSource.readyState === EventSource.CLOSED || isStale) {
-          this.connect();
-        }
-      }
-    });
-
     window.addEventListener('focus', () => {
-      const isStale = Date.now() - this.lastActivityTime > 120000;
-      if (!this.eventSource || this.eventSource.readyState === EventSource.CLOSED || isStale) {
-        this.connect();
-      }
+      this.handleIncomingEvent({ entity: 'global_focus', action: 'SYNC', timestamp: Date.now() });
     });
   }
 
   private startHealthCheck() {
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
+    // Periodic background pulse every 15 seconds to ensure UI stays fresh across all roles automatically
     this.healthCheckInterval = setInterval(() => {
-      if (this.currentStatus === 'connected' && Date.now() - this.lastActivityTime > 90000) {
-        this.connect();
-      }
-    }, 30000);
+      this.handleIncomingEvent({ entity: 'heartbeat', action: 'SYNC', timestamp: Date.now() });
+    }, 15000);
   }
 
   public getStatus() {
@@ -151,11 +148,7 @@ class RealtimeService {
     if (this.currentStatus !== status) {
       this.currentStatus = status;
       this.statusListeners.forEach((listener) => {
-        try {
-          listener(status);
-        } catch (e) {
-          console.error(e);
-        }
+        try { listener(status); } catch (e) { }
       });
     }
   }
@@ -163,25 +156,18 @@ class RealtimeService {
   public onStatusChange(listener: (status: 'connected' | 'connecting' | 'disconnected') => void) {
     this.statusListeners.add(listener);
     listener(this.currentStatus);
-    return () => {
-      this.statusListeners.delete(listener);
-    };
+    return () => { this.statusListeners.delete(listener); };
   }
 
   public connect() {
     if (typeof window === 'undefined' || this.isConnecting) return;
-
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
 
     if (this.eventSource) {
-      try {
-        this.eventSource.close();
-      } catch (e) {
-        // ignore
-      }
+      try { this.eventSource.close(); } catch (e) { }
       this.eventSource = null;
     }
 
@@ -200,36 +186,25 @@ class RealtimeService {
       es.addEventListener('connected', () => {
         this.isConnecting = false;
         this.reconnectAttempts = 0;
-        this.lastActivityTime = Date.now();
         this.sseConnected = true;
         this.updateAggregateStatus();
-      });
-
-      es.addEventListener('ping', () => {
-        this.lastActivityTime = Date.now();
       });
 
       es.addEventListener('message', (event) => {
         this.lastActivityTime = Date.now();
         try {
           const parsed: RealtimeEvent = JSON.parse(event.data);
-          if (parsed && parsed.entity && parsed.action !== 'SYNC') {
+          if (parsed && parsed.entity) {
             this.handleIncomingEvent(parsed);
           }
-        } catch (err) {
-          // ignore
-        }
+        } catch (err) { }
       });
 
       es.onerror = () => {
         this.isConnecting = false;
         this.sseConnected = false;
         this.updateAggregateStatus();
-        try {
-          es.close();
-        } catch (e) {
-          // ignore
-        }
+        try { es.close(); } catch (e) { }
         this.eventSource = null;
         this.scheduleReconnect();
       };
@@ -252,9 +227,7 @@ class RealtimeService {
   }
 
   private handleIncomingEvent(event: RealtimeEvent) {
-    if (!event || !event.entity || event.entity === 'sync' || event.entity === 'ping') {
-      return;
-    }
+    if (!event || !event.entity) return;
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: event }));
@@ -262,20 +235,12 @@ class RealtimeService {
 
     this.listeners.forEach((entitySet) => {
       entitySet.forEach((listener) => {
-        try {
-          listener(event);
-        } catch (err) {
-          console.error('[REALTIME LISTENER ERROR]', err);
-        }
+        try { listener(event); } catch (err) { }
       });
     });
 
     this.globalListeners.forEach((listener) => {
-      try {
-        listener(event);
-      } catch (err) {
-        console.error('[REALTIME GLOBAL ERROR]', err);
-      }
+      try { listener(event); } catch (err) { }
     });
   }
 
@@ -295,9 +260,7 @@ class RealtimeService {
         const set = this.listeners.get(entity);
         if (set) {
           set.delete(callback);
-          if (set.size === 0) {
-            this.listeners.delete(entity);
-          }
+          if (set.size === 0) this.listeners.delete(entity);
         }
       });
     };
@@ -305,9 +268,7 @@ class RealtimeService {
 
   public subscribeAll(callback: Listener): () => void {
     this.globalListeners.add(callback);
-    return () => {
-      this.globalListeners.delete(callback);
-    };
+    return () => { this.globalListeners.delete(callback); };
   }
 }
 
@@ -340,23 +301,16 @@ export function useRealtimeSync(
 
     const unsubscribeEvents = realtimeService.subscribe(entities, (event) => {
       if (!callbackRef.current) return;
-
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
-        if (callbackRef.current) {
-          callbackRef.current(event);
-        }
-      }, 150);
+        if (callbackRef.current) callbackRef.current(event);
+      }, 100);
     });
 
     return () => {
       unsubscribeStatus();
       unsubscribeEvents();
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
   }, [entityKey, enabled]);
 
