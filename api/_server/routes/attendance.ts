@@ -49,53 +49,31 @@ function getNepalTimeDetails() {
 }
 
 /**
- * Helper to fetch ONLY the exact active staff members from the Staff directory table (Staff Management)
+ * Helper to fetch authorized staff users directly from the User table
  */
 async function fetchSafeStaffUsers() {
   try {
-    // 1. Primary Source: Query the Staff directory table used by Staff Management
-    const { data: staffMembers, error: staffErr } = await supabaseAdmin
-      .from('Staff')
-      .select('*')
-      .order('name', { ascending: true });
-
-    if (!staffErr && Array.isArray(staffMembers) && staffMembers.length > 0) {
-      return staffMembers
-        .filter((s: any) => {
-          const status = (s.status || 'ACTIVE').toUpperCase();
-          const email = (s.email || '').toLowerCase();
-          const isReal = !email.endsWith('.local') && !email.includes('2fatest') && !email.includes('test_admin');
-          return status === 'ACTIVE' && isReal;
-        })
-        .map((s: any) => ({
-          id: s.userId || s.id,
-          name: s.name || 'Staff Member',
-          email: s.email || '',
-          role: s.role || 'TECHNICIAN',
-          department: s.department || 'Repair Lab',
-          phone: s.phone || '',
-          avatarUrl: s.avatarUrl || s.profileImage || null,
-          status: s.status || 'ACTIVE'
-        }));
-    }
-
-    // 2. Fallback: Query User table with strict staff directory filtering
-    const { data: users, error: userErr } = await supabaseAdmin
+    const { data: users, error } = await supabaseAdmin
       .from('User')
       .select('*')
       .in('role', AUTHORIZED_STAFF_ROLES)
-      .eq('status', 'ACTIVE')
       .order('name', { ascending: true });
 
-    if (userErr) {
-      console.error('[SUPABASE USER QUERY ERROR]', userErr);
+    if (error) {
+      console.error('[SUPABASE USER QUERY ERROR]', error);
       return [];
     }
 
     return (users || []).filter((u: any) => {
+      const status = (u.status || 'ACTIVE').toUpperCase();
+      const role = (u.role || '').toUpperCase();
       const email = (u.email || '').toLowerCase();
+
+      const isStaffRole = AUTHORIZED_STAFF_ROLES.includes(role);
+      const isActive = status === 'ACTIVE';
       const isRealAccount = !email.endsWith('.local') && !email.includes('2fatest') && !email.includes('test_admin');
-      return isRealAccount;
+
+      return isStaffRole && isActive && isRealAccount;
     });
   } catch (err) {
     console.error('[SAFE USER FETCH EXCEPTION]', err);
@@ -152,10 +130,8 @@ const handleRosterRequest = async (req: AuthRequest, res: Response) => {
     const time = getNepalTimeDetails();
     const todayStr = (req.query.date as string) || time.dateString;
 
-    // 1. Fetch authorized staff registered in staff management
     const staffList = await fetchSafeStaffUsers();
 
-    // 2. Fetch today's attendance records
     const { data: attendanceRecords } = await supabaseAdmin
       .from('Attendance')
       .select('*')
@@ -258,10 +234,8 @@ router.get('/monthly-report', authenticate, async (req: AuthRequest, res: Respon
     const { month } = req.query;
     const currentMonth = (month as string) || new Date().toISOString().slice(0, 7);
 
-    // 1. Fetch authorized staff list
     const staffList = await fetchSafeStaffUsers();
 
-    // 2. Fetch all logs for this month
     const { data: records } = await supabaseAdmin
       .from('Attendance')
       .select('*')
@@ -373,11 +347,10 @@ router.get('/staff/:userId/monthly', authenticate, async (req: AuthRequest, res:
       const rec = logs.find((l: any) => l.date === dStr);
       const isFuture = dStr > todayStr;
       const isToday = dStr === todayStr;
-      const dayOfWeek = format(new Date(y, m - 1, day), 'EEE');
 
       dailyLogs.push({
         date: dStr,
-        dayOfWeek,
+        dayOfWeek: new Date(y, m - 1, day).toLocaleString('en', { weekday: 'short' }),
         isToday,
         isFuture,
         status: rec ? rec.status : isFuture ? 'FUTURE' : 'NOT_MARKED',
@@ -406,7 +379,7 @@ router.get('/staff/:userId/monthly', authenticate, async (req: AuthRequest, res:
 });
 
 // ==========================================
-// 6. POST /api/attendance/dispatch-request (Manager 10:00 - 10:35 AM Broadcast)
+// 6. POST /api/attendance/dispatch-request
 // ==========================================
 router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
@@ -447,7 +420,6 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
       console.warn('[BROADCAST LOG FAIL NON FATAL]', e);
     }
 
-    // Auto-mark manager PRESENT
     const { data: managerRecord } = await supabaseAdmin
       .from('Attendance')
       .select('id')
@@ -474,7 +446,6 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
       }).eq('id', managerRecord.id);
     }
 
-    // Set other staff to PENDING if not marked
     const staffUsers = await fetchSafeStaffUsers();
 
     for (const staff of staffUsers.filter((u: any) => u.id !== req.user!.id)) {
@@ -513,7 +484,7 @@ router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMI
 });
 
 // ==========================================
-// 7. POST /api/attendance/mark (Super Admin Universal Override 24/7)
+// 7. POST /api/attendance/mark
 // ==========================================
 router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -533,7 +504,6 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
     const isSuperAdmin = req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'ADMIN';
     const isManager = req.user?.role === 'MANAGER';
 
-    // Verify target is an authorized staff member
     const staffList = await fetchSafeStaffUsers();
     const isRegisteredStaff = staffList.some((s: any) => s.id === effectiveUserId);
     if (!isRegisteredStaff && !isSuperAdmin) {
@@ -551,7 +521,6 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
 
     const existingRecord = existing?.[0];
 
-    // CASE A: SUPER ADMIN / MANAGER DIRECT MARK
     if (isSuperAdmin || (isManager && explicitStatus && time.isWithinWindow)) {
       const finalStatus = explicitStatus || 'PRESENT';
       const updatePayload: any = {
@@ -595,7 +564,6 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // CASE B: REGULAR STAFF SELF CHECK-IN
     if (type === 'CHECK_IN' || type === 'IN') {
       if (existingRecord && existingRecord.status === 'PRESENT') {
         return res.status(400).json({ error: 'Check-in already completed for today.' });
@@ -634,25 +602,6 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
 
       if (error) throw error;
       return res.status(201).json({ success: true, message: 'Check-in recorded.', record: created });
-    }
-
-    // CASE C: REGULAR STAFF CHECK-OUT
-    if (type === 'CHECK_OUT' || type === 'OUT') {
-      if (!existingRecord) {
-        return res.status(400).json({ error: 'No check-in record found for today.' });
-      }
-
-      const { data: updated, error } = await supabaseAdmin
-        .from('Attendance')
-        .update({
-          updatedAt: new Date().toISOString(),
-        })
-        .eq('id', existingRecord.id)
-        .select('*')
-        .single();
-
-      if (error) throw error;
-      return res.json({ success: true, message: 'Check-out recorded successfully.', record: updated });
     }
 
     return res.status(400).json({ error: 'Invalid attendance parameters.' });
@@ -740,7 +689,7 @@ router.get('/history', authenticate, async (req: AuthRequest, res: Response) => 
 router.patch('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { status, notes, reason } = req.body;
+    const { status } = req.body;
 
     const { data: updated, error } = await supabaseAdmin
       .from('Attendance')

@@ -3356,33 +3356,19 @@ function getNepalTimeDetails() {
 }
 async function fetchSafeStaffUsers() {
   try {
-    const { data: staffMembers, error: staffErr } = await supabaseAdmin.from("Staff").select("*").order("name", { ascending: true });
-    if (!staffErr && Array.isArray(staffMembers) && staffMembers.length > 0) {
-      return staffMembers.filter((s) => {
-        const status = (s.status || "ACTIVE").toUpperCase();
-        const email = (s.email || "").toLowerCase();
-        const isReal = !email.endsWith(".local") && !email.includes("2fatest") && !email.includes("test_admin");
-        return status === "ACTIVE" && isReal;
-      }).map((s) => ({
-        id: s.userId || s.id,
-        name: s.name || "Staff Member",
-        email: s.email || "",
-        role: s.role || "TECHNICIAN",
-        department: s.department || "Repair Lab",
-        phone: s.phone || "",
-        avatarUrl: s.avatarUrl || s.profileImage || null,
-        status: s.status || "ACTIVE"
-      }));
-    }
-    const { data: users, error: userErr } = await supabaseAdmin.from("User").select("*").in("role", AUTHORIZED_STAFF_ROLES).eq("status", "ACTIVE").order("name", { ascending: true });
-    if (userErr) {
-      console.error("[SUPABASE USER QUERY ERROR]", userErr);
+    const { data: users, error } = await supabaseAdmin.from("User").select("*").in("role", AUTHORIZED_STAFF_ROLES).order("name", { ascending: true });
+    if (error) {
+      console.error("[SUPABASE USER QUERY ERROR]", error);
       return [];
     }
     return (users || []).filter((u) => {
+      const status = (u.status || "ACTIVE").toUpperCase();
+      const role = (u.role || "").toUpperCase();
       const email = (u.email || "").toLowerCase();
+      const isStaffRole = AUTHORIZED_STAFF_ROLES.includes(role);
+      const isActive = status === "ACTIVE";
       const isRealAccount = !email.endsWith(".local") && !email.includes("2fatest") && !email.includes("test_admin");
-      return isRealAccount;
+      return isStaffRole && isActive && isRealAccount;
     });
   } catch (err) {
     console.error("[SAFE USER FETCH EXCEPTION]", err);
@@ -3587,10 +3573,9 @@ router8.get("/staff/:userId/monthly", authenticate, async (req, res) => {
       const rec = logs.find((l) => l.date === dStr);
       const isFuture = dStr > todayStr;
       const isToday = dStr === todayStr;
-      const dayOfWeek = format(new Date(y, m - 1, day), "EEE");
       dailyLogs.push({
         date: dStr,
-        dayOfWeek,
+        dayOfWeek: new Date(y, m - 1, day).toLocaleString("en", { weekday: "short" }),
         isToday,
         isFuture,
         status: rec ? rec.status : isFuture ? "FUTURE" : "NOT_MARKED",
@@ -3771,16 +3756,6 @@ router8.post("/mark", authenticate, async (req, res) => {
       if (error) throw error;
       return res.status(201).json({ success: true, message: "Check-in recorded.", record: created });
     }
-    if (type === "CHECK_OUT" || type === "OUT") {
-      if (!existingRecord) {
-        return res.status(400).json({ error: "No check-in record found for today." });
-      }
-      const { data: updated, error } = await supabaseAdmin.from("Attendance").update({
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      }).eq("id", existingRecord.id).select("*").single();
-      if (error) throw error;
-      return res.json({ success: true, message: "Check-out recorded successfully.", record: updated });
-    }
     return res.status(400).json({ error: "Invalid attendance parameters." });
   } catch (err) {
     console.error("[ATTENDANCE MARK ERROR]", err);
@@ -3832,7 +3807,7 @@ router8.get("/history", authenticate, async (req, res) => {
 router8.patch("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, notes, reason } = req.body;
+    const { status } = req.body;
     const { data: updated, error } = await supabaseAdmin.from("Attendance").update({
       status,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
