@@ -48,7 +48,7 @@ class RealtimeService {
     try {
       if (!supabase) return;
 
-      // Listen to native Supabase PostgreSQL changes directly across all tables
+      // Use a consistent channel name across client and server broadcasts
       this.supabaseChannel = supabase.channel('mts_app_db_changes');
 
       // Subscribe to standard Postgres changes for core application tables
@@ -60,7 +60,10 @@ class RealtimeService {
         'RepairLog', 'repairLog',
         'Payment', 'payment',
         'User', 'user',
-        'RepairTransferRequest', 'repairTransferRequest'
+        'RepairTransferRequest', 'repairTransferRequest',
+        'Customer', 'customer',
+        'InventoryItem', 'inventoryitem',
+        'BatteryWarranty', 'batterywarranty'
       ];
 
       tablesToTrack.forEach((tableName) => {
@@ -96,7 +99,7 @@ class RealtimeService {
         );
       });
 
-      // Also listen to custom broadcast channels for backward compatibility
+      // Listen to custom broadcast channels for instant cross-tab & cross-role synchronization
       this.supabaseChannel
         .on('broadcast', { event: 'db_event' }, ({ payload }: { payload: RealtimeEvent }) => {
           if (payload && payload.entity) {
@@ -118,6 +121,26 @@ class RealtimeService {
           if (payload?.id) {
             this.handleIncomingEvent({
               entity: 'repair',
+              action: 'DELETE',
+              id: payload.id,
+              timestamp: Date.now()
+            });
+          }
+        })
+        .on('broadcast', { event: '*' }, ({ event, payload }: { event: string; payload: any }) => {
+          if (event && event.includes('_sync') && payload) {
+            const entityName = event.replace('_sync', '').toLowerCase();
+            this.handleIncomingEvent({
+              entity: entityName,
+              action: 'UPDATE',
+              id: payload.id,
+              data: payload,
+              timestamp: Date.now()
+            });
+          } else if (event && event.includes('_delete') && payload) {
+            const entityName = event.replace('_delete', '').toLowerCase();
+            this.handleIncomingEvent({
+              entity: entityName,
               action: 'DELETE',
               id: payload.id,
               timestamp: Date.now()
