@@ -10,8 +10,6 @@ const router = Router();
 const BUCKET = 'system-backups';
 const PAGE_SIZE = 1000;
 
-// These are application data tables. Authentication/session secrets that can
-// be regenerated are deliberately excluded from backups.
 const BACKUP_TABLES = [
   'Branch', 'User', 'Customer', 'Product', 'InventoryCategory', 'InventoryItem',
   'InventoryTransaction', 'Repair', 'RepairLog', 'TechnicianNote', 'Payment',
@@ -74,7 +72,7 @@ const readTable = async (table: string) => {
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await supabaseAdmin.from(table).select('*').range(from, from + PAGE_SIZE - 1);
     if (error) throw new Error(`${table}: ${error.message}`);
-    rows.push(...(data || []));
+    rows.push(...(data || []);
     if (!data || data.length < PAGE_SIZE) break;
   }
   return rows;
@@ -104,55 +102,31 @@ router.post('/backups', authenticate, authorize(['SUPER_ADMIN']), async (req: Au
   try {
     await ensureBucket();
     const snapshot: Record<string, unknown> = { version: 1, generatedAt: new Date().toISOString(), tables: {} };
-    for (const table of BACKUP_TABLES) {
-      (snapshot.tables as Record<string, unknown>)[table] = await readTable(table);
-    }
-    // Never persist reusable authentication secrets/tokens in a backup.
+    for (const table of BACKUP_TABLES) (snapshot.tables as Record<string, unknown>)[table] = await readTable(table);
     snapshot.excludedTables = [...EPHEMERAL_TABLES];
     snapshot.mediaManifest = Array.from(collectCloudinaryUrls(snapshot.tables));
-
     const encrypted = encrypt(snapshot);
     const checksum = crypto.createHash('sha256').update(encrypted).digest('hex');
     const fileName = `mts-lab-${new Date().toISOString().replace(/[:.]/g, '-')}-${id}.mtsb`;
     const storagePath = `backups/${fileName}`;
-
-    const { error: uploadError } = await supabaseAdmin.storage.from(BUCKET).upload(storagePath, encrypted, {
-      contentType: 'application/octet-stream',
-      cacheControl: '3600',
-      upsert: false,
-    });
+    const { error: uploadError } = await supabaseAdmin.storage.from(BUCKET).upload(storagePath, encrypted, { contentType: 'application/octet-stream', cacheControl: '3600', upsert: false });
     if (uploadError) throw uploadError;
-
     const { error: metadataError } = await supabaseAdmin.from('SystemBackup').insert([{
-      id,
-      fileName,
-      storagePath,
-      sizeBytes: encrypted.length,
-      checksum,
-      createdById: req.user!.id,
-      createdByName: req.user!.name,
-      status: 'COMPLETED',
-      completedAt: new Date().toISOString(),
+      id, fileName, storagePath, sizeBytes: encrypted.length, checksum,
+      createdById: req.user!.id, createdByName: req.user!.name, status: 'COMPLETED', completedAt: new Date().toISOString(),
     }]);
     if (metadataError) {
       await supabaseAdmin.storage.from(BUCKET).remove([storagePath]);
       throw metadataError;
     }
-
     await logAudit({ userId: req.user!.id, action: 'BACKUP_CREATED', resource: 'SystemBackup', resourceId: id, details: { fileName, sizeBytes: encrypted.length, checksum } });
     return res.status(201).json({ success: true, id, message: 'Encrypted system backup created successfully.' });
   } catch (error: any) {
-    await supabaseAdmin.from('SystemBackup').upsert([{
-      id,
-      fileName: `failed-${id}`,
-      storagePath: `failed/${id}`,
-      sizeBytes: 0,
-      checksum: 'FAILED',
-      createdById: req.user!.id,
-      createdByName: req.user!.name,
-      status: 'FAILED',
-      errorMessage: error?.message || 'Unknown backup error',
-    }], { onConflict: 'id' }).catch(() => undefined);
+    const { error: failureMetadataError } = await supabaseAdmin.from('SystemBackup').upsert([{
+      id, fileName: `failed-${id}`, storagePath: `failed/${id}`, sizeBytes: 0, checksum: 'FAILED',
+      createdById: req.user!.id, createdByName: req.user!.name, status: 'FAILED', errorMessage: error?.message || 'Unknown backup error',
+    }], { onConflict: 'id' });
+    if (failureMetadataError) console.warn('[BACKUP METADATA WARNING]', failureMetadataError.message);
     await logAudit({ userId: req.user!.id, action: 'BACKUP_FAILED', resource: 'SystemBackup', resourceId: id, status: 'FAILED', details: { message: error?.message || 'Unknown backup error' } });
     return res.status(500).json({ error: error?.message || 'Backup creation failed.' });
   }
@@ -192,14 +166,12 @@ router.post('/backups/:id/restore', authenticate, authorize(['SUPER_ADMIN']), as
   if (!hasServiceRole()) return res.status(503).json({ error: 'Backup restore requires SUPABASE_SERVICE_ROLE_KEY.' });
   if (req.body?.confirmation !== 'RESTORE') return res.status(400).json({ error: 'Restore confirmation is required.' });
   try {
-    // A safety snapshot is mandatory before restore.
     const safety = await fetch(`${req.protocol}://${req.get('host')}/api/admin/backups`, {
       method: 'POST',
       headers: { authorization: req.headers.authorization || '', 'content-type': 'application/json', cookie: req.headers.cookie || '' },
       body: '{}',
     });
     if (!safety.ok) return res.status(409).json({ error: 'Restore blocked because a safety backup could not be created.' });
-
     const { data: backup, error } = await supabaseAdmin.from('SystemBackup').select('*').eq('id', req.params.id).maybeSingle();
     if (error || !backup || backup.status !== 'COMPLETED') return res.status(404).json({ error: 'Backup not found.' });
     const { data: file, error: downloadError } = await supabaseAdmin.storage.from(BUCKET).download(backup.storagePath);
