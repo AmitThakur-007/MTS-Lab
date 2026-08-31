@@ -13,6 +13,7 @@ import attendanceRoutes from './routes/attendance';
 import repairDamageRoutes from './routes/repairDamage';
 import repairPricesRoutes from './routes/repairPrices';
 import repairPriceFoldersRoutes from './routes/repairPriceFolders';
+import accessRequestsCompatRoutes from './routes/accessRequestsCompat';
 import slidesRoutes from './routes/slides';
 import productsRoutes from './routes/products';
 import notificationsRoutes from './routes/notifications';
@@ -64,7 +65,7 @@ export function createApp() {
   app.use('/api/notifications', notificationsRoutes);
   app.use('/api/admin', superAdminRoutes);
   app.use('/api/share', superAdminRoutes);
-  app.use('/api/access-requests', securityRoutes);
+  app.use('/api/access-requests', accessRequestsCompatRoutes);
   app.use('/api/approved-devices', securityRoutes);
   app.use('/api/upload', uploadRoutes);
   app.use('/api/events', eventsRoutes);
