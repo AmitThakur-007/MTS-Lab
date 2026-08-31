@@ -40,7 +40,7 @@ import { formatNPR } from '@/lib/format';
 import { motion } from 'motion/react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRealtimeSync } from '@/services/realtime';
-import { syncRepairToSupabase as syncRepairToRtdb, syncRepairToSupabase } from '@/lib/supabase';
+import { syncRepairToSupabase as syncRepairToRtdb } from '@/lib/supabase';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { useAuthStore } from '@/store/authStore';
 import {
@@ -73,7 +73,7 @@ export default function RepairDetails() {
 
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
-  const [alertPriority, setAlertPriority] = useState<'URGENT' | 'HIGH' | 'MEDIUM' | 'NORMAL'>('NORMAL');
+  const [alertPriority, setAlertPriority] = useState<'URGENT' | 'HIGH' | 'MEDIUM' | 'NORMAL'>('URGENT');
   const [sendingAlert, setSendingAlert] = useState(false);
 
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
@@ -115,7 +115,7 @@ export default function RepairDetails() {
         api.get(`/repairs/${id}/notes`).catch(() => [])
       ]);
       setRepair(repairData);
-      setTechnicians(staffData.filter((s: any) => ['TECHNICIAN', 'LEAD_TECHNICIAN'].includes(s.role) && s.isActive !== false));
+      setTechnicians(Array.isArray(staffData) ? staffData.filter((s: any) => ['TECHNICIAN', 'LEAD_TECHNICIAN'].includes(s.role) && s.isActive !== false) : []);
       setNotes(Array.isArray(notesData) ? notesData : []);
     } catch (err: any) {
       toast.error(err.message || 'Failed to load repair details');
@@ -129,7 +129,6 @@ export default function RepairDetails() {
     fetchData();
   }, [id]);
 
-  // Real-time synchronization for instant status, payment, and technician assignment updates across all devices
   useRealtimeSync(['repair', 'technicianNote', 'repairLog', 'notification', 'repairTransfer', 'payment', 'user', 'sync'], (event) => {
     if (
       !event.id ||
@@ -148,10 +147,10 @@ export default function RepairDetails() {
       const updated = await api.post(`/repairs/${id}/assign`, { technicianId });
       await syncRepairToRtdb(updated);
       setRepair(updated);
-      toast.success('Specialist assigned and notified in real time');
+      toast.success('Specialist assigned successfully');
       fetchData();
     } catch (err: any) {
-      toast.error(err.message || 'Unable to update specialist assignment. Please try again.');
+      toast.error(err.message || 'Unable to update specialist assignment.');
     } finally {
       setUpdating(false);
     }
@@ -184,14 +183,17 @@ export default function RepairDetails() {
     try {
       const res = await api.post(`/repairs/${id}/alert`, {
         message: alertMessage.trim(),
-        priority: alertPriority
+        priority: alertPriority,
+        isUrgent: alertPriority === 'URGENT'
       });
 
-      const updatedRepair = res.repair || res;
-      setRepair(updatedRepair);
-      await syncRepairToRtdb(updatedRepair);
+      const updatedRepair = res?.repair || res;
+      if (updatedRepair) {
+        setRepair(updatedRepair);
+        await syncRepairToRtdb(updatedRepair);
+      }
 
-      toast.success("Priority alert dispatched and status updated in real-time");
+      toast.success(`Priority alert (${alertPriority}) dispatched successfully`);
       setIsAlertDialogOpen(false);
       setAlertMessage('');
       fetchData();
@@ -231,7 +233,20 @@ export default function RepairDetails() {
     }
   };
 
-
+  const handleUpdatePriority = async (priority: string) => {
+    setUpdating(true);
+    try {
+      const res = await api.patch(`/repairs/${id}`, { priority });
+      setRepair(res);
+      await syncRepairToRtdb(res);
+      toast.success(`Priority updated to ${priority}`);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update priority");
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const handleAddNote = async () => {
     if (!newNote.trim() || submittingNote) return;
@@ -253,15 +268,15 @@ export default function RepairDetails() {
 
   const handleOpenCourierDispatch = () => {
     setCourierDispatchForm({
-      returnCourierCompany: repair.returnCourierCompany || repair.courierCompany || 'Sundar Courier',
+      returnCourierCompany: repair?.returnCourierCompany || repair?.courierCompany || 'Sundar Courier',
       customCourierCompany: '',
-      returnCourierTrackingNumber: repair.returnCourierTrackingNumber || '',
+      returnCourierTrackingNumber: repair?.returnCourierTrackingNumber || '',
       returnCourierDispatchDate: format(new Date(), 'yyyy-MM-dd'),
-      destinationDistrict: repair.destinationDistrict || repair.originDistrict || repair.customer?.district || 'Kathmandu',
-      destinationAddress: repair.destinationAddress || repair.originAddress || repair.customerAddress || '',
-      receiverName: repair.receiverName || repair.senderName || repair.customerName || '',
-      receiverPhone: repair.receiverPhone || repair.senderPhone || repair.customerPhone || '',
-      returnCourierNotes: repair.returnCourierNotes || ''
+      destinationDistrict: repair?.destinationDistrict || repair?.originDistrict || repair?.customer?.district || 'Kathmandu',
+      destinationAddress: repair?.destinationAddress || repair?.originAddress || repair?.customerAddress || '',
+      receiverName: repair?.receiverName || repair?.senderName || repair?.customerName || '',
+      receiverPhone: repair?.receiverPhone || repair?.senderPhone || repair?.customerPhone || '',
+      returnCourierNotes: repair?.returnCourierNotes || ''
     });
     setIsCourierDispatchDialogOpen(true);
   };
@@ -295,7 +310,7 @@ export default function RepairDetails() {
       });
       const updated = res.repair || res;
       await syncRepairToRtdb(updated);
-      toast.success(`Repaired device dispatched via ${company} (Tracking #${courierDispatchForm.returnCourierTrackingNumber.trim()})`);
+      toast.success(`Repaired device dispatched via ${company}`);
       setRepair(updated);
       setIsCourierDispatchDialogOpen(false);
       fetchData();
@@ -316,10 +331,10 @@ export default function RepairDetails() {
       const updated = await api.patch(`/repairs/${id}`, { status });
       await syncRepairToRtdb(updated);
       setRepair(updated);
-      toast.success(`Status updated to ${status.replace(/_/g, ' ')}`);
+      toast.success(`Status updated successfully`);
       fetchData();
     } catch (err: any) {
-      toast.error(err.message || 'Unable to save the repair status. Please try again.');
+      toast.error(err.message || 'Unable to save the repair status.');
     } finally {
       setUpdating(false);
     }
@@ -338,9 +353,10 @@ export default function RepairDetails() {
 
   return (
     <div className="space-y-6 sm:space-y-8 pb-32 max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 w-full overflow-x-hidden">
-      {/* Top Header & Responsive Toolbar */}
+
+      {/* Top Header Toolbar */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-sm w-full">
-        <div className="flex items-center gap-3.5 min-w-0 flex-1 w-full xl:w-auto">
+        <div className="flex items-center gap-3 min-w-0 flex-1 w-full xl:w-auto">
           <Button
             variant="outline"
             onClick={() => navigate('/dashboard/repairs')}
@@ -354,21 +370,20 @@ export default function RepairDetails() {
                 JOB #{repair.repairNumber}
               </Badge>
               <Badge className={repair.status === 'COMPLETED' || repair.status === 'REPAIRED' ? "bg-emerald-600 text-white font-bold" : "bg-indigo-600 text-white font-bold"}>
-                {repair.status.replace(/_/g, ' ')}
+                {repair.status?.replace(/_/g, ' ') || 'RECEIVED'}
               </Badge>
               {repair.priority === 'URGENT' && (
-                <Badge className="bg-rose-600 text-white font-bold animate-pulse">
-                  URGENT
-                </Badge>
+                <Badge className="bg-rose-600 text-white font-bold animate-pulse">URGENT</Badge>
               )}
               {repair.priority === 'HIGH' && (
-                <Badge className="bg-amber-500 text-white font-bold">
-                  HIGH
-                </Badge>
+                <Badge className="bg-amber-500 text-white font-bold">HIGH</Badge>
               )}
-              {(!repair.priority || repair.priority === 'NORMAL' || repair.priority === 'MEDIUM') && (
+              {repair.priority === 'MEDIUM' && (
+                <Badge className="bg-yellow-500 text-slate-950 font-bold">MEDIUM</Badge>
+              )}
+              {(!repair.priority || repair.priority === 'NORMAL') && (
                 <Badge variant="outline" className="bg-slate-100 text-slate-700 font-bold border-slate-300">
-                  {repair.priority || 'MEDIUM'}
+                  NORMAL
                 </Badge>
               )}
             </div>
@@ -379,6 +394,23 @@ export default function RepairDetails() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end shrink-0 pt-2 xl:pt-0 border-t xl:border-t-0 border-slate-100">
+          {['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(user?.role || '') && (
+            <Select
+              value={repair.priority || 'MEDIUM'}
+              onValueChange={handleUpdatePriority}
+              disabled={updating}
+            >
+              <SelectTrigger className="h-10 rounded-2xl border-slate-200 bg-white font-bold text-xs w-32 shrink-0 cursor-pointer">
+                <SelectValue placeholder="Priority" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="NORMAL" className="font-bold text-xs">Normal</SelectItem>
+                <SelectItem value="MEDIUM" className="font-bold text-xs text-yellow-600">Medium</SelectItem>
+                <SelectItem value="HIGH" className="font-bold text-xs text-amber-600">High</SelectItem>
+                <SelectItem value="URGENT" className="font-bold text-xs text-rose-600">Urgent</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
 
           {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && (
             <Button
@@ -425,7 +457,8 @@ export default function RepairDetails() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 w-full">
         <div className="lg:col-span-2 space-y-6 sm:space-y-8 w-full min-w-0">
-          {/* Device & Status Card */}
+
+          {/* Diagnostics Card */}
           <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white w-full">
             <CardHeader className="bg-slate-50/50 p-6 sm:p-8 border-b">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -447,6 +480,7 @@ export default function RepairDetails() {
                 </Button>
               </div>
             </CardHeader>
+
             <CardContent className="p-6 sm:p-10 space-y-8 w-full">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
                 <div className="space-y-1 bg-slate-50/60 p-4 rounded-2xl border border-slate-100">
@@ -488,83 +522,10 @@ export default function RepairDetails() {
                       <Zap className="h-3.5 w-3.5 mr-1 text-amber-500" /> Includes: {repair.accessoriesReceived}
                     </Badge>
                   )}
-                  {(repair.receivingMethod === 'COURIER' || repair.isCourierIn) && (
-                    <Badge className="bg-amber-500 text-white font-bold text-xs rounded-xl px-3 py-1.5 flex items-center gap-1">
-                      <Package className="w-3.5 h-3.5" /> Received Via Courier
-                    </Badge>
-                  )}
                 </div>
-
-                {repair.conditionNotes && (
-                  <div className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200/80 break-words">
-                    <span className="font-bold text-slate-800">Condition Notes:</span> {repair.conditionNotes}
-                  </div>
-                )}
               </div>
 
-              {/* INBOUND & RETURN COURIER DETAILS PANELS */}
-              {(repair.isCourierIn || repair.receivingMethod === 'COURIER' || repair.isReturnCourierDispatched) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {repair.isCourierIn || repair.receivingMethod === 'COURIER' ? (
-                    <div className="p-5 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2 text-xs">
-                      <div className="flex items-center gap-2 font-bold text-amber-900 text-sm border-b border-amber-200/60 pb-2">
-                        <Package className="w-4 h-4 text-amber-700" />
-                        <span>Inbound Courier Consignment</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-slate-800 pt-1">
-                        <div>
-                          <span className="text-amber-800/80 block text-[10px] font-bold uppercase">Courier:</span>
-                          <span className="font-bold">{repair.courierCompany || 'Courier Partner'}</span>
-                        </div>
-                        <div>
-                          <span className="text-amber-800/80 block text-[10px] font-bold uppercase">Tracking #:</span>
-                          <span className="font-mono font-bold">{repair.courierTrackingNumber || 'N/A'}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {repair.isReturnCourierDispatched ? (
-                    <div className="p-5 rounded-2xl bg-blue-50/60 border border-blue-200/80 space-y-2 text-xs">
-                      <div className="flex items-center justify-between border-b border-blue-200/60 pb-2">
-                        <div className="flex items-center gap-2 font-bold text-blue-950 text-sm">
-                          <Truck className="w-4 h-4 text-blue-700" />
-                          <span>Return Dispatch Consignment</span>
-                        </div>
-                        <Badge className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 font-bold">Dispatched</Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-slate-800 pt-1">
-                        <div>
-                          <span className="text-blue-800/80 block text-[10px] font-bold uppercase">Courier:</span>
-                          <span className="font-bold">{repair.returnCourierCompany}</span>
-                        </div>
-                        <div>
-                          <span className="text-blue-800/80 block text-[10px] font-bold uppercase">Tracking #:</span>
-                          <span className="font-mono font-bold text-blue-700">{repair.returnCourierTrackingNumber}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              )}
-
-              {repair.status === 'DELIVERED' && ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(user?.role || '') && (
-                <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 border border-amber-200">
-                      <RotateCcw className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h5 className="font-bold text-sm text-amber-900">Warranty Claim / Re-Problem</h5>
-                      <p className="text-xs text-amber-700">If the customer reports a recurring fault after delivery, reopen this job.</p>
-                    </div>
-                  </div>
-                  <Button onClick={() => setIsReopenDialogOpen(true)} className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-10 px-5 rounded-xl shrink-0">
-                    <AlertCircle className="w-4 h-4 mr-1.5" /> Reopen as Re-Problem
-                  </Button>
-                </div>
-              )}
-
+              {/* Status Flow Buttons */}
               <div className="space-y-3">
                 <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Update Operation Status</h4>
                 <div className="flex flex-wrap gap-2">
@@ -597,7 +558,7 @@ export default function RepairDetails() {
             </CardContent>
           </Card>
 
-          {/* Communication & Technical Notes */}
+          {/* Notes Section */}
           <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white w-full">
             <CardHeader className="bg-slate-50/50 p-6 sm:p-8 border-b">
               <div className="flex items-center gap-3">
@@ -617,32 +578,22 @@ export default function RepairDetails() {
                     No communication notes recorded yet.
                   </div>
                 ) : (
-                  notes.map((n) => {
-                    const isAlert = n.note?.startsWith('[Priority Alert]') || n.note?.startsWith('[Staff Alert]');
-                    return (
-                      <div
-                        key={n.id}
-                        className={cn(
-                          "p-4 rounded-2xl text-xs space-y-1.5 border break-words",
-                          isAlert ? "bg-rose-50 border-rose-200 text-rose-950" : "bg-slate-50 border-slate-100 text-slate-900"
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <span className="font-extrabold text-[11px] flex items-center gap-1.5">
-                            {isAlert ? <Flame className="h-3.5 w-3.5 text-rose-600 shrink-0" /> : null}
-                            <span>{n.authorName || n.technician?.name || 'Staff Member'}</span>
-                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 rounded-md font-bold uppercase">
-                              {n.authorRole || n.technician?.role || 'STAFF'}
-                            </Badge>
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            {n.createdAt ? format(new Date(n.createdAt), 'dd MMM yyyy, hh:mm a') : ''}
-                          </span>
-                        </div>
-                        <p className="text-xs font-medium leading-relaxed">{n.note}</p>
+                  notes.map((n) => (
+                    <div key={n.id} className="p-4 rounded-2xl text-xs space-y-1.5 border bg-slate-50 border-slate-100 text-slate-900 break-words">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-extrabold text-[11px] flex items-center gap-1.5">
+                          <span>{n.authorName || n.technician?.name || 'Staff Member'}</span>
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 rounded-md font-bold uppercase">
+                            {n.authorRole || n.technician?.role || 'STAFF'}
+                          </Badge>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {n.createdAt ? format(new Date(n.createdAt), 'dd MMM yyyy, hh:mm a') : ''}
+                        </span>
                       </div>
-                    );
-                  })
+                      <p className="text-xs font-medium leading-relaxed">{n.note}</p>
+                    </div>
+                  ))
                 )}
               </div>
 
@@ -669,10 +620,9 @@ export default function RepairDetails() {
           </Card>
         </div>
 
-        {/* Right Sidebar Column */}
+        {/* Sidebar */}
         <div className="space-y-6 sm:space-y-8 w-full min-w-0">
 
-          {/* Client & Billing Card */}
           <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white w-full">
             <CardHeader className="bg-slate-950 text-white p-6 sm:p-8">
               <CardTitle className="text-lg sm:text-xl font-bold flex items-center gap-2">
@@ -695,12 +645,6 @@ export default function RepairDetails() {
                   <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Phone Number</span>
                   <span className="font-mono font-bold text-slate-900 truncate">{repair.customerPhone}</span>
                 </div>
-                {repair.customerEmail && (
-                  <div className="flex justify-between items-center gap-2">
-                    <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Email</span>
-                    <span className="font-bold text-slate-900 truncate">{repair.customerEmail}</span>
-                  </div>
-                )}
               </div>
 
               <Separator />
@@ -732,7 +676,6 @@ export default function RepairDetails() {
             </CardContent>
           </Card>
 
-          {/* Specialist Assignment */}
           <Card className="rounded-[32px] sm:rounded-[40px] border-indigo-100 shadow-sm overflow-hidden bg-white w-full">
             <CardHeader className="p-6 sm:p-8">
               <CardTitle className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -752,7 +695,7 @@ export default function RepairDetails() {
                 <SelectContent className="rounded-2xl">
                   {technicians.map((t) => (
                     <SelectItem key={t.id} value={t.id} className="rounded-xl font-bold text-xs py-2.5">
-                      {t.name} ({t.role.replace(/_/g, ' ')})
+                      {t.name} ({t.role?.replace(/_/g, ' ') || 'STAFF'})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -762,25 +705,13 @@ export default function RepairDetails() {
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center gap-3.5 p-3.5 bg-slate-50 rounded-2xl border border-indigo-100">
                     <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">
-                      {repair.technician.name.charAt(0)}
+                      {repair.technician.name?.charAt(0) || 'T'}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-slate-900 text-xs truncate">{repair.technician.name}</p>
                       <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Active Specialist</p>
                     </div>
                   </div>
-
-                  {['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LEAD_TECHNICIAN', 'TECHNICIAN'].includes(user?.role || '') && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsTransferDialogOpen(true)}
-                      className="w-full rounded-2xl border-amber-200 text-amber-800 hover:bg-amber-50 font-bold text-xs h-10 cursor-pointer"
-                    >
-                      <ArrowRightLeft className="h-3.5 w-3.5 mr-1.5 text-amber-600" />
-                      Transfer Case
-                    </Button>
-                  )}
                 </div>
               )}
             </CardContent>
@@ -789,46 +720,8 @@ export default function RepairDetails() {
       </div>
 
       {/* ========================================================================= */}
-      {/* MODALS SECTION (Crash Proof & Fully Interactive)                         */}
+      {/* CRASH-PROOF ADVANCED ALERT TECHNICIAN MODAL                               */}
       {/* ========================================================================= */}
-
-      {/* 1. Reopen Dialog */}
-      <Dialog open={isReopenDialogOpen} onOpenChange={setIsReopenDialogOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
-          <DialogHeader>
-            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-1 border border-rose-100">
-              <RotateCcw className="h-5 w-5" />
-            </div>
-            <DialogTitle className="text-xl font-bold text-slate-900">Reopen Warranty Claim</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Reopen job <b>#{repair?.repairNumber}</b> for warranty assessment.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Reported Problem *</Label>
-              <Textarea
-                placeholder="e.g. Customer reported recurring issue..."
-                value={reopenRemark}
-                onChange={e => setReopenRemark(e.target.value)}
-                className="rounded-xl border-slate-200 min-h-[90px] text-xs"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="pt-2 flex items-center justify-between gap-2">
-            <Button variant="ghost" onClick={() => setIsReopenDialogOpen(false)} className="rounded-xl text-xs font-bold text-slate-500">
-              Cancel
-            </Button>
-            <Button onClick={handleReopenReProblem} className="rounded-xl h-10 px-5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs" disabled={updating}>
-              Confirm Reopen
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 2. Advanced Priority Alert Technician Dialog (Interactive Urgency Buttons) */}
       <Dialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
         <DialogContent className="max-w-md w-full rounded-[32px] p-6 sm:p-7 border border-slate-200 shadow-2xl bg-white space-y-6">
           <DialogHeader className="space-y-2">
@@ -839,7 +732,7 @@ export default function RepairDetails() {
               Alert Assigned Technician
             </DialogTitle>
             <DialogDescription className="text-xs sm:text-sm text-slate-500 font-medium leading-relaxed">
-              Dispatch an operational alert for Job <span className="font-mono font-bold text-slate-900">#{repair?.repairNumber}</span> to <span className="font-bold text-slate-800">{repair?.technician?.name || 'Assigned Specialist'}</span>.
+              Dispatch an operational alert for Job <span className="font-mono font-bold text-slate-900">#{repair?.repairNumber}</span>.
             </DialogDescription>
           </DialogHeader>
 
@@ -928,116 +821,16 @@ export default function RepairDetails() {
         </DialogContent>
       </Dialog>
 
-      {/* 3. Transfer Dialog */}
-      <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}>
+      {/* Reopen Modal */}
+      <Dialog open={isReopenDialogOpen} onOpenChange={setIsReopenDialogOpen}>
         <DialogContent className="max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
           <DialogHeader>
-            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 border border-amber-100">
-              <ArrowRightLeft className="h-5 w-5" />
-            </div>
-            <DialogTitle className="text-xl font-bold text-slate-900">Transfer Repair Case</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Transfer Job <b>#{repair?.repairNumber}</b> to another technician
-            </DialogDescription>
+            <DialogTitle className="text-xl font-bold">Reopen Warranty Claim</DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Target Specialist *</Label>
-              <Select value={transferTargetId} onValueChange={setTransferTargetId}>
-                <SelectTrigger className="rounded-xl h-11 border-slate-200 text-xs font-bold">
-                  <SelectValue placeholder="Select target technician..." />
-                </SelectTrigger>
-                <SelectContent className="rounded-2xl max-h-56">
-                  {technicians.filter(t => t.id !== repair?.technicianId).map((t) => (
-                    <SelectItem key={t.id} value={t.id} className="text-xs font-bold py-2">
-                      {t.name} ({t.role.replace(/_/g, ' ')})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Reason for Transfer *</Label>
-              <Textarea
-                placeholder="Reason..."
-                value={transferReason}
-                onChange={e => setTransferReason(e.target.value)}
-                className="rounded-xl border-slate-200 min-h-[90px] text-xs"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="pt-2 flex items-center justify-between gap-2">
-            <Button variant="ghost" onClick={() => setIsTransferDialogOpen(false)} className="rounded-xl text-xs font-bold text-slate-500">
-              Cancel
-            </Button>
-            <Button disabled={sendingTransfer || !transferTargetId || !transferReason.trim()} onClick={handleSendTransfer} className="rounded-xl h-10 px-5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs">
-              Submit Transfer
-            </Button>
+          <Textarea placeholder="Reason..." value={reopenRemark} onChange={e => setReopenRemark(e.target.value)} className="rounded-xl" />
+          <DialogFooter>
+            <Button onClick={handleReopenReProblem} className="bg-rose-600 text-white">Confirm</Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 4. Courier Dispatch Dialog */}
-      <Dialog open={isCourierDispatchDialogOpen} onOpenChange={setIsCourierDispatchDialogOpen}>
-        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-lg">
-          <form onSubmit={handleSaveCourierDispatch}>
-            <DialogHeader>
-              <div className="w-12 h-12 bg-blue-100 text-blue-700 rounded-2xl flex items-center justify-center mb-3">
-                <Truck className="h-6 w-6" />
-              </div>
-              <DialogTitle className="text-xl font-bold text-slate-900">
-                Dispatch Repaired Device via Courier
-              </DialogTitle>
-              <DialogDescription className="text-slate-500 text-xs">
-                Record shipment details for <strong>#{repair?.repairNumber}</strong>.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 my-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Courier Partner *</Label>
-                  <Select
-                    value={courierDispatchForm.returnCourierCompany}
-                    onValueChange={(v) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierCompany: v }))}
-                  >
-                    <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-semibold">
-                      <SelectValue placeholder="Select Courier" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl shadow-xl">
-                      {["Nepal Can Move (NCM)", "Sundar Courier", "Pathao Logistics", "Aramex Nepal", "DHL Express", "Other Courier"].map(c => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Consignment / Tracking # *</Label>
-                  <Input
-                    placeholder="e.g. SCN-982341"
-                    value={courierDispatchForm.returnCourierTrackingNumber}
-                    onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierTrackingNumber: e.target.value }))}
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50 font-mono text-xs font-bold"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter className="gap-2">
-              <Button type="button" variant="outline" onClick={() => setIsCourierDispatchDialogOpen(false)} className="h-10 rounded-xl border-slate-200 text-xs font-bold">
-                Cancel
-              </Button>
-              <Button type="submit" disabled={sendingCourierDispatch} className="h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 shadow-sm">
-                {sendingCourierDispatch ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Truck className="h-3.5 w-3.5 mr-1" />}
-                Confirm Dispatch
-              </Button>
-            </DialogFooter>
-          </form>
         </DialogContent>
       </Dialog>
 
