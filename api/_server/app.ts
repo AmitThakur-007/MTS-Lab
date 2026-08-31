@@ -1151,8 +1151,31 @@ async function generateWarrantyNumber() {
 }
 async function syncBatteryWarrantyFromRepair(repairData, reqUser) {
   try {
-    const isWarrantyActive = repairData.hasBatteryWarranty === true || repairData.hasBatteryWarranty === "true" || Boolean(repairData.batteryWarrantyPeriod);
-    if (!isWarrantyActive) return;
+    if (!repairData || !repairData.id) return;
+
+    // Strict boolean normalization: ONLY explicit true
+    const isWarrantyActive =
+      repairData.hasBatteryWarranty === true ||
+      repairData.hasBatteryWarranty === "true";
+
+    // If warranty is not active, clean up any existing warranty record for this repair
+    if (!isWarrantyActive) {
+      const { data: existing } = await supabaseAdmin
+        .from("BatteryWarranty")
+        .select("id")
+        .eq("repairId", repairData.id);
+
+      if (existing && existing.length > 0) {
+        for (const w of existing) {
+          await supabaseAdmin.from("BatteryWarrantyClaim").delete().eq("warrantyId", w.id);
+          await supabaseAdmin.from("BatteryWarranty").delete().eq("id", w.id);
+          await broadcastServerChange("BatteryWarranty", "DELETE", w.id);
+        }
+      }
+      return;
+    }
+
+    // Warranty IS explicitly active:
     const { data: existing } = await supabaseAdmin.from("BatteryWarranty").select("id").eq("repairId", repairData.id).limit(1);
     const rawPeriod = String(repairData.batteryWarrantyPeriod || "6_MONTHS");
     const months = rawPeriod.includes("12") ? 12 : rawPeriod.includes("3") ? 3 : 6;
@@ -1174,11 +1197,14 @@ async function syncBatteryWarrantyFromRepair(repairData, reqUser) {
         status: "ACTIVE",
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       }).eq("id", existing[0].id);
+
+      await broadcastServerChange("BatteryWarranty", "UPDATE", existing[0].id);
     } else {
+      const warrantyId = uuidv44();
       const warrantyNumber = await generateWarrantyNumber();
       await supabaseAdmin.from("BatteryWarranty").insert([
         {
-          id: uuidv44(),
+          id: warrantyId,
           warrantyNumber,
           repairId: repairData.id,
           repairNumber: repairData.repairNumber,
@@ -1201,6 +1227,8 @@ async function syncBatteryWarrantyFromRepair(repairData, reqUser) {
           updatedAt: (/* @__PURE__ */ new Date()).toISOString()
         }
       ]);
+
+      await broadcastServerChange("BatteryWarranty", "CREATE", warrantyId);
     }
   } catch (syncErr) {
     console.error("[SYNC BATTERY WARRANTY EXCEPTION]", syncErr);
@@ -1490,6 +1518,8 @@ router3.post("/", authenticate, async (req, res) => {
     const finalPriority = VALID_PRIORITIES.includes(normalizedPriority) ? normalizedPriority : 'NORMAL';
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
 
+    const isWarrantyExplicit = hasBatteryWarranty === true || hasBatteryWarranty === "true";
+
     const newRepair = {
       id: repairId,
       repairNumber,
@@ -1525,11 +1555,11 @@ router3.post("/", authenticate, async (req, res) => {
       senderPhone: senderPhone || null,
       originDistrict: originDistrict || null,
       originAddress: originAddress || null,
-      hasBatteryWarranty: Boolean(hasBatteryWarranty),
-      batteryWarrantyPeriod: batteryWarrantyPeriod || null,
-      batteryType: batteryType || null,
-      batteryHealth: batteryHealth || null,
-      batterySerial: batterySerial || null,
+      hasBatteryWarranty: isWarrantyExplicit,
+      batteryWarrantyPeriod: isWarrantyExplicit ? (batteryWarrantyPeriod || "6_MONTHS") : null,
+      batteryType: isWarrantyExplicit ? (batteryType || "Original Replacement Battery") : null,
+      batteryHealth: isWarrantyExplicit ? (batteryHealth || null) : null,
+      batterySerial: isWarrantyExplicit ? (batterySerial || null) : null,
       createdById: req.user.id,
       createdAt: nowIso,
       updatedAt: nowIso
@@ -1539,7 +1569,7 @@ router3.post("/", authenticate, async (req, res) => {
       console.error("[REPAIR CREATE ERROR]", error);
       return res.status(500).json({ error: "Failed to create repair ticket." });
     }
-    if (hasBatteryWarranty || batteryWarrantyPeriod) {
+    if (isWarrantyExplicit) {
       await syncBatteryWarrantyFromRepair(created, req.user);
     }
     const logId = uuidv44();
@@ -1572,6 +1602,148 @@ router3.post("/", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to register repair ticket." });
   }
 });
+
+// Multi-device Batch Registration Endpoint
+router3.post("/batch", authenticate, async (req, res) => {
+  try {
+    const { customer, devices } = req.body;
+    if (!customer || !customer.name || !customer.phone) {
+      return res.status(400).json({ error: "Customer name and phone number are required." });
+    }
+    if (!Array.isArray(devices) || devices.length === 0) {
+      return res.status(400).json({ error: "At least one device must be included in batch intake." });
+    }
+
+    let resolvedCustomerId = customer.id;
+    if (!resolvedCustomerId) {
+      const { data: existingCustomers } = await supabaseAdmin
+        .from("Customer")
+        .select("id")
+        .eq("phone", customer.phone.trim())
+        .limit(1);
+
+      if (existingCustomers && existingCustomers.length > 0) {
+        resolvedCustomerId = existingCustomers[0].id;
+      } else {
+        const newCusId = uuidv44();
+        const { data: createdCus } = await supabaseAdmin
+          .from("Customer")
+          .insert([
+            {
+              id: newCusId,
+              customerId: `CUS-${Date.now().toString().slice(-5)}`,
+              name: customer.name.trim(),
+              phone: customer.phone.trim(),
+              email: customer.email ? customer.email.trim() : null,
+              address: customer.address ? customer.address.trim() : null,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ])
+          .select("id")
+          .single();
+
+        if (createdCus) {
+          resolvedCustomerId = createdCus.id;
+          await broadcastServerChange("Customer", "CREATE", newCusId);
+        }
+      }
+    }
+
+    const createdRepairs = [];
+
+    for (const dev of devices) {
+      if (!dev.deviceModel) continue;
+
+      const repairNumber = await generateRepairNumber();
+      const repairId = uuidv44();
+      const estCostNum = parseFloat(dev.estimatedCost || 0) || 0;
+      const advPaidNum = parseFloat(dev.advancePaid || 0) || 0;
+      const paymentStatus = advPaidNum >= estCostNum && estCostNum > 0 ? "PAID" : (advPaidNum > 0 ? "PARTIAL" : "UNPAID");
+      const isWarrantyExplicit = dev.hasBatteryWarranty === true || dev.hasBatteryWarranty === "true";
+
+      const newRepair = {
+        id: repairId,
+        repairNumber,
+        customerId: resolvedCustomerId || null,
+        customerName: customer.name.trim(),
+        customerPhone: customer.phone.trim(),
+        customerEmail: customer.email ? customer.email.trim() : null,
+        customerAddress: customer.address ? customer.address.trim() : null,
+        deviceBrand: dev.deviceBrand || "Apple",
+        deviceModel: dev.deviceModel.trim(),
+        imeiNumber: dev.imeiNumber ? String(dev.imeiNumber).trim() : null,
+        deviceColor: dev.deviceColor || null,
+        deviceCondition: dev.deviceCondition || "FAIR",
+        conditionNotes: dev.conditionNotes || null,
+        problemDescription: dev.problemDescription || "",
+        accessoriesReceived: dev.accessoriesReceived || null,
+        estimatedCost: estCostNum,
+        advancePaid: advPaidNum,
+        totalPaid: advPaidNum,
+        paymentStatus,
+        status: dev.status || "RECEIVED",
+        priority: dev.priority || "NORMAL",
+        technicianId: dev.technicianId || null,
+        branchId: req.user.branchId || null,
+        expectedCompletionDate: dev.expectedCompletionDate || null,
+        remarks: dev.remarks || null,
+        receivingMethod: dev.receivingMethod || "WALK_IN",
+        isCourierIn: Boolean(dev.isCourierIn),
+        courierCompany: dev.courierCompany || null,
+        courierTrackingNumber: dev.courierTrackingNumber || null,
+        senderName: dev.senderName || null,
+        senderPhone: dev.senderPhone || null,
+        originDistrict: dev.originDistrict || null,
+        originAddress: dev.originAddress || null,
+        hasBatteryWarranty: isWarrantyExplicit,
+        batteryWarrantyPeriod: isWarrantyExplicit ? (dev.batteryWarrantyPeriod || "6_MONTHS") : null,
+        batteryType: isWarrantyExplicit ? (dev.batteryType || "Original Replacement Battery") : null,
+        batteryHealth: isWarrantyExplicit ? (dev.batteryHealth || null) : null,
+        batterySerial: isWarrantyExplicit ? (dev.batterySerial || null) : null,
+        createdById: req.user.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const { data: created, error } = await supabaseAdmin.from("Repair").insert([newRepair]).select("*").single();
+
+      if (!error && created) {
+        if (isWarrantyExplicit) {
+          await syncBatteryWarrantyFromRepair(created, req.user);
+        }
+
+        const logId = uuidv44();
+        await supabaseAdmin.from("RepairLog").insert([
+          {
+            id: logId,
+            repairId: created.id,
+            userId: req.user.id,
+            action: "CREATED",
+            status: "RECEIVED",
+            notes: `Multi-device intake recorded by ${req.user.name}.`,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        await broadcastServerChange("RepairLog", "CREATE", logId);
+        await broadcastServerChange("Repair", "CREATE", created.id, created);
+
+        createdRepairs.push(created);
+      }
+    }
+
+    return res.status(201).json({
+      success: true,
+      totalRegistered: createdRepairs.length,
+      repairs: createdRepairs,
+      customer
+    });
+  } catch (batchErr) {
+    console.error("[BATCH REPAIR INTAKE ERROR]", batchErr);
+    return res.status(500).json({ error: "Failed to process batch repair intake." });
+  }
+});
+
 var handleRepairUpdate = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1585,6 +1757,15 @@ var handleRepairUpdate = async (req, res) => {
     if (updateData.estimatedCost !== void 0) updateData.estimatedCost = parseFloat(updateData.estimatedCost) || 0;
     if (updateData.advancePaid !== void 0) updateData.advancePaid = parseFloat(updateData.advancePaid) || 0;
     if (updateData.totalPaid !== void 0) updateData.totalPaid = parseFloat(updateData.totalPaid) || 0;
+
+    if (rawBody.hasBatteryWarranty !== void 0) {
+      const isWarranty = rawBody.hasBatteryWarranty === true || rawBody.hasBatteryWarranty === "true";
+      updateData.hasBatteryWarranty = isWarranty;
+      if (!isWarranty) {
+        updateData.batteryWarrantyPeriod = null;
+        updateData.batteryType = null;
+      }
+    }
     
     // Normalize priority if provided
     let priorityChanged = false;
@@ -1602,8 +1783,10 @@ var handleRepairUpdate = async (req, res) => {
       console.error("[REPAIR UPDATE ERROR]", error);
       return res.status(400).json({ error: error.message });
     }
-    if (rawBody.hasBatteryWarranty || rawBody.batteryWarrantyPeriod || updated.hasBatteryWarranty || updated.batteryWarrantyPeriod) {
-      await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody }, req.user);
+    
+    // Always run battery warranty sync when warranty fields are modified or present
+    if (rawBody.hasBatteryWarranty !== void 0 || updated.hasBatteryWarranty !== void 0) {
+      await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody, id, repairNumber: updated.repairNumber }, req.user);
     }
     
     // Log priority change
@@ -3379,8 +3562,23 @@ router7.get("/", authenticate, async (req, res) => {
       console.error("[BATTERY WARRANTIES ERROR]", error);
       return res.status(500).json({ error: error.message || "Failed to fetch battery warranties." });
     }
+
+    // Verify linked repair hasBatteryWarranty status to ensure data integrity
+    const { data: allRepairs } = await supabaseAdmin.from("Repair").select("id, hasBatteryWarranty");
+    const repairWarrantyMap = new Map();
+    (allRepairs || []).forEach((r) => {
+      repairWarrantyMap.set(r.id, r.hasBatteryWarranty === true || r.hasBatteryWarranty === "true");
+    });
+
+    const validWarranties = (warranties || []).filter((w) => {
+      if (w.repairId) {
+        return repairWarrantyMap.get(w.repairId) === true;
+      }
+      return true;
+    });
+
     const { data: allClaims } = await supabaseAdmin.from("BatteryWarrantyClaim").select("*");
-    const combined = (warranties || []).map((w) => ({
+    const combined = validWarranties.map((w) => ({
       ...w,
       claims: (allClaims || []).filter((c) => c.warrantyId === w.id)
     }));
@@ -3396,7 +3594,21 @@ router7.get("/export", authenticate, async (req, res) => {
     let query = supabaseAdmin.from("BatteryWarranty").select("*");
     if (status && status !== "ALL") query = query.eq("status", String(status));
     const { data: warranties } = await query.order("createdAt", { ascending: false });
-    const rows = (warranties || []).map((w) => ({
+
+    const { data: allRepairs } = await supabaseAdmin.from("Repair").select("id, hasBatteryWarranty");
+    const repairWarrantyMap = new Map();
+    (allRepairs || []).forEach((r) => {
+      repairWarrantyMap.set(r.id, r.hasBatteryWarranty === true || r.hasBatteryWarranty === "true");
+    });
+
+    const validWarranties = (warranties || []).filter((w) => {
+      if (w.repairId) {
+        return repairWarrantyMap.get(w.repairId) === true;
+      }
+      return true;
+    });
+
+    const rows = validWarranties.map((w) => ({
       "Warranty Number": w.warrantyNumber,
       "Customer Name": w.customerName,
       "Phone": w.customerPhone,

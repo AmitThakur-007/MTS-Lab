@@ -101,10 +101,24 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ error: error.message || 'Failed to fetch battery warranties.' });
     }
 
+    // Verify linked repair hasBatteryWarranty status to ensure data integrity
+    const { data: allRepairs } = await supabaseAdmin.from('Repair').select('id, hasBatteryWarranty');
+    const repairWarrantyMap = new Map<string, boolean>();
+    (allRepairs || []).forEach((r: any) => {
+      repairWarrantyMap.set(r.id, r.hasBatteryWarranty === true || r.hasBatteryWarranty === 'true');
+    });
+
+    const validWarranties = (warranties || []).filter((w: any) => {
+      if (w.repairId) {
+        return repairWarrantyMap.get(w.repairId) === true;
+      }
+      return true;
+    });
+
     // Fetch claims safely without breaking if foreign key joins are not established
     const { data: allClaims } = await supabaseAdmin.from('BatteryWarrantyClaim').select('*');
 
-    const combined = (warranties || []).map((w: any) => ({
+    const combined = validWarranties.map((w: any) => ({
       ...w,
       claims: (allClaims || []).filter((c: any) => c.warrantyId === w.id),
     }));
@@ -126,7 +140,21 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
 
     const { data: warranties } = await query.order('createdAt', { ascending: false });
 
-    const rows = (warranties || []).map((w: any) => ({
+    // Verify linked repair hasBatteryWarranty status to ensure data integrity
+    const { data: allRepairs } = await supabaseAdmin.from('Repair').select('id, hasBatteryWarranty');
+    const repairWarrantyMap = new Map<string, boolean>();
+    (allRepairs || []).forEach((r: any) => {
+      repairWarrantyMap.set(r.id, r.hasBatteryWarranty === true || r.hasBatteryWarranty === 'true');
+    });
+
+    const validWarranties = (warranties || []).filter((w: any) => {
+      if (w.repairId) {
+        return repairWarrantyMap.get(w.repairId) === true;
+      }
+      return true;
+    });
+
+    const rows = validWarranties.map((w: any) => ({
       'Warranty Number': w.warrantyNumber,
       'Customer Name': w.customerName,
       'Phone': w.customerPhone,

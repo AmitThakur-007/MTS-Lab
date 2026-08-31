@@ -379,9 +379,9 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
         priority: formData.priority || 'NORMAL',
         remarks: formData.remarks.trim() || null,
         expectedCompletionDate: formData.expectedCompletionDate ? new Date(formData.expectedCompletionDate).toISOString() : null,
-        hasBatteryWarranty,
-        batteryWarrantyPeriod: hasBatteryWarranty ? batteryWarrantyPeriod : undefined,
-        batteryType: hasBatteryWarranty ? (batteryType.trim() || 'Original Replacement Battery') : undefined
+        hasBatteryWarranty: Boolean(hasBatteryWarranty),
+        batteryWarrantyPeriod: hasBatteryWarranty ? batteryWarrantyPeriod : null,
+        batteryType: hasBatteryWarranty ? (batteryType.trim() || 'Original Replacement Battery') : null
       };
 
       const updated = await api.patch(`/repairs/${repair.id}`, payload);

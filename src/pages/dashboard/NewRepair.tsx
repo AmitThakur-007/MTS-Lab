@@ -611,9 +611,9 @@ export default function NewRepair() {
           status: dev.status || 'RECEIVED',
           expectedCompletionDate: dev.expectedCompletionDate ? new Date(dev.expectedCompletionDate).toISOString() : null,
           remarks: dev.remarks.trim() || undefined,
-          hasBatteryWarranty: dev.hasBatteryWarranty,
-          batteryWarrantyPeriod: dev.batteryWarrantyPeriod,
-          batteryType: dev.batteryType,
+          hasBatteryWarranty: Boolean(dev.hasBatteryWarranty),
+          batteryWarrantyPeriod: dev.hasBatteryWarranty ? (dev.batteryWarrantyPeriod || '6_MONTHS') : null,
+          batteryType: dev.hasBatteryWarranty ? (dev.batteryType || 'Original Replacement Battery') : null,
 
           // Courier-In Fields
           receivingMethod,
@@ -665,9 +665,9 @@ export default function NewRepair() {
             status: dev.status || 'RECEIVED',
             expectedCompletionDate: dev.expectedCompletionDate ? new Date(dev.expectedCompletionDate).toISOString() : null,
             remarks: dev.remarks.trim() || undefined,
-            hasBatteryWarranty: dev.hasBatteryWarranty,
-            batteryWarrantyPeriod: dev.batteryWarrantyPeriod,
-            batteryType: dev.batteryType,
+            hasBatteryWarranty: Boolean(dev.hasBatteryWarranty),
+            batteryWarrantyPeriod: dev.hasBatteryWarranty ? (dev.batteryWarrantyPeriod || '6_MONTHS') : null,
+            batteryType: dev.hasBatteryWarranty ? (dev.batteryType || 'Original Replacement Battery') : null,
 
             // Courier-In Fields
             receivingMethod,
