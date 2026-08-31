@@ -5,9 +5,33 @@ import { useRealtimeSync } from '@/services/realtime';
 export interface DashboardStats {
     activeRepairs: number;
     completedRepairs: number;
+    pendingRepairs: number;
+    urgentRepairs: number;
     totalCustomers: number;
     totalStaff: number;
     totalRevenue: number;
+    repairCollected: number;
+    recentRevenue: number;
+    previousRevenue: number;
+    revenueGrowth: number;
+}
+
+function isDashboardStats(value: unknown): value is DashboardStats {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as Record<string, unknown>;
+    return [
+        'activeRepairs',
+        'completedRepairs',
+        'pendingRepairs',
+        'urgentRepairs',
+        'totalCustomers',
+        'totalStaff',
+        'totalRevenue',
+        'repairCollected',
+        'recentRevenue',
+        'previousRevenue',
+        'revenueGrowth',
+    ].every((key) => typeof candidate[key] === 'number' && Number.isFinite(candidate[key]));
 }
 
 export function useDashboardData() {
@@ -33,7 +57,12 @@ export function useDashboardData() {
             const failures: string[] = [];
 
             if (statsRes.status === 'fulfilled' && statsRes.value) {
-                setStats(statsRes.value as DashboardStats);
+                const rawStats = (statsRes.value as any)?.data ?? statsRes.value;
+                if (isDashboardStats(rawStats)) {
+                    setStats(rawStats);
+                } else {
+                    failures.push('dashboard statistics (invalid response)');
+                }
             } else {
                 failures.push('dashboard statistics');
             }
@@ -41,12 +70,12 @@ export function useDashboardData() {
             if (repairsRes.status === 'fulfilled' && repairsRes.value) {
                 const rawRepairs = Array.isArray(repairsRes.value)
                     ? repairsRes.value
-                    : (repairsRes.value as any)?.repairs;
+                    : (repairsRes.value as any)?.data ?? (repairsRes.value as any)?.repairs;
 
                 if (Array.isArray(rawRepairs)) {
                     setRepairs(rawRepairs);
                 } else {
-                    failures.push('repair data');
+                    failures.push('repair data (invalid response)');
                 }
             } else {
                 failures.push('repair data');
