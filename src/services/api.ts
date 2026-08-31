@@ -92,7 +92,7 @@ async function doRefreshToken(): Promise<string | null> {
 }
 
 
-async function request(endpoint: string, options: any = {}) {
+async function request<T = any>(endpoint: string, options: any = {}): Promise<T> {
   const { token } = useAuthStore.getState();
 
   const headers = {
@@ -197,7 +197,7 @@ async function request(endpoint: string, options: any = {}) {
 }
 
 export const api = {
-  get: (endpoint: string) => request(endpoint),
+  get: <T = any>(endpoint: string) => request<T>(endpoint),
   getBlob: async (endpoint: string, options: any = {}) => {
     const { token } = useAuthStore.getState();
     const headers = {
@@ -286,26 +286,26 @@ export const api = {
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
   },
-  post: (endpoint: string, data: any, options: any = {}) => {
+  post: <T = any>(endpoint: string, data?: any, options: any = {}) => {
     const isFormData = data instanceof FormData;
-    return request(endpoint, {
+    return request<T>(endpoint, {
       method: 'POST',
       headers: isFormData ? {} : { 'Content-Type': 'application/json', ...options.headers },
-      body: isFormData ? data : JSON.stringify(data),
+      body: isFormData ? data : data !== undefined ? JSON.stringify(data) : undefined,
       ...options
     });
   },
-  put: (endpoint: string, data: any) => request(endpoint, {
+  put: <T = any>(endpoint: string, data?: any) => request<T>(endpoint, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: data !== undefined ? JSON.stringify(data) : undefined,
   }),
-  patch: (endpoint: string, data: any) => request(endpoint, {
+  patch: <T = any>(endpoint: string, data?: any) => request<T>(endpoint, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: data !== undefined ? JSON.stringify(data) : undefined,
   }),
-  delete: (endpoint: string, data?: any) => request(endpoint, {
+  delete: <T = any>(endpoint: string, data?: any) => request<T>(endpoint, {
     method: 'DELETE',
     headers: data ? { 'Content-Type': 'application/json' } : {},
     body: data ? JSON.stringify(data) : undefined

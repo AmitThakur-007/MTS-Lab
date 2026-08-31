@@ -1,815 +1,787 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
-import { createExcelBuffer } from '../services/excelService';
-import { broadcastServerChange } from '../services/realtimeSync';
+import {
+  getNepalBusinessTime,
+  getAuthorizedStaffList,
+  getAllAttendanceRecords,
+  getAttendanceRecordById,
+  getAttendanceRecordByUserAndDate,
+  upsertAttendanceRecord,
+  bulkUpsertAttendance,
+  deleteAttendanceRecord,
+  purgeUserAttendance,
+  getAttendanceAuditLogs,
+  AttendanceRecord,
+} from '../services/attendanceStorage';
 
 const router = Router();
 
-const AUTHORIZED_STAFF_ROLES = [
-  'SUPER_ADMIN',
-  'ADMIN',
-  'MANAGER',
-  'RECEPTIONIST',
-  'TECHNICIAN',
-  'LEAD_TECHNICIAN',
-  'HEAD_TECHNICIAN',
-  'TECHNICAL_ASSISTANT',
-  'STAFF'
-];
-
-function getNepalTimeDetails() {
-  const now = new Date();
-  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  const nptDate = new Date(utc + 345 * 60000);
-
-  const hours = nptDate.getHours();
-  const minutes = nptDate.getMinutes();
-  const seconds = nptDate.getSeconds();
-  const totalMinutes = hours * 60 + minutes;
-
-  // 10:00 AM (600m) to 10:35 AM (635m)
-  const isWithinWindow = totalMinutes >= 600 && totalMinutes <= 635;
-
-  const dateString = nptDate.toISOString().split('T')[0];
-  const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-
-  return {
-    nptDate,
-    dateString,
-    timeString,
-    hours,
-    minutes,
-    totalMinutes,
-    isWithinWindow,
-    windowStart: '10:00:00',
-    windowEnd: '10:35:00'
-  };
-}
-
-/**
- * Robust helper to fetch active staff members from the User table
- */
-async function fetchSafeStaffUsers() {
-  try {
-    const { data: users, error } = await supabaseAdmin
-      .from('User')
-      .select('*')
-      .in('role', AUTHORIZED_STAFF_ROLES)
-      .order('name', { ascending: true });
-
-    if (error) {
-      console.error('[SUPABASE USER QUERY ERROR]', error);
-      return [];
-    }
-
-    return (users || []).filter((u: any) => {
-      const status = (u.status || 'ACTIVE').toUpperCase();
-      return status !== 'SUSPENDED' && status !== 'INACTIVE' && status !== 'DELETED';
-    });
-  } catch (err) {
-    console.error('[SAFE USER FETCH EXCEPTION]', err);
-    return [];
-  }
-}
+const ATTENDANCE_MANAGEMENT_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'];
+const ATTENDANCE_ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 
 // ==========================================
 // 1. GET /api/attendance/server-time
+// Authoritative Asia/Kathmandu (NPT) Business Clock
 // ==========================================
 router.get('/server-time', (req, res) => {
-  const time = getNepalTimeDetails();
-  return res.json({
-    iso: time.nptDate.toISOString(),
-    timestamp: time.nptDate.getTime(),
-    dateString: time.dateString,
-    timeString: time.timeString,
-    isWithinWindow: time.isWithinWindow,
-    windowRange: '10:00 AM – 10:35 AM NPT'
-  });
-});
-
-// ==========================================
-// 2. GET /api/attendance/pending-requests
-// ==========================================
-router.get('/pending-requests', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { data: records } = await supabaseAdmin
-      .from('Attendance')
-      .select('*')
-      .eq('status', 'PENDING')
-      .order('createdAt', { ascending: false });
-
-    const staffList = await fetchSafeStaffUsers();
-    const userMap = new Map();
-    staffList.forEach((u: any) => userMap.set(u.id, u));
-
-    const formatted = (records || []).map((r: any) => ({
-      ...r,
-      user: userMap.get(r.userId) || { name: 'Staff Member', role: 'TECHNICIAN' }
-    }));
-
-    return res.json(formatted);
+    const time = getNepalBusinessTime();
+    return res.json({
+      serverTime: time.timeString,
+      serverDate: time.dateString,
+      hours: time.hours,
+      minutes: time.minutes,
+      seconds: time.seconds,
+      totalMinutes: time.totalMinutes,
+      isWithinWindow: time.isWithinWindow,
+      secondsRemainingInWindow: time.secondsRemainingInWindow,
+      secondsUntilWindowOpens: time.secondsUntilWindowOpens,
+      windowStart: time.windowStart,
+      windowEnd: time.windowEnd,
+      timezone: time.timezone,
+    });
   } catch (err: any) {
-    return res.json([]);
+    return res.status(500).json({ error: 'Failed to retrieve server business time.' });
   }
 });
 
 // ==========================================
-// 3. GET /api/attendance/roster & /api/attendance/today
+// 2. GET /api/attendance/roster & /api/attendance/today
+// Daily roster of active staff with today's status
 // ==========================================
-const handleRosterRequest = async (req: AuthRequest, res: Response) => {
+const handleGetRoster = async (req: AuthRequest, res: Response) => {
   try {
-    const time = getNepalTimeDetails();
-    const todayStr = (req.query.date as string) || time.dateString;
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: 'Unauthorized' });
 
-    const staffList = await fetchSafeStaffUsers();
+    const isManagement = ATTENDANCE_MANAGEMENT_ROLES.includes(currentUser.role);
+    const time = getNepalBusinessTime();
+    const targetDate = (req.query.date as string) || time.dateString;
+    const currentMonth = targetDate.slice(0, 7);
 
-    const { data: attendanceRecords } = await supabaseAdmin
-      .from('Attendance')
-      .select('*')
-      .eq('date', todayStr);
+    // Fetch authorized staff list
+    const staffList = await getAuthorizedStaffList();
+    // Fetch all attendance records for target date
+    const todayRecords = await getAllAttendanceRecords({ date: targetDate });
+    // Fetch month records for calculating attendance rates
+    const monthRecords = await getAllAttendanceRecords({ month: currentMonth });
 
-    const attendanceMap = new Map();
-    (attendanceRecords || []).forEach((rec: any) => {
-      attendanceMap.set(rec.userId, rec);
+    const recordMap = new Map<string, AttendanceRecord>();
+    todayRecords.forEach((r) => recordMap.set(r.userId, r));
+
+    // Calculate monthly rate per user
+    const monthCounts = new Map<string, { present: number; total: number }>();
+    monthRecords.forEach((r) => {
+      const entry = monthCounts.get(r.userId) || { present: 0, total: 0 };
+      entry.total += 1;
+      if (r.status === 'PRESENT' || r.status === 'LATE' || r.status === 'HALF_DAY') {
+        entry.present += 1;
+      }
+      monthCounts.set(r.userId, entry);
     });
 
-    let dispatchCount = 0;
-    try {
-      const { data: broadcastLogs } = await supabaseAdmin
-        .from('AttendanceBroadcast')
-        .select('id')
-        .eq('date', todayStr);
-      dispatchCount = broadcastLogs?.length || 0;
-    } catch {
-      dispatchCount = 0;
-    }
+    const roster = staffList.map((user) => {
+      const rec = recordMap.get(user.id);
+      const mStats = monthCounts.get(user.id);
+      const rate = mStats && mStats.total > 0 ? Math.round((mStats.present / mStats.total) * 100) : null;
 
-    const roster = staffList.map((u: any) => {
-      const record = attendanceMap.get(u.id);
       return {
-        userId: u.id,
-        id: u.id,
-        name: u.name || u.email?.split('@')[0] || 'Staff Member',
-        email: u.email,
-        role: u.role || 'TECHNICIAN',
-        department: u.department || 'Repair Lab',
-        phone: u.phone || '',
-        avatarUrl: u.avatarUrl || u.profileImage || null,
-        date: todayStr,
-        status: record ? record.status : 'NOT_MARKED',
-        checkInTime: record ? (record.checkInTime || record.time || null) : null,
-        checkOutTime: record ? record.checkOutTime : null,
-        notes: record ? record.notes : null,
-        attendanceId: record ? record.id : null,
-        user: {
-          id: u.id,
-          name: u.name || u.email?.split('@')[0] || 'Staff Member',
-          email: u.email,
-          role: u.role || 'TECHNICIAN',
-          department: u.department || 'Repair Lab',
-          profileImage: u.avatarUrl || u.profileImage || null,
-        },
-        attendance: record ? {
-          id: record.id,
-          status: record.status,
-          checkInTime: record.checkInTime || record.time || null,
-          checkOutTime: record.checkOutTime || null,
-          markedByName: record.markedByName || 'Administrator',
-          markedAt: record.checkInTime || record.createdAt || record.date,
-          notes: record.notes
-        } : null
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        department: user.department || 'Repair Lab',
+        phoneNumber: user.phoneNumber || null,
+        profileImage: user.profileImage || null,
+        status: rec ? rec.status : 'NOT_MARKED',
+        attendanceId: rec ? rec.id : null,
+        checkInTime: rec ? rec.checkInTime : null,
+        checkOutTime: rec ? rec.checkOutTime : null,
+        notes: rec ? rec.notes : null,
+        markedByName: rec ? rec.markedByName : null,
+        markedByRole: rec ? rec.markedByRole : null,
+        markedAt: rec ? rec.markedAt : null,
+        monthlyAttendanceRate: rate,
       };
     });
 
-    const presentToday = roster.filter((r: any) => ['PRESENT', 'LATE', 'HALF_DAY'].includes(r.status)).length;
-    const absentToday = roster.filter((r: any) => r.status === 'ABSENT').length;
-    const rate = roster.length > 0 ? Math.round((presentToday / roster.length) * 100) : 100;
+    // Summary counts
+    const totalStaff = roster.length;
+    const presentCount = roster.filter((s) => s.status === 'PRESENT' || s.status === 'LATE' || s.status === 'HALF_DAY').length;
+    const absentCount = roster.filter((s) => s.status === 'ABSENT').length;
+    const pendingCount = roster.filter((s) => s.status === 'PENDING').length;
+    const notMarkedCount = roster.filter((s) => s.status === 'NOT_MARKED').length;
 
     return res.json({
       success: true,
-      roster,
-      windowInfo: {
-        isWithinWindow: time.isWithinWindow,
-        currentTimeNPT: time.timeString,
-        windowStart: '10:00 AM',
-        windowEnd: '10:35 AM',
-        dispatchCount,
-        maxDispatches: 3,
-        canManagerDispatch: time.isWithinWindow && dispatchCount < 3
+      date: targetDate,
+      serverTime: time.timeString,
+      isWithinWindow: time.isWithinWindow,
+      summary: {
+        totalStaff,
+        presentCount,
+        absentCount,
+        pendingCount,
+        notMarkedCount,
+        markedCount: totalStaff - notMarkedCount,
+        overallRate: totalStaff > 0 ? Math.round((presentCount / totalStaff) * 100) : 0,
       },
-      stats: {
-        totalStaff: roster.length,
-        presentToday,
-        presentCount: presentToday,
-        absentToday,
-        absentCount: absentToday,
-        attendanceRate: rate,
-        pendingCount: roster.filter((r: any) => r.status === 'PENDING').length,
-        notMarkedCount: roster.filter((r: any) => r.status === 'NOT_MARKED').length,
-      }
+      roster: isManagement ? roster : roster.filter((r) => r.id === currentUser.id),
     });
   } catch (err: any) {
-    console.error('[ATTENDANCE ROSTER EXCEPTION]', err);
+    console.error('[ROSTER FETCH ERROR]', err);
     return res.status(500).json({ error: 'Failed to generate attendance roster.' });
   }
 };
 
-router.get('/roster', authenticate, handleRosterRequest);
-router.get('/today', authenticate, handleRosterRequest);
+router.get('/roster', authenticate, handleGetRoster);
+router.get('/today', authenticate, handleGetRoster);
 
 // ==========================================
-// 4. GET /api/attendance/monthly-report
+// 3. GET /api/attendance/monthly-report
+// Comprehensive Monthly Report & Matrix
 // ==========================================
-router.get('/monthly-report', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/monthly-report', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async (req: AuthRequest, res: Response) => {
   try {
-    const { month } = req.query;
-    const currentMonth = (month as string) || new Date().toISOString().slice(0, 7);
+    const time = getNepalBusinessTime();
+    const targetMonth = (req.query.month as string) || time.dateString.slice(0, 7);
 
-    const staffList = await fetchSafeStaffUsers();
+    const [yearStr, monthStr] = targetMonth.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const daysInMonth = new Date(year, month, 0).getDate();
 
-    const { data: records } = await supabaseAdmin
-      .from('Attendance')
-      .select('*')
-      .gte('date', `${currentMonth}-01`)
-      .lte('date', `${currentMonth}-31`);
+    const staffList = await getAuthorizedStaffList();
+    const records = await getAllAttendanceRecords({ month: targetMonth });
 
-    const userLogsMap = new Map<string, any[]>();
-    (records || []).forEach((r: any) => {
-      const existing = userLogsMap.get(r.userId) || [];
-      existing.push(r);
-      userLogsMap.set(r.userId, existing);
+    // Group records by userId and date
+    const userRecordsMap = new Map<string, Map<string, AttendanceRecord>>();
+    records.forEach((r) => {
+      let userMap = userRecordsMap.get(r.userId);
+      if (!userMap) {
+        userMap = new Map<string, AttendanceRecord>();
+        userRecordsMap.set(r.userId, userMap);
+      }
+      userMap.set(r.date, r);
     });
 
-    let totalPresentAll = 0;
-    let totalAbsentAll = 0;
+    let totalStaffPresentSum = 0;
+    let totalActiveStaffWithLogs = 0;
 
-    const report = staffList.map((u: any) => {
-      const logs = userLogsMap.get(u.id) || [];
-      const presentDays = logs.filter((l: any) => ['PRESENT', 'LATE', 'HALF_DAY'].includes(l.status)).length;
-      const absentDays = logs.filter((l: any) => l.status === 'ABSENT').length;
-      const pendingDays = logs.filter((l: any) => l.status === 'PENDING').length;
-      const rejectedDays = logs.filter((l: any) => l.status === 'REJECTED').length;
+    const staffMetrics = staffList.map((staff) => {
+      const userMap = userRecordsMap.get(staff.id) || new Map<string, AttendanceRecord>();
+      let presentCount = 0;
+      let absentCount = 0;
+      let lateCount = 0;
+      let halfDayCount = 0;
+      let pendingCount = 0;
 
-      totalPresentAll += presentDays;
-      totalAbsentAll += absentDays;
+      const dailyStatus: Record<string, string> = {};
 
-      const totalActiveDays = presentDays + absentDays;
-      const attendanceRate = totalActiveDays > 0 ? Math.round((presentDays / totalActiveDays) * 100) : null;
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dayStr = `${targetMonth}-${String(day).padStart(2, '0')}`;
+        const rec = userMap.get(dayStr);
+        if (rec) {
+          dailyStatus[dayStr] = rec.status;
+          if (rec.status === 'PRESENT') presentCount++;
+          else if (rec.status === 'ABSENT') absentCount++;
+          else if (rec.status === 'LATE') {
+            lateCount++;
+            presentCount++;
+          } else if (rec.status === 'HALF_DAY') {
+            halfDayCount++;
+            presentCount++;
+          } else if (rec.status === 'PENDING') {
+            pendingCount++;
+          }
+        } else {
+          dailyStatus[dayStr] = 'NOT_MARKED';
+        }
+      }
 
-      let statusTag = 'NO_DATA';
-      if (attendanceRate !== null) {
-        if (attendanceRate >= 90) statusTag = 'EXCELLENT';
-        else if (attendanceRate >= 75) statusTag = 'GOOD';
-        else if (attendanceRate >= 60) statusTag = 'AVERAGE';
+      const totalMarked = presentCount + absentCount + pendingCount;
+      const rate = totalMarked > 0 ? Math.round((presentCount / totalMarked) * 100) : null;
+
+      if (rate !== null) {
+        totalStaffPresentSum += rate;
+        totalActiveStaffWithLogs++;
+      }
+
+      let statusTag = 'UNTRACKED';
+      if (rate !== null) {
+        if (rate >= 90) statusTag = 'EXCELLENT';
+        else if (rate >= 75) statusTag = 'GOOD';
+        else if (rate >= 60) statusTag = 'AVERAGE';
         else statusTag = 'NEEDS_ATTENTION';
       }
 
       return {
-        user: {
-          id: u.id,
-          name: u.name || u.email?.split('@')[0] || 'Staff Member',
-          email: u.email,
-          role: u.role || 'TECHNICIAN',
-          department: u.department || 'Repair Lab',
-          profileImage: u.avatarUrl || u.profileImage || null,
-        },
-        presentDays,
-        absentDays,
-        pendingDays,
-        rejectedDays,
-        attendanceRate,
+        id: staff.id,
+        name: staff.name,
+        email: staff.email,
+        role: staff.role,
+        department: staff.department || 'Repair Lab',
+        profileImage: staff.profileImage || null,
+        presentCount,
+        absentCount,
+        lateCount,
+        halfDayCount,
+        pendingCount,
+        totalMarked,
+        attendanceRate: rate,
         statusTag,
-        logs
+        dailyStatus,
       };
     });
 
-    const avgRate = staffList.length > 0 && (totalPresentAll + totalAbsentAll) > 0
-      ? Math.round((totalPresentAll / (totalPresentAll + totalAbsentAll)) * 100)
-      : 100;
+    const averageRate = totalActiveStaffWithLogs > 0 ? Math.round(totalStaffPresentSum / totalActiveStaffWithLogs) : 0;
 
     return res.json({
       success: true,
-      report,
-      stats: {
+      month: targetMonth,
+      daysInMonth,
+      summary: {
         totalStaff: staffList.length,
-        presentToday: totalPresentAll,
-        absentToday: totalAbsentAll,
-        attendanceRate: avgRate
-      }
+        averageRate,
+        totalLogs: records.length,
+      },
+      report: staffMetrics,
+      staffMetrics,
     });
   } catch (err: any) {
-    console.error('[MONTHLY REPORT EXCEPTION]', err);
-    return res.status(500).json({ error: 'Failed to load monthly report.' });
+    console.error('[MONTHLY REPORT ERROR]', err);
+    return res.status(500).json({ error: 'Failed to generate monthly attendance report.' });
   }
 });
 
 // ==========================================
-// 5. GET /api/attendance/staff/:userId/monthly
+// 4. GET /api/attendance/staff/:userId/monthly
+// Single staff member's detailed monthly view
 // ==========================================
 router.get('/staff/:userId/monthly', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.params;
-    const { month } = req.query;
-    const currentMonth = (month as string) || new Date().toISOString().slice(0, 7);
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { data: records } = await supabaseAdmin
-      .from('Attendance')
-      .select('*')
-      .eq('userId', userId)
-      .gte('date', `${currentMonth}-01`)
-      .lte('date', `${currentMonth}-31`)
-      .order('date', { ascending: true });
+    const isManagement = ATTENDANCE_MANAGEMENT_ROLES.includes(currentUser.role);
+    if (!isManagement && currentUser.id !== userId) {
+      return res.status(403).json({ error: 'You are only authorized to view your own attendance logs.' });
+    }
 
-    const logs = records || [];
-    const presentCount = logs.filter((l: any) => ['PRESENT', 'LATE', 'HALF_DAY'].includes(l.status)).length;
-    const absentCount = logs.filter((l: any) => l.status === 'ABSENT').length;
-    const pendingCount = logs.filter((l: any) => l.status === 'PENDING').length;
-    const rejectedCount = logs.filter((l: any) => l.status === 'REJECTED').length;
+    const time = getNepalBusinessTime();
+    const targetMonth = (req.query.month as string) || time.dateString.slice(0, 7);
 
-    const rate = (presentCount + absentCount) > 0 ? Math.round((presentCount / (presentCount + absentCount)) * 100) : null;
+    const [yearStr, monthStr] = targetMonth.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const daysInMonth = new Date(year, month, 0).getDate();
 
-    const [y, m] = currentMonth.split('-').map(Number);
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const records = await getAllAttendanceRecords({ userId, month: targetMonth });
+    const recordMap = new Map<string, AttendanceRecord>();
+    records.forEach((r) => recordMap.set(r.date, r));
+
+    let presentCount = 0;
+    let absentCount = 0;
+    let lateCount = 0;
+    let halfDayCount = 0;
+    let pendingCount = 0;
 
     const dailyLogs = [];
     for (let day = 1; day <= daysInMonth; day++) {
-      const dStr = `${currentMonth}-${String(day).padStart(2, '0')}`;
-      const rec = logs.find((l: any) => l.date === dStr);
-      const isFuture = dStr > todayStr;
-      const isToday = dStr === todayStr;
+      const dateStr = `${targetMonth}-${String(day).padStart(2, '0')}`;
+      const rec = recordMap.get(dateStr);
+      if (rec) {
+        if (rec.status === 'PRESENT') presentCount++;
+        else if (rec.status === 'ABSENT') absentCount++;
+        else if (rec.status === 'LATE') {
+          lateCount++;
+          presentCount++;
+        } else if (rec.status === 'HALF_DAY') {
+          halfDayCount++;
+          presentCount++;
+        } else if (rec.status === 'PENDING') {
+          pendingCount++;
+        }
 
-      dailyLogs.push({
-        date: dStr,
-        dayOfWeek: new Date(y, m - 1, day).toLocaleString('en', { weekday: 'short' }),
-        isToday,
-        isFuture,
-        status: rec ? rec.status : isFuture ? 'FUTURE' : 'NOT_MARKED',
-        record: rec ? {
-          ...rec,
-          formattedCheckInTime: rec.checkInTime || rec.time || '—',
-          markedBy: rec.markedByName || 'Administrator'
-        } : null
-      });
+        dailyLogs.push(rec);
+      } else {
+        dailyLogs.push({
+          id: null,
+          userId,
+          date: dateStr,
+          status: 'NOT_MARKED',
+          checkInTime: null,
+          checkOutTime: null,
+          notes: null,
+        });
+      }
     }
+
+    const totalMarked = presentCount + absentCount + pendingCount;
+    const rate = totalMarked > 0 ? Math.round((presentCount / totalMarked) * 100) : null;
 
     return res.json({
       success: true,
-      dailyLogs,
+      userId,
+      month: targetMonth,
       stats: {
         presentCount,
         absentCount,
+        lateCount,
+        halfDayCount,
         pendingCount,
-        rejectedCount,
-        attendanceRate: rate
-      }
+        totalMarked,
+        attendanceRate: rate,
+      },
+      dailyLogs,
     });
   } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to load staff monthly calendar.' });
+    return res.status(500).json({ error: 'Failed to fetch staff monthly logs.' });
   }
 });
 
 // ==========================================
-// 6. POST /api/attendance/dispatch-request
-// ==========================================
-router.post('/dispatch-request', authenticate, authorize(['MANAGER', 'SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
-  try {
-    const time = getNepalTimeDetails();
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-
-    if (!isSuperAdmin && !time.isWithinWindow) {
-      return res.status(403).json({
-        error: `Manager attendance dispatch is only allowed between 10:00 AM and 10:35 AM NPT. (Current NPT: ${time.timeString})`
-      });
-    }
-
-    const { data: existingDispatches } = await supabaseAdmin
-      .from('AttendanceBroadcast')
-      .select('id')
-      .eq('date', time.dateString);
-
-    const currentCount = existingDispatches?.length || 0;
-    if (!isSuperAdmin && currentCount >= 3) {
-      return res.status(429).json({
-        error: 'Daily limit reached: Manager can only send attendance requests up to 3 times per day.'
-      });
-    }
-
-    try {
-      await supabaseAdmin.from('AttendanceBroadcast').insert([
-        {
-          id: uuidv4(),
-          dispatchedById: req.user!.id,
-          dispatchedByName: req.user!.name,
-          date: time.dateString,
-          time: time.timeString,
-          broadcastNumber: currentCount + 1,
-          createdAt: new Date().toISOString()
-        }
-      ]);
-    } catch (e) {
-      console.warn('[BROADCAST LOG FAIL NON FATAL]', e);
-    }
-
-    const { data: managerRecord } = await supabaseAdmin
-      .from('Attendance')
-      .select('id')
-      .eq('userId', req.user!.id)
-      .eq('date', time.dateString)
-      .maybeSingle();
-
-    if (!managerRecord) {
-      await supabaseAdmin.from('Attendance').insert([
-        {
-          id: uuidv4(),
-          userId: req.user!.id,
-          date: time.dateString,
-          status: 'PRESENT',
-          markedById: req.user!.id,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ]);
-    } else {
-      await supabaseAdmin.from('Attendance').update({
-        status: 'PRESENT',
-        updatedAt: new Date().toISOString()
-      }).eq('id', managerRecord.id);
-    }
-
-    const staffUsers = await fetchSafeStaffUsers();
-
-    for (const staff of staffUsers.filter((u: any) => u.id !== req.user!.id)) {
-      const { data: exists } = await supabaseAdmin
-        .from('Attendance')
-        .select('id, status')
-        .eq('userId', staff.id)
-        .eq('date', time.dateString)
-        .maybeSingle();
-
-      if (!exists) {
-        await supabaseAdmin.from('Attendance').insert([
-          {
-            id: uuidv4(),
-            userId: staff.id,
-            date: time.dateString,
-            status: 'PENDING',
-            markedById: req.user!.id,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }
-        ]);
-      }
-    }
-
-    await broadcastServerChange('Attendance', 'CREATE', 'dispatch');
-
-    return res.json({
-      success: true,
-      message: `Attendance request dispatched to all staff (${currentCount + 1}/3). You have been auto-marked PRESENT.`,
-      dispatchCount: currentCount + 1,
-      maxDispatches: 3
-    });
-  } catch (err: any) {
-    console.error('[DISPATCH REQUEST ERROR]', err);
-    return res.status(500).json({ error: 'Failed to broadcast attendance request.' });
-  }
-});
-
-// ==========================================
-// 7. POST /api/attendance/mark
+// 5. POST /api/attendance/mark
+// Core Attendance Marking Endpoint with Strict Time Window for Managers
 // ==========================================
 router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: 'Unauthorized' });
+
     const {
-      type,
-      status: explicitStatus,
+      userId,
+      date,
+      status = 'PRESENT',
       notes,
-      userId: targetUserId,
-      date: targetDate,
-      time: targetTime
+      correctionReason,
+      checkInTime,
+      checkOutTime,
     } = req.body;
 
-    const time = getNepalTimeDetails();
-    const effectiveDate = targetDate || time.dateString;
-    const effectiveTime = targetTime || time.timeString;
-    const effectiveUserId = targetUserId || req.user!.id;
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'ADMIN';
-    const isManager = req.user?.role === 'MANAGER';
+    const time = getNepalBusinessTime();
+    const targetUserId = userId || currentUser.id;
+    const targetDate = date || time.dateString;
 
-    const staffList = await fetchSafeStaffUsers();
-    const isRegisteredStaff = staffList.some((s: any) => s.id === effectiveUserId);
-    if (!isRegisteredStaff && !isSuperAdmin) {
+    const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
+    const isAdmin = currentUser.role === 'ADMIN';
+    const isManager = currentUser.role === 'MANAGER';
+    const isSelf = targetUserId === currentUser.id;
+
+    // RBAC & TIME WINDOW ENFORCEMENT
+    if (isSuperAdmin || isAdmin) {
+      // Super Admin and Admin have 24/7 unlimited access to mark anyone's attendance
+    } else if (isManager) {
+      // Manager marking other staff must be strictly within 10:00 AM - 10:35 AM NPT
+      if (!isSelf && !time.isWithinWindow) {
+        return res.status(403).json({
+          error: `Manager can only record staff attendance between 10:00 AM and 10:35 AM (Asia/Kathmandu time). Current NPT time: ${time.timeString}`,
+          code: 'OUTSIDE_ATTENDANCE_WINDOW',
+          serverTime: time.timeString,
+          window: '10:00 AM - 10:35 AM NPT',
+        });
+      }
+    } else {
+      // Regular staff (Technician, Receptionist, etc.) can ONLY mark their own attendance
+      if (!isSelf) {
+        return res.status(403).json({
+          error: 'Access denied: Staff members can only record their own personal attendance.',
+          code: 'UNAUTHORIZED_TARGET_USER',
+        });
+      }
+    }
+
+    // Verify target user is in authorized staff list
+    const staffList = await getAuthorizedStaffList();
+    const targetUser = staffList.find((s) => s.id === targetUserId);
+    if (!targetUser && !isSuperAdmin && !isAdmin) {
+      return res.status(400).json({ error: 'Target employee is not an active staff member.' });
+    }
+
+    const saved = await upsertAttendanceRecord(
+      {
+        userId: targetUserId,
+        date: targetDate,
+        status,
+        notes,
+        correctionReason,
+        checkInTime,
+        checkOutTime,
+        method: isSuperAdmin
+          ? 'DIRECT_SUPER_ADMIN'
+          : isAdmin
+          ? 'DIRECT_ADMIN'
+          : isManager
+          ? 'MANAGER_ATTENDANCE'
+          : 'STAFF_SELF_CHECKIN',
+        requestStatus: 'DIRECT',
+      },
+      {
+        id: currentUser.id,
+        name: currentUser.name || 'Staff User',
+        role: currentUser.role,
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `Attendance marked as ${saved.status} for ${targetUser?.name || 'employee'}.`,
+      record: saved,
+    });
+  } catch (err: any) {
+    console.error('[MARK ATTENDANCE EXCEPTION]', err);
+    return res.status(500).json({ error: err?.message || 'Failed to record attendance.' });
+  }
+});
+
+// ==========================================
+// 6. POST /api/attendance/bulk-mark
+// Mark multiple staff attendance at once
+// ==========================================
+router.post('/bulk-mark', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: 'Unauthorized' });
+
+    const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
+    const isAdmin = currentUser.role === 'ADMIN';
+    const isManager = currentUser.role === 'MANAGER';
+
+    if (!isSuperAdmin && !isAdmin && !isManager) {
+      return res.status(403).json({ error: 'Access denied: Insufficient permissions for bulk attendance.' });
+    }
+
+    const time = getNepalBusinessTime();
+
+    // Time window restriction for Manager
+    if (isManager && !time.isWithinWindow) {
       return res.status(403).json({
-        error: 'Attendance can only be recorded for staff members registered in Staff Management.'
+        error: `Manager can only record staff attendance between 10:00 AM and 10:35 AM (Asia/Kathmandu time). Current NPT time: ${time.timeString}`,
+        code: 'OUTSIDE_ATTENDANCE_WINDOW',
       });
     }
 
-    const { data: existing } = await supabaseAdmin
-      .from('Attendance')
-      .select('*')
-      .eq('userId', effectiveUserId)
-      .eq('date', effectiveDate)
-      .limit(1);
-
-    const existingRecord = existing?.[0];
-
-    if (isSuperAdmin || (isManager && explicitStatus && time.isWithinWindow)) {
-      const finalStatus = explicitStatus || 'PRESENT';
-      const updatePayload: any = {
-        status: finalStatus,
-        updatedAt: new Date().toISOString()
-      };
-
-      if (notes) updatePayload.notes = notes.trim();
-
-      if (existingRecord) {
-        const { data: updated, error } = await supabaseAdmin
-          .from('Attendance')
-          .update(updatePayload)
-          .eq('id', existingRecord.id)
-          .select('*')
-          .single();
-
-        if (error) throw error;
-        await broadcastServerChange('Attendance', 'UPDATE', existingRecord.id, updated);
-        return res.json({ success: true, message: `Staff attendance updated to ${finalStatus}.`, record: updated });
-      } else {
-        const newRecord: any = {
-          id: uuidv4(),
-          userId: effectiveUserId,
-          date: effectiveDate,
-          status: finalStatus,
-          markedById: req.user!.id,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        if (notes) newRecord.notes = notes.trim();
-
-        const { data: created, error } = await supabaseAdmin
-          .from('Attendance')
-          .insert([newRecord])
-          .select('*')
-          .single();
-
-        if (error) throw error;
-        await broadcastServerChange('Attendance', 'CREATE', created.id, created);
-        return res.status(201).json({ success: true, message: `Staff attendance marked as ${finalStatus}.`, record: created });
-      }
+    const { date, items } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'List of staff items is required for bulk marking.' });
     }
 
-    if (type === 'CHECK_IN' || type === 'IN') {
-      if (existingRecord && existingRecord.status === 'PRESENT') {
-        return res.status(400).json({ error: 'Check-in already completed for today.' });
-      }
+    const targetDate = date || time.dateString;
+    const formattedItems = items.map((item) => ({
+      userId: item.userId,
+      date: targetDate,
+      status: item.status || 'PRESENT',
+      notes: item.notes,
+    }));
 
-      if (existingRecord) {
-        const { data: updated, error } = await supabaseAdmin
-          .from('Attendance')
-          .update({
-            status: 'PRESENT',
-            updatedAt: new Date().toISOString(),
-          })
-          .eq('id', existingRecord.id)
-          .select('*')
-          .single();
-
-        if (error) throw error;
-        await broadcastServerChange('Attendance', 'UPDATE', existingRecord.id, updated);
-        return res.json({ success: true, message: 'Check-in confirmed successfully.', record: updated });
-      }
-
-      const newRecord = {
-        id: uuidv4(),
-        userId: effectiveUserId,
-        date: effectiveDate,
-        status: 'PRESENT',
-        markedById: req.user!.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      const { data: created, error } = await supabaseAdmin
-        .from('Attendance')
-        .insert([newRecord])
-        .select('*')
-        .single();
-
-      if (error) throw error;
-      await broadcastServerChange('Attendance', 'CREATE', created.id, created);
-      return res.status(201).json({ success: true, message: 'Check-in recorded.', record: created });
-    }
-
-    return res.status(400).json({ error: 'Invalid attendance parameters.' });
-  } catch (err: any) {
-    console.error('[ATTENDANCE MARK ERROR]', err);
-    return res.status(500).json({ error: err?.message || 'Failed to mark attendance.' });
-  }
-});
-
-// ==========================================
-// 8. GET /api/attendance/my
-// ==========================================
-router.get('/my', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const time = getNepalTimeDetails();
-    const todayStr = time.dateString;
-
-    const { data: todayRecord } = await supabaseAdmin
-      .from('Attendance')
-      .select('*')
-      .eq('userId', req.user!.id)
-      .eq('date', todayStr)
-      .limit(1);
-
-    const { data: recentRecords } = await supabaseAdmin
-      .from('Attendance')
-      .select('*')
-      .eq('userId', req.user!.id)
-      .order('date', { ascending: false })
-      .limit(30);
+    const results = await bulkUpsertAttendance(formattedItems, {
+      id: currentUser.id,
+      name: currentUser.name || 'Admin',
+      role: currentUser.role,
+    });
 
     return res.json({
       success: true,
-      today: todayRecord?.[0] || null,
-      recent: recentRecords || [],
-      history: recentRecords || []
+      message: `Successfully processed attendance for ${results.length} staff members.`,
+      records: results,
     });
   } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to fetch personal attendance.' });
+    console.error('[BULK MARK ERROR]', err);
+    return res.status(500).json({ error: 'Failed to complete bulk attendance.' });
   }
 });
 
 // ==========================================
-// 9. GET /api/attendance/history
+// 7. GET /api/attendance/my
+// Personal Attendance Record for logged-in user
+// ==========================================
+router.get('/my', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: 'Unauthorized' });
+
+    const time = getNepalBusinessTime();
+    const currentMonth = (req.query.month as string) || time.dateString.slice(0, 7);
+
+    const allMyRecords = await getAllAttendanceRecords({ userId: currentUser.id });
+    const todayRecord = allMyRecords.find((r) => r.date === time.dateString);
+    const monthRecords = allMyRecords.filter((r) => r.date.startsWith(currentMonth));
+
+    let presentDays = 0;
+    let absentDays = 0;
+    let lateDays = 0;
+
+    monthRecords.forEach((r) => {
+      if (r.status === 'PRESENT') presentDays++;
+      else if (r.status === 'LATE') {
+        lateDays++;
+        presentDays++;
+      } else if (r.status === 'HALF_DAY') presentDays++;
+      else if (r.status === 'ABSENT') absentDays++;
+    });
+
+    const totalDays = monthRecords.length;
+    const rate = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : null;
+
+    return res.json({
+      success: true,
+      today: todayRecord || {
+        status: 'NOT_MARKED',
+        date: time.dateString,
+        checkInTime: null,
+      },
+      stats: {
+        month: currentMonth,
+        presentDays,
+        absentDays,
+        lateDays,
+        totalRecordedDays: totalDays,
+        attendanceRate: rate,
+      },
+      history: allMyRecords.slice(0, 60),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to retrieve personal attendance.' });
+  }
+});
+
+// ==========================================
+// 8. GET /api/attendance/history
+// Filterable Attendance History
 // ==========================================
 router.get('/history', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { userId, status, month, startDate, endDate, limit = '100' } = req.query;
-    let query = supabaseAdmin.from('Attendance').select('*');
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: 'Unauthorized' });
 
-    if (userId && userId !== 'ALL') query = query.eq('userId', String(userId));
-    if (status && status !== 'ALL') query = query.eq('status', String(status));
+    const isManagement = ATTENDANCE_MANAGEMENT_ROLES.includes(currentUser.role);
+    const { date, month, userId, status, search } = req.query as Record<string, string>;
 
-    if (month) {
-      query = query.gte('date', `${month}-01`).lte('date', `${month}-31`);
-    } else if (startDate || endDate) {
-      if (startDate) query = query.gte('date', String(startDate));
-      if (endDate) query = query.lte('date', String(endDate));
-    }
+    const filterUserId = isManagement ? userId : currentUser.id;
 
-    const { data: records, error } = await query
-      .order('date', { ascending: false })
-      .limit(parseInt(limit as string, 10) || 100);
+    const records = await getAllAttendanceRecords({
+      date,
+      month,
+      userId: filterUserId,
+      status,
+      search,
+    });
 
-    if (error) return res.status(500).json({ error: 'Failed to fetch attendance history.' });
+    const staffList = await getAuthorizedStaffList();
+    const userMap = new Map<string, any>();
+    staffList.forEach((s) => userMap.set(s.id, s));
 
-    const staffList = await fetchSafeStaffUsers();
-    const userMap = new Map();
-    staffList.forEach((u: any) => userMap.set(u.id, u));
-
-    const enriched = (records || []).map((r: any) => ({
-      ...r,
-      user: userMap.get(r.userId) || { name: 'Staff Member', role: 'TECHNICIAN' }
-    }));
-
-    return res.json(enriched);
-  } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to retrieve attendance logs.' });
-  }
-});
-
-// ==========================================
-// 10. PATCH /api/attendance/:id
-// ==========================================
-router.patch('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const { data: updated, error } = await supabaseAdmin
-      .from('Attendance')
-      .update({
-        status,
-        updatedAt: new Date().toISOString()
-      })
-      .eq('id', id)
-      .select('*')
-      .single();
-
-    if (error) return res.status(500).json({ error: 'Failed to update record.' });
-    await broadcastServerChange('Attendance', 'UPDATE', id, updated);
-    return res.json({ success: true, message: 'Attendance record corrected.', record: updated });
-  } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to update attendance log.' });
-  }
-});
-
-// ==========================================
-// 11. DELETE /api/attendance/:id
-// ==========================================
-router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { error } = await supabaseAdmin.from('Attendance').delete().eq('id', id);
-
-    if (error) return res.status(500).json({ error: 'Failed to delete attendance record.' });
-    await broadcastServerChange('Attendance', 'DELETE', id);
-    return res.json({ success: true, message: 'Attendance record deleted.' });
-  } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to delete log.' });
-  }
-});
-
-// ==========================================
-// 12. GET /api/attendance/export
-// ==========================================
-router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const { month } = req.query;
-    const targetMonth = (month as string) || new Date().toISOString().slice(0, 7);
-
-    const { data: records } = await supabaseAdmin
-      .from('Attendance')
-      .select('*')
-      .gte('date', `${targetMonth}-01`)
-      .lte('date', `${targetMonth}-31`)
-      .order('date', { ascending: false });
-
-    const staffList = await fetchSafeStaffUsers();
-    const userMap = new Map();
-    staffList.forEach((u: any) => userMap.set(u.id, u));
-
-    const rows = (records || []).map((r: any) => {
-      const u = userMap.get(r.userId) || {};
+    const enriched = records.map((r) => {
+      const user = userMap.get(r.userId);
       return {
-        'Date': r.date,
-        'Staff Name': u.name || 'Staff',
-        'Role': u.role || 'TECHNICIAN',
-        'Department': u.department || 'Repair Lab',
-        'Status': r.status,
-        'Notes': r.notes || '—',
+        ...r,
+        user: user
+          ? {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              department: user.department,
+              profileImage: user.profileImage,
+            }
+          : { id: r.userId, name: 'Staff Member', role: 'STAFF' },
       };
     });
 
-    return res.json({ success: true, rows });
+    // Optional text search filter
+    let finalRecords = enriched;
+    if (search && search.trim()) {
+      const s = search.toLowerCase();
+      finalRecords = finalRecords.filter(
+        (r) =>
+          r.user?.name?.toLowerCase().includes(s) ||
+          r.user?.email?.toLowerCase().includes(s) ||
+          r.user?.role?.toLowerCase().includes(s) ||
+          r.notes?.toLowerCase().includes(s) ||
+          r.date?.includes(s)
+      );
+    }
+
+    return res.json({
+      success: true,
+      count: finalRecords.length,
+      records: finalRecords,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to retrieve attendance history.' });
+  }
+});
+
+// ==========================================
+// 9. PATCH /api/attendance/:id
+// Correct / Update Attendance Record
+// ==========================================
+router.patch('/:id', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const currentUser = req.user!;
+    const { id } = req.params;
+    const { status, notes, correctionReason, checkInTime, checkOutTime } = req.body;
+
+    const existing = await getAttendanceRecordById(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Attendance record not found.' });
+    }
+
+    const time = getNepalBusinessTime();
+    const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
+    const isAdmin = currentUser.role === 'ADMIN';
+    const isManager = currentUser.role === 'MANAGER';
+
+    // Manager time window check if modifying others' attendance
+    if (isManager && !time.isWithinWindow) {
+      return res.status(403).json({
+        error: `Manager can only update attendance during 10:00 AM – 10:35 AM NPT. (Current NPT: ${time.timeString})`,
+        code: 'OUTSIDE_ATTENDANCE_WINDOW',
+      });
+    }
+
+    const updated = await upsertAttendanceRecord(
+      {
+        userId: existing.userId,
+        date: existing.date,
+        status: status || existing.status,
+        checkInTime: checkInTime !== undefined ? checkInTime : existing.checkInTime,
+        checkOutTime: checkOutTime !== undefined ? checkOutTime : existing.checkOutTime,
+        notes: notes !== undefined ? notes : existing.notes,
+        correctionReason: correctionReason || 'Administrative correction',
+      },
+      {
+        id: currentUser.id,
+        name: currentUser.name || 'Admin',
+        role: currentUser.role,
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: 'Attendance record successfully updated.',
+      record: updated,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to update attendance record.' });
+  }
+});
+
+// ==========================================
+// 10. DELETE /api/attendance/:id
+// Delete Single Attendance Record (Admin / Super Admin)
+// ==========================================
+router.delete('/:id', authenticate, authorize(ATTENDANCE_ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const currentUser = req.user!;
+    const { id } = req.params;
+
+    const success = await deleteAttendanceRecord(id, {
+      id: currentUser.id,
+      name: currentUser.name || 'Admin',
+      role: currentUser.role,
+    });
+
+    if (!success) {
+      return res.status(404).json({ error: 'Attendance record not found.' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Attendance record deleted successfully.',
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to delete attendance record.' });
+  }
+});
+
+// ==========================================
+// 11. GET /api/attendance/export
+// Export Attendance Data to CSV
+// ==========================================
+router.get('/export', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { month } = req.query;
+    const time = getNepalBusinessTime();
+    const targetMonth = (month as string) || time.dateString.slice(0, 7);
+
+    const records = await getAllAttendanceRecords({ month: targetMonth });
+    const staffList = await getAuthorizedStaffList();
+    const userMap = new Map<string, any>();
+    staffList.forEach((u) => userMap.set(u.id, u));
+
+    const rows = records.map((r) => {
+      const u = userMap.get(r.userId) || {};
+      return {
+        Date: r.date,
+        'Staff Name': u.name || 'Staff Member',
+        Role: (u.role || 'TECHNICIAN').replace(/_/g, ' '),
+        Department: u.department || 'Repair Lab',
+        Status: r.status,
+        'Check-In': r.checkInTime || '—',
+        'Check-Out': r.checkOutTime || '—',
+        'Marked By': r.markedByName || 'System',
+        'Marked Role': r.markedByRole || '—',
+        Notes: r.notes || '—',
+        'Correction Reason': r.correctionReason || '—',
+      };
+    });
+
+    return res.json({
+      success: true,
+      month: targetMonth,
+      count: rows.length,
+      rows,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to export attendance records.' });
   }
 });
 
 // ==========================================
-// 13. DELETE /api/attendance/staff/:userId (Super Admin Only - Permanent Deletion)
+// 12. GET /api/attendance/audit-logs
+// Audit Logs for Attendance Changes
+// ==========================================
+router.get('/audit-logs', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const logs = await getAttendanceAuditLogs({ limit: 100 });
+    return res.json({ success: true, auditLogs: logs, logs });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch audit logs.' });
+  }
+});
+
+// ==========================================
+// 13. DELETE /api/attendance/staff/:userId
+// Super Admin Only: Purge Staff Attendance Records
 // ==========================================
 router.delete('/staff/:userId', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
+    const currentUser = req.user!;
     const { userId } = req.params;
 
     if (!userId) {
       return res.status(400).json({ error: 'Staff User ID is required.' });
     }
 
-    if (userId === req.user!.id) {
-      return res.status(400).json({ error: 'You cannot delete your own Super Admin account from attendance.' });
+    if (userId === currentUser.id) {
+      return res.status(400).json({ error: 'You cannot delete your own Super Admin attendance records.' });
     }
 
-    // 1. Delete associated attendance logs
-    await supabaseAdmin
-      .from('Attendance')
-      .delete()
-      .eq('userId', userId);
-
-    // 2. Remove from Staff directory table if present
-    await supabaseAdmin
-      .from('Staff')
-      .delete()
-      .or(`id.eq.${userId},userId.eq.${userId}`);
-
-    // 3. Permanently delete from User table (now fully supported with ON DELETE SET NULL)
-    const { error: userDelErr } = await supabaseAdmin
-      .from('User')
-      .delete()
-      .eq('id', userId);
-
-    if (userDelErr) {
-      console.error('[USER TABLE DELETE ERROR]', userDelErr);
-      return res.status(500).json({ error: 'Failed to delete user account.' });
-    }
-
-    await broadcastServerChange('User', 'DELETE', userId);
-    await broadcastServerChange('Attendance', 'DELETE', userId);
+    const count = await purgeUserAttendance(userId, {
+      id: currentUser.id,
+      name: currentUser.name || 'Super Admin',
+      role: currentUser.role,
+    });
 
     return res.json({
       success: true,
-      message: 'Staff member and all their records have been permanently removed.'
+      message: `Permanently removed ${count} attendance records for this staff member.`,
     });
   } catch (err: any) {
-    console.error('[STAFF DELETE EXCEPTION]', err);
-    return res.status(500).json({ error: err?.message || 'Server error removing staff records.' });
+    return res.status(500).json({ error: 'Failed to purge staff attendance records.' });
   }
 });
 
