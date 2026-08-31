@@ -71,9 +71,10 @@ export default function RepairDetails() {
   const [isReopenDialogOpen, setIsReopenDialogOpen] = useState(false);
   const [reopenRemark, setReopenRemark] = useState('');
 
+  // Alert Tech Dialog States (Priority integrated here)
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
-  const [alertPriority, setAlertPriority] = useState<'URGENT' | 'HIGH' | 'MEDIUM' | 'NORMAL'>('URGENT');
+  const [alertPriority, setAlertPriority] = useState<'NORMAL' | 'MEDIUM' | 'HIGH' | 'URGENT'>('NORMAL');
   const [sendingAlert, setSendingAlert] = useState(false);
 
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
@@ -196,6 +197,7 @@ export default function RepairDetails() {
       toast.success(`Priority alert (${alertPriority}) dispatched successfully`);
       setIsAlertDialogOpen(false);
       setAlertMessage('');
+      setAlertPriority('NORMAL'); // Reset to default normal
       fetchData();
     } catch (err: any) {
       toast.error(err.message || "Failed to send repair alert");
@@ -230,21 +232,6 @@ export default function RepairDetails() {
       toast.error(err.message || "Failed to submit transfer");
     } finally {
       setSendingTransfer(false);
-    }
-  };
-
-  const handleUpdatePriority = async (priority: string) => {
-    setUpdating(true);
-    try {
-      const res = await api.patch(`/repairs/${id}`, { priority });
-      setRepair(res);
-      await syncRepairToRtdb(res);
-      toast.success(`Priority updated to ${priority}`);
-      fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update priority");
-    } finally {
-      setUpdating(false);
     }
   };
 
@@ -354,7 +341,7 @@ export default function RepairDetails() {
   return (
     <div className="space-y-6 sm:space-y-8 pb-32 max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 w-full overflow-x-hidden">
 
-      {/* Top Header Toolbar */}
+      {/* Top Header Toolbar (Standalone Priority Dropdown REMOVED Completely) */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-sm w-full">
         <div className="flex items-center gap-3 min-w-0 flex-1 w-full xl:w-auto">
           <Button
@@ -393,24 +380,8 @@ export default function RepairDetails() {
           </div>
         </div>
 
+        {/* Header Action Buttons (Only Update Courier, Alert Tech, Edit, Sync, Refresh) */}
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end shrink-0 pt-2 xl:pt-0 border-t xl:border-t-0 border-slate-100">
-          {['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(user?.role || '') && (
-            <Select
-              value={repair.priority || 'MEDIUM'}
-              onValueChange={handleUpdatePriority}
-              disabled={updating}
-            >
-              <SelectTrigger className="h-10 rounded-2xl border-slate-200 bg-white font-bold text-xs w-32 shrink-0 cursor-pointer">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="NORMAL" className="font-bold text-xs">Normal</SelectItem>
-                <SelectItem value="MEDIUM" className="font-bold text-xs text-yellow-600">Medium</SelectItem>
-                <SelectItem value="HIGH" className="font-bold text-xs text-amber-600">High</SelectItem>
-                <SelectItem value="URGENT" className="font-bold text-xs text-rose-600">Urgent</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
 
           {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && (
             <Button
@@ -720,7 +691,7 @@ export default function RepairDetails() {
       </div>
 
       {/* ========================================================================= */}
-      {/* CRASH-PROOF ADVANCED ALERT TECHNICIAN MODAL                               */}
+      {/* 2. ADVANCED CRASH-PROOF ALERT TECH MODAL (Priority Moved Inside Here)      */}
       {/* ========================================================================= */}
       <Dialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
         <DialogContent className="max-w-md w-full rounded-[32px] p-6 sm:p-7 border border-slate-200 shadow-2xl bg-white space-y-6">
@@ -732,7 +703,7 @@ export default function RepairDetails() {
               Alert Assigned Technician
             </DialogTitle>
             <DialogDescription className="text-xs sm:text-sm text-slate-500 font-medium leading-relaxed">
-              Dispatch an operational alert for Job <span className="font-mono font-bold text-slate-900">#{repair?.repairNumber}</span>.
+              Dispatch an operational alert for Job <span className="font-mono font-bold text-slate-900">#{repair?.repairNumber}</span> to <span className="font-bold text-slate-800">{repair?.technician?.name || 'Assigned Specialist'}</span>.
             </DialogDescription>
           </DialogHeader>
 
@@ -741,10 +712,10 @@ export default function RepairDetails() {
               <Label className="text-xs font-black uppercase tracking-wider text-slate-500">Select Alert Priority</Label>
               <div className="grid grid-cols-2 gap-2.5">
                 {[
-                  { value: 'URGENT', label: 'Urgent', desc: 'Immediate Action', emoji: '🔴' },
-                  { value: 'HIGH', label: 'High', desc: 'Priority Queue', emoji: '🟠' },
-                  { value: 'MEDIUM', label: 'Medium', desc: 'Elevated Notice', emoji: '🟡' },
                   { value: 'NORMAL', label: 'Normal', desc: 'Standard Notice', emoji: '⚪' },
+                  { value: 'MEDIUM', label: 'Medium', desc: 'Elevated Notice', emoji: '🟡' },
+                  { value: 'HIGH', label: 'High', desc: 'Priority Queue', emoji: '🟠' },
+                  { value: 'URGENT', label: 'Urgent', desc: 'Immediate Action', emoji: '🔴' },
                 ].map((item) => {
                   const isSelected = alertPriority === item.value;
                   return (
