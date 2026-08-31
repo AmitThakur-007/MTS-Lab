@@ -51,7 +51,7 @@ import {
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { useRealtimeSync } from '@/services/realtime';
-import { syncRepairToSupabase as syncRepairToRtdb, syncRepairToSupabase } from '@/lib/supabase';
+import { syncRepairToSupabase as syncRepairToRtdb } from '@/lib/supabase';
 import { formatTimeAgo, formatShortTimeAgo } from '@/lib/timeUtils';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -89,32 +89,22 @@ const statusStyles: Record<string, { label: string; badge: string; bgSoft: strin
   PENDING: { label: 'Pending', badge: 'bg-slate-100 text-slate-700 border-slate-300', bgSoft: 'bg-slate-50', border: 'border-slate-200' }
 };
 
-type StatusFilterTab = 'ALL' | 'URGENT' | 'HIGH' | 'ACTIVE' | 'IN_PROCESS' | 'TESTING' | 'WAITING_FOR_PARTS' | 'REPAIRED' | 'RE_PROBLEM' | 'TRANSFERS';
+type StatusFilterTab = 'ALL' | 'URGENT' | 'HIGH' | 'MEDIUM' | 'ACTIVE' | 'IN_PROCESS' | 'TESTING' | 'WAITING_FOR_PARTS' | 'REPAIRED' | 'RE_PROBLEM' | 'TRANSFERS';
 
 /**
- * Categorizes repair priority into 3 authoritative tiers:
- * 🔴 High Priority (URGENT)
- * 🟠 Priority (HIGH)
- * 🔵 Normal (NORMAL / standard)
+ * Categorizes repair priority into 4 robust tiers matching backend and modal inputs:
+ * 🔴 URGENT
+ * 🟠 HIGH
+ * 🟡 MEDIUM
+ * ⚪ NORMAL
  */
 export function getPriorityMeta(repair: any) {
   const p = String(repair?.priority || '').toUpperCase().trim();
-  const isUrgent = p === 'URGENT' ||
-    repair?.isUrgent === true ||
-    String(repair?.problemDescription || '').toLowerCase().includes('urgent') ||
-    String(repair?.remarks || '').toLowerCase().includes('urgent');
 
-  const isHigh = !isUrgent && (
-    p === 'HIGH' ||
-    p === 'PRIORITY' ||
-    String(repair?.problemDescription || '').toLowerCase().includes('priority') ||
-    String(repair?.remarks || '').toLowerCase().includes('priority')
-  );
-
-  if (isUrgent) {
+  if (p === 'URGENT') {
     return {
       tier: 'URGENT' as const,
-      label: 'High Priority',
+      label: 'Urgent',
       badgeClass: 'bg-rose-600 hover:bg-rose-700 text-white font-extrabold border-rose-700 shadow-sm shadow-rose-600/30 animate-pulse',
       cardBorder: 'border-rose-400 ring-2 ring-rose-500/20 shadow-sm shadow-rose-500/10',
       headerBg: 'bg-rose-50/60',
@@ -125,10 +115,10 @@ export function getPriorityMeta(repair: any) {
     };
   }
 
-  if (isHigh) {
+  if (p === 'HIGH') {
     return {
       tier: 'HIGH' as const,
-      label: 'Priority',
+      label: 'High',
       badgeClass: 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black border-amber-600 shadow-xs',
       cardBorder: 'border-amber-300 ring-2 ring-amber-400/20 shadow-sm',
       headerBg: 'bg-amber-50/50',
@@ -136,6 +126,20 @@ export function getPriorityMeta(repair: any) {
       iconColor: 'text-amber-600',
       tagColor: 'text-amber-700',
       bannerBg: 'bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-yellow-500/10 border-amber-300'
+    };
+  }
+
+  if (p === 'MEDIUM') {
+    return {
+      tier: 'MEDIUM' as const,
+      label: 'Medium',
+      badgeClass: 'bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-bold border-yellow-500 shadow-xs',
+      cardBorder: 'border-yellow-200 shadow-xs',
+      headerBg: 'bg-yellow-50/40',
+      icon: Zap,
+      iconColor: 'text-yellow-600',
+      tagColor: 'text-yellow-700',
+      bannerBg: 'bg-yellow-50 border-yellow-200'
     };
   }
 
@@ -220,21 +224,17 @@ export default function TechnicianDashboard() {
   const [newNoteContent, setNewNoteContent] = useState('');
   const [loadingNotes, setLoadingNotes] = useState(false);
 
-  // Repair-Related Damage Stats
-  const [damageOverview, setDamageOverview] = useState<any>(null);
-
   // ============================================================================
   // DATA FETCHING
   // ============================================================================
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const [repairsData, staffData, transfersData, notifsData, damageData] = await Promise.allSettled([
+      const [repairsData, staffData, transfersData, notifsData] = await Promise.allSettled([
         api.get('/repairs'),
         api.get('/staff'),
         api.get('/repair-transfers/my-requests'),
-        api.get('/notifications'),
-        api.get('/repair-damage/overview')
+        api.get('/notifications')
       ]);
 
       if (repairsData.status === 'fulfilled') {
@@ -261,10 +261,6 @@ export default function TechnicianDashboard() {
         setNotifications(list);
         setUnreadNotificationCount(typeof notifsData.value.unreadCount === 'number' ? notifsData.value.unreadCount : list.filter((n: any) => !n.isRead).length);
       }
-
-      if (damageData.status === 'fulfilled' && damageData.value) {
-        setDamageOverview(damageData.value);
-      }
     } catch (err: any) {
       console.error("[TECHNICIAN DASHBOARD FETCH ERROR]", err);
     } finally {
@@ -288,7 +284,7 @@ export default function TechnicianDashboard() {
         const deviceName = `${event?.data?.deviceBrand || ''} ${event?.data?.deviceModel || ''}`.trim() || 'Device';
 
         if (event?.data?.type === 'REPAIR_URGENT' || eventPriority === 'URGENT') {
-          toast.error(`🚨 High Priority Alert: Job #${jobNum} (${deviceName}) marked as High Priority!`, {
+          toast.error(`🚨 Urgent Priority Alert: Job #${jobNum} (${deviceName})`, {
             duration: 9000,
             action: {
               label: "View Job",
@@ -299,8 +295,8 @@ export default function TechnicianDashboard() {
               }
             }
           });
-        } else if (event?.data?.type === 'REPAIR_ALERT' || eventPriority === 'HIGH') {
-          toast.warning(`🟠 Priority Alert: Job #${jobNum} (${deviceName}) priority updated!`, {
+        } else if (eventPriority === 'HIGH' || eventPriority === 'MEDIUM') {
+          toast.warning(`⚠️ ${eventPriority} Priority Alert: Job #${jobNum} (${deviceName})`, {
             duration: 7000,
             action: {
               label: "View Job",
@@ -310,10 +306,6 @@ export default function TechnicianDashboard() {
                 else fetchDashboardData();
               }
             }
-          });
-        } else if (event?.data?.type === 'REPAIR_ASSIGNED') {
-          toast.info(`🔔 New Job #${jobNum} (${deviceName}) assigned to your workspace.`, {
-            duration: 6000
           });
         }
       }
@@ -395,7 +387,7 @@ export default function TechnicianDashboard() {
       return;
     }
     if (!transferForm.reason || transferForm.reason.trim().length < 3) {
-      toast.error("Please provide a reason for the transfer (minimum 3 characters).");
+      toast.error("Please provide a reason for the transfer.");
       return;
     }
 
@@ -405,7 +397,7 @@ export default function TechnicianDashboard() {
         targetTechnicianId: transferForm.targetTechnicianId,
         reason: transferForm.reason.trim()
       });
-      toast.success("Transfer request dispatched to specialist successfully.");
+      toast.success("Transfer request dispatched successfully.");
       setIsTransferModalOpen(false);
       fetchDashboardData();
     } catch (err: any) {
@@ -438,7 +430,7 @@ export default function TechnicianDashboard() {
     setRespondingTransferId(transferId);
     try {
       await api.post(`/repair-transfers/${transferId}/respond`, { action });
-      toast.success(action === 'ACCEPT' ? "Transfer accepted! Repair assigned to your workspace." : "Transfer request declined.");
+      toast.success(action === 'ACCEPT' ? "Transfer accepted successfully." : "Transfer request declined.");
       fetchDashboardData();
     } catch (err: any) {
       toast.error(err.message || "Failed to respond to transfer request.");
@@ -472,17 +464,24 @@ export default function TechnicianDashboard() {
   // FILTERING & STATS
   // ============================================================================
 
-  const highPriorityRepairs = useMemo(() => {
+  const urgentRepairs = useMemo(() => {
     return repairs.filter(r => {
       const meta = getPriorityMeta(r);
       return meta.tier === 'URGENT' && !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status);
     });
   }, [repairs]);
 
-  const priorityRepairs = useMemo(() => {
+  const highRepairs = useMemo(() => {
     return repairs.filter(r => {
       const meta = getPriorityMeta(r);
       return meta.tier === 'HIGH' && !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status);
+    });
+  }, [repairs]);
+
+  const mediumRepairs = useMemo(() => {
+    return repairs.filter(r => {
+      const meta = getPriorityMeta(r);
+      return meta.tier === 'MEDIUM' && !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status);
     });
   }, [repairs]);
 
@@ -499,20 +498,22 @@ export default function TechnicianDashboard() {
       testingCount: testing.length,
       repairedCount: repaired.length,
       reProblemCount: reProblem.length,
-      highPriorityCount: highPriorityRepairs.length,
-      priorityCount: priorityRepairs.length,
+      urgentCount: urgentRepairs.length,
+      highCount: highRepairs.length,
+      mediumCount: mediumRepairs.length,
       pendingTransfersCount: transferRequests.pendingIncomingCount
     };
-  }, [repairs, highPriorityRepairs, priorityRepairs, transferRequests]);
+  }, [repairs, urgentRepairs, highRepairs, mediumRepairs, transferRequests]);
 
   const filteredRepairs = useMemo(() => {
     let list = [...repairs];
 
-    // Filter Tab
     if (activeTab === 'URGENT') {
       list = list.filter(r => getPriorityMeta(r).tier === 'URGENT' && !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
     } else if (activeTab === 'HIGH') {
       list = list.filter(r => getPriorityMeta(r).tier === 'HIGH' && !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
+    } else if (activeTab === 'MEDIUM') {
+      list = list.filter(r => getPriorityMeta(r).tier === 'MEDIUM' && !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
     } else if (activeTab === 'ACTIVE') {
       list = list.filter(r => !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
     } else if (activeTab === 'IN_PROCESS') {
@@ -527,7 +528,6 @@ export default function TechnicianDashboard() {
       list = list.filter(r => r.status === 'RE_PROBLEM' || r.status === 'REPROBLEM');
     }
 
-    // Search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(r =>
@@ -536,12 +536,10 @@ export default function TechnicianDashboard() {
         (r.customerPhone && r.customerPhone.toLowerCase().includes(q)) ||
         (r.deviceBrand && r.deviceBrand.toLowerCase().includes(q)) ||
         (r.deviceModel && r.deviceModel.toLowerCase().includes(q)) ||
-        (r.problemDescription && r.problemDescription.toLowerCase().includes(q)) ||
-        (r.remarks && r.remarks.toLowerCase().includes(q))
+        (r.problemDescription && r.problemDescription.toLowerCase().includes(q))
       );
     }
 
-    // Sort
     if (sortBy === 'newest') {
       list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } else if (sortBy === 'oldest') {
@@ -555,8 +553,9 @@ export default function TechnicianDashboard() {
     } else if (sortBy === 'priority') {
       const priorityScore = (r: any) => {
         const tier = getPriorityMeta(r).tier;
-        if (tier === 'URGENT') return 3;
-        if (tier === 'HIGH') return 2;
+        if (tier === 'URGENT') return 4;
+        if (tier === 'HIGH') return 3;
+        if (tier === 'MEDIUM') return 2;
         return 1;
       };
       list.sort((a, b) => priorityScore(b) - priorityScore(a));
@@ -577,9 +576,7 @@ export default function TechnicianDashboard() {
   return (
     <div className="space-y-6 pb-24 max-w-7xl mx-auto px-2 sm:px-4">
 
-      {/* ========================================================================= */}
-      {/* HEADER SECTION                                                            */}
-      {/* ========================================================================= */}
+      {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-5 sm:p-7 md:p-8 rounded-[28px] sm:rounded-3xl border border-slate-200/80 shadow-sm">
         <div className="space-y-1 max-w-2xl min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
@@ -593,12 +590,11 @@ export default function TechnicianDashboard() {
             </Badge>
           </div>
           <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed break-words">
-            Welcome back, <span className="font-bold text-slate-800">{user?.name}</span>. You have <span className="font-bold text-indigo-600">{stats.activeCount} active repairs</span> requiring technical action.
+            Welcome back, <span className="font-bold text-slate-800">{user?.name}</span>. You have <span className="font-bold text-indigo-600">{stats.activeCount} active repairs</span> assigned.
           </p>
         </div>
 
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-2.5 w-full lg:w-auto justify-start sm:justify-end shrink-0">
-          {/* Notification Bell Button */}
           <Button
             type="button"
             variant="outline"
@@ -614,7 +610,6 @@ export default function TechnicianDashboard() {
             )}
           </Button>
 
-          {/* Quick Dashboard Refresh Button */}
           <DashboardRefreshButton
             onRefresh={fetchDashboardData}
             showLiveBadge={false}
@@ -627,10 +622,8 @@ export default function TechnicianDashboard() {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 🚨 HIGH PRIORITY & PRIORITY REPAIRS ACTION QUEUE BANNER                     */}
-      {/* ========================================================================= */}
-      {highPriorityRepairs.length > 0 && (
+      {/* Urgent Alert Banner */}
+      {urgentRepairs.length > 0 && (
         <div className="bg-gradient-to-r from-rose-500/15 via-red-500/10 to-amber-500/10 border-2 border-rose-500/40 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-3 min-w-0">
@@ -640,14 +633,14 @@ export default function TechnicianDashboard() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-extrabold text-slate-900 text-base sm:text-lg">
-                    High Priority Repairs Requiring Immediate Technical Action
+                    Urgent Priority Repairs
                   </h3>
                   <Badge className="bg-rose-600 text-white font-black text-xs px-2.5 py-0.5 rounded-full shadow-xs">
-                    {highPriorityRepairs.length} Urgent
+                    {urgentRepairs.length} Urgent
                   </Badge>
                 </div>
                 <p className="text-xs text-slate-600 font-medium">
-                  Assigned by Management. Please prioritize diagnostics, parts allocation, and resolution for these devices.
+                  Immediate technician action required for these flagged jobs.
                 </p>
               </div>
             </div>
@@ -658,53 +651,13 @@ export default function TechnicianDashboard() {
               onClick={() => setActiveTab('URGENT')}
               className="rounded-xl border-rose-300 text-rose-700 bg-white hover:bg-rose-50 font-bold text-xs h-9 shadow-xs"
             >
-              Filter High Priority
+              Filter Urgent
             </Button>
-          </div>
-
-          {/* Quick List of High Priority Devices */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-            {highPriorityRepairs.slice(0, 3).map((r) => (
-              <div key={r.id} className="bg-white/95 backdrop-blur-sm rounded-2xl p-3.5 border border-rose-200/90 shadow-xs flex flex-col justify-between gap-2.5">
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="font-mono font-bold text-xs bg-slate-900 text-white px-2 py-0.5 rounded-md truncate">
-                      #{r.repairNumber}
-                    </span>
-                    <Badge className="bg-rose-100 text-rose-800 border-rose-300 text-[10px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
-                      <Flame className="h-3 w-3 text-rose-600" /> High Priority
-                    </Badge>
-                  </div>
-                  <h4 className="font-bold text-slate-900 text-sm truncate">
-                    {r.deviceBrand} {r.deviceModel}
-                  </h4>
-                  <p className="text-xs text-slate-600 font-medium line-clamp-1">
-                    {r.problemDescription || 'Diagnosis required'}
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-rose-100/80 text-[11px]">
-                  <span className="text-slate-500 font-semibold flex items-center gap-1">
-                    <Clock className="h-3 w-3 text-slate-400" />
-                    {formatTimeAgo(r.assignedAt || r.createdAt, tickerTime)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenUpdateModal(r)}
-                    className="font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-0.5 cursor-pointer"
-                  >
-                    Action <ChevronRight className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* INCOMING REPAIR TRANSFER REQUESTS BANNER                                  */}
-      {/* ========================================================================= */}
+      {/* Transfer Requests */}
       {transferRequests.incoming.filter(t => t.status === 'PENDING').length > 0 && (
         <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border-2 border-amber-400/40 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -717,7 +670,7 @@ export default function TechnicianDashboard() {
                   Incoming Repair Transfer Requests
                 </h3>
                 <p className="text-xs text-slate-600 font-medium">
-                  Fellow technicians have requested to transfer tickets to your specialized workstation.
+                  Pending job transfers assigned to your queue.
                 </p>
               </div>
             </div>
@@ -738,9 +691,6 @@ export default function TechnicianDashboard() {
                   <p className="text-xs text-slate-700 font-medium bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                     <b className="text-slate-900">Reason:</b> {transfer.reason}
                   </p>
-                  <span className="text-[10px] text-slate-400 font-medium block">
-                    Requested: {formatTimeAgo(transfer.createdAt, tickerTime)}
-                  </span>
                 </div>
 
                 <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
@@ -770,18 +720,15 @@ export default function TechnicianDashboard() {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* KPI METRIC CARDS                                                          */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: 'Active Jobs', value: stats.activeCount, icon: Wrench, color: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-100', tab: 'ACTIVE' },
-          { label: 'High Priority', value: stats.highPriorityCount, icon: Flame, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-200', tab: 'URGENT' },
-          { label: 'Priority', value: stats.priorityCount, icon: Zap, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200', tab: 'HIGH' },
+          { label: 'Urgent', value: stats.urgentCount, icon: Flame, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-200', tab: 'URGENT' },
+          { label: 'High Priority', value: stats.highCount, icon: Zap, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200', tab: 'HIGH' },
+          { label: 'Medium Priority', value: stats.mediumCount, icon: Zap, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200', tab: 'MEDIUM' },
           { label: 'In Progress', value: stats.inProgressCount, icon: Smartphone, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100', tab: 'IN_PROCESS' },
           { label: 'Testing QA', value: stats.testingCount, icon: ShieldCheck, color: 'text-orange-600', bg: 'bg-orange-50 border-orange-100', tab: 'TESTING' },
-          { label: 'Repaired', value: stats.repairedCount, icon: CheckCircle2, color: 'text-teal-600', bg: 'bg-teal-50 border-teal-100', tab: 'REPAIRED' },
-          { label: 'Re-Problem', value: stats.reProblemCount, icon: RotateCcw, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-100', tab: 'RE_PROBLEM' },
         ].map((item, i) => (
           <button
             key={i}
@@ -804,36 +751,29 @@ export default function TechnicianDashboard() {
         ))}
       </div>
 
-      {/* ========================================================================= */}
-      {/* ATTENDANCE & REPAIR-RELATED DAMAGE PERSONAL SUMMARY CARDS                 */}
-      {/* ========================================================================= */}
       <UserOverviewCards />
+
+      {/* Filters & Search Toolbar */}
       <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-
-          {/* Scrollable Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full no-scrollbar">
             {[
               { key: 'ALL', label: 'All Jobs', count: repairs.length, color: 'normal' },
-              { key: 'URGENT', label: '🔥 High Priority', count: stats.highPriorityCount, color: 'urgent' },
-              { key: 'HIGH', label: '🟠 Priority', count: stats.priorityCount, color: 'priority' },
+              { key: 'URGENT', label: '🔴 Urgent', count: stats.urgentCount, color: 'urgent' },
+              { key: 'HIGH', label: '🟠 High', count: stats.highCount, color: 'high' },
+              { key: 'MEDIUM', label: '🟡 Medium', count: stats.mediumCount, color: 'medium' },
               { key: 'ACTIVE', label: 'Active', count: stats.activeCount, color: 'normal' },
               { key: 'IN_PROCESS', label: 'In Progress', count: stats.inProgressCount, color: 'normal' },
               { key: 'TESTING', label: 'Testing QA', count: stats.testingCount, color: 'normal' },
-              { key: 'WAITING_FOR_PARTS', label: 'Parts Wait', count: repairs.filter(r => r.status === 'WAITING_FOR_PARTS').length, color: 'normal' },
-              { key: 'REPAIRED', label: 'Repaired', count: stats.repairedCount, color: 'normal' },
-              { key: 'RE_PROBLEM', label: 'Warranty Re-Problem', count: stats.reProblemCount, color: 'normal' },
             ].map(tab => {
               const isSelected = activeTab === tab.key;
               let styleClass = "bg-slate-50 hover:bg-slate-100 text-slate-600";
 
               if (isSelected) {
                 if (tab.color === 'urgent') styleClass = "bg-rose-600 text-white shadow-sm";
-                else if (tab.color === 'priority') styleClass = "bg-amber-500 text-slate-950 font-black shadow-sm";
+                else if (tab.color === 'high') styleClass = "bg-amber-500 text-slate-950 font-black shadow-sm";
+                else if (tab.color === 'medium') styleClass = "bg-yellow-500 text-slate-950 font-black shadow-sm";
                 else styleClass = "bg-slate-900 text-white shadow-sm";
-              } else {
-                if (tab.color === 'urgent') styleClass = "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200";
-                else if (tab.color === 'priority') styleClass = "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200";
               }
 
               return (
@@ -847,12 +787,7 @@ export default function TechnicianDashboard() {
                   )}
                 >
                   <span>{tab.label}</span>
-                  <span className={cn(
-                    "text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold",
-                    isSelected
-                      ? (tab.color === 'urgent' ? "bg-rose-800 text-white" : (tab.color === 'priority' ? "bg-amber-700 text-white" : "bg-slate-800 text-slate-200"))
-                      : (tab.color === 'urgent' ? "bg-rose-200 text-rose-800" : (tab.color === 'priority' ? "bg-amber-200 text-amber-900" : "bg-slate-200 text-slate-700"))
-                  )}>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold bg-white/20">
                     {tab.count}
                   </span>
                 </button>
@@ -860,7 +795,6 @@ export default function TechnicianDashboard() {
             })}
           </div>
 
-          {/* Sort Selector */}
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs font-bold text-slate-400 hidden sm:inline">Sort:</span>
             <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
@@ -877,44 +811,24 @@ export default function TechnicianDashboard() {
           </div>
         </div>
 
-        {/* Search Input */}
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Search by Repair #, Customer Name, Phone, Device Model, or Problem description..."
+            placeholder="Search by Repair #, Customer Name, Phone, Device Model..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="pl-10 h-11 rounded-2xl border-slate-200 bg-slate-50/70 text-xs sm:text-sm font-medium focus:bg-white transition-all"
           />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
-            >
-              Clear
-            </button>
-          )}
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* REPAIR CARDS GRID (RESPONSIVE FOR ALL SCREEN SIZES: SMARTPHONE, TABLET, DESKTOP) */}
-      {/* ========================================================================= */}
+      {/* Repairs List */}
       {filteredRepairs.length === 0 ? (
         <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-slate-300 space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center mx-auto">
             <Package className="h-6 w-6" />
           </div>
           <h3 className="font-bold text-slate-800 text-base">No repairs matching this criteria</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            {searchQuery ? "No repair tickets matched your search query. Try clearing search filters." : "You currently have no repair cases assigned under this filter tab."}
-          </p>
-          {searchQuery && (
-            <Button size="sm" variant="outline" onClick={() => setSearchQuery('')} className="rounded-xl text-xs font-bold cursor-pointer">
-              Reset Search Filters
-            </Button>
-          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
@@ -947,28 +861,22 @@ export default function TechnicianDashboard() {
                     priorityMeta.cardBorder
                   )}>
                     <CardHeader className={cn("p-4 sm:p-5 pb-3 space-y-3", priorityMeta.headerBg)}>
-
-                      {/* Top Badges Row */}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono font-black text-xs bg-slate-950 text-white px-2.5 py-1 rounded-xl shadow-xs">
                             #{repair.repairNumber}
                           </span>
-
-                          {/* 3-Tier Priority Indicator */}
                           <Badge className={cn("text-[10px] uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1 shrink-0", priorityMeta.badgeClass)}>
                             <PriorityIcon className="h-3 w-3" />
                             <span>{priorityMeta.label}</span>
                           </Badge>
                         </div>
 
-                        {/* Status Badge */}
                         <Badge className={cn("text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border shrink-0", statusInfo.badge)}>
                           {statusInfo.label}
                         </Badge>
                       </div>
 
-                      {/* Device Title */}
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
@@ -979,7 +887,6 @@ export default function TechnicianDashboard() {
                           </h3>
                         </div>
 
-                        {/* Problem Description Area with Expandable View */}
                         <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/70 space-y-1 mt-2">
                           <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
                             Customer Device Problem:
@@ -997,11 +904,7 @@ export default function TechnicianDashboard() {
                               onClick={() => toggleDescription(repair.id)}
                               className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 pt-1 cursor-pointer"
                             >
-                              {isDescExpanded ? (
-                                <><span>View Less</span> <ChevronUp className="h-3 w-3" /></>
-                              ) : (
-                                <><span>View More</span> <ChevronDown className="h-3 w-3" /></>
-                              )}
+                              {isDescExpanded ? <><span>View Less</span> <ChevronUp className="h-3 w-3" /></> : <><span>View More</span> <ChevronDown className="h-3 w-3" /></>}
                             </button>
                           )}
                         </div>
@@ -1009,10 +912,7 @@ export default function TechnicianDashboard() {
                     </CardHeader>
 
                     <CardContent className="p-4 sm:p-5 pt-0 space-y-3.5">
-
-                      {/* Timing & Attribution Information */}
                       <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-100 space-y-1.5">
-                        {/* Primary Assignment Elapsed Time */}
                         <div className="flex items-center justify-between text-xs gap-2">
                           <span className="text-slate-500 font-medium flex items-center gap-1.5 shrink-0">
                             <Clock className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
@@ -1022,28 +922,12 @@ export default function TechnicianDashboard() {
                             {formatTimeAgo(repair.assignedAt || repair.createdAt, tickerTime)}
                           </span>
                         </div>
-
-                        {/* Secondary Manager Update Timestamp */}
-                        {(repair.managerUpdatedAt || repair.priorityUpdatedAt || repair.updatedAt) && (
-                          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 pt-1 border-t border-slate-200/60 gap-2">
-                            <span className="font-medium text-slate-500 flex items-center gap-1 truncate">
-                              <History className="h-3 w-3 text-slate-400 shrink-0" />
-                              <span>Manager update</span>
-                            </span>
-                            <span className="font-semibold text-slate-600 shrink-0">
-                              {formatShortTimeAgo(repair.managerUpdatedAt || repair.priorityUpdatedAt || repair.updatedAt, tickerTime)}
-                            </span>
-                          </div>
-                        )}
                       </div>
 
-                      {/* Customer & Scheduling Metadata Grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
                         <div className="min-w-0">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">Customer</span>
-                          <span className="font-bold text-slate-800 truncate block" title={repair.customerName}>
-                            {repair.customerName || 'Customer'}
-                          </span>
+                          <span className="font-bold text-slate-800 truncate block">{repair.customerName || 'Customer'}</span>
                         </div>
                         <div className="min-w-0">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">Intake Date</span>
@@ -1053,26 +937,13 @@ export default function TechnicianDashboard() {
                         </div>
                         <div className="col-span-2 sm:col-span-1 min-w-0">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">Target Due</span>
-                          <span className={cn(
-                            "font-bold block truncate",
-                            repair.expectedCompletionDate ? "text-indigo-600" : "text-slate-400 font-normal"
-                          )}>
+                          <span className={cn("font-bold block truncate", repair.expectedCompletionDate ? "text-indigo-600" : "text-slate-400 font-normal")}>
                             {repair.expectedCompletionDate ? format(new Date(repair.expectedCompletionDate), 'dd MMM yyyy') : 'Not scheduled'}
                           </span>
                         </div>
                       </div>
 
-                      {/* Parts Used / Remarks preview if available */}
-                      {repair.partsUsed && (
-                        <div className="text-[11px] text-slate-600 flex items-center gap-1.5 font-medium bg-purple-50/60 p-2 rounded-xl border border-purple-100 truncate">
-                          <Package className="h-3.5 w-3.5 text-purple-600 shrink-0" />
-                          <span className="truncate"><b>Parts:</b> {repair.partsUsed}</span>
-                        </div>
-                      )}
-
-                      {/* Action Buttons Row */}
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-                        {/* 1. Update Progress */}
                         <Button
                           size="sm"
                           onClick={() => handleOpenUpdateModal(repair)}
@@ -1082,37 +953,31 @@ export default function TechnicianDashboard() {
                           Update Progress
                         </Button>
 
-                        {/* 2. Communication & Notes */}
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => handleOpenNotesModal(repair)}
                           className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs h-9 px-3 cursor-pointer shrink-0"
-                          title="View & Add Notes"
                         >
                           <MessageSquare className="h-3.5 w-3.5 mr-1 text-slate-500" />
                           Notes
                         </Button>
 
-                        {/* 3. Transfer Request */}
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => handleOpenTransferModal(repair)}
                           className="rounded-xl border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-200 font-bold text-xs h-9 px-3 cursor-pointer shrink-0"
-                          title="Transfer to another Specialist"
                         >
                           <ArrowRightLeft className="h-3.5 w-3.5 mr-1 text-amber-600" />
                           Transfer
                         </Button>
 
-                        {/* 4. Full Details */}
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
                           className="rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 h-9 px-2.5 cursor-pointer shrink-0"
-                          title="View Complete Vault Details"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -1126,48 +991,32 @@ export default function TechnicianDashboard() {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 1. UPDATE STATUS MODAL                                                    */}
-      {/* ========================================================================= */}
+      {/* Update Modal */}
       <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
         <DialogContent className="max-w-md w-full max-h-[90vh] overflow-y-auto rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
           <DialogHeader>
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1 border border-indigo-100">
-              <Wrench className="h-5 w-5" />
-            </div>
             <DialogTitle className="text-xl font-extrabold text-slate-900">
               Update Repair #{selectedRepair?.repairNumber}
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              {selectedRepair?.deviceBrand} {selectedRepair?.deviceModel} — Customer: {selectedRepair?.customerName}
-            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
-            {/* Status Select */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">Repair Status</Label>
-              <Select
-                value={updateForm.status}
-                onValueChange={(val) => setUpdateForm(prev => ({ ...prev, status: val }))}
-              >
+              <Select value={updateForm.status} onValueChange={(val) => setUpdateForm(prev => ({ ...prev, status: val }))}>
                 <SelectTrigger className="h-11 rounded-2xl border-slate-200 text-xs font-bold">
-                  <SelectValue placeholder="Select Status" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl">
-                  {REPAIR_STATUS_FLOW.map(s => {
-                    const info = statusStyles[s] || { label: s };
-                    return (
-                      <SelectItem key={s} value={s} className="text-xs font-bold py-2">
-                        {info.label}
-                      </SelectItem>
-                    );
-                  })}
+                  {REPAIR_STATUS_FLOW.map(s => (
+                    <SelectItem key={s} value={s} className="text-xs font-bold py-2">
+                      {statusStyles[s]?.label || s}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Target Expected Date */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">Estimated Delivery Date</Label>
               <Input
@@ -1178,22 +1027,20 @@ export default function TechnicianDashboard() {
               />
             </div>
 
-            {/* Parts Consumed / Installed */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Spare Parts Used (Optional)</Label>
+              <Label className="text-xs font-bold text-slate-700">Spare Parts Used</Label>
               <Input
-                placeholder="e.g. Original OLED Panel, Battery Pack 5000mAh..."
+                placeholder="e.g. OLED Panel"
                 value={updateForm.partsUsed}
                 onChange={e => setUpdateForm(prev => ({ ...prev, partsUsed: e.target.value }))}
                 className="h-11 rounded-2xl border-slate-200 text-xs font-medium"
               />
             </div>
 
-            {/* Technical Log Note */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Technical Work Log Note (Optional)</Label>
+              <Label className="text-xs font-bold text-slate-700">Technical Work Log Note</Label>
               <Textarea
-                placeholder="Describe diagnostics performed, test voltages, micro-soldering, or parts replacement..."
+                placeholder="Diagnostic notes..."
                 value={updateForm.note}
                 onChange={e => setUpdateForm(prev => ({ ...prev, note: e.target.value }))}
                 className="min-h-[90px] rounded-2xl border-slate-200 text-xs font-medium p-3"
@@ -1202,50 +1049,25 @@ export default function TechnicianDashboard() {
           </div>
 
           <DialogFooter className="flex flex-row items-center gap-2 pt-3 border-t border-slate-100">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsUpdateModalOpen(false)}
-              className="flex-1 rounded-2xl border-slate-200 text-slate-700 h-11 text-xs font-bold cursor-pointer"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={submittingUpdate}
-              onClick={submitStatusUpdate}
-              className="flex-1 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white h-11 text-xs font-bold shadow-md cursor-pointer"
-            >
+            <Button variant="outline" onClick={() => setIsUpdateModalOpen(false)} className="flex-1 rounded-2xl h-11 text-xs font-bold">Cancel</Button>
+            <Button disabled={submittingUpdate} onClick={submitStatusUpdate} className="flex-1 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white h-11 text-xs font-bold">
               {submittingUpdate ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Progress"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ========================================================================= */}
-      {/* 2. REPAIR TRANSFER MODAL                                                  */}
-      {/* ========================================================================= */}
+      {/* Transfer Modal */}
       <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
         <DialogContent className="max-w-md w-full rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
           <DialogHeader>
-            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 border border-amber-100">
-              <ArrowRightLeft className="h-5 w-5" />
-            </div>
-            <DialogTitle className="text-xl font-extrabold text-slate-900">
-              Transfer Repair #{selectedRepair?.repairNumber}
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Transfer this job to another certified MTS Lab technician or lead specialist.
-            </DialogDescription>
+            <DialogTitle className="text-xl font-extrabold text-slate-900">Transfer Repair Case</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">Target Specialist</Label>
-              <Select
-                value={transferForm.targetTechnicianId}
-                onValueChange={(val) => setTransferForm(prev => ({ ...prev, targetTechnicianId: val }))}
-              >
+              <Select value={transferForm.targetTechnicianId} onValueChange={(val) => setTransferForm(prev => ({ ...prev, targetTechnicianId: val }))}>
                 <SelectTrigger className="h-11 rounded-2xl border-slate-200 text-xs font-bold">
                   <SelectValue placeholder="Select Technician" />
                 </SelectTrigger>
@@ -1262,7 +1084,7 @@ export default function TechnicianDashboard() {
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">Reason for Transfer</Label>
               <Textarea
-                placeholder="Explain why this repair requires transfer (e.g. requires ultrasonic micro-soldering, FaceID programming tool, shift change)..."
+                placeholder="Reason..."
                 value={transferForm.reason}
                 onChange={e => setTransferForm(prev => ({ ...prev, reason: e.target.value }))}
                 className="min-h-[100px] rounded-2xl border-slate-200 text-xs font-medium p-3"
@@ -1271,140 +1093,73 @@ export default function TechnicianDashboard() {
           </div>
 
           <DialogFooter className="flex flex-row items-center gap-2 pt-3 border-t border-slate-100">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsTransferModalOpen(false)}
-              className="flex-1 rounded-2xl border-slate-200 text-slate-700 h-11 text-xs font-bold cursor-pointer"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={submittingTransfer}
-              onClick={submitTransferRequest}
-              className="flex-1 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black h-11 text-xs shadow-md cursor-pointer"
-            >
+            <Button variant="outline" onClick={() => setIsTransferModalOpen(false)} className="flex-1 rounded-2xl h-11 text-xs font-bold">Cancel</Button>
+            <Button disabled={submittingTransfer} onClick={submitTransferRequest} className="flex-1 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black h-11 text-xs">
               {submittingTransfer ? <Loader2 className="h-4 w-4 animate-spin" /> : "Dispatch Transfer"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ========================================================================= */}
-      {/* 3. NOTES & COMMUNICATION THREAD MODAL                                     */}
-      {/* ========================================================================= */}
+      {/* Notes Modal */}
       <Dialog open={isNotesModalOpen} onOpenChange={setIsNotesModalOpen}>
         <DialogContent className="max-w-lg w-full max-h-[90vh] flex flex-col rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
           <DialogHeader>
-            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1 border border-blue-100">
-              <MessageSquare className="h-5 w-5" />
-            </div>
-            <DialogTitle className="text-xl font-extrabold text-slate-900">
-              Diagnostic Notes — #{selectedRepair?.repairNumber}
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Internal technical notes, voltage readings, and communication history.
-            </DialogDescription>
+            <DialogTitle className="text-xl font-extrabold text-slate-900">Diagnostic Notes</DialogTitle>
           </DialogHeader>
 
-          {/* Notes List */}
           <div className="flex-1 overflow-y-auto max-h-[300px] space-y-2.5 pr-1">
             {loadingNotes ? (
-              <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading notes thread...
-              </div>
+              <div className="py-8 text-center text-xs text-slate-400">Loading notes...</div>
             ) : repairNotes.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                No diagnostic notes logged yet for this repair case.
-              </div>
+              <div className="py-8 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl">No notes logged yet.</div>
             ) : (
               repairNotes.map((note: any) => (
                 <div key={note.id} className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1">
-                  <div className="flex items-center justify-between text-[11px] gap-2">
-                    <span className="font-bold text-slate-800">
-                      {note.technician?.name || note.authorName || 'Staff Specialist'}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      {formatTimeAgo(note.createdAt, tickerTime)}
-                    </span>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-bold text-slate-800">{note.technician?.name || note.authorName || 'Staff'}</span>
+                    <span className="text-[10px] text-slate-400">{formatTimeAgo(note.createdAt, tickerTime)}</span>
                   </div>
-                  <p className="text-xs text-slate-700 font-medium whitespace-pre-wrap">
-                    {note.note}
-                  </p>
+                  <p className="text-xs text-slate-700 font-medium whitespace-pre-wrap">{note.note}</p>
                 </div>
               ))
             )}
           </div>
 
-          {/* New Note Form */}
           <div className="space-y-2 pt-2 border-t border-slate-100">
             <Textarea
-              placeholder="Type technical note or diagnostic observation..."
+              placeholder="Type note..."
               value={newNoteContent}
               onChange={e => setNewNoteContent(e.target.value)}
               className="min-h-[80px] rounded-2xl border-slate-200 text-xs font-medium p-3"
             />
-            <Button
-              type="button"
-              disabled={submittingNote || !newNoteContent.trim()}
-              onClick={submitNote}
-              className="w-full rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white h-11 text-xs font-bold shadow-md cursor-pointer"
-            >
-              {submittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : (
-                <><Send className="h-3.5 w-3.5 mr-1.5" /> Post Diagnostic Note</>
-              )}
+            <Button disabled={submittingNote || !newNoteContent.trim()} onClick={submitNote} className="w-full rounded-2xl bg-indigo-600 text-white h-11 text-xs font-bold">
+              {submittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : "Post Note"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* ========================================================================= */}
-      {/* 4. NOTIFICATION & PRIORITY ALERT CENTER MODAL                             */}
-      {/* ========================================================================= */}
+      {/* Notification Center */}
       <Dialog open={isNotificationCenterOpen} onOpenChange={setIsNotificationCenterOpen}>
         <DialogContent className="max-w-lg w-full max-h-[85vh] flex flex-col rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
           <DialogHeader>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
-                  <Bell className="h-5 w-5" />
-                </div>
-                <div>
-                  <DialogTitle className="text-xl font-extrabold text-slate-900">
-                    Technician Alerts & Priority Feed
-                  </DialogTitle>
-                  <DialogDescription className="text-xs text-slate-500">
-                    Real-time assignment notices, high-priority alerts, and transfer requests.
-                  </DialogDescription>
-                </div>
-              </div>
-
+              <DialogTitle className="text-xl font-extrabold text-slate-900">Alerts & Priority Feed</DialogTitle>
               {unreadNotificationCount > 0 && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleMarkAllNotificationsRead}
-                  className="rounded-xl text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 h-8"
-                >
-                  <CheckCheck className="h-3.5 w-3.5 mr-1" /> Mark all read
+                <Button size="sm" variant="ghost" onClick={handleMarkAllNotificationsRead} className="rounded-xl text-[11px] font-bold text-indigo-600">
+                  Mark all read
                 </Button>
               )}
             </div>
           </DialogHeader>
 
-          {/* Notifications Feed */}
           <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 max-h-[420px]">
             {notifications.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                <Bell className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-                No alerts or notifications recorded in your feed.
-              </div>
+              <div className="py-12 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl">No notifications.</div>
             ) : (
               notifications.map((notif: any) => {
-                const isUrgent = notif.type === 'REPAIR_URGENT' || String(notif.title || '').includes('Urgent') || String(notif.title || '').includes('High Priority');
-                const isPriority = notif.type === 'REPAIR_ALERT' || String(notif.title || '').includes('Priority');
-
+                const isUrgent = notif.type === 'REPAIR_URGENT' || String(notif.title || '').includes('Urgent');
                 return (
                   <div
                     key={notif.id}
@@ -1417,34 +1172,18 @@ export default function TechnicianDashboard() {
                     }}
                     className={cn(
                       "p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start gap-3",
-                      notif.isRead ? "bg-white border-slate-100 opacity-80" : "bg-indigo-50/40 border-indigo-200 shadow-xs",
-                      isUrgent && !notif.isRead && "bg-rose-50/60 border-rose-300"
+                      notif.isRead ? "bg-white border-slate-100 opacity-80" : "bg-indigo-50/40 border-indigo-200 shadow-xs"
                     )}
                   >
-                    <div className={cn(
-                      "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
-                      isUrgent ? "bg-rose-600 text-white" : (isPriority ? "bg-amber-500 text-slate-950" : "bg-indigo-100 text-indigo-700")
-                    )}>
-                      {isUrgent ? <Flame className="h-4 w-4" /> : (isPriority ? <Zap className="h-4 w-4" /> : <Bell className="h-4 w-4" />)}
+                    <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5", isUrgent ? "bg-rose-600 text-white" : "bg-indigo-100 text-indigo-700")}>
+                      <Bell className="h-4 w-4" />
                     </div>
-
                     <div className="flex-1 min-w-0 space-y-1">
                       <div className="flex items-center justify-between gap-2">
-                        <h4 className={cn("text-xs font-black truncate", isUrgent ? "text-rose-950" : "text-slate-900")}>
-                          {notif.title}
-                        </h4>
-                        <span className="text-[10px] text-slate-400 font-medium shrink-0">
-                          {formatTimeAgo(notif.createdAt, tickerTime)}
-                        </span>
+                        <h4 className="text-xs font-black truncate text-slate-900">{notif.title}</h4>
+                        <span className="text-[10px] text-slate-400 shrink-0">{formatTimeAgo(notif.createdAt, tickerTime)}</span>
                       </div>
-                      <p className="text-xs text-slate-600 font-medium leading-relaxed break-words">
-                        {notif.message}
-                      </p>
-                      {notif.repairNumber && (
-                        <span className="inline-block font-mono font-bold text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md mt-1">
-                          Ticket #{notif.repairNumber}
-                        </span>
-                      )}
+                      <p className="text-xs text-slate-600 font-medium break-words">{notif.message}</p>
                     </div>
                   </div>
                 );
@@ -1453,14 +1192,7 @@ export default function TechnicianDashboard() {
           </div>
 
           <DialogFooter className="pt-2 border-t border-slate-100">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsNotificationCenterOpen(false)}
-              className="w-full rounded-2xl border-slate-200 text-slate-700 h-10 text-xs font-bold cursor-pointer"
-            >
-              Close Alert Center
-            </Button>
+            <Button variant="outline" onClick={() => setIsNotificationCenterOpen(false)} className="w-full rounded-2xl h-10 text-xs font-bold">Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
