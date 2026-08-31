@@ -595,11 +595,11 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
     const { id } = req.params;
     const { priority, message } = req.body;
 
-    // Strict priority validation
+    // Strict priority validation supporting NORMAL, MEDIUM, HIGH, URGENT
     const VALID_PRIORITIES = ['NORMAL', 'MEDIUM', 'HIGH', 'URGENT'];
-    const resolvedPriority = priority ? String(priority).toUpperCase().trim() : '';
+    const resolvedPriority = priority ? String(priority).toUpperCase().trim() : 'NORMAL';
 
-    if (!resolvedPriority || !VALID_PRIORITIES.includes(resolvedPriority)) {
+    if (!VALID_PRIORITIES.includes(resolvedPriority)) {
       return res.status(400).json({ error: `Invalid priority. Must be one of: ${VALID_PRIORITIES.join(', ')}` });
     }
 
@@ -622,7 +622,7 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
       return res.status(400).json({ error: 'Cannot alert technician — no technician is assigned to this repair.' });
     }
 
-    // Update repair priority
+    // Update repair priority safely in the database
     const { data: updatedRepair, error: updateErr } = await supabaseAdmin
       .from('Repair')
       .update({
@@ -635,10 +635,11 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
       .single();
 
     if (updateErr) {
+      console.error('[ALERT PRIORITY DB UPDATE ERROR]', updateErr);
       return res.status(500).json({ error: 'Failed to update repair priority.' });
     }
 
-    // Create repair log
+    // Create repair log entry
     const logId = uuidv4();
     await supabaseAdmin.from('RepairLog').insert([
       {
@@ -671,7 +672,7 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
         id: notifId,
         title: notifTitle,
         message: notifMessage,
-        type: 'REPAIR_ALERT',
+        type: resolvedPriority === 'URGENT' ? 'REPAIR_URGENT' : 'REPAIR_ALERT',
         priority: resolvedPriority,
         userId: updatedRepair.technicianId,
         repairId: id,

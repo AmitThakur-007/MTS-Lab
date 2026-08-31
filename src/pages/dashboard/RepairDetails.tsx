@@ -71,7 +71,7 @@ export default function RepairDetails() {
   const [isReopenDialogOpen, setIsReopenDialogOpen] = useState(false);
   const [reopenRemark, setReopenRemark] = useState('');
 
-  // Alert Tech Dialog States (Priority integrated here)
+  // Alert Tech Dialog States
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [alertPriority, setAlertPriority] = useState<'NORMAL' | 'MEDIUM' | 'HIGH' | 'URGENT'>('NORMAL');
@@ -194,10 +194,10 @@ export default function RepairDetails() {
         await syncRepairToRtdb(updatedRepair);
       }
 
-      toast.success(`Priority alert (${alertPriority}) dispatched successfully`);
+      toast.success(`Priority alert (${alertPriority}) dispatched successfully!`);
       setIsAlertDialogOpen(false);
       setAlertMessage('');
-      setAlertPriority('NORMAL'); // Reset to default normal
+      setAlertPriority('NORMAL');
       fetchData();
     } catch (err: any) {
       toast.error(err.message || "Failed to send repair alert");
@@ -341,7 +341,7 @@ export default function RepairDetails() {
   return (
     <div className="space-y-6 sm:space-y-8 pb-32 max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 w-full overflow-x-hidden">
 
-      {/* Top Header Toolbar (Standalone Priority Dropdown REMOVED Completely) */}
+      {/* Top Header Toolbar */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-sm w-full">
         <div className="flex items-center gap-3 min-w-0 flex-1 w-full xl:w-auto">
           <Button
@@ -380,7 +380,7 @@ export default function RepairDetails() {
           </div>
         </div>
 
-        {/* Header Action Buttons (Only Update Courier, Alert Tech, Edit, Sync, Refresh) */}
+        {/* Header Action Buttons */}
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end shrink-0 pt-2 xl:pt-0 border-t xl:border-t-0 border-slate-100">
 
           {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && (
