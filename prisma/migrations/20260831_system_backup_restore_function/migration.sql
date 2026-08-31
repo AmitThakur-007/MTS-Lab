@@ -12,7 +12,7 @@ DECLARE
     'ApprovedDevice','AccessRequest','AuditLog','LoginActivity','AppletShare','HomeSlide',
     'RepairPriceFolder','RepairPrice'
   ];
-  truncate_order text[] := ARRAY[
+  delete_order text[] := ARRAY[
     'Session','OTPVerification','PasswordResetToken','AuditLog','LoginActivity','AccessRequest',
     'ApprovedDevice','Notification','RepairTransferRequest','RepairPrice','RepairPriceFolder',
     'HomeSlide','RepairRelatedDamageAudit','RepairRelatedDamage','AttendanceBroadcast',
@@ -25,10 +25,8 @@ BEGIN
     RAISE EXCEPTION 'Invalid backup payload';
   END IF;
 
-  PERFORM set_config('session_replication_role', 'replica', true);
-
-  FOREACH table_name IN ARRAY truncate_order LOOP
-    EXECUTE format('TRUNCATE TABLE public.%I RESTART IDENTITY CASCADE', table_name);
+  FOREACH table_name IN ARRAY delete_order LOOP
+    EXECUTE format('DELETE FROM public.%I', table_name);
   END LOOP;
 
   FOREACH table_name IN ARRAY restore_order LOOP
@@ -41,11 +39,9 @@ BEGIN
     END IF;
   END LOOP;
 
-  PERFORM set_config('session_replication_role', 'origin', true);
   RETURN jsonb_build_object('success', true, 'restoredTables', to_jsonb(restore_order));
 EXCEPTION
   WHEN OTHERS THEN
-    PERFORM set_config('session_replication_role', 'origin', true);
     RAISE;
 END;
 $$;
