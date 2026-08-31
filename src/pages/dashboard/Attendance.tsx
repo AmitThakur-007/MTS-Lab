@@ -112,7 +112,7 @@ export default function Attendance() {
 
   // Realtime hook
   useRealtimeSync(['attendance'], () => {
-    refreshAllData();
+    refreshAllData(true);
   });
 
   // 1. Fetch Server Time and NPT status
@@ -221,9 +221,9 @@ export default function Attendance() {
     }
   }, [user?.id, selectedMonth]);
 
-  // Refresh all
-  const refreshAllData = useCallback(async () => {
-    setIsLoading(true);
+  // Refresh all (with silent background support)
+  const refreshAllData = useCallback(async (isBackground = false) => {
+    if (!isBackground) setIsLoading(true);
     await Promise.all([
       fetchServerTime(),
       isManagement ? fetchRoster(selectedDate) : Promise.resolve(),
@@ -231,7 +231,7 @@ export default function Attendance() {
       isManagement ? fetchHistory() : Promise.resolve(),
       fetchPersonalData(),
     ]);
-    setIsLoading(false);
+    if (!isBackground) setIsLoading(false);
   }, [
     fetchServerTime,
     isManagement,
@@ -243,17 +243,20 @@ export default function Attendance() {
     fetchPersonalData,
   ]);
 
-  // Initial load & Polling
+  // Initial load
   useEffect(() => {
-    refreshAllData();
+    refreshAllData(false);
+  }, [refreshAllData]);
 
-    // 10s background sync
-    const interval = setInterval(() => {
-      fetchServerTime();
-    }, 10000);
+  // Smooth local second ticking for clock without hammering API
+  useEffect(() => {
+    const clockInterval = setInterval(() => {
+      setSecondsRemaining((prev) => (prev > 0 ? prev - 1 : 0));
+      setSecondsUntilOpen((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
 
-    return () => clearInterval(interval);
-  }, [refreshAllData, fetchServerTime]);
+    return () => clearInterval(clockInterval);
+  }, []);
 
   // Handle Quick Mark Action
   const handleQuickMark = async (

@@ -317,7 +317,8 @@ export default function Repairs() {
   };
 
   // Fetch all repair records and staff from the real database
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     try {
       const [repairRes, staffRes] = await Promise.all([
         api.get('/repairs'),
@@ -329,33 +330,19 @@ export default function Repairs() {
       toast.error(err.message || 'Failed to fetch repair records');
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
+    fetchData(false);
   }, [fetchData]);
 
-  // Real-Time Event Sync across all user roles via browser custom events & realtime hook
-  useEffect(() => {
-    const handleRealtimeUpdate = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      console.log('[REALTIME EVENT CAUGHT ON REPAIRS PAGE]', customEvent.detail);
-      fetchData();
-    };
-
-    window.addEventListener('mts-realtime-update', handleRealtimeUpdate);
-    return () => {
-      window.removeEventListener('mts-realtime-update', handleRealtimeUpdate);
-    };
-  }, [fetchData]);
-
+  // Real-Time Event Sync across all user roles via singleton realtime hook
   useRealtimeSync(
-    ['Repair', 'repair', 'RepairLog', 'repairLog', 'TechnicianNote', 'technicianNote', 'Payment', 'payment', 'User', 'user', 'Notification', 'notification', 'Attendance', 'attendance', 'RepairTransferRequest', 'repairTransferRequest', 'Customer', 'customer', 'InventoryItem', 'inventoryitem', 'BatteryWarranty', 'batterywarranty'],
-    (event) => {
-      console.log('[REPAIRS REALTIME EVENT]', event);
-      fetchData();
+    ['repair', 'repairlog', 'techniciannote', 'payment', 'user', 'notification', 'repairtransferrequest', 'customer', 'inventoryitem', 'batterywarranty'],
+    () => {
+      fetchData(true);
     }
   );
 

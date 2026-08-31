@@ -263,8 +263,8 @@ export default function CourierManagement() {
     }
   };
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     try {
       const params = new URLSearchParams();
       if (activeTab !== 'ALL') params.set('type', activeTab);
@@ -292,7 +292,7 @@ export default function CourierManagement() {
       console.error("Failed to load courier hub data:", err);
       toast.error(err?.message || "Failed to load courier shipments.");
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
@@ -333,8 +333,8 @@ export default function CourierManagement() {
   }, [activeTab, statusFilter, courierCompanyFilter, districtFilter, paymentStatusFilter, dateRangeFilter, customStartDate, customEndDate, sortBy]);
 
   // Real-time synchronization
-  useRealtimeSync(['courier', 'repair', 'repairLog', 'Customer'], () => {
-    fetchData();
+  useRealtimeSync(['courier', 'repair'], () => {
+    fetchData(true);
     fetchMetadata();
   });
 
@@ -1110,7 +1110,7 @@ export default function CourierManagement() {
             <Button
               variant="outline"
               size="icon"
-              onClick={fetchData}
+              onClick={() => fetchData(false)}
               className="h-9 w-9 rounded-xl border-slate-200 hover:bg-slate-100 shrink-0 cursor-pointer"
               title="Refresh Data"
             >

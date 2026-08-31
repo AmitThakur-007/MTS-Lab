@@ -117,27 +117,44 @@ class RealtimeService {
     return null;
   }
 
-  private initNetworkListeners() {
-    window.addEventListener('online', () => {
-      this.reconnectAttempts = 0;
-      this.connect();
-    });
+  private normalizeEntity(entity: string): string {
+    return (entity || '').toLowerCase().replace(/[-_\s]/g, '');
+  }
 
-    window.addEventListener('offline', () => {
-      this.setStatus('disconnected');
-    });
-
-    window.addEventListener('focus', () => {
-      this.handleIncomingEvent({ entity: 'global_focus', action: 'SYNC', timestamp: Date.now() });
-    });
+  private getEntityAliases(normalized: string): string[] {
+    const aliases = [normalized];
+    if (normalized.startsWith('repairdamage') || normalized.startsWith('repairrelateddamage')) {
+      aliases.push('repairdamage', 'repairrelateddamage', 'repair_damage', 'repair-damage', 'damage');
+    } else if (normalized.startsWith('repair')) {
+      aliases.push('repair', 'repairs', 'repairlog', 'techniciannote');
+    } else if (normalized === 'user' || normalized === 'users' || normalized === 'staff') {
+      aliases.push('user', 'users', 'staff', 'session');
+    } else if (normalized.startsWith('inventory')) {
+      aliases.push('inventory', 'inventoryitem', 'inventorytransaction', 'inventoryfolder', 'inventorycategory');
+    } else if (normalized.startsWith('attendance')) {
+      aliases.push('attendance', 'attendancerecord', 'attendanceauditlog');
+    } else if (normalized.startsWith('courier')) {
+      aliases.push('courier', 'couriers');
+    } else if (normalized.startsWith('battery') || normalized.startsWith('warranty')) {
+      aliases.push('batterywarranty', 'warranty', 'battery');
+    } else if (normalized.startsWith('customer')) {
+      aliases.push('customer', 'customers');
+    } else if (normalized.startsWith('homeslide') || normalized.startsWith('slide')) {
+      aliases.push('homeslide', 'slide', 'slides');
+    } else if (normalized.startsWith('accessrequest')) {
+      aliases.push('accessrequest', 'accessrequests');
+    }
+    return Array.from(new Set(aliases.map(a => this.normalizeEntity(a))));
   }
 
   private startHealthCheck() {
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
-    // Periodic background pulse every 15 seconds to ensure UI stays fresh across all roles automatically
+    // Silent connection health monitor — does NOT emit fake data events to listeners
     this.healthCheckInterval = setInterval(() => {
-      this.handleIncomingEvent({ entity: 'heartbeat', action: 'SYNC', timestamp: Date.now() });
-    }, 15000);
+      if (this.currentStatus === 'disconnected' && !this.isConnecting) {
+        this.connect();
+      }
+    }, 30000);
   }
 
   public getStatus() {
@@ -226,27 +243,71 @@ class RealtimeService {
     }, delay);
   }
 
+  private initNetworkListeners() {
+    window.addEventListener('online', () => {
+      this.reconnectAttempts = 0;
+      this.connect();
+    });
+
+    window.addEventListener('offline', () => {
+      this.setStatus('disconnected');
+    });
+  }
+
   private handleIncomingEvent(event: RealtimeEvent) {
     if (!event || !event.entity) return;
+
+    const incomingRaw = (event.entity || '').toLowerCase();
+    const incomingNormalized = this.normalizeEntity(incomingRaw);
+
+    // Ignore internal heartbeat/focus events from triggering data updates
+    if (incomingNormalized === 'heartbeat' || incomingNormalized === 'globalfocus' || incomingNormalized === 'ping') {
+      return;
+    }
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: event }));
     }
 
-    this.listeners.forEach((entitySet) => {
-      entitySet.forEach((listener) => {
-        try { listener(event); } catch (err) { }
-      });
+    const matchedAliases = this.getEntityAliases(incomingNormalized);
+    const notifiedListeners = new Set<Listener>();
+
+    // Notify listeners subscribed to this specific entity or its aliases
+    matchedAliases.forEach((alias) => {
+      const entitySet = this.listeners.get(alias);
+      if (entitySet) {
+        entitySet.forEach((listener) => {
+          if (!notifiedListeners.has(listener)) {
+            notifiedListeners.add(listener);
+            try { listener(event); } catch (err) { console.warn('[REALTIME LISTENER ERROR]', err); }
+          }
+        });
+      }
     });
 
+    // Notify wildcard listeners
+    const wildcardSet = this.listeners.get('*');
+    if (wildcardSet) {
+      wildcardSet.forEach((listener) => {
+        if (!notifiedListeners.has(listener)) {
+          notifiedListeners.add(listener);
+          try { listener(event); } catch (err) { console.warn('[REALTIME LISTENER ERROR]', err); }
+        }
+      });
+    }
+
+    // Global listeners
     this.globalListeners.forEach((listener) => {
-      try { listener(event); } catch (err) { }
+      if (!notifiedListeners.has(listener)) {
+        notifiedListeners.add(listener);
+        try { listener(event); } catch (err) { console.warn('[REALTIME LISTENER ERROR]', err); }
+      }
     });
   }
 
   public subscribe(entities: string | string[], callback: Listener): () => void {
     const list = Array.isArray(entities) ? entities : [entities];
-    const normalizedList = list.map((e) => e.toLowerCase());
+    const normalizedList = list.map((e) => this.normalizeEntity(e));
 
     normalizedList.forEach((entity) => {
       if (!this.listeners.has(entity)) {

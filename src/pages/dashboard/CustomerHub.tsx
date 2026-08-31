@@ -301,8 +301,8 @@ export default function CustomerHub() {
   // second client-side slice to a paginated response.
   const pagedCustomers = customers;
 
-  const fetchCustomers = useCallback(async (query = '', sort = sortBy, order = sortOrder, requestedPage = page) => {
-    setLoading(true);
+  const fetchCustomers = useCallback(async (query = '', sort = sortBy, order = sortOrder, requestedPage = page, isBackground = false) => {
+    if (!isBackground) setLoading(true);
     try {
       const params = new URLSearchParams();
       if (query) params.set('search', query);
@@ -319,12 +319,12 @@ export default function CustomerHub() {
     } catch (err: any) {
       toast.error(err.message || 'Failed to load customers');
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   }, [page, sortBy, sortOrder]);
 
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomers('', sortBy, sortOrder, page, false);
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
@@ -335,9 +335,9 @@ export default function CustomerHub() {
     if (page > totalPages) setPage(1);
   }, [page, totalPages]);
 
-  // Real-time sync — preserves current page
-  useRealtimeSync(['repair', 'customer', 'user'], () => {
-    fetchCustomers(searchQuery, sortBy, sortOrder);
+  // Real-time sync — preserves current page and query without UI flickering
+  useRealtimeSync(['customer', 'repair'], () => {
+    fetchCustomers(searchQuery, sortBy, sortOrder, page, true);
   });
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {

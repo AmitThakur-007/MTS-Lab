@@ -198,7 +198,8 @@ export default function RepairRelatedDamage() {
   });
 
   // Fetch Overview Stats
-  const fetchOverviewStats = useCallback(async () => {
+  const fetchOverviewStats = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoadingOverview(true);
     try {
       const params = new URLSearchParams();
       if (isElevated && selectedStaffFilter !== 'ALL') {
@@ -209,13 +210,13 @@ export default function RepairRelatedDamage() {
     } catch (err: any) {
       console.error('[FETCH DAMAGE OVERVIEW ERROR]', err);
     } finally {
-      setLoadingOverview(false);
+      if (!isBackground) setLoadingOverview(false);
     }
   }, [isElevated, selectedStaffFilter]);
 
   // Fetch Records with applied filters
-  const fetchRecords = useCallback(async () => {
-    setLoadingRecords(true);
+  const fetchRecords = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoadingRecords(true);
     try {
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.append('search', searchQuery.trim());
@@ -263,7 +264,7 @@ export default function RepairRelatedDamage() {
       console.error('[FETCH DAMAGE RECORDS ERROR]', err);
       toast.error(err?.message || 'Failed to load repair-related damage records.');
     } finally {
-      setLoadingRecords(false);
+      if (!isBackground) setLoadingRecords(false);
     }
   }, [searchQuery, isElevated, selectedStaffFilter, selectedComponentFilter, selectedTypeFilter, periodTab, customDate, customMonth, customYear, startDate, endDate]);
 
@@ -291,20 +292,20 @@ export default function RepairRelatedDamage() {
   };
 
   useEffect(() => {
-    fetchOverviewStats();
+    fetchOverviewStats(false);
     if (isElevated) {
       fetchSupportingData();
     }
   }, [fetchOverviewStats, isElevated]);
 
   useEffect(() => {
-    fetchRecords();
+    fetchRecords(false);
   }, [fetchRecords]);
 
   // Real-time synchronization
   useRealtimeSync(['repairRelatedDamage', 'repair', 'inventory', 'user'], () => {
-    fetchOverviewStats();
-    fetchRecords();
+    fetchOverviewStats(true);
+    fetchRecords(true);
   });
 
   // Repair Live Search

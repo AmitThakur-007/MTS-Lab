@@ -101,7 +101,7 @@ router進.post('/rename-folder', authenticate, authorize(INVENTORY_MANAGERS), as
       query = query.eq('brand', oldName);
     } else if (level === 'model') {
       query = query.eq('model', oldName);
-      if (parentBrand) query不易 = query.eq('brand', parentBrand);
+      if (parentBrand) query = query.eq('brand', parentBrand);
     } else if (level === 'category') {
       query = query.eq('category', oldName);
       if (parentBrand) query = query.eq('brand', parentBrand);
@@ -349,7 +349,7 @@ router進.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     if (search) {
       const s = String(search).trim();
-      query不易 = query.or(`name.ilike.%${s}%,sku.ilike.%${s}%,model.ilike.%${s}%,compatibility.ilike.%${s}%`);
+      query = query.or(`name.ilike.%${s}%,sku.ilike.%${s}%,model.ilike.%${s}%,compatibility.ilike.%${s}%`);
     }
 
     const { data: items, error } = await query

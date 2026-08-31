@@ -50,13 +50,6 @@ export function useDashboardData() {
     // Initial load
     useEffect(() => {
         fetchDashboardData(false);
-
-        // Optional: Background polling every 30 seconds as fallback
-        const interval = setInterval(() => {
-            fetchDashboardData(true);
-        }, 30000);
-
-        return () => clearInterval(interval);
     }, [fetchDashboardData]);
 
     // Debounced realtime listener to prevent rapid stuttering

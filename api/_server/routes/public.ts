@@ -124,6 +124,7 @@ const handlePublicTrack = async (req: Request, res: Response) => {
           action: 'STATUS_UPDATED',
           status: repairRecord.status || 'RECEIVED',
           notes: `Device checked in and status currently registered as ${repairRecord.status || 'RECEIVED'}.`,
+          message: `Device status: ${repairRecord.status || 'RECEIVED'}`,
           createdAt: repairRecord.createdAt || new Date().toISOString()
         }
       ];
