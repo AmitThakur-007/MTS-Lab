@@ -28,6 +28,12 @@ function normalizeValue(value: unknown): string {
   return String(value || '').toUpperCase().replace(/\s+/g, '_').trim();
 }
 
+function startOfDay(date: Date): Date {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
 function scopedRepairsQuery(req: AuthRequest) {
   let query = supabaseAdmin
     .from('Repair')
@@ -41,6 +47,32 @@ function scopedRepairsQuery(req: AuthRequest) {
 
   if (role === 'TECHNICIAN') {
     query = query.eq('technicianId', req.user.id);
+  }
+
+  return query;
+}
+
+function scopedCustomersQuery(req: AuthRequest) {
+  let query = supabaseAdmin.from('Customer').select('id').eq('archived', false);
+  const role = normalizeValue(req.user?.role);
+
+  if (req.user?.branchId && role !== 'SUPER_ADMIN') {
+    query = query.eq('branchId', req.user.branchId);
+  }
+
+  return query;
+}
+
+function scopedStaffQuery(req: AuthRequest) {
+  let query = supabaseAdmin
+    .from('User')
+    .select('id')
+    .is('deletedAt', null)
+    .eq('isActive', true);
+  const role = normalizeValue(req.user?.role);
+
+  if (req.user?.branchId && role !== 'SUPER_ADMIN') {
+    query = query.eq('branchId', req.user.branchId);
   }
 
   return query;
@@ -61,10 +93,13 @@ router.get(
       const repairIds = repairs.map((repair) => repair.id);
 
       const [customersResult, staffResult, paymentsResult] = await Promise.all([
-        supabaseAdmin.from('Customer').select('id').eq('archived', false),
-        supabaseAdmin.from('User').select('id').is('deletedAt', null).eq('isActive', true),
+        scopedCustomersQuery(req),
+        scopedStaffQuery(req),
         repairIds.length
-          ? supabaseAdmin.from('Payment').select('amount, createdAt, repairId').in('repairId', repairIds)
+          ? supabaseAdmin
+              .from('Payment')
+              .select('amount, createdAt, repairId')
+              .in('repairId', repairIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
 
@@ -86,9 +121,29 @@ router.get(
         0,
       );
 
-      const now = Date.now();
-      const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-      const previousSevenDaysStart = new Date(now - 14 * 24 * 60 * 60 * 1000);
+      const now = new Date();
+      const today = startOfDay(now);
+      const dailyRepairIntake = Array.from({ length: 7 }, (_, index) => {
+        const day = new Date(today);
+        day.setDate(today.getDate() - (6 - index));
+        const nextDay = new Date(day);
+        nextDay.setDate(day.getDate() + 1);
+
+        const count = repairs.filter((repair) => {
+          if (!repair.createdAt) return false;
+          const created = new Date(repair.createdAt);
+          return created >= day && created < nextDay;
+        }).length;
+
+        return {
+          day: day.toLocaleDateString('en-US', { weekday: 'short' }),
+          date: day.toISOString().slice(0, 10),
+          count,
+        };
+      });
+
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const previousSevenDaysStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
       const recentRevenue = payments
         .filter((payment) => payment.createdAt && new Date(payment.createdAt) >= sevenDaysAgo)
         .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
@@ -118,6 +173,7 @@ router.get(
           recentRevenue,
           previousRevenue,
           revenueGrowth: Number(revenueGrowth.toFixed(2)),
+          dailyRepairIntake,
           generatedAt: new Date().toISOString(),
         },
       });
