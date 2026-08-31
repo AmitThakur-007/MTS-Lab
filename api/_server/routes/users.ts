@@ -51,7 +51,6 @@ router.post('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: 
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedTargetRole = normalizeRole(role);
 
-    // Check if user already exists in public.User
     const { data: existingUsers } = await supabaseAdmin
       .from('User')
       .select('id, email, deletedAt')
@@ -70,7 +69,6 @@ router.post('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: 
     let userId = uuidv4();
     let supabaseUid: string | null = null;
 
-    // Create in Supabase Auth
     try {
       const { data: authUser, error: authErr } = await supabaseAdmin.auth.admin.createUser({
         email: normalizedEmail,
@@ -171,7 +169,6 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     if (address !== undefined) updatePayload.address = address ? address.trim() : null;
     if (branchId !== undefined) updatePayload.branchId = branchId || null;
 
-    // Role, accountStatus, isActive, 2FA toggle can only be changed by Admin/SuperAdmin
     if (isSuperAdminOrAdmin) {
       if (role !== undefined) updatePayload.role = normalizeRole(role);
       if (accountStatus !== undefined) updatePayload.accountStatus = accountStatus;
@@ -184,7 +181,6 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       const passwordHash = await bcrypt.hash(password, 10);
       updatePayload.password = passwordHash;
 
-      // Update Supabase Auth if applicable
       try {
         await supabaseAdmin.auth.admin.updateUserById(id, { password });
       } catch (_) {}
@@ -220,6 +216,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // 4. PATCH /api/users/:id/2fa & POST /api/users/:id/2fa
+// Security/account controls must be restricted server-side.
 const handle2FAToggle = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -240,6 +237,14 @@ const handle2FAToggle = async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ error: 'Failed to update 2FA configuration.' });
     }
 
+    await logAudit({
+      userId: req.user!.id,
+      action: 'SECURITY_SETTING_CHANGED',
+      resource: 'User',
+      resourceId: id,
+      details: { setting: 'twoFactorEnabled', enabled: isEnabled },
+    });
+
     await broadcastServerChange('User', 'UPDATE', id, updated);
 
     return res.json({ success: true, message: `2FA ${isEnabled ? 'enabled' : 'disabled'} successfully.`, user: updated });
@@ -248,10 +253,10 @@ const handle2FAToggle = async (req: AuthRequest, res: Response) => {
   }
 };
 
-router.patch('/:id/2fa', authenticate, handle2FAToggle);
-router.post('/:id/2fa', authenticate, handle2FAToggle);
-router.patch('/:id/toggle-2fa', authenticate, handle2FAToggle);
-router.post('/:id/toggle-2fa', authenticate, handle2FAToggle);
+router.patch('/:id/2fa', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), handle2FAToggle);
+router.post('/:id/2fa', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), handle2FAToggle);
+router.patch('/:id/toggle-2fa', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), handle2FAToggle);
+router.post('/:id/toggle-2fa', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), handle2FAToggle);
 
 // 5. POST /api/users/:id/verify-email
 const handleDirectVerifyEmail = async (req: AuthRequest, res: Response) => {
