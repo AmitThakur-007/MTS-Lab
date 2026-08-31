@@ -14,6 +14,7 @@ import SlideshowManagement from './dashboard/SlideshowManagement';
 import Settings from './dashboard/Settings';
 import Revenue from './dashboard/Revenue';
 import SuperAdmin from './dashboard/SuperAdmin';
+import SuperAdminSecurityControl from './dashboard/SuperAdminSecurityControl';
 import AccessRequests from './dashboard/AccessRequests';
 import TechnicianDashboard from './dashboard/TechnicianDashboard';
 import ManagerDashboard from './dashboard/ManagerDashboard';
@@ -64,8 +65,8 @@ export default function Dashboard() {
           {isSuperAdmin && (
             <>
               <Route path="access-requests" element={<AccessRequests />} />
-              <Route path="security-surveillance" element={<SuperAdmin />} />
-              <Route path="security" element={<SuperAdmin />} />
+              <Route path="security-surveillance" element={<SuperAdminSecurityControl />} />
+              <Route path="security" element={<SuperAdminSecurityControl />} />
             </>
           )}
           <Route path="*" element={defaultElement} />
