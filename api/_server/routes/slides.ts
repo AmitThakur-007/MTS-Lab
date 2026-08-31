@@ -27,7 +27,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // 2. POST /api/admin/slides/upload-image
-router.post('/upload-image', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), upload.single('image'), async (req: Request, res: Response) => {
+router.post('/upload-image', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), upload.single('image') as any, async (req: Request, res: Response) => {
   try {
     if (req.file) {
       const result = await uploadToCloudinary(req.file.buffer, 'mts_slides');

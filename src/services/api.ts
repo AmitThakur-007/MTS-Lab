@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/store/authStore';
+import { getDeviceIdentifier } from '@/lib/device';
 
 const API_BASE = '/api';
 
@@ -94,10 +95,12 @@ async function doRefreshToken(): Promise<string | null> {
 
 async function request<T = any>(endpoint: string, options: any = {}): Promise<T> {
   const { token } = useAuthStore.getState();
+  const deviceId = getDeviceIdentifier();
 
   const headers = {
     ...options.headers,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(deviceId ? { 'x-device-identifier': deviceId } : {}),
   };
 
   let res;

@@ -268,6 +268,14 @@ export default function SuperAdmin() {
           </div>
         </div>
         <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end shrink-0">
+          <Button
+            id="superadmin-goto-surveillance-btn"
+            onClick={() => navigate('/dashboard/security-surveillance')}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
+          >
+            <Shield className="h-4 w-4 mr-1.5" />
+            Security &amp; Surveillance
+          </Button>
           <DashboardRefreshButton
             onRefresh={async () => {
               await fetchHistory();

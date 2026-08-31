@@ -123,7 +123,41 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       });
     }
 
-    // 5. Attach authoritative user to request
+    // 5. Device-Level Security Enforcement (Hardware Fingerprint Validation)
+    const deviceIdentifier = (req.headers['x-device-identifier'] as string) || (req.body?.deviceIdentifier as string) || (req.query?.deviceIdentifier as string);
+    if (deviceIdentifier) {
+      try {
+        const { data: devRecord } = await supabaseAdmin
+          .from('ApprovedDevice')
+          .select('status, deviceName')
+          .eq('userId', dbUser.id)
+          .eq('deviceIdentifier', deviceIdentifier)
+          .maybeSingle();
+
+        if (devRecord && (devRecord.status === 'REVOKED' || devRecord.status === 'BLOCKED')) {
+          return res.status(403).json({
+            error: 'DeviceBlocked',
+            message: `This device (${devRecord.deviceName || 'Unidentified Hardware'}) has been revoked or blocked from accessing MTS Lab by a security administrator.`,
+          });
+        }
+      } catch (devCheckErr) {
+        // Non-blocking fallback
+      }
+    }
+
+    // 6. Update presence / lastActiveAt asynchronously
+    const nowIso = new Date().toISOString();
+    // Fire-and-forget presence update (non-blocking for throughput)
+    Promise.resolve(supabaseAdmin.from('User').update({ lastActiveAt: nowIso }).eq('id', dbUser.id)).catch(() => {});
+    if (deviceIdentifier) {
+      Promise.resolve(supabaseAdmin.from('ApprovedDevice').update({ 
+        lastUsedAt: nowIso, 
+        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null 
+      }).eq('userId', dbUser.id).eq('deviceIdentifier', deviceIdentifier)).catch(() => {});
+    }
+
+    // 7. Attach authoritative user to request
     req.user = {
       id: dbUser.id,
       email: dbUser.email,

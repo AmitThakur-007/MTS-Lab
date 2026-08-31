@@ -201,7 +201,7 @@ router.get('/import/template', authenticate, (req: Request, res: Response) => {
 });
 
 // 4. POST /api/battery-warranties/import/preview
-router.post('/import/preview', authenticate, upload.single('file'), (req: Request, res: Response) => {
+router.post('/import/preview', authenticate, upload.single('file') as any, (req: Request, res: Response) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No Excel file provided.' });
     const rows = parseExcelBuffer(req.file.buffer);

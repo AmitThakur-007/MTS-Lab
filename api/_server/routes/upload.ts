@@ -7,7 +7,7 @@ const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 // 1. POST /api/upload
-router.post('/', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, upload.single('file') as any, async (req: AuthRequest, res: Response) => {
   try {
     const folder = (req.query.folder as string) || (req.body?.folder as string) || 'mts_lab';
 

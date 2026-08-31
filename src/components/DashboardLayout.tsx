@@ -162,7 +162,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Attendance', path: '/dashboard/attendance', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST', 'ACCOUNTANT'] },
     { name: 'Repair-Related Damage', path: '/dashboard/repair-damage', icon: FileWarning, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST'] },
     { name: 'Staff Management', path: '/dashboard/staff', icon: Users, roles: ['SUPER_ADMIN'] },
-    { name: 'Access Requests', path: '/dashboard/access-requests', icon: ShieldCheck, roles: ['SUPER_ADMIN'] },
+    { name: 'Security & Surveillance', path: '/dashboard/security-surveillance', icon: ShieldCheck, roles: ['SUPER_ADMIN'] },
     { name: 'Revenue Hub', path: '/dashboard/revenue', icon: BarChart3, roles: ['SUPER_ADMIN', 'ACCOUNTANT'] },
     { name: 'Super Admin', path: '/dashboard/super-admin', icon: ShieldAlert, roles: ['SUPER_ADMIN'] },
     { name: 'Settings', path: '/dashboard/settings', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'ACCOUNTANT'] },

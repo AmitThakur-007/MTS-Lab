@@ -67,6 +67,38 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
+    // Check if device is explicitly blocked / revoked
+    if (deviceIdentifier) {
+      const { data: existingDevice } = await supabaseAdmin
+        .from('ApprovedDevice')
+        .select('*')
+        .eq('userId', user.id)
+        .eq('deviceIdentifier', deviceIdentifier)
+        .maybeSingle();
+
+      if (existingDevice && (existingDevice.status === 'REVOKED' || existingDevice.status === 'BLOCKED')) {
+        await logAudit({
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          userRole: user.role,
+          action: 'LOGIN_BLOCKED_DEVICE',
+          resource: 'ApprovedDevice',
+          resourceId: existingDevice.id,
+          status: 'FAILED',
+          ipAddress: ipAddress || req.ip || (req.headers['x-forwarded-for'] as string) || null,
+          userAgent: req.headers['user-agent'] || null,
+          deviceInfo: { deviceIdentifier, deviceName, browser, os },
+          details: { reason: 'Login attempt from revoked/blocked device' },
+        });
+
+        return res.status(403).json({
+          error: 'DeviceBlocked',
+          message: 'This device has been blocked or revoked from accessing MTS Lab. Please contact a Super Administrator.',
+        });
+      }
+    }
+
     // Authenticate password
     let passwordMatches = false;
 
@@ -107,17 +139,84 @@ router.post('/login', async (req: Request, res: Response) => {
     if (!passwordMatches) {
       const attempts = (user.failedLoginAttempts || 0) + 1;
       await supabaseAdmin.from('User').update({ failedLoginAttempts: attempts }).eq('id', user.id);
+
+      await logAudit({
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: 'FAILED_LOGIN',
+        resource: 'User',
+        resourceId: user.id,
+        status: 'FAILED',
+        ipAddress: ipAddress || req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        deviceInfo: { deviceIdentifier, deviceName, browser, os },
+        details: { attemptNumber: attempts },
+      });
+
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
-    // Reset failed login attempts & update lastLoginAt
+    // Reset failed login attempts & update lastLoginAt & lastActiveAt
+    const nowIso = new Date().toISOString();
     await supabaseAdmin
       .from('User')
       .update({
         failedLoginAttempts: 0,
-        lastLoginAt: new Date().toISOString(),
+        lastLoginAt: nowIso,
+        lastActiveAt: nowIso,
       })
       .eq('id', user.id);
+
+    // Register or update device in ApprovedDevice
+    if (deviceIdentifier) {
+      try {
+        const { data: dev } = await supabaseAdmin
+          .from('ApprovedDevice')
+          .select('id')
+          .eq('userId', user.id)
+          .eq('deviceIdentifier', deviceIdentifier)
+          .maybeSingle();
+
+        if (dev) {
+          await supabaseAdmin
+            .from('ApprovedDevice')
+            .update({
+              deviceName: deviceName || undefined,
+              deviceType: deviceType || 'DESKTOP',
+              browser: browser || undefined,
+              os: os || undefined,
+              ipAddress: ipAddress || req.ip || null,
+              userAgent: req.headers['user-agent'] || null,
+              lastUsedAt: nowIso,
+              updatedAt: nowIso,
+            })
+            .eq('id', dev.id);
+        } else {
+          await supabaseAdmin.from('ApprovedDevice').insert([
+            {
+              id: uuidv4(),
+              userId: user.id,
+              deviceIdentifier,
+              deviceName: deviceName || 'Workstation',
+              deviceType: deviceType || 'DESKTOP',
+              browser: browser || null,
+              os: os || null,
+              ipAddress: ipAddress || req.ip || null,
+              userAgent: req.headers['user-agent'] || null,
+              status: 'APPROVED',
+              approvedAt: nowIso,
+              lastUsedAt: nowIso,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+            },
+          ]);
+        }
+      } catch (devErr) {
+        console.warn('[DEVICE REGISTRATION ERROR]', devErr);
+      }
+    }
 
     // Record login activity
     try {
@@ -133,7 +232,7 @@ router.post('/login', async (req: Request, res: Response) => {
           browser: browser || null,
           os: os || null,
           status: 'SUCCESS',
-          createdAt: new Date().toISOString(),
+          createdAt: nowIso,
         },
       ]);
     } catch (_) { }
@@ -192,10 +291,17 @@ router.post('/login', async (req: Request, res: Response) => {
 
     await logAudit({
       userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+      userRole: user.role,
       action: 'LOGIN',
       resource: 'User',
       resourceId: user.id,
-      details: { email: user.email, role: user.role },
+      status: 'SUCCESS',
+      ipAddress: ipAddress || req.ip || (req.headers['x-forwarded-for'] as string) || null,
+      userAgent: req.headers['user-agent'] || null,
+      deviceInfo: { deviceIdentifier, deviceName, deviceType, browser, os },
+      details: { email: user.email, role: user.role, method: 'PASSWORD' },
     });
 
     return res.json({
@@ -418,6 +524,29 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
 // 5. POST /api/auth/logout
 router.post('/logout', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.verify(token, config.jwtSecret) as any;
+        if (decoded && decoded.id) {
+          await logAudit({
+            userId: decoded.id,
+            userEmail: decoded.email,
+            userRole: decoded.role,
+            action: 'LOGOUT',
+            resource: 'User',
+            resourceId: decoded.id,
+            status: 'SUCCESS',
+            ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+            userAgent: req.headers['user-agent'] || null,
+            details: { message: 'User logged out' },
+          });
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
   return res.json({ success: true, message: 'Logged out successfully.' });
 });
 

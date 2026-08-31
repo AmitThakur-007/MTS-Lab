@@ -15,6 +15,7 @@ import Settings from './dashboard/Settings';
 import Revenue from './dashboard/Revenue';
 import SuperAdmin from './dashboard/SuperAdmin';
 import AccessRequests from './dashboard/AccessRequests';
+import SecuritySurveillance from './dashboard/SecuritySurveillance';
 import TechnicianDashboard from './dashboard/TechnicianDashboard';
 import ManagerDashboard from './dashboard/ManagerDashboard';
 import Attendance from './dashboard/Attendance';
@@ -93,7 +94,11 @@ export default function Dashboard() {
           {/* Super Admin Privileged Access */}
           <Route path="super-admin" element={<SuperAdmin />} />
           {isSuperAdmin && (
-            <Route path="access-requests" element={<AccessRequests />} />
+            <>
+              <Route path="access-requests" element={<SecuritySurveillance />} />
+              <Route path="security-surveillance" element={<SecuritySurveillance />} />
+              <Route path="security" element={<SecuritySurveillance />} />
+            </>
           )}
 
           {/* Catch-All Fallback Route */}
