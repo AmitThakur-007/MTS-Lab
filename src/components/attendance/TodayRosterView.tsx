@@ -254,16 +254,6 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
 
       {/* Roster List / Table */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
-        {/* Table Header */}
-        <div className="hidden lg:grid grid-cols-12 gap-4 px-5 py-3.5 bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-          <div className="col-span-4">Staff Member</div>
-          <div className="col-span-2">Department / Role</div>
-          <div className="col-span-2">Status & Check-In</div>
-          <div className="col-span-3 text-center">Fast Attendance Action</div>
-          <div className="col-span-1 text-right">Options</div>
-        </div>
-
-        {/* List Content */}
         {isLoading ? (
           <div className="p-12 text-center text-slate-400 text-sm font-medium">
             <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -278,179 +268,389 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
             </div>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {filteredRoster.map((staff) => {
-              const initials = (staff.name || 'Staff')
-                .split(' ')
-                .map((n) => n[0])
-                .join('')
-                .slice(0, 2)
-                .toUpperCase();
+          <>
+            {/* Desktop & Tablet Table View (horizontal scrollable wrapper if viewport is constricted) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[940px]">
+                <thead>
+                  <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 select-none">
+                    <th className="py-3.5 pl-5 pr-3 w-[26%] min-w-[240px]">Staff Member</th>
+                    <th className="py-3.5 px-3 w-[16%] min-w-[140px]">Department / Role</th>
+                    <th className="py-3.5 px-3 w-[18%] min-w-[160px]">Status & Check-In</th>
+                    <th className="py-3.5 px-3 w-[28%] min-w-[270px] text-center">Fast Attendance Action</th>
+                    <th className="py-3.5 pl-3 pr-5 w-[12%] min-w-[110px] text-right">Options</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {filteredRoster.map((staff) => {
+                    const initials = (staff.name || 'Staff')
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase();
 
-              const checkInTime =
-                staff.checkInTime ||
-                staff.attendance?.checkInTime ||
-                (staff.status === 'PRESENT' ? '10:05 AM' : null);
+                    const checkInTime =
+                      staff.checkInTime ||
+                      staff.attendance?.checkInTime ||
+                      (staff.status === 'PRESENT' ? '10:05 AM' : null);
 
-              const markedBy = staff.attendance?.markedByName;
-              const notes = staff.notes || staff.attendance?.notes;
+                    const markedBy = staff.attendance?.markedByName;
+                    const notes = staff.notes || staff.attendance?.notes;
 
-              return (
-                <div
-                  key={staff.userId || staff.id}
-                  className="p-4 lg:px-5 lg:py-3.5 hover:bg-slate-50/70 transition-colors flex flex-col lg:grid lg:grid-cols-12 gap-3 lg:gap-4 items-stretch lg:items-center"
-                >
-                  {/* Column 1: Staff Info */}
-                  <div className="lg:col-span-4 flex items-center gap-3">
-                    <Avatar className="w-10 h-10 rounded-xl border border-slate-200 shadow-2xs shrink-0 bg-indigo-50">
-                      <AvatarImage src={staff.avatarUrl || staff.user?.avatarUrl} />
-                      <AvatarFallback className="text-xs font-black text-indigo-700 bg-indigo-100 rounded-xl">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-slate-900 truncate">
-                          {staff.name}
-                        </span>
-                        {staff.userId === currentUserId && (
-                          <Badge className="bg-slate-900 text-white text-[9px] font-bold px-1.5 py-0">
-                            YOU
-                          </Badge>
+                    return (
+                      <tr
+                        key={staff.userId || staff.id}
+                        className="hover:bg-slate-50/70 transition-colors group"
+                      >
+                        {/* Column 1: Staff Info */}
+                        <td className="py-3.5 pl-5 pr-3 align-middle">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Avatar className="w-9 h-9 rounded-xl border border-slate-200 shadow-2xs shrink-0 bg-indigo-50">
+                              <AvatarImage src={staff.avatarUrl || staff.user?.avatarUrl} />
+                              <AvatarFallback className="text-xs font-black text-indigo-700 bg-indigo-100 rounded-xl">
+                                {initials}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className="text-sm font-bold text-slate-900 truncate max-w-[180px]"
+                                  title={staff.name}
+                                >
+                                  {staff.name}
+                                </span>
+                                {staff.userId === currentUserId && (
+                                  <Badge className="bg-slate-900 text-white text-[9px] font-bold px-1.5 py-0 shrink-0">
+                                    YOU
+                                  </Badge>
+                                )}
+                              </div>
+                              <div
+                                className="text-xs text-slate-500 truncate max-w-[200px]"
+                                title={staff.email}
+                              >
+                                {staff.email}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Column 2: Department & Role */}
+                        <td className="py-3.5 px-3 align-middle">
+                          <div className="flex flex-col items-start gap-1">
+                            {getRoleBadge(staff.role)}
+                            <span
+                              className="text-xs font-semibold text-slate-500 truncate max-w-[130px]"
+                              title={staff.department || 'All Repair'}
+                            >
+                              {staff.department || 'All Repair'}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Column 3: Current Status & Check-In */}
+                        <td className="py-3.5 px-3 align-middle">
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {getStatusBadge(staff.status)}
+                            </div>
+                            {checkInTime && staff.status !== 'NOT_MARKED' && (
+                              <div className="text-[11px] font-mono font-medium text-slate-500 flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span>{checkInTime}</span>
+                                {markedBy && (
+                                  <span
+                                    className="text-[10px] text-slate-400 font-sans truncate max-w-[80px]"
+                                    title={`Marked by ${markedBy}`}
+                                  >
+                                    ({markedBy.split(' ')[0]})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {notes && (
+                              <div
+                                className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded italic truncate max-w-[150px]"
+                                title={notes}
+                              >
+                                "{notes}"
+                              </div>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Column 4: Quick Action Buttons */}
+                        <td className="py-3.5 px-3 align-middle text-center">
+                          <div className="inline-flex items-center justify-center gap-1.5 flex-nowrap">
+                            {/* Mark Present */}
+                            <Button
+                              size="sm"
+                              variant={staff.status === 'PRESENT' ? 'default' : 'outline'}
+                              onClick={() => onQuickMark(staff.userId, 'PRESENT', staff.name)}
+                              disabled={!canMark}
+                              className={cn(
+                                'h-8 px-2.5 text-xs font-bold rounded-lg gap-1.5 shrink-0 whitespace-nowrap transition-all select-none',
+                                staff.status === 'PRESENT'
+                                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs font-black'
+                                  : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300'
+                              )}
+                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:35 AM NPT)' : 'Mark as Present'}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Present</span>
+                            </Button>
+
+                            {/* Mark Late */}
+                            <Button
+                              size="sm"
+                              variant={staff.status === 'LATE' ? 'default' : 'outline'}
+                              onClick={() => onQuickMark(staff.userId, 'LATE', staff.name)}
+                              disabled={!canMark}
+                              className={cn(
+                                'h-8 px-2.5 text-xs font-bold rounded-lg gap-1.5 shrink-0 whitespace-nowrap transition-all select-none',
+                                staff.status === 'LATE'
+                                  ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs font-black'
+                                  : 'border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-300'
+                              )}
+                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:35 AM NPT)' : 'Mark as Late'}
+                            >
+                              <Clock className="w-3.5 h-3.5 shrink-0" />
+                              <span>Late</span>
+                            </Button>
+
+                            {/* Mark Absent */}
+                            <Button
+                              size="sm"
+                              variant={staff.status === 'ABSENT' ? 'default' : 'outline'}
+                              onClick={() => onQuickMark(staff.userId, 'ABSENT', staff.name)}
+                              disabled={!canMark}
+                              className={cn(
+                                'h-8 px-2.5 text-xs font-bold rounded-lg gap-1.5 shrink-0 whitespace-nowrap transition-all select-none',
+                                staff.status === 'ABSENT'
+                                  ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-2xs font-black'
+                                  : 'border-rose-200 text-rose-700 hover:bg-rose-50 hover:border-rose-300'
+                              )}
+                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:35 AM NPT)' : 'Mark as Absent'}
+                            >
+                              <UserX className="w-3.5 h-3.5 shrink-0" />
+                              <span>Absent</span>
+                            </Button>
+                          </div>
+                        </td>
+
+                        {/* Column 5: Options (Edit / History / Purge) */}
+                        <td className="py-3.5 pl-3 pr-5 align-middle text-right">
+                          <div className="inline-flex items-center justify-end gap-1 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onOpenEditModal(staff)}
+                              className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg shrink-0"
+                              title="Edit / Correct Record with Notes"
+                              aria-label="Edit record"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onOpenStaffHistory(staff.userId, staff.name)}
+                              className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg shrink-0"
+                              title="View Staff Monthly Calendar & Logs"
+                              aria-label="View staff calendar"
+                            >
+                              <Calendar className="w-3.5 h-3.5" />
+                            </Button>
+
+                            {isSuperAdmin && staff.userId !== currentUserId && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onOpenPurgeModal(staff.userId, staff.name)}
+                                className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg shrink-0"
+                                title="Permanent Staff Deletion (Super Admin Only)"
+                                aria-label="Delete staff"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card Layout (Screen < 768px) */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filteredRoster.map((staff) => {
+                const initials = (staff.name || 'Staff')
+                  .split(' ')
+                  .map((n) => n[0])
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase();
+
+                const checkInTime =
+                  staff.checkInTime ||
+                  staff.attendance?.checkInTime ||
+                  (staff.status === 'PRESENT' ? '10:05 AM' : null);
+
+                const markedBy = staff.attendance?.markedByName;
+                const notes = staff.notes || staff.attendance?.notes;
+
+                return (
+                  <div key={staff.userId || staff.id} className="p-4 space-y-3 bg-white">
+                    {/* Header: Avatar, Name, Role, Options */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Avatar className="w-10 h-10 rounded-xl border border-slate-200 shadow-2xs shrink-0 bg-indigo-50">
+                          <AvatarImage src={staff.avatarUrl || staff.user?.avatarUrl} />
+                          <AvatarFallback className="text-xs font-black text-indigo-700 bg-indigo-100 rounded-xl">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-bold text-slate-900 truncate" title={staff.name}>
+                              {staff.name}
+                            </span>
+                            {staff.userId === currentUserId && (
+                              <Badge className="bg-slate-900 text-white text-[9px] font-bold px-1.5 py-0 shrink-0">
+                                YOU
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 truncate" title={staff.email}>
+                            {staff.email}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Options on Mobile */}
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onOpenEditModal(staff)}
+                          className="h-7 w-7 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                          title="Edit Record"
+                          aria-label="Edit record"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onOpenStaffHistory(staff.userId, staff.name)}
+                          className="h-7 w-7 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                          title="View Calendar"
+                          aria-label="View staff calendar"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                        </Button>
+                        {isSuperAdmin && staff.userId !== currentUserId && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onOpenPurgeModal(staff.userId, staff.name)}
+                            className="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
+                            title="Delete Staff"
+                            aria-label="Delete staff"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
                         )}
                       </div>
-                      <div className="text-xs text-slate-500 truncate flex items-center gap-2">
-                        <span className="truncate">{staff.email}</span>
+                    </div>
+
+                    {/* Department & Current Status Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200/60">
+                      <div className="flex items-center gap-1.5">
+                        {getRoleBadge(staff.role)}
+                        <span className="text-[11px] font-medium text-slate-600">
+                          {staff.department || 'All Repair'}
+                        </span>
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Column 2: Department & Role */}
-                  <div className="lg:col-span-2 flex flex-wrap items-center gap-1.5">
-                    {getRoleBadge(staff.role)}
-                    <span className="text-xs font-semibold text-slate-500">
-                      {staff.department || 'Lab'}
-                    </span>
-                  </div>
-
-                  {/* Column 3: Current Status & Check-In */}
-                  <div className="lg:col-span-2 flex flex-col gap-1">
-                    <div className="flex items-center gap-1.5">
-                      {getStatusBadge(staff.status)}
-                    </div>
-                    {checkInTime && staff.status !== 'NOT_MARKED' && (
-                      <div className="text-[11px] font-mono font-medium text-slate-500 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-slate-400" />
-                        {checkInTime}
-                        {markedBy && (
-                          <span className="text-[10px] text-slate-400 font-sans truncate">
-                            ({markedBy.split(' ')[0]})
+                      <div className="flex items-center gap-2">
+                        {getStatusBadge(staff.status)}
+                        {checkInTime && staff.status !== 'NOT_MARKED' && (
+                          <span className="text-[11px] font-mono font-bold text-slate-600">
+                            {checkInTime}
                           </span>
                         )}
                       </div>
-                    )}
+                    </div>
+
                     {notes && (
-                      <div className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded italic truncate max-w-[180px]">
+                      <div className="text-[11px] text-slate-500 bg-slate-100 px-2 py-1 rounded-lg italic">
                         "{notes}"
                       </div>
                     )}
-                  </div>
 
-                  {/* Column 4: Quick Action Buttons */}
-                  <div className="lg:col-span-3 flex items-center justify-center gap-1 sm:gap-1.5">
-                    {/* Mark Present */}
-                    <Button
-                      size="sm"
-                      variant={staff.status === 'PRESENT' ? 'default' : 'outline'}
-                      onClick={() => onQuickMark(staff.userId, 'PRESENT', staff.name)}
-                      disabled={!canMark}
-                      className={cn(
-                        'h-8 px-2 sm:px-2.5 text-xs font-bold rounded-lg gap-1 transition-all',
-                        staff.status === 'PRESENT'
-                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                          : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                      )}
-                      title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:35 AM NPT)' : 'Mark as Present'}
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Present</span>
-                    </Button>
-
-                    {/* Mark Late */}
-                    <Button
-                      size="sm"
-                      variant={staff.status === 'LATE' ? 'default' : 'outline'}
-                      onClick={() => onQuickMark(staff.userId, 'LATE', staff.name)}
-                      disabled={!canMark}
-                      className={cn(
-                        'h-8 px-2 text-xs font-bold rounded-lg gap-1 transition-all',
-                        staff.status === 'LATE'
-                          ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
-                          : 'border-amber-200 text-amber-700 hover:bg-amber-50'
-                      )}
-                      title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:35 AM NPT)' : 'Mark as Late'}
-                    >
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>Late</span>
-                    </Button>
-
-                    {/* Mark Absent */}
-                    <Button
-                      size="sm"
-                      variant={staff.status === 'ABSENT' ? 'default' : 'outline'}
-                      onClick={() => onQuickMark(staff.userId, 'ABSENT', staff.name)}
-                      disabled={!canMark}
-                      className={cn(
-                        'h-8 px-2 text-xs font-bold rounded-lg gap-1 transition-all',
-                        staff.status === 'ABSENT'
-                          ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs'
-                          : 'border-rose-200 text-rose-700 hover:bg-rose-50'
-                      )}
-                      title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:35 AM NPT)' : 'Mark as Absent'}
-                    >
-                      <UserX className="w-3.5 h-3.5" />
-                      <span>Absent</span>
-                    </Button>
-                  </div>
-
-                  {/* Column 5: Options (Edit / History / Purge) */}
-                  <div className="lg:col-span-1 flex items-center justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onOpenEditModal(staff)}
-                      className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                      title="Edit / Correct Record with Notes"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onOpenStaffHistory(staff.userId, staff.name)}
-                      className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                      title="View Staff Monthly Calendar & Logs"
-                    >
-                      <Calendar className="w-3.5 h-3.5" />
-                    </Button>
-
-                    {isSuperAdmin && staff.userId !== currentUserId && (
+                    {/* Fast Attendance Actions Grid */}
+                    <div className="grid grid-cols-3 gap-2 pt-1">
                       <Button
-                        variant="ghost"
                         size="sm"
-                        onClick={() => onOpenPurgeModal(staff.userId, staff.name)}
-                        className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
-                        title="Permanent Staff Deletion (Super Admin Only)"
+                        variant={staff.status === 'PRESENT' ? 'default' : 'outline'}
+                        onClick={() => onQuickMark(staff.userId, 'PRESENT', staff.name)}
+                        disabled={!canMark}
+                        className={cn(
+                          'h-9 px-2 text-xs font-bold rounded-xl gap-1.5 transition-all select-none w-full justify-center',
+                          staff.status === 'PRESENT'
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs font-black'
+                            : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                        )}
+                        title={!canMark ? 'Attendance marking window closed' : 'Mark Present'}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>Present</span>
                       </Button>
-                    )}
+
+                      <Button
+                        size="sm"
+                        variant={staff.status === 'LATE' ? 'default' : 'outline'}
+                        onClick={() => onQuickMark(staff.userId, 'LATE', staff.name)}
+                        disabled={!canMark}
+                        className={cn(
+                          'h-9 px-2 text-xs font-bold rounded-xl gap-1.5 transition-all select-none w-full justify-center',
+                          staff.status === 'LATE'
+                            ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs font-black'
+                            : 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                        )}
+                        title={!canMark ? 'Attendance marking window closed' : 'Mark Late'}
+                      >
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
+                        <span>Late</span>
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant={staff.status === 'ABSENT' ? 'default' : 'outline'}
+                        onClick={() => onQuickMark(staff.userId, 'ABSENT', staff.name)}
+                        disabled={!canMark}
+                        className={cn(
+                          'h-9 px-2 text-xs font-bold rounded-xl gap-1.5 transition-all select-none w-full justify-center',
+                          staff.status === 'ABSENT'
+                            ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-2xs font-black'
+                            : 'border-rose-200 text-rose-700 hover:bg-rose-50'
+                        )}
+                        title={!canMark ? 'Attendance marking window closed' : 'Mark Absent'}
+                      >
+                        <UserX className="w-3.5 h-3.5 shrink-0" />
+                        <span>Absent</span>
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>

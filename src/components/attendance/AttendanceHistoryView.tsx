@@ -284,15 +284,6 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
 
           {/* Records Table */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
-            <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3.5 bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              <div className="col-span-2">Date</div>
-              <div className="col-span-3">Staff Member</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-2">Time & Method</div>
-              <div className="col-span-2">Recorded By / Notes</div>
-              <div className="col-span-1 text-right">Actions</div>
-            </div>
-
             {isLoading ? (
               <div className="p-12 text-center text-slate-400 font-medium">
                 <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -303,137 +294,241 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
                 No matching attendance history records found.
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
-                {filteredRecords.map((rec) => {
-                  const staffUser = rec.user;
-                  return (
-                    <div
-                      key={rec.id}
-                      className="p-4 md:px-5 md:py-3.5 hover:bg-slate-50/70 transition-colors flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 items-stretch md:items-center"
-                    >
-                      {/* Date */}
-                      <div className="md:col-span-2 font-mono font-bold text-slate-800 text-xs">
-                        {rec.date}
-                      </div>
-
-                      {/* Staff Member */}
-                      <div className="md:col-span-3 flex items-center gap-2.5">
-                        <Avatar className="w-8 h-8 rounded-lg bg-indigo-50 border border-slate-200 shrink-0">
-                          <AvatarImage src={staffUser?.avatarUrl} />
-                          <AvatarFallback className="text-[10px] font-black text-indigo-700">
-                            {(staffUser?.name || 'Staff').slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-slate-900 truncate">
-                            {staffUser?.name || 'Staff Member'}
-                          </div>
-                          <div className="text-[10px] text-slate-400 truncate">
-                            {staffUser?.role || 'Staff'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Status */}
-                      <div className="md:col-span-2">{getStatusBadge(rec.status)}</div>
-
-                      {/* Time & Method */}
-                      <div className="md:col-span-2">
-                        <div className="text-xs font-mono font-bold text-slate-800 flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-slate-400" />
-                          {rec.checkInTime || '—'}
-                        </div>
-                        <div className="text-[10px] text-slate-400 uppercase font-semibold">
-                          {rec.method || 'VERIFIED'}
-                        </div>
-                      </div>
-
-                      {/* Recorded By & Notes */}
-                      <div className="md:col-span-2 min-w-0">
-                        <div className="text-xs text-slate-700 font-medium truncate">
-                          {rec.markedByName || 'System Auto'}
-                        </div>
-                        {rec.notes && (
-                          <div className="text-[10px] text-slate-500 italic truncate" title={rec.notes}>
-                            "{rec.notes}"
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="md:col-span-1 flex items-center justify-end gap-1">
-                        {isAdminOrSuperAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onOpenEditModal(rec)}
-                            className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                            title="Edit / Correct Record"
+              <>
+                {/* Desktop & Tablet Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[860px]">
+                    <thead>
+                      <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 select-none">
+                        <th className="py-3.5 pl-5 pr-3 w-[15%] min-w-[110px]">Date</th>
+                        <th className="py-3.5 px-3 w-[25%] min-w-[200px]">Staff Member</th>
+                        <th className="py-3.5 px-3 w-[16%] min-w-[130px]">Status</th>
+                        <th className="py-3.5 px-3 w-[18%] min-w-[150px]">Time & Method</th>
+                        <th className="py-3.5 px-3 w-[16%] min-w-[140px]">Recorded By / Notes</th>
+                        <th className="py-3.5 pl-3 pr-5 w-[10%] min-w-[90px] text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {filteredRecords.map((rec) => {
+                        const staffUser = rec.user;
+                        return (
+                          <tr
+                            key={rec.id}
+                            className="hover:bg-slate-50/70 transition-colors group"
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
-                        {isSuperAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onDeleteRecord(rec.id)}
-                            className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
-                            title="Delete this Attendance Entry"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                            {/* Date */}
+                            <td className="py-3.5 pl-5 pr-3 align-middle font-mono font-bold text-slate-800">
+                              {rec.date}
+                            </td>
+
+                            {/* Staff Member */}
+                            <td className="py-3.5 px-3 align-middle">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <Avatar className="w-8 h-8 rounded-lg bg-indigo-50 border border-slate-200 shrink-0">
+                                  <AvatarImage src={staffUser?.avatarUrl} />
+                                  <AvatarFallback className="text-[10px] font-black text-indigo-700">
+                                    {(staffUser?.name || 'Staff').slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-xs font-bold text-slate-900 truncate max-w-[160px]" title={staffUser?.name}>
+                                    {staffUser?.name || 'Staff Member'}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 truncate max-w-[160px]">
+                                    {staffUser?.role || 'Staff'}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Status */}
+                            <td className="py-3.5 px-3 align-middle">
+                              {getStatusBadge(rec.status)}
+                            </td>
+
+                            {/* Time & Method */}
+                            <td className="py-3.5 px-3 align-middle">
+                              <div className="flex flex-col gap-0.5">
+                                <div className="text-xs font-mono font-bold text-slate-800 flex items-center gap-1">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span>{rec.checkInTime || '—'}</span>
+                                </div>
+                                <div className="text-[10px] text-slate-400 uppercase font-semibold">
+                                  {rec.method || 'VERIFIED'}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Recorded By & Notes */}
+                            <td className="py-3.5 px-3 align-middle">
+                              <div className="flex flex-col gap-0.5 min-w-0">
+                                <div className="text-xs text-slate-700 font-medium truncate max-w-[130px]" title={rec.markedByName || 'System Auto'}>
+                                  {rec.markedByName || 'System Auto'}
+                                </div>
+                                {rec.notes && (
+                                  <div className="text-[10px] text-slate-500 italic truncate max-w-[130px]" title={rec.notes}>
+                                    "{rec.notes}"
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-3.5 pl-3 pr-5 align-middle text-right">
+                              <div className="inline-flex items-center justify-end gap-1 shrink-0">
+                                {isAdminOrSuperAdmin && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => onOpenEditModal(rec)}
+                                    className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg shrink-0"
+                                    title="Edit / Correct Record"
+                                    aria-label="Edit record"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                                {isSuperAdmin && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => onDeleteRecord(rec.id)}
+                                    className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg shrink-0"
+                                    title="Delete this Attendance Entry"
+                                    aria-label="Delete entry"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Cards */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {filteredRecords.map((rec) => {
+                    const staffUser = rec.user;
+                    return (
+                      <div key={rec.id} className="p-4 space-y-2.5 bg-white">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <Avatar className="w-8 h-8 rounded-lg bg-indigo-50 border border-slate-200 shrink-0">
+                              <AvatarImage src={staffUser?.avatarUrl} />
+                              <AvatarFallback className="text-[10px] font-black text-indigo-700">
+                                {(staffUser?.name || 'Staff').slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-slate-900 truncate">
+                                {staffUser?.name || 'Staff Member'}
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                {staffUser?.role || 'Staff'} • <span className="font-mono font-bold text-slate-600">{rec.date}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            {isAdminOrSuperAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onOpenEditModal(rec)}
+                                className="h-7 w-7 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                                title="Edit Record"
+                                aria-label="Edit record"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                            {isSuperAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onDeleteRecord(rec.id)}
+                                className="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
+                                title="Delete Entry"
+                                aria-label="Delete entry"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200/60">
+                          {getStatusBadge(rec.status)}
+                          <div className="text-xs font-mono font-bold text-slate-700 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            {rec.checkInTime || '—'}
+                          </div>
+                        </div>
+
+                        {(rec.markedByName || rec.notes) && (
+                          <div className="text-[11px] text-slate-500 space-y-0.5">
+                            {rec.markedByName && <div>Recorded by: <span className="font-medium text-slate-700">{rec.markedByName}</span></div>}
+                            {rec.notes && <div className="italic text-slate-400">"{rec.notes}"</div>}
+                          </div>
                         )}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </>
       ) : (
         /* Audit Trail Table */
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
-          <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3.5 bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider">
-            <div className="col-span-3">Timestamp (NPT)</div>
-            <div className="col-span-2">Action</div>
-            <div className="col-span-3">Modified By</div>
-            <div className="col-span-4">Audit Details / Changes</div>
-          </div>
-
           {auditLogs.length === 0 ? (
             <div className="p-12 text-center text-slate-400 font-medium">
               No audit log entries recorded yet.
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
-              {auditLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="p-4 md:px-5 md:py-3.5 hover:bg-slate-50/70 transition-colors flex flex-col md:grid md:grid-cols-12 gap-2 md:gap-4 items-stretch md:items-center text-xs"
-                >
-                  <div className="md:col-span-3 font-mono font-medium text-slate-600">
-                    <div>{log.timeNPT || log.timestamp}</div>
-                    <div className="text-[10px] text-slate-400">Target Date: {log.targetDate}</div>
-                  </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[700px]">
+                <thead>
+                  <tr className="bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider select-none">
+                    <th className="py-3.5 pl-5 pr-3 w-[25%]">Timestamp (NPT)</th>
+                    <th className="py-3.5 px-3 w-[20%]">Action</th>
+                    <th className="py-3.5 px-3 w-[25%]">Modified By</th>
+                    <th className="py-3.5 pl-3 pr-5 w-[30%]">Audit Details / Changes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {auditLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-3.5 pl-5 pr-3 align-top font-mono font-medium text-slate-600">
+                        <div>{log.timeNPT || log.timestamp}</div>
+                        <div className="text-[10px] text-slate-400">Target Date: {log.targetDate}</div>
+                      </td>
 
-                  <div className="md:col-span-2">
-                    <Badge className="bg-slate-100 text-slate-800 border border-slate-200 text-[10px] font-bold">
-                      {log.action}
-                    </Badge>
-                  </div>
+                      <td className="py-3.5 px-3 align-top">
+                        <Badge className="bg-slate-100 text-slate-800 border border-slate-200 text-[10px] font-bold">
+                          {log.action}
+                        </Badge>
+                      </td>
 
-                  <div className="md:col-span-3">
-                    <div className="font-bold text-slate-900">{log.performedByName}</div>
-                    <div className="text-[10px] text-slate-400 font-semibold">{log.performedByRole}</div>
-                  </div>
+                      <td className="py-3.5 px-3 align-top">
+                        <div className="font-bold text-slate-900">{log.performedByName}</div>
+                        <div className="text-[10px] text-slate-400 font-semibold">{log.performedByRole}</div>
+                      </td>
 
-                  <div className="md:col-span-4 font-mono text-[11px] text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-200/60 overflow-x-auto">
-                    {JSON.stringify(log.details)}
-                  </div>
-                </div>
-              ))}
+                      <td className="py-3.5 pl-3 pr-5 align-top">
+                        <div className="font-mono text-[11px] text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-200/60 overflow-x-auto max-h-24">
+                          {JSON.stringify(log.details)}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
