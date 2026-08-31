@@ -21,17 +21,6 @@ const getEncryptionKey = () => {
   if (Buffer.byteLength(raw, 'utf8') === 32) return Buffer.from(raw, 'utf8');
   throw new Error('BACKUP_ENCRYPTION_KEY must represent exactly 32 bytes.');
 };
-const encrypt = (value: unknown) => {
-  const cipher = crypto.createCipheriv('aes-256-gcm', getEncryptionKey(), crypto.randomBytes(12));
-  const iv = (cipher as any).iv || undefined;
-  const plaintext = Buffer.from(JSON.stringify(value), 'utf8');
-  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-  // Recreate with explicit IV because Cipheriv does not expose it.
-  const explicitIv = (cipher as any).__mtsIv as Buffer | undefined;
-  if (!iv && !explicitIv) throw new Error('Backup encryption initialization failed.');
-  const tag = cipher.getAuthTag();
-  return Buffer.concat([Buffer.from('MTSB1'), explicitIv || iv!, tag, ciphertext]);
-};
 const decrypt = (buffer: Buffer) => {
   const key = getEncryptionKey();
   if (buffer.subarray(0,5).toString() !== 'MTSB1') throw new Error('Unsupported backup format.');
