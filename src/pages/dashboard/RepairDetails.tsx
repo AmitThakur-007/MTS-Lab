@@ -73,7 +73,7 @@ export default function RepairDetails() {
 
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
-  const [alertPriority, setAlertPriority] = useState<'URGENT' | 'HIGH' | 'NORMAL'>('URGENT');
+  const [alertPriority, setAlertPriority] = useState<'URGENT' | 'HIGH' | 'MEDIUM' | 'NORMAL'>('NORMAL');
   const [sendingAlert, setSendingAlert] = useState(false);
 
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
@@ -184,8 +184,7 @@ export default function RepairDetails() {
     try {
       const res = await api.post(`/repairs/${id}/alert`, {
         message: alertMessage.trim(),
-        priority: alertPriority,
-        isUrgent: alertPriority === 'URGENT'
+        priority: alertPriority
       });
 
       const updatedRepair = res.repair || res;
@@ -232,20 +231,7 @@ export default function RepairDetails() {
     }
   };
 
-  const handleUpdatePriority = async (priority: string) => {
-    setUpdating(true);
-    try {
-      const res = await api.patch(`/repairs/${id}`, { priority });
-      setRepair(res);
-      await syncRepairToRtdb(res);
-      toast.success(`Priority updated to ${priority}`);
-      fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update priority");
-    } finally {
-      setUpdating(false);
-    }
-  };
+
 
   const handleAddNote = async () => {
     if (!newNote.trim() || submittingNote) return;
@@ -393,23 +379,6 @@ export default function RepairDetails() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end shrink-0 pt-2 xl:pt-0 border-t xl:border-t-0 border-slate-100">
-          {['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(user?.role || '') && (
-            <Select
-              value={repair.priority || 'MEDIUM'}
-              onValueChange={handleUpdatePriority}
-              disabled={updating}
-            >
-              <SelectTrigger className="h-10 rounded-2xl border-slate-200 bg-white font-bold text-xs w-32 shrink-0 cursor-pointer">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="NORMAL" className="font-bold text-xs">Normal</SelectItem>
-                <SelectItem value="MEDIUM" className="font-bold text-xs text-slate-700">Medium</SelectItem>
-                <SelectItem value="HIGH" className="font-bold text-xs text-amber-600">High</SelectItem>
-                <SelectItem value="URGENT" className="font-bold text-xs text-rose-600">Urgent</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
 
           {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && (
             <Button
@@ -876,12 +845,13 @@ export default function RepairDetails() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs font-black uppercase tracking-wider text-slate-500">Select Urgency Level</Label>
-              <div className="grid grid-cols-3 gap-2.5">
+              <Label className="text-xs font-black uppercase tracking-wider text-slate-500">Select Alert Priority</Label>
+              <div className="grid grid-cols-2 gap-2.5">
                 {[
-                  { value: 'URGENT', label: 'Urgent', desc: 'Immediate Action' },
-                  { value: 'HIGH', label: 'High', desc: 'Priority Queue' },
-                  { value: 'NORMAL', label: 'Normal', desc: 'Standard Notice' },
+                  { value: 'URGENT', label: 'Urgent', desc: 'Immediate Action', emoji: '🔴' },
+                  { value: 'HIGH', label: 'High', desc: 'Priority Queue', emoji: '🟠' },
+                  { value: 'MEDIUM', label: 'Medium', desc: 'Elevated Notice', emoji: '🟡' },
+                  { value: 'NORMAL', label: 'Normal', desc: 'Standard Notice', emoji: '⚪' },
                 ].map((item) => {
                   const isSelected = alertPriority === item.value;
                   return (
@@ -893,12 +863,15 @@ export default function RepairDetails() {
                         "flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all cursor-pointer text-center gap-1",
                         item.value === 'URGENT' && "border-rose-200 bg-rose-50/50 text-rose-800 hover:bg-rose-100",
                         item.value === 'HIGH' && "border-amber-200 bg-amber-50/50 text-amber-900 hover:bg-amber-100",
+                        item.value === 'MEDIUM' && "border-yellow-200 bg-yellow-50/50 text-yellow-900 hover:bg-yellow-100",
                         item.value === 'NORMAL' && "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100",
                         isSelected && item.value === 'URGENT' && "border-rose-600 bg-rose-600 text-white shadow-md shadow-rose-600/20 scale-[1.02]",
                         isSelected && item.value === 'HIGH' && "border-amber-500 bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20 scale-[1.02]",
+                        isSelected && item.value === 'MEDIUM' && "border-yellow-500 bg-yellow-500 text-slate-950 font-bold shadow-md shadow-yellow-500/20 scale-[1.02]",
                         isSelected && item.value === 'NORMAL' && "border-slate-900 bg-slate-900 text-white shadow-md scale-[1.02]"
                       )}
                     >
+                      <span className="text-sm">{item.emoji}</span>
                       <span className="text-xs font-black uppercase tracking-wider">{item.label}</span>
                       <span className="text-[10px] opacity-80 font-medium">{item.desc}</span>
                     </button>
@@ -935,6 +908,7 @@ export default function RepairDetails() {
                 "flex-1 rounded-2xl h-11 font-bold text-xs shadow-md cursor-pointer text-white",
                 alertPriority === 'URGENT' && "bg-rose-600 hover:bg-rose-700 shadow-rose-600/20",
                 alertPriority === 'HIGH' && "bg-amber-500 hover:bg-amber-600 text-slate-950 font-black shadow-amber-500/20",
+                alertPriority === 'MEDIUM' && "bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-black shadow-yellow-500/20",
                 alertPriority === 'NORMAL' && "bg-slate-900 hover:bg-slate-800 shadow-slate-900/20"
               )}
             >
@@ -946,7 +920,7 @@ export default function RepairDetails() {
               ) : (
                 <>
                   <Send className="h-4 w-4 mr-1.5" />
-                  <span>Dispatch {alertPriority} Alert</span>
+                  <span>Send {alertPriority} Alert</span>
                 </>
               )}
             </Button>

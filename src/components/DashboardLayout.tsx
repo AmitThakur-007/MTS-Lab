@@ -352,6 +352,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           )} />
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-extrabold text-slate-900 truncate">{n.title}</p>
+                            {n.priority && (
+                              <span className={cn(
+                                "inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-0.5",
+                                n.priority === 'URGENT' && "bg-rose-100 text-rose-700",
+                                n.priority === 'HIGH' && "bg-amber-100 text-amber-700",
+                                n.priority === 'MEDIUM' && "bg-yellow-100 text-yellow-700",
+                                n.priority === 'NORMAL' && "bg-slate-100 text-slate-600"
+                              )}>
+                                {n.priority === 'URGENT' ? '🔴' : n.priority === 'HIGH' ? '🟠' : n.priority === 'MEDIUM' ? '🟡' : '⚪'} {n.priority}
+                              </span>
+                            )}
                             <p className="text-xs text-slate-600 font-medium line-clamp-2 mt-0.5">{n.message}</p>
                             <span className="text-[10px] text-slate-400 font-bold block mt-1">
                               {n.createdAt ? format(new Date(n.createdAt), 'dd MMM • HH:mm') : ''}

@@ -458,6 +458,7 @@ model Notification {
   repairNumber String?
   senderId     String?
   senderName   String?
+  priority     String?   // NORMAL, MEDIUM, HIGH, URGENT — used for alert notifications
   metadata     String?
   isRead       Boolean   @default(false)
   readAt       DateTime?

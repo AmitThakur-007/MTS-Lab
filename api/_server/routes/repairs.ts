@@ -590,19 +590,44 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
 });
 
 // Urgent Alert & Priority Escalation Endpoint (Explicitly updates priority field)
-router.post('/:id/alert', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'LEAD_TECHNICIAN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { priority, message, isUrgent } = req.body;
+    const { priority, message } = req.body;
 
-    const resolvedPriority = isUrgent || (priority && String(priority).toUpperCase() === 'URGENT')
-      ? 'URGENT'
-      : (priority ? String(priority).toUpperCase() : 'HIGH');
+    // Strict priority validation
+    const VALID_PRIORITIES = ['NORMAL', 'MEDIUM', 'HIGH', 'URGENT'];
+    const resolvedPriority = priority ? String(priority).toUpperCase().trim() : '';
 
+    if (!resolvedPriority || !VALID_PRIORITIES.includes(resolvedPriority)) {
+      return res.status(400).json({ error: `Invalid priority. Must be one of: ${VALID_PRIORITIES.join(', ')}` });
+    }
+
+    if (!message || !String(message).trim()) {
+      return res.status(400).json({ error: 'Alert message is required.' });
+    }
+
+    // Verify repair exists
+    const { data: existingRepair, error: fetchErr } = await supabaseAdmin
+      .from('Repair')
+      .select('*, technician:User!Repair_technicianId_fkey(id, name)')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !existingRepair) {
+      return res.status(404).json({ error: 'Repair not found.' });
+    }
+
+    if (!existingRepair.technicianId) {
+      return res.status(400).json({ error: 'Cannot alert technician — no technician is assigned to this repair.' });
+    }
+
+    // Update repair priority
     const { data: updatedRepair, error: updateErr } = await supabaseAdmin
       .from('Repair')
       .update({
         priority: resolvedPriority,
+        priorityUpdatedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       })
       .eq('id', id)
@@ -613,30 +638,46 @@ router.post('/:id/alert', authenticate, async (req: AuthRequest, res: Response) 
       return res.status(500).json({ error: 'Failed to update repair priority.' });
     }
 
+    // Create repair log
     const logId = uuidv4();
     await supabaseAdmin.from('RepairLog').insert([
       {
         id: logId,
         repairId: id,
         userId: req.user!.id,
-        action: 'URGENT_ALERT_DISPATCHED',
+        action: 'PRIORITY_ALERT_DISPATCHED',
         status: updatedRepair.status,
-        notes: message || `Priority escalated to ${resolvedPriority} by ${req.user!.name}`,
+        notes: `[Priority Alert] ${resolvedPriority} — ${String(message).trim()} (Dispatched by ${req.user!.name})`,
         createdAt: new Date().toISOString()
       }
     ]);
     await broadcastServerChange('RepairLog', 'CREATE', logId);
 
+    // Build priority-aware notification
+    const priorityEmoji: Record<string, string> = {
+      URGENT: '🔴',
+      HIGH: '🟠',
+      MEDIUM: '🟡',
+      NORMAL: '⚪'
+    };
+    const emoji = priorityEmoji[resolvedPriority] || '🔔';
+    const notifTitle = `${emoji} ${resolvedPriority} Alert: Job #${updatedRepair.repairNumber}`;
+    const notifMessage = String(message).trim() || `Priority alert from ${req.user!.name}`;
+
+    // Create notification with priority field
     const notifId = uuidv4();
     await supabaseAdmin.from('Notification').insert([
       {
         id: notifId,
-        title: `🚨 Urgent Alert: Job #${updatedRepair.repairNumber}`,
-        message: message || `High priority escalation requested by ${req.user!.name}`,
-        type: 'URGENT_ALERT',
-        userId: updatedRepair.technicianId || null,
+        title: notifTitle,
+        message: notifMessage,
+        type: 'REPAIR_ALERT',
+        priority: resolvedPriority,
+        userId: updatedRepair.technicianId,
         repairId: id,
         repairNumber: updatedRepair.repairNumber,
+        senderId: req.user!.id,
+        senderName: req.user!.name,
         isRead: false,
         createdAt: new Date().toISOString()
       }
@@ -646,12 +687,12 @@ router.post('/:id/alert', authenticate, async (req: AuthRequest, res: Response) 
 
     return res.json({
       success: true,
-      message: `Repair successfully marked as ${resolvedPriority} priority and technician alerted.`,
+      message: `${resolvedPriority} priority alert dispatched to ${existingRepair.technician?.name || 'assigned technician'}.`,
       repair: updatedRepair
     });
   } catch (err: any) {
     console.error('[ALERT TECHNICIAN EXCEPTION]', err);
-    return res.status(500).json({ error: 'Failed to dispatch urgent alert.' });
+    return res.status(500).json({ error: 'Failed to dispatch alert.' });
   }
 });
 
