@@ -10,17 +10,13 @@ export interface RealtimeEvent {
 }
 
 type Listener = (event: RealtimeEvent) => void;
-
 type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
 
 /**
  * Central realtime service.
- *
- * Supabase Realtime is the single browser transport. The previous EventSource
- * connection to /api/events was removed because a persistent SSE connection is
- * not a reliable transport for the deployed serverless architecture and could
- * produce HTML/MIME errors when routing failed. Database changes are delivered
- * directly by Supabase Realtime instead.
+ * Supabase Realtime is the browser transport. Persistent EventSource/SSE
+ * connections are intentionally not used because the deployed serverless
+ * architecture cannot guarantee a long-lived /api/events response.
  */
 class RealtimeService {
   private listeners: Map<string, Set<Listener>> = new Map();
@@ -118,10 +114,9 @@ class RealtimeService {
   private initNetworkListeners() {
     window.addEventListener('online', () => {
       this.networkOnline = true;
+      // Supabase Realtime owns reconnect/backoff. Do not call private or
+      // version-dependent client methods from application code.
       this.updateStatus();
-      if (this.supabaseChannel) {
-        try { this.supabase.realtime.connect(); } catch (_) { /* Supabase handles reconnects. */ }
-      }
     });
 
     window.addEventListener('offline', () => {
@@ -139,7 +134,7 @@ class RealtimeService {
     if (this.currentStatus === status) return;
     this.currentStatus = status;
     this.statusListeners.forEach((listener) => {
-      try { listener(status); } catch (_) { /* Listener errors must not break realtime. */ }
+      try { listener(status); } catch (_) { /* listener isolation */ }
     });
   }
 
