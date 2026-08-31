@@ -19,10 +19,11 @@ import {
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { Badge } from '@/components/ui/badge';
-import mtsLogo from '@/assets/images/mts-logo.jpg';
-import sabitaPhoto from '@/assets/team/sabita-thakur.jpg';
-import manishPhoto from '@/assets/team/manish-sharma.jpg';
-import amitPhoto from '@/assets/team/amit-sharma.jpg';
+
+const mtsLogo = '/apple-touch-icon.png';
+const sabitaPhoto = '/images/team/sabita-thakur.jpg';
+const manishPhoto = '/images/team/manish-sharma.jpg';
+const amitPhoto = '/images/team/amit-sharma.jpg';
 
 const leadershipMessages = [
   {

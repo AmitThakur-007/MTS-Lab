@@ -58,22 +58,22 @@ export interface HomeSlideItem {
 const PRESET_IMAGES = [
   {
     name: 'Front Glass OCA Repair',
-    url: '/assets/images/front_glass_repair_1786719176945.jpg',
+    url: '/assets/images/front-glass-change.jpg',
     category: 'Front Glass'
   },
   {
     name: 'Original Display Replacement',
-    url: '/assets/images/display_replace_1786719191504.jpg',
+    url: '/assets/images/display-replacement.jpg',
     category: 'Display'
   },
   {
     name: 'Laser Back Glass Replacement',
-    url: '/assets/images/back_glass_fix_1786719207185.jpg',
+    url: '/assets/images/back-glass-change.jpg',
     category: 'Back Glass'
   },
   {
     name: 'IC Micro-Soldering & Lab',
-    url: '/assets/images/phone_repair_lab_1786719222650.jpg',
+    url: '/assets/images/motherboard-repair.jpg',
     category: 'Motherboard'
   }
 ];

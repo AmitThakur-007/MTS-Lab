@@ -126,6 +126,7 @@ interface DeviceFormItem {
   advancePaid: string;
   expectedCompletionDate: string;
   technicianId: string;
+  priority: 'NORMAL' | 'MEDIUM' | 'HIGH' | 'URGENT';
   status: string;
   remarks: string;
   hasBatteryWarranty: boolean;
@@ -149,6 +150,7 @@ const createInitialDevice = (index = 1): DeviceFormItem => ({
   advancePaid: '0',
   expectedCompletionDate: '',
   technicianId: '',
+  priority: 'NORMAL',
   status: 'RECEIVED',
   remarks: '',
   hasBatteryWarranty: false,
@@ -254,6 +256,7 @@ export default function NewRepair() {
             advancePaid: '0',
             expectedCompletionDate: '',
             technicianId: '',
+            priority: 'HIGH',
             status: 'RECEIVED',
             remarks: `Warranty Replacement: ${w.warrantyNumber}`,
             hasBatteryWarranty: true,
@@ -604,6 +607,7 @@ export default function NewRepair() {
           estimatedCost: dev.estimatedCost === "" ? null : Number(dev.estimatedCost),
           advancePaid: dev.advancePaid === "" ? 0 : Number(dev.advancePaid),
           technicianId: dev.technicianId || null,
+          priority: dev.priority || 'NORMAL',
           status: dev.status || 'RECEIVED',
           expectedCompletionDate: dev.expectedCompletionDate ? new Date(dev.expectedCompletionDate).toISOString() : null,
           remarks: dev.remarks.trim() || undefined,
@@ -657,6 +661,7 @@ export default function NewRepair() {
             estimatedCost: dev.estimatedCost === "" ? null : Number(dev.estimatedCost),
             advancePaid: dev.advancePaid === "" ? 0 : Number(dev.advancePaid),
             technicianId: dev.technicianId || null,
+            priority: dev.priority || 'NORMAL',
             status: dev.status || 'RECEIVED',
             expectedCompletionDate: dev.expectedCompletionDate ? new Date(dev.expectedCompletionDate).toISOString() : null,
             remarks: dev.remarks.trim() || undefined,
@@ -1550,7 +1555,7 @@ export default function NewRepair() {
                       </div>
 
                       {/* Financials & Assignment */}
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2 border-t border-slate-100">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 pt-2 border-t border-slate-100">
                         
                         <div className="space-y-1.5">
                           <Label className="text-xs font-bold text-slate-700">Estimated Cost (Rs.)</Label>
@@ -1578,6 +1583,30 @@ export default function NewRepair() {
                               className="h-11 pl-9 rounded-xl border-slate-200 bg-slate-50 font-bold font-mono text-sm text-emerald-700"
                             />
                           </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold text-slate-700">Queue Priority</Label>
+                          <Select
+                            value={device.priority || 'NORMAL'}
+                            onValueChange={(v) => handleDeviceChange(idx, 'priority', v)}
+                          >
+                            <SelectTrigger className={cn(
+                              "h-11 rounded-xl font-bold text-xs shadow-xs",
+                              device.priority === 'URGENT' ? "bg-rose-50 border-rose-300 text-rose-700 font-extrabold" :
+                              device.priority === 'HIGH' ? "bg-amber-50 border-amber-300 text-amber-700 font-bold" :
+                              device.priority === 'MEDIUM' ? "bg-yellow-50 border-yellow-300 text-yellow-800 font-bold" :
+                              "bg-slate-50 border-slate-200 text-slate-700"
+                            )}>
+                              <SelectValue placeholder="Priority" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl shadow-xl">
+                              <SelectItem value="NORMAL" className="text-xs font-semibold">⚪ Normal Priority</SelectItem>
+                              <SelectItem value="MEDIUM" className="text-xs font-bold text-yellow-700">🟡 Medium Priority</SelectItem>
+                              <SelectItem value="HIGH" className="text-xs font-bold text-amber-700">🟠 High Priority</SelectItem>
+                              <SelectItem value="URGENT" className="text-xs font-bold text-rose-700">🔴 Urgent / Expedited</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
 
                         <div className="space-y-1.5">

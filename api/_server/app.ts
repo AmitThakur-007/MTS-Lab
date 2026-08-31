@@ -40,6 +40,30 @@ var config = {
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || ""
 };
 
+async function broadcastServerChange(entityName: string, action: 'CREATE' | 'UPDATE' | 'DELETE', id: string, data?: any) {
+  try {
+    const channel = supabaseAdmin.channel('mts_app_db_changes');
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        const entityLower = entityName.toLowerCase();
+        await channel.send({
+          type: 'broadcast',
+          event: 'db_event',
+          payload: {
+            entity: entityLower,
+            action,
+            id: String(id),
+            data,
+            timestamp: Date.now()
+          }
+        });
+      }
+    });
+  } catch (err) {
+    console.warn('[SERVER REALTIME BROADCAST WARNING]', err);
+  }
+}
+
 // api/_server/middleware/auth.ts
 import jwt from "jsonwebtoken";
 async function authenticate(req, res, next) {
@@ -1000,6 +1024,7 @@ var ALLOWED_REPAIR_COLUMNS = /* @__PURE__ */ new Set([
   "paymentStatus",
   "status",
   "priority",
+  "priorityUpdatedAt",
   "technicianId",
   "branchId",
   "expectedCompletionDate",
@@ -1360,7 +1385,7 @@ router3.post("/", authenticate, async (req, res) => {
       advancePaid,
       technicianId,
       branchId,
-      priority = "MEDIUM",
+      priority = "NORMAL",
       expectedCompletionDate,
       remarks,
       receivingMethod = "WALK_IN",
@@ -1407,6 +1432,13 @@ router3.post("/", authenticate, async (req, res) => {
     const estCostNum = parseFloat(estimatedCost || 0) || 0;
     const advPaidNum = parseFloat(advancePaid || 0) || 0;
     const paymentStatus = advPaidNum >= estCostNum && estCostNum > 0 ? "PAID" : advPaidNum > 0 ? "PARTIAL" : "UNPAID";
+    
+    // Normalize and validate priority
+    const VALID_PRIORITIES = ['NORMAL', 'MEDIUM', 'HIGH', 'URGENT'];
+    const normalizedPriority = priority ? String(priority).toUpperCase().trim() : 'NORMAL';
+    const finalPriority = VALID_PRIORITIES.includes(normalizedPriority) ? normalizedPriority : 'NORMAL';
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+
     const newRepair = {
       id: repairId,
       repairNumber,
@@ -1428,7 +1460,8 @@ router3.post("/", authenticate, async (req, res) => {
       totalPaid: advPaidNum,
       paymentStatus,
       status: "RECEIVED",
-      priority,
+      priority: finalPriority,
+      priorityUpdatedAt: finalPriority !== 'NORMAL' ? nowIso : null,
       technicianId: technicianId || null,
       branchId: branchId || req.user.branchId || null,
       expectedCompletionDate: expectedCompletionDate || null,
@@ -1447,8 +1480,8 @@ router3.post("/", authenticate, async (req, res) => {
       batteryHealth: batteryHealth || null,
       batterySerial: batterySerial || null,
       createdById: req.user.id,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      createdAt: nowIso,
+      updatedAt: nowIso
     };
     const { data: created, error } = await supabaseAdmin.from("Repair").insert([newRepair]).select("*").single();
     if (error) {
@@ -1458,14 +1491,15 @@ router3.post("/", authenticate, async (req, res) => {
     if (hasBatteryWarranty || batteryWarrantyPeriod) {
       await syncBatteryWarrantyFromRepair(created, req.user);
     }
+    const logId = uuidv44();
     await supabaseAdmin.from("RepairLog").insert([
       {
-        id: uuidv44(),
+        id: logId,
         repairId: created.id,
         userId: req.user.id,
         action: "CREATED",
         status: "RECEIVED",
-        notes: `Repair intake recorded by ${req.user.name}. Initial payment: NPR ${advPaidNum}`,
+        notes: `Repair intake recorded by ${req.user.name}. Priority: ${finalPriority}. Initial payment: NPR ${advPaidNum}`,
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       }
     ]);
@@ -1474,8 +1508,13 @@ router3.post("/", authenticate, async (req, res) => {
       action: "REPAIR_CREATED",
       resource: "Repair",
       resourceId: created.id,
-      details: { repairNumber: created.repairNumber, customerName: created.customerName }
+      details: { repairNumber: created.repairNumber, customerName: created.customerName, priority: finalPriority }
     });
+
+    // Realtime Broadcasts
+    broadcastServerChange('Repair', 'CREATE', created.id, created);
+    broadcastServerChange('RepairLog', 'CREATE', logId);
+
     return res.status(201).json(created);
   } catch (err) {
     console.error("[CREATE REPAIR ERROR]", err);
@@ -1495,6 +1534,17 @@ var handleRepairUpdate = async (req, res) => {
     if (updateData.estimatedCost !== void 0) updateData.estimatedCost = parseFloat(updateData.estimatedCost) || 0;
     if (updateData.advancePaid !== void 0) updateData.advancePaid = parseFloat(updateData.advancePaid) || 0;
     if (updateData.totalPaid !== void 0) updateData.totalPaid = parseFloat(updateData.totalPaid) || 0;
+    
+    // Normalize priority if provided
+    let priorityChanged = false;
+    if (updateData.priority !== void 0) {
+      const VALID_PRIORITIES = ['NORMAL', 'MEDIUM', 'HIGH', 'URGENT'];
+      const normalizedPriority = String(updateData.priority).toUpperCase().trim();
+      updateData.priority = VALID_PRIORITIES.includes(normalizedPriority) ? normalizedPriority : 'NORMAL';
+      updateData.priorityUpdatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      priorityChanged = true;
+    }
+
     updateData.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
     const { data: updated, error } = await supabaseAdmin.from("Repair").update(updateData).eq("id", id).select("*").single();
     if (error) {
@@ -1504,10 +1554,49 @@ var handleRepairUpdate = async (req, res) => {
     if (rawBody.hasBatteryWarranty || rawBody.batteryWarrantyPeriod || updated.hasBatteryWarranty || updated.batteryWarrantyPeriod) {
       await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody }, req.user);
     }
-    if (rawBody.status) {
+    
+    // Log priority change
+    if (priorityChanged) {
+      const logId = uuidv44();
       await supabaseAdmin.from("RepairLog").insert([
         {
-          id: uuidv44(),
+          id: logId,
+          repairId: id,
+          userId: req.user.id,
+          action: "PRIORITY_UPDATED",
+          status: updated.status,
+          notes: `Priority updated to ${updateData.priority} by ${req.user.name}`,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+      broadcastServerChange('RepairLog', 'CREATE', logId);
+
+      // If priority is HIGH or URGENT and technician is assigned, dispatch Notification
+      if ((updateData.priority === 'HIGH' || updateData.priority === 'URGENT') && updated.technicianId) {
+        try {
+          const notifId = uuidv44();
+          const notifData = {
+            id: notifId,
+            title: `${updateData.priority === 'URGENT' ? '🚨 URGENT' : '⚠️ HIGH'} Priority: #${updated.repairNumber || id.slice(0, 8)}`,
+            message: `Priority escalated to ${updateData.priority} for ${updated.deviceBrand || ''} ${updated.deviceModel || 'device'}. Action required immediately.`,
+            type: updateData.priority === 'URGENT' ? 'REPAIR_URGENT' : 'REPAIR_ALERT',
+            userId: updated.technicianId,
+            isRead: false,
+            createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          };
+          await supabaseAdmin.from("Notification").insert([notifData]);
+          broadcastServerChange('Notification', 'CREATE', notifId, notifData);
+        } catch (notifErr) {
+          console.warn("[PRIORITY NOTIFICATION ERROR - NON FATAL]", notifErr);
+        }
+      }
+    }
+
+    if (rawBody.status) {
+      const logId = uuidv44();
+      await supabaseAdmin.from("RepairLog").insert([
+        {
+          id: logId,
           repairId: id,
           userId: req.user.id,
           action: "STATUS_UPDATED",
@@ -1516,7 +1605,12 @@ var handleRepairUpdate = async (req, res) => {
           createdAt: (/* @__PURE__ */ new Date()).toISOString()
         }
       ]);
+      broadcastServerChange('RepairLog', 'CREATE', logId);
     }
+
+    // Broadcast Repair Update
+    broadcastServerChange('Repair', 'UPDATE', id, updated);
+
     return res.json(updated);
   } catch (err) {
     console.error("[REPAIR UPDATE EXCEPTION]", err);
@@ -1528,7 +1622,7 @@ router3.put("/:id", authenticate, handleRepairUpdate);
 router3.patch("/:id/technician-update", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, estimatedDeliveryDate, sparePartsUsed, technicianNotes } = req.body;
+    const { status, estimatedDeliveryDate, sparePartsUsed, technicianNotes, partsUsed } = req.body;
     const { data: existingRepair, error: fetchErr } = await supabaseAdmin.from("Repair").select("*").eq("id", id).single();
     if (fetchErr || !existingRepair) {
       return res.status(404).json({ error: "Repair job not found." });
@@ -1537,33 +1631,54 @@ router3.patch("/:id/technician-update", authenticate, async (req, res) => {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     if (status) updatePayload.status = status;
-    if (estimatedDeliveryDate) updatePayload.estimatedDeliveryDate = estimatedDeliveryDate;
+    if (estimatedDeliveryDate) updatePayload.expectedCompletionDate = estimatedDeliveryDate;
     if (sparePartsUsed !== void 0) updatePayload.sparePartsUsed = sparePartsUsed;
+    if (partsUsed !== void 0) updatePayload.partsUsed = partsUsed;
     if (technicianNotes !== void 0) updatePayload.technicianNotes = technicianNotes;
     const { data: updatedRepair, error: updateErr } = await supabaseAdmin.from("Repair").update(updatePayload).eq("id", id).select("*").single();
     if (updateErr) {
       console.error("[TECHNICIAN UPDATE ERROR]", updateErr);
       return res.status(500).json({ error: "Failed to update repair progress." });
     }
+
+    const logId = uuidv44();
+    await supabaseAdmin.from("RepairLog").insert([
+      {
+        id: logId,
+        repairId: id,
+        userId: req.user.id,
+        action: "TECHNICIAN_PROGRESS",
+        status: updatedRepair.status,
+        notes: `Technician ${req.user.name} updated progress to ${status || existingRepair.status}. Notes: ${technicianNotes || "None"}`,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      }
+    ]);
+    broadcastServerChange('RepairLog', 'CREATE', logId);
+
     try {
-      await supabaseAdmin.from("Notification").insert([
-        {
-          id: uuidv44(),
-          title: `Repair Updated: #${updatedRepair.repairNumber || id.slice(0, 8)}`,
-          message: `${req.user?.name || "Technician"} updated repair status to ${status || existingRepair.status}. Note: ${technicianNotes || "No notes added"}`,
-          type: "REPAIR_UPDATE",
-          userId: existingRepair.createdById || null,
-          isRead: false,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
+      const notifId = uuidv44();
+      const notifData = {
+        id: notifId,
+        title: `Repair Updated: #${updatedRepair.repairNumber || id.slice(0, 8)}`,
+        message: `${req.user?.name || "Technician"} updated repair status to ${status || existingRepair.status}. Note: ${technicianNotes || "No notes added"}`,
+        type: "REPAIR_UPDATE",
+        userId: existingRepair.createdById || null,
+        isRead: false,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      await supabaseAdmin.from("Notification").insert([notifData]);
+      broadcastServerChange('Notification', 'CREATE', notifId, notifData);
     } catch (notifErr) {
       console.warn("[NOTIFICATION DISPATCH WARN - NON FATAL]", notifErr);
     }
+
+    broadcastServerChange('Repair', 'UPDATE', id, updatedRepair);
+
     return res.json({
       success: true,
       message: "Repair progress updated successfully.",
-      repair: updatedRepair
+      repair: updatedRepair,
+      ...updatedRepair
     });
   } catch (err) {
     console.error("[TECHNICIAN UPDATE EXCEPTION]", err);
@@ -1585,9 +1700,10 @@ router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MA
     if (error) {
       return res.status(500).json({ error: "Failed to assign technician." });
     }
+    const logId = uuidv44();
     await supabaseAdmin.from("RepairLog").insert([
       {
-        id: uuidv44(),
+        id: logId,
         repairId: id,
         userId: req.user.id,
         action: "ASSIGNED",
@@ -1596,6 +1712,29 @@ router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MA
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       }
     ]);
+    broadcastServerChange('RepairLog', 'CREATE', logId);
+
+    if (technicianId) {
+      try {
+        const notifId = uuidv44();
+        const notifData = {
+          id: notifId,
+          title: `New Job Assigned: #${updated.repairNumber || id.slice(0, 8)}`,
+          message: `You were assigned repair job #${updated.repairNumber || id.slice(0, 8)} (${updated.deviceBrand || ''} ${updated.deviceModel || ''}) with priority ${updated.priority || 'NORMAL'} by ${req.user.name}.`,
+          type: "ASSIGNMENT",
+          userId: technicianId,
+          isRead: false,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        await supabaseAdmin.from("Notification").insert([notifData]);
+        broadcastServerChange('Notification', 'CREATE', notifId, notifData);
+      } catch (notifErr) {
+        console.warn("[ASSIGN NOTIFICATION WARN]", notifErr);
+      }
+    }
+
+    broadcastServerChange('Repair', 'UPDATE', id, updated);
+
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to assign technician." });
@@ -1622,6 +1761,7 @@ router3.post("/:id/notes", authenticate, async (req, res) => {
     if (error) {
       return res.status(500).json({ error: "Failed to save note." });
     }
+    broadcastServerChange('TechnicianNote', 'CREATE', created.id, created);
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to add repair note." });
@@ -1640,7 +1780,120 @@ router3.get("/:id/notes", authenticate, async (req, res) => {
   }
 });
 router3.post("/:id/alert", authenticate, async (req, res) => {
-  return res.json({ success: true, message: "Customer notification alert dispatched successfully." });
+  try {
+    const { id } = req.params;
+    const { priority, message, isUrgent } = req.body;
+
+    // 1. Verify repair exists
+    const { data: repair, error: fetchErr } = await supabaseAdmin
+      .from('Repair')
+      .select('*, technician:User!Repair_technicianId_fkey(id, name, email)')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !repair) {
+      // Fallback query if foreign key alias fails
+      const { data: simpleRepair, error: simpleErr } = await supabaseAdmin
+        .from('Repair')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (simpleErr || !simpleRepair) {
+        return res.status(404).json({ error: 'Repair ticket not found.' });
+      }
+    }
+
+    const currentRepair = repair || (await supabaseAdmin.from('Repair').select('*').eq('id', id).single()).data;
+
+    // 2. Validate and normalize priority
+    const VALID_PRIORITIES = ['NORMAL', 'MEDIUM', 'HIGH', 'URGENT'];
+    let resolvedPriority = 'NORMAL';
+    if (priority) {
+      const up = String(priority).toUpperCase().trim();
+      if (VALID_PRIORITIES.includes(up)) resolvedPriority = up;
+    } else if (isUrgent) {
+      resolvedPriority = 'URGENT';
+    } else if (currentRepair.priority) {
+      resolvedPriority = currentRepair.priority;
+    }
+
+    const alertMessage = message?.trim() || `Priority alert escalated to ${resolvedPriority} by ${req.user.name}`;
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+
+    // 3. Update Repair table in Supabase
+    const { data: updatedRepair, error: updateErr } = await supabaseAdmin
+      .from('Repair')
+      .update({
+        priority: resolvedPriority,
+        priorityUpdatedAt: nowIso,
+        updatedAt: nowIso
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (updateErr) {
+      console.error('[ALERT PRIORITY UPDATE ERROR]', updateErr);
+      return res.status(500).json({ error: 'Failed to update repair priority in database.' });
+    }
+
+    // 4. Log alert event in RepairLog
+    const logId = uuidv44();
+    await supabaseAdmin.from('RepairLog').insert([
+      {
+        id: logId,
+        repairId: id,
+        userId: req.user.id,
+        action: 'PRIORITY_ALERT_DISPATCHED',
+        status: updatedRepair.status,
+        notes: `[Priority Alert: ${resolvedPriority}] ${alertMessage} (Dispatched by ${req.user.name})`,
+        createdAt: nowIso
+      }
+    ]);
+
+    // 5. Dispatch notification to technician if assigned
+    let createdNotif = null;
+    if (updatedRepair.technicianId) {
+      try {
+        const notifId = uuidv44();
+        const notifData = {
+          id: notifId,
+          title: `${resolvedPriority === 'URGENT' ? '🚨 URGENT' : resolvedPriority === 'HIGH' ? '⚠️ HIGH' : '📢 PRIORITY'} Alert: #${updatedRepair.repairNumber || id.slice(0, 8)}`,
+          message: alertMessage,
+          type: resolvedPriority === 'URGENT' ? 'REPAIR_URGENT' : 'REPAIR_ALERT',
+          priority: resolvedPriority,
+          userId: updatedRepair.technicianId,
+          repairId: id,
+          repairNumber: updatedRepair.repairNumber,
+          senderId: req.user.id,
+          senderName: req.user.name,
+          isRead: false,
+          createdAt: nowIso
+        };
+        const { data: notifRes } = await supabaseAdmin.from('Notification').insert([notifData]).select('*').single();
+        createdNotif = notifRes || notifData;
+        broadcastServerChange('Notification', 'CREATE', notifId, createdNotif);
+      } catch (notifErr) {
+        console.warn('[ALERT TECH NOTIFICATION WARN - NON FATAL]', notifErr);
+      }
+    }
+
+    // 6. Broadcast Realtime events across all subscribed clients
+    broadcastServerChange('Repair', 'UPDATE', id, updatedRepair);
+    broadcastServerChange('RepairLog', 'CREATE', logId);
+
+    return res.json({
+      success: true,
+      message: `Priority set to ${resolvedPriority} and Alert Tech dispatched successfully.`,
+      repair: updatedRepair,
+      notification: createdNotif,
+      ...updatedRepair
+    });
+  } catch (err: any) {
+    console.error('[ALERT TECH EXCEPTION]', err);
+    return res.status(500).json({ error: err?.message || 'Failed to dispatch alert.' });
+  }
 });
 router3.post("/:id/transfer", authenticate, async (req, res) => {
   try {
@@ -1654,9 +1907,10 @@ router3.post("/:id/transfer", authenticate, async (req, res) => {
     if (error) {
       return res.status(500).json({ error: "Failed to transfer repair." });
     }
+    const logId = uuidv44();
     await supabaseAdmin.from("RepairLog").insert([
       {
-        id: uuidv44(),
+        id: logId,
         repairId: id,
         userId: req.user.id,
         action: "TRANSFERRED",
@@ -1665,6 +1919,8 @@ router3.post("/:id/transfer", authenticate, async (req, res) => {
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       }
     ]);
+    broadcastServerChange('RepairLog', 'CREATE', logId);
+    broadcastServerChange('Repair', 'UPDATE', id, updated);
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to transfer repair ticket." });

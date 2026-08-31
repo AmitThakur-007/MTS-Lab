@@ -81,6 +81,8 @@ export function sanitizeRepairForSupabase(repair: any) {
       role: String(repair.technician.role || 'TECHNICIAN')
     } : null,
     status: String(repair.status || 'RECEIVED'),
+    priority: String(repair.priority || 'NORMAL').toUpperCase().trim(),
+    priorityUpdatedAt: repair.priorityUpdatedAt ? new Date(repair.priorityUpdatedAt).toISOString() : null,
     partsUsed: repair.partsUsed || null,
     remarks: repair.remarks || null,
     expectedCompletionDate: repair.expectedCompletionDate ? new Date(repair.expectedCompletionDate).toISOString() : null,

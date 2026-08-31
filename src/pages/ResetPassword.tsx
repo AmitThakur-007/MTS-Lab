@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { api } from '@/services/api';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
-import mtsLogo from '@/assets/images/mts-logo.jpg';
+
+const mtsLogo = '/apple-touch-icon.png';
 
 export default function ResetPassword() {
   const [newPassword, setNewPassword] = useState('');

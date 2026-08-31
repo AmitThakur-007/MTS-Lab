@@ -23,7 +23,8 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { getDeviceDetails } from '@/lib/device';
-import mtsLogo from '@/assets/images/mts-logo.jpg';
+
+const mtsLogo = '/apple-touch-icon.png';
 
 export default function Login() {
   const [stage, setStage] = useState<'CREDENTIALS' | '2FA'>('CREDENTIALS');

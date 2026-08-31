@@ -1235,6 +1235,11 @@ export default function Repairs() {
                                 HIGH
                               </Badge>
                             )}
+                            {repair.priority === 'MEDIUM' && (
+                              <Badge className="bg-yellow-500 text-slate-950 font-bold text-[9px] px-1.5 py-0.5 shadow-xs">
+                                MEDIUM
+                              </Badge>
+                            )}
                           </div>
                         </td>
 
@@ -1475,6 +1480,11 @@ export default function Repairs() {
                       {repair.priority === 'HIGH' && (
                         <Badge className="bg-amber-500 text-white font-bold text-[9px] px-1.5 py-0.5 shadow-xs">
                           HIGH
+                        </Badge>
+                      )}
+                      {repair.priority === 'MEDIUM' && (
+                        <Badge className="bg-yellow-500 text-slate-950 font-bold text-[9px] px-1.5 py-0.5 shadow-xs">
+                          MEDIUM
                         </Badge>
                       )}
                       <Badge className={`font-bold text-[10px] px-2 py-0.5 rounded-md ${statusInfo.badgeClass}`}>

@@ -31,7 +31,7 @@ const DEFAULT_SLIDES: SlideData[] = [
     id: 'default-1',
     title: 'Front Glass Change',
     description: 'Specialized outer glass replacement preserving your original AMOLED / OLED display and touch responsiveness.',
-    imageUrl: '/assets/images/front_glass_repair_1786719176945.jpg',
+    imageUrl: '/assets/images/front-glass-change.jpg',
     buttonText: 'Check Repair Price',
     buttonLink: '/services?focus=search&q=Front+Glass'
   },
@@ -39,7 +39,7 @@ const DEFAULT_SLIDES: SlideData[] = [
     id: 'default-2',
     title: 'Display Replacement',
     description: '100% Genuine original quality screen restoration with True Tone, 120Hz ProMotion, and vibrant clarity.',
-    imageUrl: '/assets/images/display_replace_1786719191504.jpg',
+    imageUrl: '/assets/images/display-replacement.jpg',
     buttonText: 'Check Repair Price',
     buttonLink: '/services?focus=search&q=Display'
   },
@@ -47,7 +47,7 @@ const DEFAULT_SLIDES: SlideData[] = [
     id: 'default-3',
     title: 'Back Panel / Back Glass Change',
     description: 'Factory finish laser back panel replacement and frame restoration for Apple, Samsung, and flagship devices.',
-    imageUrl: '/assets/images/back_glass_fix_1786719207185.jpg',
+    imageUrl: '/assets/images/back-glass-change.jpg',
     buttonText: 'Check Repair Price',
     buttonLink: '/services?focus=search&q=Back+Glass'
   },
@@ -55,7 +55,7 @@ const DEFAULT_SLIDES: SlideData[] = [
     id: 'default-4',
     title: 'Professional Smartphone Repair',
     description: 'Advanced IC-level micro-soldering, green/white screen laser line repair, and specialized liquid damage restoration.',
-    imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
+    imageUrl: '/assets/images/motherboard-repair.jpg',
     buttonText: 'Check Repair Price',
     buttonLink: '/services?focus=search'
   }

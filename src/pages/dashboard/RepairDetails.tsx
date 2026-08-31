@@ -327,6 +327,22 @@ export default function RepairDetails() {
     }
   };
 
+  const updatePriority = async (newPriority: string) => {
+    setUpdating(true);
+    try {
+      const updated = await api.patch(`/repairs/${id}`, { priority: newPriority });
+      const synced = updated?.repair || updated;
+      await syncRepairToRtdb(synced);
+      setRepair(synced);
+      toast.success(`Priority updated to ${newPriority}`);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update priority level.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   if (loading || !repair) {
     return (
       <div className="h-[70vh] flex flex-col items-center justify-center gap-4">
@@ -397,7 +413,10 @@ export default function RepairDetails() {
           {isAssigned && ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'LEAD_TECHNICIAN'].includes(user?.role || '') && (
             <Button
               variant="outline"
-              onClick={() => setIsAlertDialogOpen(true)}
+              onClick={() => {
+                setAlertPriority(repair.priority || 'NORMAL');
+                setIsAlertDialogOpen(true);
+              }}
               className="rounded-2xl border-rose-200 bg-rose-50/50 hover:bg-rose-100 text-rose-700 font-bold text-xs h-10 px-3 shadow-xs shrink-0 cursor-pointer"
             >
               <Bell className="h-4 w-4 mr-1 text-rose-600 animate-bounce" />
@@ -524,6 +543,40 @@ export default function RepairDetails() {
                       {s === 'RE_PROBLEM' ? 'Re-Problem' : s.replace(/_/g, ' ')}
                     </Button>
                   ))}
+                </div>
+              </div>
+
+              {/* Priority Selector */}
+              <div className="space-y-3 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Repair Queue Priority</h4>
+                  <span className="text-[11px] text-slate-500 font-medium">Click to change priority immediately</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { value: 'NORMAL', label: 'Normal Priority', emoji: '⚪', activeClass: 'bg-slate-900 text-white border-slate-900 shadow-md' },
+                    { value: 'MEDIUM', label: 'Medium Priority', emoji: '🟡', activeClass: 'bg-yellow-500 text-slate-950 font-extrabold border-yellow-500 shadow-md' },
+                    { value: 'HIGH', label: 'High Priority', emoji: '🟠', activeClass: 'bg-amber-500 text-slate-950 font-extrabold border-amber-500 shadow-md' },
+                    { value: 'URGENT', label: 'Urgent / Expedited', emoji: '🔴', activeClass: 'bg-rose-600 text-white font-extrabold border-rose-600 shadow-md' },
+                  ].map((p) => {
+                    const isCurrent = (repair.priority || 'NORMAL') === p.value;
+                    return (
+                      <Button
+                        key={p.value}
+                        type="button"
+                        onClick={() => updatePriority(p.value)}
+                        disabled={updating || isCurrent}
+                        variant="outline"
+                        className={cn(
+                          "rounded-2xl h-10 px-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                          isCurrent ? p.activeClass : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+                        )}
+                      >
+                        <span>{p.emoji}</span>
+                        <span>{p.label}</span>
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
             </CardContent>

@@ -94,6 +94,7 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
     problemDescription: '',
     conditionNotes: '',
     remarks: '',
+    priority: 'NORMAL',
     estimatedCost: '',
     advancePaid: '0',
     totalPaid: '0',
@@ -237,6 +238,7 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
       problemDescription: repair.problemDescription || '',
       conditionNotes: repair.conditionNotes || '',
       remarks: repair.remarks || '',
+      priority: (repair.priority || 'NORMAL').toUpperCase().trim(),
       estimatedCost: repair.estimatedCost !== null && repair.estimatedCost !== undefined ? String(repair.estimatedCost) : '',
       advancePaid: repair.advancePaid !== null && repair.advancePaid !== undefined ? String(repair.advancePaid) : '0',
       totalPaid: repair.totalPaid !== null && repair.totalPaid !== undefined ? String(repair.totalPaid) : '0',
@@ -374,6 +376,7 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
         advancePaid: advanceStr === '' ? 0 : Number(advanceStr),
         totalPaid: totalStr === '' ? (advanceStr === '' ? 0 : Number(advanceStr)) : Number(totalStr),
         paymentStatus: formData.paymentStatus || 'UNPAID',
+        priority: formData.priority || 'NORMAL',
         remarks: formData.remarks.trim() || null,
         expectedCompletionDate: formData.expectedCompletionDate ? new Date(formData.expectedCompletionDate).toISOString() : null,
         hasBatteryWarranty,
@@ -717,6 +720,38 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
                   onChange={(e) => setFormData({ ...formData, expectedCompletionDate: e.target.value })}
                   className="h-10 rounded-xl bg-white border-slate-200 text-xs"
                 />
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-slate-200/80">
+              <Label className="text-xs font-black text-slate-800 uppercase tracking-wider">Queue Priority Level</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { value: 'NORMAL', label: 'Normal', emoji: '⚪', color: 'border-slate-300 bg-slate-50 text-slate-700' },
+                  { value: 'MEDIUM', label: 'Medium', emoji: '🟡', color: 'border-yellow-300 bg-yellow-50 text-yellow-900' },
+                  { value: 'HIGH', label: 'High', emoji: '🟠', color: 'border-amber-300 bg-amber-50 text-amber-900' },
+                  { value: 'URGENT', label: 'Urgent', emoji: '🔴', color: 'border-rose-300 bg-rose-50 text-rose-900' },
+                ].map((p) => {
+                  const isSel = (formData.priority || 'NORMAL') === p.value;
+                  return (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, priority: p.value })}
+                      className={cn(
+                        "flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer",
+                        p.color,
+                        isSel && p.value === 'URGENT' && "bg-rose-600 text-white border-rose-600 shadow-sm ring-2 ring-rose-600/20",
+                        isSel && p.value === 'HIGH' && "bg-amber-500 text-slate-950 font-extrabold border-amber-500 shadow-sm ring-2 ring-amber-500/20",
+                        isSel && p.value === 'MEDIUM' && "bg-yellow-500 text-slate-950 font-extrabold border-yellow-500 shadow-sm ring-2 ring-yellow-500/20",
+                        isSel && p.value === 'NORMAL' && "bg-slate-900 text-white border-slate-900 shadow-sm ring-2 ring-slate-900/20"
+                      )}
+                    >
+                      <span>{p.emoji}</span>
+                      <span>{p.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
