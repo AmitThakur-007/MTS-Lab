@@ -1,43 +1,11 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Users,
-  PlusCircle,
-  Settings,
-  LogOut,
-  Bell,
-  Menu,
-  X,
-  ClipboardList,
-  Package,
-  HelpCircle,
-  BarChart3,
-  SearchIcon,
-  Plus,
-  ShieldAlert,
-  Tag,
-  Layers,
-  CheckCheck,
-  BatteryCharging,
-  Briefcase,
-  UserCheck,
-  Truck,
-  FileWarning,
-} from 'lucide-react';
+import { LayoutDashboard, Users, PlusCircle, Settings, LogOut, Bell, Menu, X, ClipboardList, Package, HelpCircle, BarChart3, SearchIcon, Plus, ShieldAlert, Tag, Layers, CheckCheck, BatteryCharging, Briefcase, UserCheck, Truck, FileWarning } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuGroup
-} from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuGroup } from '@/components/ui/dropdown-menu';
 import { api } from '@/services/api';
 import { format } from 'date-fns';
 import { useRealtimeSync } from '@/services/realtime';
@@ -48,7 +16,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [pendingAccessCount, setPendingAccessCount] = useState(0);
   const [pendingAttendanceCount, setPendingAttendanceCount] = useState(0);
   const navigate = useNavigate();
 
@@ -56,26 +23,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     try {
       const data = await api.get('/notifications');
       const list = Array.isArray(data) ? data : (data?.notifications || []);
-      const count = typeof data?.unreadCount === 'number'
-        ? data.unreadCount
-        : list.filter((n: any) => !n.isRead && !n.read).length;
+      const count = typeof data?.unreadCount === 'number' ? data.unreadCount : list.filter((n: any) => !n.isRead && !n.read).length;
       setNotifications(list);
       setUnreadCount(count);
     } catch (err) {
       setNotifications([]);
       setUnreadCount(0);
-    }
-  };
-
-  const fetchPendingAccessCount = async () => {
-    if (user?.role !== 'SUPER_ADMIN') return;
-    try {
-      const data = await api.get('/access-requests');
-      if (Array.isArray(data)) {
-        setPendingAccessCount(data.filter((r: any) => r.status === 'PENDING').length);
-      }
-    } catch (err) {
-      // silently ignore
     }
   };
 
@@ -91,18 +44,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     fetchNotifications();
-    fetchPendingAccessCount();
     fetchPendingAttendance();
   }, [user?.role]);
 
-  useRealtimeSync(
-    ['notification', 'accessRequest', 'repair', 'user', 'attendance'],
-    () => {
-      fetchNotifications();
-      fetchPendingAccessCount();
-      fetchPendingAttendance();
-    }
-  );
+  useRealtimeSync(['notification', 'accessRequest', 'repair', 'user', 'attendance'], () => {
+    fetchNotifications();
+    fetchPendingAttendance();
+  });
 
   const handleMarkAllRead = async () => {
     try {
@@ -155,11 +103,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen bg-[#f8f9fa] overflow-hidden font-sans">
       {isSidebarOpen && <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs md:hidden transition-all duration-300" onClick={() => setIsSidebarOpen(false)} />}
-
-      <aside className={cn(
-        'fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200/70 transform transition-all duration-300 ease-in-out md:relative md:translate-x-0 shadow-2xl md:shadow-none flex flex-col shrink-0',
-        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      )}>
+      <aside className={cn('fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200/70 transform transition-all duration-300 ease-in-out md:relative md:translate-x-0 shadow-2xl md:shadow-none flex flex-col shrink-0', isSidebarOpen ? 'translate-x-0' : '-translate-x-full')}>
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-between h-20 sm:h-24 px-6 sm:px-8 border-b border-slate-100/80 shrink-0">
             <div className="flex items-center gap-3">
@@ -168,7 +112,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             <Button variant="ghost" size="icon" className="md:hidden rounded-full h-10 w-10 text-slate-500 hover:bg-slate-100 shrink-0 cursor-pointer" onClick={() => setIsSidebarOpen(false)}><X className="h-5 w-5" /></Button>
           </div>
-
           <nav className="flex-1 px-3.5 sm:px-4 py-4 space-y-1 overflow-y-auto">
             <div className="px-3 mb-2"><p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Management Core</p></div>
             {navItems.map((item) => (
@@ -179,14 +122,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </NavLink>
             ))}
           </nav>
-
           <div className="p-4 sm:p-5 shrink-0 border-t border-slate-100">
             <div className="bg-slate-50 rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-200/60 shadow-xs">
               <div className="flex items-center gap-3 mb-3">
-                <Avatar className="h-10 w-10 sm:h-11 sm:w-11 border-2 border-white shadow-md ring-1 ring-slate-100 font-bold overflow-hidden rounded-xl shrink-0">
-                  {user?.profileImage ? <AvatarImage src={user.profileImage} className="object-cover" /> : null}
-                  <AvatarFallback className="bg-slate-950 text-white text-xs font-black">{user?.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}</AvatarFallback>
-                </Avatar>
+                <Avatar className="h-10 w-10 sm:h-11 sm:w-11 border-2 border-white shadow-md ring-1 ring-slate-100 font-bold overflow-hidden rounded-xl shrink-0">{user?.profileImage ? <AvatarImage src={user.profileImage} className="object-cover" /> : null}<AvatarFallback className="bg-slate-950 text-white text-xs font-black">{user?.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}</AvatarFallback></Avatar>
                 <div className="flex-1 min-w-0"><p className="text-xs sm:text-sm font-extrabold text-slate-900 truncate tracking-tight">{user?.name || 'Staff User'}</p><p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center gap-1 truncate"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0 animate-pulse" /><span className="truncate">{user?.role ? user.role.replace(/_/g, ' ') : 'Staff'}</span></p></div>
               </div>
               <Button variant="ghost" className="w-full justify-start h-10 sm:h-11 min-h-[44px] rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs gap-2.5 px-3 cursor-pointer" onClick={handleLogout}><LogOut className="h-4 w-4 shrink-0" /><span>Log Out System</span></Button>
@@ -194,27 +133,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </aside>
-
       <main className="flex-1 flex flex-col min-w-0 bg-white md:m-2.5 lg:m-4 md:rounded-[36px] lg:rounded-[44px] md:shadow-xl md:shadow-slate-200/40 border-l border-slate-200/40 overflow-hidden relative">
         <header className="h-20 sm:h-24 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex items-center justify-between px-4 sm:px-6 lg:px-8 xl:px-12 shrink-0 z-20 gap-3">
           <div className="flex items-center flex-1 min-w-0 gap-3">
             <Button variant="ghost" size="icon" className="md:hidden rounded-xl h-10 w-10 text-slate-700 hover:bg-slate-100 shrink-0 cursor-pointer" onClick={() => setIsSidebarOpen(true)}><Menu className="h-5 w-5" /></Button>
             <div className="max-w-xs sm:max-w-sm lg:max-w-md w-full relative hidden sm:block"><SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" /><input type="text" placeholder="Search repairs, customers, serials..." className="w-full bg-slate-50/90 border border-slate-200/70 rounded-xl h-10 pl-10 pr-3.5 text-xs sm:text-sm font-medium text-slate-900 focus:bg-white focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all outline-none" /></div>
           </div>
-
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <DashboardRefreshButton size="sm" variant="outline" label="Sync" refreshingLabel="Syncing..." onRefresh={async () => { await fetchNotifications(); await fetchPendingAccessCount(); }} />
+            <DashboardRefreshButton size="sm" variant="outline" label="Sync" refreshingLabel="Syncing..." onRefresh={fetchNotifications} />
             <DropdownMenu>
               <DropdownMenuTrigger className="outline-none relative rounded-xl h-10 w-10 sm:h-11 sm:w-11 bg-slate-50 hover:bg-slate-100 border border-slate-200/60 flex items-center justify-center transition-all cursor-pointer shadow-2xs"><Bell className="h-4 w-4 sm:h-5 sm:w-5 text-slate-800" />{unreadCount > 0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-600 text-white rounded-full border-2 border-white shadow-xs flex items-center justify-center text-[9px] font-black">{unreadCount}</span>}</DropdownMenuTrigger>
               <DropdownMenuContent className="w-[calc(100vw-32px)] max-w-sm sm:w-96 rounded-2xl p-0 shadow-2xl border-slate-200 overflow-hidden" align="end">
                 <div className="flex items-center justify-between p-4 bg-slate-50 border-b border-slate-100"><div><h4 className="text-xs sm:text-sm font-extrabold text-slate-900">Notifications</h4><p className="text-[11px] font-bold text-slate-400">{unreadCount} unread alerts</p></div>{unreadCount > 0 && <Button variant="ghost" size="sm" onClick={handleMarkAllRead} className="h-8 text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 hover:bg-indigo-50 cursor-pointer"><CheckCheck className="h-3.5 w-3.5" />Mark read</Button>}</div>
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-                  {!Array.isArray(notifications) || notifications.length === 0 ? <div className="p-8 text-center text-slate-400 text-xs font-medium">No notifications yet</div> : notifications.map((n) => { const isUnread = !n.isRead && !n.read; return <div key={n.id} onClick={() => handleNotificationClick(n)} className={cn('p-3.5 hover:bg-slate-50 cursor-pointer transition-colors flex items-start gap-3', isUnread && 'bg-indigo-50/40')}><div className={cn('w-2 h-2 rounded-full shrink-0 mt-1.5', isUnread ? 'bg-indigo-600' : 'bg-transparent')} /><div className="flex-1 min-w-0"><p className="text-xs font-extrabold text-slate-900 truncate">{n.title}</p>{n.priority && <span className={cn('inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-0.5', n.priority === 'URGENT' && 'bg-rose-100 text-rose-700', n.priority === 'HIGH' && 'bg-amber-100 text-amber-700', n.priority === 'MEDIUM' && 'bg-yellow-100 text-yellow-700', n.priority === 'NORMAL' && 'bg-slate-100 text-slate-600')}>{n.priority === 'URGENT' ? '🔴' : n.priority === 'HIGH' ? '🟠' : n.priority === 'MEDIUM' ? '🟡' : '⚪'} {n.priority}</span>}<p className="text-xs text-slate-600 font-medium line-clamp-2 mt-0.5">{n.message}</p><span className="text-[10px] text-slate-400 font-bold block mt-1">{n.createdAt ? format(new Date(n.createdAt), 'dd MMM • HH:mm') : ''}</span></div></div>; })}
-                </div>
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">{!Array.isArray(notifications) || notifications.length === 0 ? <div className="p-8 text-center text-slate-400 text-xs font-medium">No notifications yet</div> : notifications.map((n) => { const isUnread = !n.isRead && !n.read; return <div key={n.id} onClick={() => handleNotificationClick(n)} className={cn('p-3.5 hover:bg-slate-50 cursor-pointer transition-colors flex items-start gap-3', isUnread && 'bg-indigo-50/40')}><div className={cn('w-2 h-2 rounded-full shrink-0 mt-1.5', isUnread ? 'bg-indigo-600' : 'bg-transparent')} /><div className="flex-1 min-w-0"><p className="text-xs font-extrabold text-slate-900 truncate">{n.title}</p>{n.priority && <span className={cn('inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-0.5', n.priority === 'URGENT' && 'bg-rose-100 text-rose-700', n.priority === 'HIGH' && 'bg-amber-100 text-amber-700', n.priority === 'MEDIUM' && 'bg-yellow-100 text-yellow-700', n.priority === 'NORMAL' && 'bg-slate-100 text-slate-600')}>{n.priority === 'URGENT' ? '🔴' : n.priority === 'HIGH' ? '🟠' : n.priority === 'MEDIUM' ? '🟡' : '⚪'} {n.priority}</span>}<p className="text-xs text-slate-600 font-medium line-clamp-2 mt-0.5">{n.message}</p><span className="text-[10px] text-slate-400 font-bold block mt-1">{n.createdAt ? format(new Date(n.createdAt), 'dd MMM • HH:mm') : ''}</span></div></div>; })}</div>
                 {user?.role === 'SUPER_ADMIN' && <div className="p-2 border-t border-slate-100 bg-slate-50/50"><Button variant="ghost" onClick={() => navigate('/dashboard/access-requests')} className="w-full h-8 text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer">View All Access Requests</Button></div>}
               </DropdownMenuContent>
             </DropdownMenu>
-
             <div className="h-8 w-px bg-slate-200/80 mx-0.5 hidden sm:block" />
             <DropdownMenu>
               <DropdownMenuTrigger className="outline-none cursor-pointer"><Avatar className="h-10 w-10 sm:h-11 sm:w-11 border border-slate-200 shadow-xs transform hover:scale-105 transition-transform overflow-hidden rounded-xl">{user?.profileImage ? <AvatarImage src={user.profileImage} className="object-cover" /> : null}<AvatarFallback className="bg-slate-100 font-extrabold text-slate-700 text-xs">{user?.name ? user.name[0].toUpperCase() : 'U'}</AvatarFallback></Avatar></DropdownMenuTrigger>
@@ -227,7 +161,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </DropdownMenu>
           </div>
         </header>
-
         <div className="flex-1 overflow-y-auto scrollbar-hide p-4 sm:p-6 lg:p-8 xl:p-10"><div className="max-w-7xl mx-auto w-full">{children}</div></div>
       </main>
     </div>
