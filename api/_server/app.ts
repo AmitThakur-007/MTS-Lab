@@ -18,6 +18,7 @@ import slidesRoutes from './routes/slides';
 import productsRoutes from './routes/products';
 import notificationsRoutes from './routes/notifications';
 import superAdminRoutes from './routes/superAdmin';
+import backupsRoutes from './routes/backups';
 import securityRoutes from './routes/security';
 import uploadRoutes from './routes/upload';
 import eventsRoutes from './routes/events';
@@ -29,17 +30,12 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   app.use(cookieParser());
 
-  // Mount API routes
   app.use('/api/auth', authRoutes);
   app.use('/api/users', usersRoutes);
   app.use('/api/user', usersRoutes);
   app.use('/api/staff', staffRoutes);
   app.use('/api/security', securityRoutes);
   app.use('/api/repairs', repairsRoutes);
-  // Transfer requests intentionally share the /api/repairs namespace because
-  // the technician client submits POST /api/repairs/:repairId/transfer-request.
-  // The transfer router owns only transfer-specific paths, so there is one
-  // transfer implementation and no duplicate assignment mechanism.
   app.use('/api/repairs', repairTransfersRoutes);
   app.use('/api/repair', repairsRoutes);
   app.use('/api/repair-transfers', repairTransfersRoutes);
@@ -55,8 +51,6 @@ export function createApp() {
   app.use('/api/warranty', batteryWarrantiesRoutes);
   app.use('/api/attendance', attendanceRoutes);
   app.use('/api/repair-damage', repairDamageRoutes);
-  // Register the more specific folder router before the parent repair-prices
-  // router so /folders cannot be consumed by repairPricesRoutes' catch-all paths.
   app.use('/api/repair-prices/folders', repairPriceFoldersRoutes);
   app.use('/api/repair-prices', repairPricesRoutes);
   app.use('/api/public/repair-prices', repairPricesRoutes);
@@ -65,6 +59,7 @@ export function createApp() {
   app.use('/api/products', productsRoutes);
   app.use('/api/public/products', productsRoutes);
   app.use('/api/notifications', notificationsRoutes);
+  app.use('/api/admin/backups', backupsRoutes);
   app.use('/api/admin', superAdminRoutes);
   app.use('/api/share', superAdminRoutes);
   app.use('/api/access-requests', accessRequestsCompatRoutes);
@@ -74,7 +69,7 @@ export function createApp() {
   app.use('/api/public', publicRoutes);
   app.use('/api', publicRoutes);
 
-  app.get('/api/health', (req, res) => {
+  app.get('/api/health', (_req, res) => {
     res.json({ status: 'healthy', timestamp: new Date().toISOString() });
   });
 
