@@ -3,25 +3,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const PRODUCTION_SUPABASE_URL = 'https://pirynpugkiurjobrqiqg.supabase.co';
-const PRODUCTION_SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w';
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+const SUPABASE_ANON_KEY = (
+  process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || ''
+).trim();
+const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 
-const rawUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
-const SUPABASE_URL = (!rawUrl || rawUrl.includes('your-project') || rawUrl.includes('example.com') || !rawUrl.startsWith('http'))
-  ? PRODUCTION_SUPABASE_URL
-  : rawUrl;
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('Missing required Supabase environment variables: SUPABASE_URL and SUPABASE_ANON_KEY.');
+}
 
-const rawKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim();
-const SUPABASE_ANON_KEY = (!rawKey || rawKey.includes('...') || rawKey.length < 50)
-  ? PRODUCTION_SUPABASE_ANON_KEY
-  : rawKey;
-
-const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('...') && process.env.SUPABASE_SERVICE_ROLE_KEY.length > 50)
-  ? process.env.SUPABASE_SERVICE_ROLE_KEY
-  : undefined;
-
-// Authoritative Server-Side Supabase Client (Service Role for Admin DB operations, Anon fallback)
+// Server-side client. Service-role credentials are used only when explicitly configured.
 export const supabaseAdmin: SupabaseClient = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY,
@@ -33,7 +25,7 @@ export const supabaseAdmin: SupabaseClient = createClient(
   }
 );
 
-// Standard Client for Auth Verification
+// Public client used for authentication verification.
 export const supabasePublic: SupabaseClient = createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
@@ -45,11 +37,18 @@ export const supabasePublic: SupabaseClient = createClient(
   }
 );
 
+const jwtSecret = process.env.JWT_SECRET?.trim();
+const refreshSecret = process.env.REFRESH_SECRET?.trim();
+
+if (!jwtSecret || !refreshSecret) {
+  throw new Error('Missing required authentication secrets: JWT_SECRET and REFRESH_SECRET.');
+}
+
 export const config = {
   supabaseUrl: SUPABASE_URL,
   supabaseAnonKey: SUPABASE_ANON_KEY,
-  jwtSecret: process.env.JWT_SECRET || 'mts-lab-super-secret-key-2026',
-  refreshSecret: process.env.REFRESH_SECRET || 'mts-lab-refresh-secret-key-2026',
+  jwtSecret,
+  refreshSecret,
   appUrl: process.env.APP_URL || 'http://localhost:3000',
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
