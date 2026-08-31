@@ -24,20 +24,17 @@ const ACTIVE_REPAIR_STATUSES = new Set([
   'REPAIR_IN_PROGRESS',
 ]);
 
-function normalizeStatus(status: unknown): string {
-  return String(status || '').toUpperCase().replace(/\s+/g, '_').trim();
+function normalizeValue(value: unknown): string {
+  return String(value || '').toUpperCase().replace(/\s+/g, '_').trim();
 }
 
 function scopedRepairsQuery(req: AuthRequest) {
   let query = supabaseAdmin
     .from('Repair')
-    .select('id, status, totalPaid, advancePaid, createdAt, technicianId, branchId')
-    .is('deletedAt', null);
+    .select('id, status, priority, totalPaid, advancePaid, createdAt, technicianId, branchId');
 
-  const role = String(req.user?.role || '').toUpperCase();
+  const role = normalizeValue(req.user?.role);
 
-  // Staff with a branch are restricted to their branch. Technicians are
-  // additionally restricted to repairs assigned to them.
   if (req.user?.branchId && role !== 'SUPER_ADMIN') {
     query = query.eq('branchId', req.user.branchId);
   }
@@ -55,31 +52,39 @@ router.get(
   authorize(DASHBOARD_ROLES),
   async (req: AuthRequest, res) => {
     try {
-      const repairsQuery = scopedRepairsQuery(req);
+      const repairsResult = await scopedRepairsQuery(req);
+      if (repairsResult.error) {
+        throw new Error(`Failed to load repairs: ${repairsResult.error.message}`);
+      }
 
-      const [repairsResult, customersResult, staffResult, paymentsResult] = await Promise.all([
-        repairsQuery,
+      const repairs = repairsResult.data || [];
+      const repairIds = repairs.map((repair) => repair.id);
+
+      const [customersResult, staffResult, paymentsResult] = await Promise.all([
         supabaseAdmin.from('Customer').select('id').eq('archived', false),
         supabaseAdmin.from('User').select('id').is('deletedAt', null).eq('isActive', true),
-        supabaseAdmin.from('Payment').select('amount, createdAt, repairId'),
+        repairIds.length
+          ? supabaseAdmin.from('Payment').select('amount, createdAt, repairId').in('repairId', repairIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
-      if (repairsResult.error) throw new Error(`Failed to load repairs: ${repairsResult.error.message}`);
       if (customersResult.error) throw new Error(`Failed to load customers: ${customersResult.error.message}`);
       if (staffResult.error) throw new Error(`Failed to load staff: ${staffResult.error.message}`);
       if (paymentsResult.error) throw new Error(`Failed to load payments: ${paymentsResult.error.message}`);
 
-      const repairs = repairsResult.data || [];
       const customers = customersResult.data || [];
       const staff = staffResult.data || [];
       const payments = paymentsResult.data || [];
 
-      const activeRepairs = repairs.filter((repair) => ACTIVE_REPAIR_STATUSES.has(normalizeStatus(repair.status))).length;
-      const completedRepairs = repairs.filter((repair) => normalizeStatus(repair.status) === 'COMPLETED').length;
-      const pendingRepairs = repairs.filter((repair) => normalizeStatus(repair.status) === 'PENDING').length;
-      const urgentRepairs = repairs.filter((repair) => normalizeStatus(repair.status) === 'URGENT').length;
+      const activeRepairs = repairs.filter((repair) => ACTIVE_REPAIR_STATUSES.has(normalizeValue(repair.status))).length;
+      const completedRepairs = repairs.filter((repair) => normalizeValue(repair.status) === 'COMPLETED').length;
+      const pendingRepairs = repairs.filter((repair) => normalizeValue(repair.status) === 'PENDING').length;
+      const urgentRepairs = repairs.filter((repair) => normalizeValue(repair.priority) === 'URGENT').length;
       const totalRevenue = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-      const repairCollected = repairs.reduce((sum, repair) => sum + Number(repair.totalPaid || repair.advancePaid || 0), 0);
+      const repairCollected = repairs.reduce(
+        (sum, repair) => sum + Number(repair.totalPaid ?? repair.advancePaid ?? 0),
+        0,
+      );
 
       const now = Date.now();
       const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
