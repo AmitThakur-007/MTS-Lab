@@ -19,13 +19,13 @@ assertIncludes(transferRoutes, "router.post('/:id/respond'", 'accept/reject endp
 assertIncludes(transferRoutes, "router.post('/:id/cancel'", 'cancel endpoint');
 assertIncludes(transferRoutes, "p_sender_technician_id: req.user!.id", 'sender identity comes from authenticated user');
 assertIncludes(transferRoutes, "p_receiver_technician_id: req.user!.id", 'receiver identity comes from authenticated user');
-assertIncludes(dashboard, "api.post(`/repairs/${selectedRepair.id}/transfer-request'", 'frontend calls transfer request endpoint');
-assertIncludes(dashboard, "api.post(`/repair-transfers/${transferId}/respond'", 'frontend calls response endpoint');
+assertIncludes(dashboard, 'api.post(`/repairs/${selectedRepair.id}/transfer-request`, {', 'frontend calls transfer request endpoint');
+assertIncludes(dashboard, 'api.post(`/repair-transfers/${transferId}/respond`, { action });', 'frontend calls response endpoint');
 assertIncludes(migration, 'RepairTransferRequest_one_pending_per_repair_idx', 'one pending transfer per repair constraint');
 assertIncludes(migration, 'create_repair_transfer_request', 'atomic request RPC');
 assertIncludes(migration, 'respond_repair_transfer_request', 'atomic response RPC');
 assertIncludes(migration, 'cancel_repair_transfer_request', 'atomic cancellation RPC');
-assertIncludes(migration, "v_repair.\"technicianId\" is distinct from v_request.\"senderTechnicianId\"", 'accept validates original assignment');
+assertIncludes(migration, 'v_repair."technicianId" is distinct from v_request."senderTechnicianId"', 'accept validates original assignment');
 assertIncludes(migration, 'update "Repair"', 'accept updates repair assignment');
 assertIncludes(migration, "'TRANSFER_ACCEPTED'", 'accept history event');
 assertIncludes(migration, "'TRANSFER_REJECTED'", 'reject history event');
