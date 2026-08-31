@@ -1,15 +1,27 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-/** Browser-only Supabase configuration. Never read service-role credentials here. */
-const env = typeof import.meta !== 'undefined' ? (import.meta as any).env : undefined;
-const SUPABASE_URL = String(env?.VITE_SUPABASE_URL || '').trim();
-const SUPABASE_ANON_KEY = String(env?.VITE_SUPABASE_ANON_KEY || '').trim();
+/**
+ * Browser-only Supabase configuration. Never read service-role credentials here.
+ *
+ * Vite statically replaces direct import.meta.env.VITE_* references during the
+ * production build. Keep the public project values as a last-resort fallback
+ * so a missing Vercel VITE_* variable cannot blank the entire SPA.
+ */
+const DEFAULT_SUPABASE_URL = 'https://pirynpugkiurjobrqiqg.supabase.co';
+const DEFAULT_SUPABASE_PUBLIC_KEY = 'sb_publishable_qdk-qGpTDF77ZDV_S2JTew_ClZAAls9';
 
-if (!SUPABASE_URL || !SUPABASE_URL.startsWith('https://')) {
-  throw new Error('Missing VITE_SUPABASE_URL configuration.');
+const SUPABASE_URL = String(
+  import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL
+).trim();
+const SUPABASE_ANON_KEY = String(
+  import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_PUBLIC_KEY
+).trim();
+
+if (!SUPABASE_URL.startsWith('https://')) {
+  throw new Error('Invalid Supabase URL configuration.');
 }
 if (!SUPABASE_ANON_KEY) {
-  throw new Error('Missing VITE_SUPABASE_ANON_KEY configuration.');
+  throw new Error('Missing Supabase public client key configuration.');
 }
 
 let supabaseInstance: SupabaseClient | null = null;
