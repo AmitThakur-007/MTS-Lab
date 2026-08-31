@@ -1502,6 +1502,198 @@ router3.post("/", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to register repair ticket." });
   }
 });
+var handleBatchRepairIntakeIndex = async (req, res) => {
+  const createdRepairs = [];
+  try {
+    const { customer, devices } = req.body;
+    if (!customer || !customer.name || !customer.phone) {
+      return res.status(400).json({ error: "Customer name and phone number are required." });
+    }
+    if (!Array.isArray(devices) || devices.length === 0) {
+      return res.status(400).json({ error: "At least one device must be included in batch intake." });
+    }
+    for (let i = 0; i < devices.length; i++) {
+      const dev = devices[i];
+      if (!dev || !dev.deviceModel || !dev.deviceModel.trim()) {
+        return res.status(400).json({ error: `Device #${i + 1} is missing a valid device model.` });
+      }
+    }
+    let resolvedCustomerId = customer.id;
+    let resolvedCustomerObj = null;
+    if (resolvedCustomerId) {
+      const { data: existingCus } = await supabaseAdmin.from("Customer").select("*").eq("id", resolvedCustomerId).single();
+      if (existingCus) {
+        resolvedCustomerObj = existingCus;
+        const { data: updatedCus } = await supabaseAdmin.from("Customer").update({
+          name: customer.name.trim(),
+          phone: customer.phone.trim(),
+          alternativePhone: customer.alternativePhone ? customer.alternativePhone.trim() : existingCus.alternativePhone,
+          email: customer.email ? customer.email.trim() : existingCus.email,
+          district: customer.district ? customer.district.trim() : existingCus.district,
+          municipality: customer.municipality ? customer.municipality.trim() : existingCus.municipality,
+          address: customer.address ? customer.address.trim() : existingCus.address,
+          landmark: customer.landmark ? customer.landmark.trim() : existingCus.landmark,
+          notes: customer.notes ? customer.notes.trim() : existingCus.notes,
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+        }).eq("id", resolvedCustomerId).select("*").single();
+        if (updatedCus) resolvedCustomerObj = updatedCus;
+      }
+    }
+    if (!resolvedCustomerObj) {
+      const { data: existingByPhone } = await supabaseAdmin.from("Customer").select("*").eq("phone", customer.phone.trim()).limit(1);
+      if (existingByPhone && existingByPhone.length > 0) {
+        resolvedCustomerId = existingByPhone[0].id;
+        resolvedCustomerObj = existingByPhone[0];
+        const { data: updatedCus } = await supabaseAdmin.from("Customer").update({
+          name: customer.name.trim(),
+          alternativePhone: customer.alternativePhone ? customer.alternativePhone.trim() : existingByPhone[0].alternativePhone,
+          email: customer.email ? customer.email.trim() : existingByPhone[0].email,
+          district: customer.district ? customer.district.trim() : existingByPhone[0].district,
+          municipality: customer.municipality ? customer.municipality.trim() : existingByPhone[0].municipality,
+          address: customer.address ? customer.address.trim() : existingByPhone[0].address,
+          landmark: customer.landmark ? customer.landmark.trim() : existingByPhone[0].landmark,
+          notes: customer.notes ? customer.notes.trim() : existingByPhone[0].notes,
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+        }).eq("id", resolvedCustomerId).select("*").single();
+        if (updatedCus) resolvedCustomerObj = updatedCus;
+      } else {
+        const newCusId = uuidv44();
+        const { data: createdCus } = await supabaseAdmin.from("Customer").insert([
+          {
+            id: newCusId,
+            customerId: `CUS-${Date.now().toString().slice(-5)}`,
+            name: customer.name.trim(),
+            phone: customer.phone.trim(),
+            alternativePhone: customer.alternativePhone ? customer.alternativePhone.trim() : null,
+            email: customer.email ? customer.email.trim() : null,
+            district: customer.district ? customer.district.trim() : null,
+            municipality: customer.municipality ? customer.municipality.trim() : null,
+            address: customer.address ? customer.address.trim() : null,
+            landmark: customer.landmark ? customer.landmark.trim() : null,
+            notes: customer.notes ? customer.notes.trim() : null,
+            createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+          }
+        ]).select("*").single();
+        if (createdCus) {
+          resolvedCustomerId = createdCus.id;
+          resolvedCustomerObj = createdCus;
+        }
+      }
+    }
+    for (let i = 0; i < devices.length; i++) {
+      const dev = devices[i];
+      const repairNumber = await generateRepairNumber();
+      const repairId = uuidv44();
+      const estCostNum = parseFloat(dev.estimatedCost || 0) || 0;
+      const advPaidNum = parseFloat(dev.advancePaid || 0) || 0;
+      const paymentStatus = advPaidNum >= estCostNum && estCostNum > 0 ? "PAID" : advPaidNum > 0 ? "PARTIAL" : "UNPAID";
+      const isWarrantyExplicit = dev.hasBatteryWarranty === true || dev.hasBatteryWarranty === "true";
+      const newRepair = {
+        id: repairId,
+        repairNumber,
+        customerId: resolvedCustomerId || null,
+        customerName: customer.name.trim(),
+        customerPhone: customer.phone.trim(),
+        customerEmail: customer.email ? customer.email.trim() : null,
+        customerAddress: customer.address ? customer.address.trim() : null,
+        deviceBrand: dev.deviceBrand || "Apple",
+        deviceModel: dev.deviceModel.trim(),
+        imeiNumber: dev.imeiNumber ? String(dev.imeiNumber).trim() : null,
+        deviceColor: dev.deviceColor || null,
+        deviceCondition: dev.deviceCondition || "FAIR",
+        conditionNotes: dev.conditionNotes || null,
+        problemDescription: dev.problemDescription || "",
+        accessoriesReceived: dev.accessoriesReceived || null,
+        estimatedCost: estCostNum,
+        advancePaid: advPaidNum,
+        totalPaid: advPaidNum,
+        paymentStatus,
+        status: dev.status || "RECEIVED",
+        priority: dev.priority || "NORMAL",
+        technicianId: dev.technicianId || null,
+        branchId: req.user?.branchId || null,
+        expectedCompletionDate: dev.expectedCompletionDate || null,
+        remarks: dev.remarks || null,
+        receivingMethod: dev.receivingMethod || "WALK_IN",
+        isCourierIn: Boolean(dev.isCourierIn),
+        courierCompany: dev.courierCompany || null,
+        courierTrackingNumber: dev.courierTrackingNumber || null,
+        courierDate: dev.courierDate || null,
+        courierReceivedDate: dev.courierReceivedDate || null,
+        senderName: dev.senderName || null,
+        senderPhone: dev.senderPhone || null,
+        originDistrict: dev.originDistrict || null,
+        originAddress: dev.originAddress || null,
+        courierNotes: dev.courierNotes || null,
+        hasBatteryWarranty: isWarrantyExplicit,
+        batteryWarrantyPeriod: isWarrantyExplicit ? dev.batteryWarrantyPeriod || "6_MONTHS" : null,
+        batteryType: isWarrantyExplicit ? dev.batteryType || "Original Replacement Battery" : null,
+        batteryHealth: isWarrantyExplicit ? dev.batteryHealth || null : null,
+        batterySerial: isWarrantyExplicit ? dev.batterySerial || null : null,
+        createdById: req.user?.id,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      const { data: created, error: insertErr } = await supabaseAdmin.from("Repair").insert([newRepair]).select("*").single();
+      if (insertErr || !created) {
+        if (createdRepairs.length > 0) {
+          const insertedIds = createdRepairs.map((r) => r.id);
+          await supabaseAdmin.from("RepairLog").delete().in("repairId", insertedIds);
+          await supabaseAdmin.from("Repair").delete().in("id", insertedIds);
+        }
+        return res.status(500).json({ error: `Failed to create repair ticket for device #${i + 1} (${dev.deviceModel}). Batch rolled back.` });
+      }
+      if (isWarrantyExplicit) {
+        await syncBatteryWarrantyFromRepair(created, req.user);
+      }
+      await supabaseAdmin.from("RepairLog").insert([
+        {
+          id: uuidv44(),
+          repairId: created.id,
+          userId: req.user?.id,
+          action: "CREATED",
+          status: "RECEIVED",
+          notes: `Multi-device intake recorded by ${req.user?.name || "Staff"} (Device ${i + 1} of ${devices.length}).`,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+      await logAudit({
+        userId: req.user?.id,
+        action: "REPAIR_CREATED",
+        resource: "Repair",
+        resourceId: created.id,
+        details: {
+          repairNumber: created.repairNumber,
+          customerName: created.customerName,
+          deviceModel: created.deviceModel,
+          batchIndex: i + 1,
+          totalDevices: devices.length
+        }
+      });
+      createdRepairs.push(created);
+    }
+    return res.status(201).json({
+      success: true,
+      totalRegistered: createdRepairs.length,
+      count: createdRepairs.length,
+      repairs: createdRepairs,
+      customer: resolvedCustomerObj || customer
+    });
+  } catch (batchErr) {
+    if (createdRepairs.length > 0) {
+      try {
+        const insertedIds = createdRepairs.map((r) => r.id);
+        await supabaseAdmin.from("RepairLog").delete().in("repairId", insertedIds);
+        await supabaseAdmin.from("Repair").delete().in("id", insertedIds);
+      } catch {}
+    }
+    return res.status(500).json({ error: "Failed to process batch repair intake: " + (batchErr?.message || "Server error") });
+  }
+};
+router3.post("/batch", authenticate, handleBatchRepairIntakeIndex);
+router3.post("/repairs/batch", authenticate, handleBatchRepairIntakeIndex);
+router3.post("/repair/batch", authenticate, handleBatchRepairIntakeIndex);
 var handleRepairUpdate = async (req, res) => {
   try {
     const { id } = req.params;
@@ -4870,6 +5062,7 @@ function createApp() {
   app22.use("/api/users", users_default);
   app22.use("/api/staff", users_default);
   app22.use("/api/repairs", repairs_default);
+  app22.use("/api/repair", repairs_default);
   app22.use("/api/repair-transfers", repairTransfers_default);
   app22.use("/api/customers", customers_default);
   app22.use("/api/inventory", inventory_default);

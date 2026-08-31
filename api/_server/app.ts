@@ -29,15 +29,21 @@ export function createApp() {
   // Mount API routes
   app.use('/api/auth', authRoutes);
   app.use('/api/users', usersRoutes);
+  app.use('/api/user', usersRoutes);
   app.use('/api/security', securityRoutes);
   app.use('/api/repairs', repairsRoutes);
+  app.use('/api/repair', repairsRoutes);
   app.use('/api/repair-transfers', repairTransfersRoutes);
+  app.use('/api/repair-transfer', repairTransfersRoutes);
   app.use('/api/customers', customersRoutes);
+  app.use('/api/customer', customersRoutes);
   app.use('/api/inventory', inventoryRoutes);
   app.use('/api/couriers', couriersRoutes);
+  app.use('/api/courier', couriersRoutes);
   app.use('/api/battery-warranties', batteryWarrantiesRoutes);
   app.use('/api/battery-warranty', batteryWarrantiesRoutes);
   app.use('/api/warranties', batteryWarrantiesRoutes);
+  app.use('/api/warranty', batteryWarrantiesRoutes);
   app.use('/api/attendance', attendanceRoutes);
   app.use('/api/repair-damage', repairDamageRoutes);
   app.use('/api/repair-prices', repairPricesRoutes);

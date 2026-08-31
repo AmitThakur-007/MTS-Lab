@@ -685,9 +685,12 @@ export default function NewRepair() {
         };
 
         const res = await api.post('/repairs/batch', payload);
-        toast.success(`Successfully registered ${res.totalRegistered} devices for ${customer.name}!`);
-        finalRepairs = res.repairs || [];
+        finalRepairs = Array.isArray(res.repairs) ? res.repairs : (res ? [res] : []);
         finalCustomer = res.customer || customer;
+        for (const rep of finalRepairs) {
+          await syncRepairToRtdb(rep).catch(() => {});
+        }
+        toast.success(`Successfully registered ${finalRepairs.length} devices for ${customer.name}!`);
       }
 
       // Automatically launch Service Slip Generation Dialog

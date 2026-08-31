@@ -86,14 +86,14 @@ const ALLOWED_REPAIR_COLUMNS = new Set([
   'sparePartsUsed'
 ]);
 
-async function generateRepairNumber(): Promise<string> {
+async function generateRepairNumber(offset: number = 0): Promise<string> {
   const currentYear = new Date().getFullYear();
   const { data: repairs } = await supabaseAdmin
     .from('Repair')
     .select('repairNumber')
     .ilike('repairNumber', `MTS-${currentYear}-%`)
     .order('repairNumber', { ascending: false })
-    .limit(20);
+    .limit(30);
 
   let maxNum = 1000;
   if (repairs && repairs.length > 0) {
@@ -109,18 +109,18 @@ async function generateRepairNumber(): Promise<string> {
     }
   }
 
-  const nextNum = maxNum + 1;
+  const nextNum = maxNum + 1 + offset;
   return `MTS-${currentYear}-${nextNum.toString().padStart(4, '0')}`;
 }
 
-async function generateWarrantyNumber(): Promise<string> {
+async function generateWarrantyNumber(offset: number = 0): Promise<string> {
   const currentYear = new Date().getFullYear();
   const { data: records } = await supabaseAdmin
     .from('BatteryWarranty')
     .select('warrantyNumber')
     .ilike('warrantyNumber', `BW-${currentYear}-%`)
     .order('warrantyNumber', { ascending: false })
-    .limit(10);
+    .limit(20);
 
   let maxNum = 0;
   if (records && records.length > 0) {
@@ -134,7 +134,7 @@ async function generateWarrantyNumber(): Promise<string> {
     }
   }
 
-  const nextNum = maxNum + 1;
+  const nextNum = maxNum + 1 + offset;
   return `BW-${currentYear}-${nextNum.toString().padStart(4, '0')}`;
 }
 
@@ -142,12 +142,10 @@ async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
   try {
     if (!repairData || !repairData.id) return;
 
-    // Strict boolean normalization: ONLY explicit true
     const isWarrantyActive =
       repairData.hasBatteryWarranty === true ||
       repairData.hasBatteryWarranty === 'true';
 
-    // If warranty is not active, delete/clean up any existing warranty record for this repair
     if (!isWarrantyActive) {
       const { data: existing } = await supabaseAdmin
         .from('BatteryWarranty')
@@ -156,7 +154,6 @@ async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
 
       if (existing && existing.length > 0) {
         for (const w of existing) {
-          // Delete any linked warranty claims first to respect foreign keys
           await supabaseAdmin.from('BatteryWarrantyClaim').delete().eq('warrantyId', w.id);
           await supabaseAdmin.from('BatteryWarranty').delete().eq('id', w.id);
           await broadcastServerChange('BatteryWarranty', 'DELETE', w.id);
@@ -165,7 +162,6 @@ async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
       return;
     }
 
-    // Warranty IS explicitly active:
     const { data: existing } = await supabaseAdmin
       .from('BatteryWarranty')
       .select('id')
@@ -235,6 +231,9 @@ async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
   }
 }
 
+// ----------------------------------------------------
+// 1. GET / — List repairs with filtering and search
+// ----------------------------------------------------
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const {
@@ -323,14 +322,251 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ----------------------------------------------------
+// 2. GET /export — Export repairs to Excel
+// ----------------------------------------------------
+router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { status, search, startDate, endDate } = req.query;
+    let query = supabaseAdmin.from('Repair').select('*, technician:User!Repair_technicianId_fkey(name)');
+
+    if (status && status !== 'ALL') query = query.eq('status', String(status));
+    if (startDate) query = query.gte('createdAt', String(startDate));
+    if (endDate) query = query.lte('createdAt', String(endDate));
+    if (search) {
+      const s = String(search).trim();
+      query = query.or(`repairNumber.ilike.%${s}%,customerName.ilike.%${s}%,customerPhone.ilike.%${s}%`);
+    }
+
+    const { data: repairs } = await query.order('createdAt', { ascending: false });
+
+    const rows = (repairs || []).map((r: any) => ({
+      'Repair Number': r.repairNumber,
+      'Customer Name': r.customerName,
+      'Phone': r.customerPhone,
+      'Device Brand': r.deviceBrand,
+      'Device Model': r.deviceModel,
+      'IMEI': r.imeiNumber || 'N/A',
+      'Problem': r.problemDescription,
+      'Status': r.status,
+      'Priority': r.priority || 'NORMAL',
+      'Estimated Cost': r.estimatedCost,
+      'Advance Paid': r.advancePaid,
+      'Total Paid': r.totalPaid,
+      'Technician': r.technician?.name || 'Unassigned',
+      'Date': r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : ''
+    }));
+
+    const buffer = createExcelBuffer('Repairs', rows);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="MTS_Repairs_${new Date().toISOString().split('T')[0]}.xlsx"`);
+    return res.send(buffer);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to export repairs.' });
+  }
+});
+
+// ----------------------------------------------------
+// 3. GET /import/template — Excel Template
+// ----------------------------------------------------
+router.get('/import/template', authenticate, (_req: Request, res: Response) => {
+  const sampleData = [
+    {
+      'Customer Name': 'Ram Bahadur',
+      'Customer Phone': '9841234567',
+      'Customer Email': 'ram@example.com',
+      'Customer Address': 'New Road, Kathmandu',
+      'Device Brand': 'Apple',
+      'Device Model': 'iPhone 13 Pro',
+      'IMEI / Serial': '354892019283741',
+      'Problem Description': 'Broken OLED screen, touch not working',
+      'Estimated Cost': 18500,
+      'Advance Paid': 5000,
+      'Remarks': 'Urgent repair requested by customer'
+    }
+  ];
+  const buffer = createExcelBuffer('Import Template', sampleData);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="MTS_Lab_Repair_Import_Template.xlsx"');
+  return res.send(buffer);
+});
+
+// ----------------------------------------------------
+// 4. POST /import/preview — Excel Upload Preview
+// ----------------------------------------------------
+router.post('/import/preview', authenticate, upload.single('file') as any, (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No Excel file provided for import preview.' });
+    }
+    const rows = parseExcelBuffer(req.file.buffer);
+    const parsed = rows.map((r: any, idx: number) => ({
+      rowIndex: idx + 1,
+      customerName: r['Customer Name'] || r['customerName'] || '',
+      customerPhone: r['Customer Phone'] || r['customerPhone'] || r['Phone'] || '',
+      customerEmail: r['Customer Email'] || r['customerEmail'] || '',
+      customerAddress: r['Customer Address'] || r['customerAddress'] || '',
+      deviceBrand: r['Device Brand'] || r['deviceBrand'] || 'Apple',
+      deviceModel: r['Device Model'] || r['deviceModel'] || '',
+      imeiNumber: r['IMEI / Serial'] || r['IMEI'] || r['imeiNumber'] || '',
+      problemDescription: r['Problem Description'] || r['problemDescription'] || '',
+      estimatedCost: parseFloat(r['Estimated Cost'] || r['estimatedCost'] || '0') || 0,
+      advancePaid: parseFloat(r['Advance Paid'] || r['advancePaid'] || '0') || 0,
+      remarks: r['Remarks'] || r['remarks'] || '',
+      isValid: Boolean((r['Customer Name'] || r['customerName']) && (r['Customer Phone'] || r['customerPhone']) && (r['Device Model'] || r['deviceModel']))
+    }));
+    return res.json({
+      totalRows: parsed.length,
+      validRows: parsed.filter((p: any) => p.isValid).length,
+      invalidRows: parsed.filter((p: any) => !p.isValid).length,
+      preview: parsed
+    });
+  } catch (err: any) {
+    return res.status(400).json({ error: 'Failed to parse Excel file. Ensure valid .xlsx format.' });
+  }
+});
+
+// ----------------------------------------------------
+// 5. POST /import/confirm — Batch Import Confirm
+// ----------------------------------------------------
+router.post('/import/confirm', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { items } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'No repair items to import.' });
+    }
+    const importedRepairs: any[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item.customerName || !item.customerPhone || !item.deviceModel) continue;
+      const repairNumber = await generateRepairNumber(i);
+      const repairId = uuidv4();
+      const newRepair = {
+        id: repairId,
+        repairNumber,
+        customerName: item.customerName.trim(),
+        customerPhone: item.customerPhone.trim(),
+        customerEmail: item.customerEmail ? item.customerEmail.trim() : null,
+        customerAddress: item.customerAddress ? item.customerAddress.trim() : null,
+        deviceBrand: item.deviceBrand || 'Apple',
+        deviceModel: item.deviceModel.trim(),
+        imeiNumber: item.imeiNumber ? String(item.imeiNumber).trim() : null,
+        problemDescription: item.problemDescription || 'General diagnostic & repair',
+        estimatedCost: Number(item.estimatedCost || 0),
+        advancePaid: Number(item.advancePaid || 0),
+        totalPaid: Number(item.advancePaid || 0),
+        paymentStatus: Number(item.advancePaid || 0) > 0 ? (Number(item.advancePaid) >= Number(item.estimatedCost) ? 'PAID' : 'PARTIAL') : 'UNPAID',
+        status: 'RECEIVED',
+        priority: 'NORMAL',
+        remarks: item.remarks || null,
+        createdById: req.user!.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      const { data: created } = await supabaseAdmin.from('Repair').insert([newRepair]).select('*').single();
+      if (created) importedRepairs.push(created);
+    }
+    return res.json({ success: true, count: importedRepairs.length, message: `Successfully imported ${importedRepairs.length} repairs.` });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to process batch repair import.' });
+  }
+});
+
+// ----------------------------------------------------
+// 6. POST /bulk-delete — Bulk Delete Repairs
+// ----------------------------------------------------
+router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No repair IDs specified.' });
+    }
+    await supabaseAdmin.from('RepairLog').delete().in('repairId', ids);
+    await supabaseAdmin.from('TechnicianNote').delete().in('repairId', ids);
+    await supabaseAdmin.from('Payment').delete().in('repairId', ids);
+    const { error } = await supabaseAdmin.from('Repair').delete().in('id', ids);
+    if (error) {
+      return res.status(500).json({ error: 'Failed to bulk delete repairs.' });
+    }
+    return res.json({ success: true, message: `Successfully deleted ${ids.length} repair records.` });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to bulk delete repairs.' });
+  }
+});
+
+// ----------------------------------------------------
+// 7. GET /:id — Get Single Repair Details
+// ----------------------------------------------------
+router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'Invalid repair ID.' });
+    }
+
+    const { data: repair, error } = await supabaseAdmin
+      .from('Repair')
+      .select('*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, email, role)')
+      .eq('id', id)
+      .single();
+
+    if (error || !repair) {
+      // Fallback: lookup by repairNumber
+      const { data: byNum } = await supabaseAdmin
+        .from('Repair')
+        .select('*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, email, role)')
+        .eq('repairNumber', id)
+        .single();
+
+      if (byNum) {
+        return res.json(byNum);
+      }
+      return res.status(404).json({ error: 'Repair ticket not found.' });
+    }
+
+    return res.json(repair);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to load repair record.' });
+  }
+});
+
+// ----------------------------------------------------
+// 8. GET /:id/notes — Get Notes for a Repair
+// ----------------------------------------------------
+router.get('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { data: notes, error } = await supabaseAdmin
+      .from('TechnicianNote')
+      .select('*')
+      .eq('repairId', id)
+      .order('createdAt', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: 'Failed to retrieve notes.' });
+    }
+    return res.json(notes || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to load notes.' });
+  }
+});
+
+// ----------------------------------------------------
+// 9. POST / & POST /repair — Single Repair Intake
+// ----------------------------------------------------
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const {
       customerId,
       customerName,
       customerPhone,
+      customerAlternativePhone,
       customerEmail,
+      customerDistrict,
+      customerMunicipality,
       customerAddress,
+      customerLandmark,
+      customerNotes,
       deviceBrand,
       deviceModel,
       imeiNumber,
@@ -350,10 +586,13 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       isCourierIn = false,
       courierCompany,
       courierTrackingNumber,
+      courierDate,
+      courierReceivedDate,
       senderName,
       senderPhone,
       originDistrict,
       originAddress,
+      courierNotes,
       hasBatteryWarranty = false,
       batteryWarrantyPeriod,
       batteryType,
@@ -375,6 +614,21 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 
       if (existingCustomers && existingCustomers.length > 0) {
         resolvedCustomerId = existingCustomers[0].id;
+        // Update customer details if provided
+        await supabaseAdmin
+          .from('Customer')
+          .update({
+            name: customerName.trim(),
+            alternativePhone: customerAlternativePhone ? customerAlternativePhone.trim() : undefined,
+            email: customerEmail ? customerEmail.trim() : undefined,
+            district: customerDistrict ? customerDistrict.trim() : undefined,
+            municipality: customerMunicipality ? customerMunicipality.trim() : undefined,
+            address: customerAddress ? customerAddress.trim() : undefined,
+            landmark: customerLandmark ? customerLandmark.trim() : undefined,
+            notes: customerNotes ? customerNotes.trim() : undefined,
+            updatedAt: new Date().toISOString()
+          })
+          .eq('id', resolvedCustomerId);
       } else {
         const newCusId = uuidv4();
         const { data: createdCus } = await supabaseAdmin
@@ -385,8 +639,13 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
               customerId: `CUS-${Date.now().toString().slice(-5)}`,
               name: customerName.trim(),
               phone: customerPhone.trim(),
+              alternativePhone: customerAlternativePhone ? customerAlternativePhone.trim() : null,
               email: customerEmail ? customerEmail.trim() : null,
+              district: customerDistrict ? customerDistrict.trim() : null,
+              municipality: customerMunicipality ? customerMunicipality.trim() : null,
               address: customerAddress ? customerAddress.trim() : null,
+              landmark: customerLandmark ? customerLandmark.trim() : null,
+              notes: customerNotes ? customerNotes.trim() : null,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             },
@@ -439,10 +698,13 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       isCourierIn: Boolean(isCourierIn),
       courierCompany: courierCompany || null,
       courierTrackingNumber: courierTrackingNumber || null,
+      courierDate: courierDate || null,
+      courierReceivedDate: courierReceivedDate || null,
       senderName: senderName || null,
       senderPhone: senderPhone || null,
       originDistrict: originDistrict || null,
       originAddress: originAddress || null,
+      courierNotes: courierNotes || null,
       hasBatteryWarranty: isWarrantyExplicit,
       batteryWarrantyPeriod: isWarrantyExplicit ? (batteryWarrantyPeriod || '6_MONTHS') : null,
       batteryType: isWarrantyExplicit ? (batteryType || 'Original Replacement Battery') : null,
@@ -495,59 +757,133 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Multi-device Batch Registration Endpoint
-router.post('/batch', authenticate, async (req: AuthRequest, res: Response) => {
+// ----------------------------------------------------
+// 10. POST /batch & POST /repairs/batch & POST /repair/batch — Multi-device Batch Registration
+// ----------------------------------------------------
+const handleBatchRepairIntake = async (req: AuthRequest, res: Response) => {
+  const createdRepairs: any[] = [];
   try {
     const { customer, devices } = req.body;
+
     if (!customer || !customer.name || !customer.phone) {
       return res.status(400).json({ error: 'Customer name and phone number are required.' });
     }
+
     if (!Array.isArray(devices) || devices.length === 0) {
       return res.status(400).json({ error: 'At least one device must be included in batch intake.' });
     }
 
+    // Validate that all devices have a device model
+    for (let i = 0; i < devices.length; i++) {
+      const dev = devices[i];
+      if (!dev || !dev.deviceModel || !dev.deviceModel.trim()) {
+        return res.status(400).json({ error: `Device #${i + 1} is missing a valid device model.` });
+      }
+    }
+
+    // 1. Resolve or Create Customer
     let resolvedCustomerId = customer.id;
-    if (!resolvedCustomerId) {
-      const { data: existingCustomers } = await supabaseAdmin
+    let resolvedCustomerObj: any = null;
+
+    if (resolvedCustomerId) {
+      const { data: existingCus } = await supabaseAdmin
         .from('Customer')
-        .select('id')
+        .select('*')
+        .eq('id', resolvedCustomerId)
+        .single();
+
+      if (existingCus) {
+        resolvedCustomerObj = existingCus;
+        // Update customer details if provided
+        const { data: updatedCus } = await supabaseAdmin
+          .from('Customer')
+          .update({
+            name: customer.name.trim(),
+            phone: customer.phone.trim(),
+            alternativePhone: customer.alternativePhone ? customer.alternativePhone.trim() : existingCus.alternativePhone,
+            email: customer.email ? customer.email.trim() : existingCus.email,
+            district: customer.district ? customer.district.trim() : existingCus.district,
+            municipality: customer.municipality ? customer.municipality.trim() : existingCus.municipality,
+            address: customer.address ? customer.address.trim() : existingCus.address,
+            landmark: customer.landmark ? customer.landmark.trim() : existingCus.landmark,
+            notes: customer.notes ? customer.notes.trim() : existingCus.notes,
+            updatedAt: new Date().toISOString()
+          })
+          .eq('id', resolvedCustomerId)
+          .select('*')
+          .single();
+        if (updatedCus) resolvedCustomerObj = updatedCus;
+      }
+    }
+
+    if (!resolvedCustomerObj) {
+      const { data: existingByPhone } = await supabaseAdmin
+        .from('Customer')
+        .select('*')
         .eq('phone', customer.phone.trim())
         .limit(1);
 
-      if (existingCustomers && existingCustomers.length > 0) {
-        resolvedCustomerId = existingCustomers[0].id;
+      if (existingByPhone && existingByPhone.length > 0) {
+        resolvedCustomerId = existingByPhone[0].id;
+        resolvedCustomerObj = existingByPhone[0];
+        // Update customer details if provided
+        const { data: updatedCus } = await supabaseAdmin
+          .from('Customer')
+          .update({
+            name: customer.name.trim(),
+            alternativePhone: customer.alternativePhone ? customer.alternativePhone.trim() : existingByPhone[0].alternativePhone,
+            email: customer.email ? customer.email.trim() : existingByPhone[0].email,
+            district: customer.district ? customer.district.trim() : existingByPhone[0].district,
+            municipality: customer.municipality ? customer.municipality.trim() : existingByPhone[0].municipality,
+            address: customer.address ? customer.address.trim() : existingByPhone[0].address,
+            landmark: customer.landmark ? customer.landmark.trim() : existingByPhone[0].landmark,
+            notes: customer.notes ? customer.notes.trim() : existingByPhone[0].notes,
+            updatedAt: new Date().toISOString()
+          })
+          .eq('id', resolvedCustomerId)
+          .select('*')
+          .single();
+        if (updatedCus) resolvedCustomerObj = updatedCus;
       } else {
         const newCusId = uuidv4();
-        const { data: createdCus } = await supabaseAdmin
+        const newCustomerNumber = `CUS-${Date.now().toString().slice(-5)}`;
+        const { data: createdCus, error: cusErr } = await supabaseAdmin
           .from('Customer')
           .insert([
             {
               id: newCusId,
-              customerId: `CUS-${Date.now().toString().slice(-5)}`,
+              customerId: newCustomerNumber,
               name: customer.name.trim(),
               phone: customer.phone.trim(),
+              alternativePhone: customer.alternativePhone ? customer.alternativePhone.trim() : null,
               email: customer.email ? customer.email.trim() : null,
+              district: customer.district ? customer.district.trim() : null,
+              municipality: customer.municipality ? customer.municipality.trim() : null,
               address: customer.address ? customer.address.trim() : null,
+              landmark: customer.landmark ? customer.landmark.trim() : null,
+              notes: customer.notes ? customer.notes.trim() : null,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             },
           ])
-          .select('id')
+          .select('*')
           .single();
 
+        if (cusErr) {
+          console.error('[CUSTOMER CREATE BATCH ERROR]', cusErr);
+        }
         if (createdCus) {
           resolvedCustomerId = createdCus.id;
-          await broadcastServerChange('Customer', 'CREATE', newCusId);
+          resolvedCustomerObj = createdCus;
+          await broadcastServerChange('Customer', 'CREATE', newCusId, createdCus);
         }
       }
     }
 
-    const createdRepairs: any[] = [];
-
-    for (const dev of devices) {
-      if (!dev.deviceModel) continue;
-
-      const repairNumber = await generateRepairNumber();
+    // 2. Iterate through devices and perform atomic creation
+    for (let i = 0; i < devices.length; i++) {
+      const dev = devices[i];
+      const repairNumber = await generateRepairNumber(i);
       const repairId = uuidv4();
       const estCostNum = parseFloat(dev.estimatedCost || 0) || 0;
       const advPaidNum = parseFloat(dev.advancePaid || 0) || 0;
@@ -584,10 +920,13 @@ router.post('/batch', authenticate, async (req: AuthRequest, res: Response) => {
         isCourierIn: Boolean(dev.isCourierIn),
         courierCompany: dev.courierCompany || null,
         courierTrackingNumber: dev.courierTrackingNumber || null,
+        courierDate: dev.courierDate || null,
+        courierReceivedDate: dev.courierReceivedDate || null,
         senderName: dev.senderName || null,
         senderPhone: dev.senderPhone || null,
         originDistrict: dev.originDistrict || null,
         originAddress: dev.originAddress || null,
+        courierNotes: dev.courierNotes || null,
         hasBatteryWarranty: isWarrantyExplicit,
         batteryWarrantyPeriod: isWarrantyExplicit ? (dev.batteryWarrantyPeriod || '6_MONTHS') : null,
         batteryType: isWarrantyExplicit ? (dev.batteryType || 'Original Replacement Battery') : null,
@@ -598,44 +937,86 @@ router.post('/batch', authenticate, async (req: AuthRequest, res: Response) => {
         updatedAt: new Date().toISOString(),
       };
 
-      const { data: created, error } = await supabaseAdmin.from('Repair').insert([newRepair]).select('*').single();
+      const { data: created, error: insertErr } = await supabaseAdmin.from('Repair').insert([newRepair]).select('*').single();
 
-      if (!error && created) {
-        if (isWarrantyExplicit) {
-          await syncBatteryWarrantyFromRepair(created, req.user);
+      if (insertErr || !created) {
+        console.error(`[BATCH REPAIR DEVICE ${i + 1} INSERT ERROR]`, insertErr);
+        // Rollback any repairs created in this transaction
+        if (createdRepairs.length > 0) {
+          const insertedIds = createdRepairs.map((r: any) => r.id);
+          await supabaseAdmin.from('RepairLog').delete().in('repairId', insertedIds);
+          await supabaseAdmin.from('Repair').delete().in('id', insertedIds);
         }
-
-        const logId = uuidv4();
-        await supabaseAdmin.from('RepairLog').insert([
-          {
-            id: logId,
-            repairId: created.id,
-            userId: req.user!.id,
-            action: 'CREATED',
-            status: 'RECEIVED',
-            notes: `Multi-device intake recorded by ${req.user!.name}.`,
-            createdAt: new Date().toISOString(),
-          },
-        ]);
-        await broadcastServerChange('RepairLog', 'CREATE', logId);
-        await broadcastServerChange('Repair', 'CREATE', created.id, created);
-
-        createdRepairs.push(created);
+        return res.status(500).json({ error: `Failed to create repair ticket for device #${i + 1} (${dev.deviceModel}). Batch rolled back.` });
       }
+
+      if (isWarrantyExplicit) {
+        await syncBatteryWarrantyFromRepair(created, req.user);
+      }
+
+      const logId = uuidv4();
+      await supabaseAdmin.from('RepairLog').insert([
+        {
+          id: logId,
+          repairId: created.id,
+          userId: req.user!.id,
+          action: 'CREATED',
+          status: 'RECEIVED',
+          notes: `Multi-device intake recorded by ${req.user!.name} (Device ${i + 1} of ${devices.length}).`,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      await broadcastServerChange('RepairLog', 'CREATE', logId);
+      await broadcastServerChange('Repair', 'CREATE', created.id, created);
+
+      await logAudit({
+        userId: req.user!.id,
+        action: 'REPAIR_CREATED',
+        resource: 'Repair',
+        resourceId: created.id,
+        details: {
+          repairNumber: created.repairNumber,
+          customerName: created.customerName,
+          deviceModel: created.deviceModel,
+          batchIndex: i + 1,
+          totalDevices: devices.length
+        },
+      });
+
+      createdRepairs.push(created);
     }
 
     return res.status(201).json({
       success: true,
       totalRegistered: createdRepairs.length,
+      count: createdRepairs.length,
       repairs: createdRepairs,
-      customer
+      customer: resolvedCustomerObj || customer
     });
   } catch (batchErr: any) {
-    console.error('[BATCH REPAIR INTAKE ERROR]', batchErr);
-    return res.status(500).json({ error: 'Failed to process batch repair intake.' });
+    console.error('[BATCH REPAIR INTAKE EXCEPTION]', batchErr);
+    // Cleanup any partially created repairs
+    if (createdRepairs.length > 0) {
+      try {
+        const insertedIds = createdRepairs.map((r: any) => r.id);
+        await supabaseAdmin.from('RepairLog').delete().in('repairId', insertedIds);
+        await supabaseAdmin.from('Repair').delete().in('id', insertedIds);
+      } catch (rollbackErr) {
+        console.error('[ROLLBACK EXCEPTION]', rollbackErr);
+      }
+    }
+    return res.status(500).json({ error: 'Failed to process batch repair intake: ' + (batchErr?.message || 'Server error') });
   }
-});
+};
 
+// Register batch endpoint under multiple matching routes for zero-failure resilience
+router.post('/batch', authenticate, handleBatchRepairIntake);
+router.post('/repairs/batch', authenticate, handleBatchRepairIntake);
+router.post('/repair/batch', authenticate, handleBatchRepairIntake);
+
+// ----------------------------------------------------
+// 11. PATCH /:id & PUT /:id — Update Repair
+// ----------------------------------------------------
 const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -675,7 +1056,6 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: error.message });
     }
 
-    // Always run battery warranty sync when warranty fields are modified or present
     if (rawBody.hasBatteryWarranty !== undefined || updated.hasBatteryWarranty !== undefined) {
       await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody, id, repairNumber: updated.repairNumber }, req.user);
     }
@@ -708,7 +1088,9 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
 router.patch('/:id', authenticate, handleRepairUpdate);
 router.put('/:id', authenticate, handleRepairUpdate);
 
-// Technician Progress Update Route
+// ----------------------------------------------------
+// 12. PATCH /:id/technician-update — Technician Progress
+// ----------------------------------------------------
 router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -776,7 +1158,9 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
   }
 });
 
-// Urgent Alert & Priority Escalation Endpoint
+// ----------------------------------------------------
+// 13. POST /:id/alert — Urgent Alert & Priority Escalation
+// ----------------------------------------------------
 router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'LEAD_TECHNICIAN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -878,6 +1262,9 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
   }
 });
 
+// ----------------------------------------------------
+// 14. POST /:id/assign — Assign Technician
+// ----------------------------------------------------
 router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LEAD_TECHNICIAN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -923,6 +1310,9 @@ router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MAN
   }
 });
 
+// ----------------------------------------------------
+// 15. POST /:id/notes — Add Technician Note
+// ----------------------------------------------------
 router.post('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -958,6 +1348,9 @@ router.post('/:id/notes', authenticate, async (req: AuthRequest, res: Response) 
   }
 });
 
+// ----------------------------------------------------
+// 16. POST /:id/courier-dispatch — Courier Dispatch & Outbound Logistics
+// ----------------------------------------------------
 router.post('/:id/courier-dispatch', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -1055,7 +1448,10 @@ router.post('/:id/courier-dispatch', authenticate, async (req: AuthRequest, res:
   }
 });
 
-router.post('/:id/re-problem', authenticate, async (req, res) => {
+// ----------------------------------------------------
+// 17. POST /:id/re-problem — Mark Re-problem
+// ----------------------------------------------------
+router.post('/:id/re-problem', authenticate, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { description } = req.body;
@@ -1083,6 +1479,9 @@ router.post('/:id/re-problem', authenticate, async (req, res) => {
   }
 });
 
+// ----------------------------------------------------
+// 18. DELETE /:id — Delete Repair
+// ----------------------------------------------------
 router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
