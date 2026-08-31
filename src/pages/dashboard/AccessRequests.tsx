@@ -1,6 +1,6 @@
 import React from 'react';
-import SecuritySurveillance from './SecuritySurveillance';
+import SuperAdminSecurityControl from './SuperAdminSecurityControl';
 
 export default function AccessRequests() {
-  return <SecuritySurveillance />;
+  return <SuperAdminSecurityControl />;
 }
