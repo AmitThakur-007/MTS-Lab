@@ -2,6 +2,7 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth';
 import usersRoutes from './routes/users';
+import staffRoutes from './routes/staff';
 import repairsRoutes from './routes/repairs';
 import repairTransfersRoutes from './routes/repairTransfers';
 import customersRoutes from './routes/customers';
@@ -30,6 +31,7 @@ export function createApp() {
   app.use('/api/auth', authRoutes);
   app.use('/api/users', usersRoutes);
   app.use('/api/user', usersRoutes);
+  app.use('/api/staff', staffRoutes);
   app.use('/api/security', securityRoutes);
   app.use('/api/repairs', repairsRoutes);
   // Transfer requests intentionally share the /api/repairs namespace because
