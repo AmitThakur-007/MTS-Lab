@@ -7,11 +7,10 @@ import { broadcastServerChange } from '../services/realtimeSync';
 
 const router = Router();
 const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+const allowedLevels = new Set(['brand', 'model', 'category', 'subcategory']);
 
 router.use(authenticate);
 router.use(authorize(adminRoles));
-
-const allowedLevels = new Set(['brand', 'model', 'category', 'subcategory']);
 
 function normalizeFolderBody(body: any) {
   const name = typeof body?.name === 'string' ? body.name.trim() : '';
@@ -64,9 +63,13 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     if (existing) return res.status(409).json({ success: false, message: 'A folder with this path already exists.' });
 
-    const { data, error } = await supabaseAdmin.from('RepairPriceFolder').insert(folder).select('id,name,level,brand,model,category,path,createdAt,createdBy').single();
-    if (error) throw error;
+    const { data, error } = await supabaseAdmin
+      .from('RepairPriceFolder')
+      .insert(folder)
+      .select('id,name,level,brand,model,category,path,createdAt,createdBy')
+      .single();
 
+    if (error) throw error;
     await broadcastServerChange('RepairPriceFolder', 'CREATE', data.id, data);
     return res.status(201).json(data);
   } catch (error) {
@@ -75,16 +78,24 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.patch('/:id', async (req: AuthRequest, res: Response) => {
+const updateFolder = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const normalized = normalizeFolderBody(req.body);
     if ('error' in normalized) return res.status(400).json({ success: false, message: normalized.error });
 
-    const update = { ...normalized.value, updatedAt: new Date().toISOString() };
+    const { data: duplicate } = await supabaseAdmin
+      .from('RepairPriceFolder')
+      .select('id')
+      .eq('path', normalized.value.path)
+      .neq('id', id)
+      .maybeSingle();
+
+    if (duplicate) return res.status(409).json({ success: false, message: 'A folder with this path already exists.' });
+
     const { data, error } = await supabaseAdmin
       .from('RepairPriceFolder')
-      .update(update)
+      .update({ ...normalized.value, updatedAt: new Date().toISOString() })
       .eq('id', id)
       .select('id,name,level,brand,model,category,path,createdAt,createdBy')
       .maybeSingle();
@@ -98,12 +109,10 @@ router.patch('/:id', async (req: AuthRequest, res: Response) => {
     console.error('[REPAIR PRICE FOLDER UPDATE ERROR]', error);
     return res.status(500).json({ success: false, message: 'Unable to update repair price folder.' });
   }
-});
+};
 
-router.put('/:id', async (req: AuthRequest, res: Response) => {
-  req.method = 'PATCH';
-  return router.handle(req, res, () => undefined);
-});
+router.patch('/:id', updateFolder);
+router.put('/:id', updateFolder);
 
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {
