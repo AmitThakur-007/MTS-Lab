@@ -54,8 +54,8 @@ router.post('/delete-data', authenticate, authorize(['SUPER_ADMIN']), async (req
   }
 });
 
-// GET /api/share/history — kept as a compatibility API for existing share clients.
-router.get('/share/history', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (_req: AuthRequest, res: Response) => {
+// Mounted at /api/share, so these paths intentionally begin with /history and /applet.
+router.get('/history', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (_req: AuthRequest, res: Response) => {
   try {
     const { data: shares, error } = await supabaseAdmin.from('AppletShare').select('*').order('createdAt', { ascending: false }).limit(50);
     if (error) {
@@ -69,7 +69,7 @@ router.get('/share/history', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), 
   }
 });
 
-router.post('/share/applet', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
+router.post('/applet', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { title, appletName, description, permissions, expiresAt } = req.body;
     const shareId = uuidv4();
