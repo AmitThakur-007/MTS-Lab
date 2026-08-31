@@ -92,68 +92,61 @@ const statusStyles: Record<string, { label: string; badge: string; bgSoft: strin
 type StatusFilterTab = 'ALL' | 'URGENT' | 'HIGH' | 'MEDIUM' | 'ACTIVE' | 'IN_PROCESS' | 'TESTING' | 'WAITING_FOR_PARTS' | 'REPAIRED' | 'RE_PROBLEM' | 'TRANSFERS';
 
 /**
- * Categorizes repair priority into 4 robust tiers matching backend and modal inputs:
- * 🔴 URGENT
- * 🟠 HIGH
- * 🟡 MEDIUM
- * ⚪ NORMAL
+ * Robust case-insensitive priority handler for badges & metadata across dashboards.
  */
 export function getPriorityMeta(repair: any) {
-  const p = String(repair?.priority || '').toUpperCase().trim();
+  const p = String(repair?.priority || 'NORMAL').toUpperCase().trim();
 
-  if (p === 'URGENT') {
-    return {
-      tier: 'URGENT' as const,
-      label: 'Urgent',
-      badgeClass: 'bg-rose-600 hover:bg-rose-700 text-white font-extrabold border-rose-700 shadow-sm shadow-rose-600/30 animate-pulse',
-      cardBorder: 'border-rose-400 ring-2 ring-rose-500/20 shadow-sm shadow-rose-500/10',
-      headerBg: 'bg-rose-50/60',
-      icon: Flame,
-      iconColor: 'text-rose-600',
-      tagColor: 'text-rose-700',
-      bannerBg: 'bg-gradient-to-r from-rose-500/15 via-red-500/10 to-amber-500/10 border-rose-400'
-    };
+  switch (p) {
+    case 'URGENT':
+      return {
+        tier: 'URGENT' as const,
+        label: 'Urgent',
+        badgeClass: 'bg-rose-600 hover:bg-rose-700 text-white font-extrabold border-rose-700 shadow-sm shadow-rose-600/30 animate-pulse',
+        cardBorder: 'border-rose-400 ring-2 ring-rose-500/20 shadow-sm shadow-rose-500/10',
+        headerBg: 'bg-rose-50/60',
+        icon: Flame,
+        iconColor: 'text-rose-600',
+        tagColor: 'text-rose-700',
+        bannerBg: 'bg-gradient-to-r from-rose-500/15 via-red-500/10 to-amber-500/10 border-rose-400'
+      };
+    case 'HIGH':
+      return {
+        tier: 'HIGH' as const,
+        label: 'High',
+        badgeClass: 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black border-amber-600 shadow-xs',
+        cardBorder: 'border-amber-300 ring-2 ring-amber-400/20 shadow-sm',
+        headerBg: 'bg-amber-50/50',
+        icon: Zap,
+        iconColor: 'text-amber-600',
+        tagColor: 'text-amber-700',
+        bannerBg: 'bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-yellow-500/10 border-amber-300'
+      };
+    case 'MEDIUM':
+      return {
+        tier: 'MEDIUM' as const,
+        label: 'Medium',
+        badgeClass: 'bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-bold border-yellow-500 shadow-xs',
+        cardBorder: 'border-yellow-200 shadow-xs',
+        headerBg: 'bg-yellow-50/40',
+        icon: Zap,
+        iconColor: 'text-yellow-600',
+        tagColor: 'text-yellow-700',
+        bannerBg: 'bg-yellow-50 border-yellow-200'
+      };
+    default:
+      return {
+        tier: 'NORMAL' as const,
+        label: 'Normal',
+        badgeClass: 'bg-slate-100 text-slate-700 border-slate-300 font-semibold',
+        cardBorder: 'border-slate-200/90 hover:border-indigo-300',
+        headerBg: 'bg-transparent',
+        icon: Smartphone,
+        iconColor: 'text-slate-500',
+        tagColor: 'text-slate-600',
+        bannerBg: 'bg-slate-50 border-slate-200'
+      };
   }
-
-  if (p === 'HIGH') {
-    return {
-      tier: 'HIGH' as const,
-      label: 'High',
-      badgeClass: 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black border-amber-600 shadow-xs',
-      cardBorder: 'border-amber-300 ring-2 ring-amber-400/20 shadow-sm',
-      headerBg: 'bg-amber-50/50',
-      icon: Zap,
-      iconColor: 'text-amber-600',
-      tagColor: 'text-amber-700',
-      bannerBg: 'bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-yellow-500/10 border-amber-300'
-    };
-  }
-
-  if (p === 'MEDIUM') {
-    return {
-      tier: 'MEDIUM' as const,
-      label: 'Medium',
-      badgeClass: 'bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-bold border-yellow-500 shadow-xs',
-      cardBorder: 'border-yellow-200 shadow-xs',
-      headerBg: 'bg-yellow-50/40',
-      icon: Zap,
-      iconColor: 'text-yellow-600',
-      tagColor: 'text-yellow-700',
-      bannerBg: 'bg-yellow-50 border-yellow-200'
-    };
-  }
-
-  return {
-    tier: 'NORMAL' as const,
-    label: 'Normal',
-    badgeClass: 'bg-slate-100 text-slate-700 border-slate-300 font-semibold',
-    cardBorder: 'border-slate-200/90 hover:border-indigo-300',
-    headerBg: 'bg-transparent',
-    icon: Smartphone,
-    iconColor: 'text-slate-500',
-    tagColor: 'text-slate-600',
-    bannerBg: 'bg-slate-50 border-slate-200'
-  };
 }
 
 export default function TechnicianDashboard() {

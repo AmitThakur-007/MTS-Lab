@@ -32,6 +32,7 @@ const ALLOWED_REPAIR_COLUMNS = new Set([
   'paymentStatus',
   'status',
   'priority',
+  'priorityUpdatedAt',
   'technicianId',
   'branchId',
   'expectedCompletionDate',
@@ -227,7 +228,6 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     const role = normalizeRole(req.user!.role);
     if (role === 'TECHNICIAN' && !technicianId) {
-      // Allow technicians to view their own assigned jobs OR any urgent/high priority tickets globally
       query = query.or(`technicianId.eq.${req.user!.id},priority.eq.URGENT,priority.eq.HIGH`);
     } else if (technicianId && technicianId !== 'ALL') {
       query = query.eq('technicianId', String(technicianId));
@@ -309,7 +309,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       advancePaid,
       technicianId,
       branchId,
-      priority = 'MEDIUM',
+      priority = 'NORMAL',
       expectedCompletionDate,
       remarks,
       receivingMethod = 'WALK_IN',
@@ -521,7 +521,7 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
 router.patch('/:id', authenticate, handleRepairUpdate);
 router.put('/:id', authenticate, handleRepairUpdate);
 
-// Technician Progress Update Route - Broadcasts change instantly to all roles
+// Technician Progress Update Route
 router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -589,13 +589,12 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
   }
 });
 
-// Urgent Alert & Priority Escalation Endpoint (Explicitly updates priority field)
+// Urgent Alert & Priority Escalation Endpoint
 router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'LEAD_TECHNICIAN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { priority, message } = req.body;
 
-    // Strict priority validation supporting NORMAL, MEDIUM, HIGH, URGENT
     const VALID_PRIORITIES = ['NORMAL', 'MEDIUM', 'HIGH', 'URGENT'];
     const resolvedPriority = priority ? String(priority).toUpperCase().trim() : 'NORMAL';
 
@@ -607,7 +606,6 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
       return res.status(400).json({ error: 'Alert message is required.' });
     }
 
-    // Verify repair exists
     const { data: existingRepair, error: fetchErr } = await supabaseAdmin
       .from('Repair')
       .select('*, technician:User!Repair_technicianId_fkey(id, name)')
@@ -622,7 +620,6 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
       return res.status(400).json({ error: 'Cannot alert technician — no technician is assigned to this repair.' });
     }
 
-    // Update repair priority safely in the database
     const { data: updatedRepair, error: updateErr } = await supabaseAdmin
       .from('Repair')
       .update({
@@ -639,7 +636,6 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
       return res.status(500).json({ error: 'Failed to update repair priority.' });
     }
 
-    // Create repair log entry
     const logId = uuidv4();
     await supabaseAdmin.from('RepairLog').insert([
       {
@@ -654,7 +650,6 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
     ]);
     await broadcastServerChange('RepairLog', 'CREATE', logId);
 
-    // Build priority-aware notification
     const priorityEmoji: Record<string, string> = {
       URGENT: '🔴',
       HIGH: '🟠',
@@ -665,7 +660,6 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
     const notifTitle = `${emoji} ${resolvedPriority} Alert: Job #${updatedRepair.repairNumber}`;
     const notifMessage = String(message).trim() || `Priority alert from ${req.user!.name}`;
 
-    // Create notification with priority field
     const notifId = uuidv4();
     await supabaseAdmin.from('Notification').insert([
       {
