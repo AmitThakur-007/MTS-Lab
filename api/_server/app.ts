@@ -55,8 +55,10 @@ export function createApp() {
   app.use('/api/warranty', batteryWarrantiesRoutes);
   app.use('/api/attendance', attendanceRoutes);
   app.use('/api/repair-damage', repairDamageRoutes);
-  app.use('/api/repair-prices', repairPricesRoutes);
+  // Register the more specific folder router before the parent repair-prices
+  // router so /folders cannot be consumed by repairPricesRoutes' catch-all paths.
   app.use('/api/repair-prices/folders', repairPriceFoldersRoutes);
+  app.use('/api/repair-prices', repairPricesRoutes);
   app.use('/api/public/repair-prices', repairPricesRoutes);
   app.use('/api/slides', slidesRoutes);
   app.use('/api/admin/slides', slidesRoutes);
