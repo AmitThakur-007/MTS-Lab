@@ -155,11 +155,13 @@ router.post('/:id/respond', authenticate, async (req: AuthRequest, res: Response
 
     const result = mapTransfer(data);
     await broadcastServerChange('RepairTransfer', 'UPDATE', result.id, result);
-    await broadcastServerChange('Repair', normalizedAction === 'ACCEPT' ? 'UPDATE' : 'UPDATE', result.repairId, {
-      repairId: result.repairId,
-      technicianId: normalizedAction === 'ACCEPT' ? req.user!.id : undefined,
-      transferStatus: result.status,
-    });
+    if (normalizedAction === 'ACCEPT') {
+      await broadcastServerChange('Repair', 'UPDATE', result.repairId, {
+        repairId: result.repairId,
+        technicianId: req.user!.id,
+        transferStatus: result.status,
+      });
+    }
     await broadcastServerChange('Notification', 'CREATE', result.id, {
       type: normalizedAction === 'ACCEPT' ? 'TRANSFER_ACCEPTED' : 'TRANSFER_REJECTED',
       userId: result.senderTechnicianId,
