@@ -3,6 +3,7 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth';
 import usersRoutes from './routes/users';
 import staffRoutes from './routes/staff';
+import dashboardRoutes from './routes/dashboard';
 import repairsRoutes from './routes/repairs';
 import repairTransfersRoutes from './routes/repairTransfers';
 import customersRoutes from './routes/customers';
@@ -33,6 +34,7 @@ export function createApp() {
   app.use('/api/users', usersRoutes);
   app.use('/api/user', usersRoutes);
   app.use('/api/staff', staffRoutes);
+  app.use('/api/dashboard/stats', dashboardRoutes);
   app.use('/api/repairs', repairsRoutes);
   app.use('/api/repairs', repairTransfersRoutes);
   app.use('/api/repair', repairsRoutes);
@@ -57,8 +59,6 @@ export function createApp() {
   app.use('/api/products', productsRoutes);
   app.use('/api/public/products', productsRoutes);
   app.use('/api/notifications', notificationsRoutes);
-  // The backups router defines /backups, /backups/:id, etc.; mount it at the
-  // admin namespace so the public API contract is /api/admin/backups/*.
   app.use('/api/admin', backupsRoutes);
   app.use('/api/admin', superAdminRoutes);
   app.use('/api/share', superAdminRoutes);
