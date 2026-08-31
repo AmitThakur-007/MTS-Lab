@@ -14,6 +14,7 @@ import SlideshowManagement from './dashboard/SlideshowManagement';
 import Settings from './dashboard/Settings';
 import Revenue from './dashboard/Revenue';
 import SuperAdmin from './dashboard/SuperAdmin';
+import AccessRequests from './dashboard/AccessRequests';
 import TechnicianDashboard from './dashboard/TechnicianDashboard';
 import ManagerDashboard from './dashboard/ManagerDashboard';
 import Attendance from './dashboard/Attendance';
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const { user } = useAuthStore();
   const isTechnician = useMemo(() => ['TECHNICIAN', 'LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT'].includes(user?.role || ''), [user?.role]);
   const isManager = user?.role === 'MANAGER';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const defaultElement = useMemo(() => {
     if (isTechnician) return <TechnicianDashboard />;
     if (isManager) return <ManagerDashboard />;
@@ -59,6 +61,13 @@ export default function Dashboard() {
           <Route path="revenue" element={<Revenue />} />
           <Route path="settings" element={<Settings />} />
           <Route path="super-admin" element={<SuperAdmin />} />
+          {isSuperAdmin && (
+            <>
+              <Route path="access-requests" element={<AccessRequests />} />
+              <Route path="security-surveillance" element={<SuperAdmin />} />
+              <Route path="security" element={<SuperAdmin />} />
+            </>
+          )}
           <Route path="*" element={defaultElement} />
         </Routes>
       </DashboardLayout>
