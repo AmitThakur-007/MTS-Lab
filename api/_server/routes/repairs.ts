@@ -41,17 +41,32 @@ const ALLOWED_REPAIR_COLUMNS = new Set([
   'isCourierIn',
   'courierCompany',
   'courierTrackingNumber',
+  'courierDate',
+  'courierReceivedDate',
+  'courierInStatus',
+  'courierStatus',
+  'courierInCharge',
+  'courierInPaymentStatus',
+  'courierInNotes',
+  'courierNotes',
   'senderName',
   'senderPhone',
+  'senderWhatsapp',
   'originDistrict',
   'originAddress',
   'isCourierOut',
   'returnCourierCompany',
   'returnCourierTrackingNumber',
+  'returnCourierDispatchDate',
+  'courierOutDeliveredDate',
+  'courierOutStatus',
+  'courierOutCharge',
+  'courierOutPaymentStatus',
   'destinationDistrict',
   'destinationAddress',
   'receiverName',
   'receiverPhone',
+  'receiverWhatsapp',
   'returnCourierNotes',
   'isReturnCourierDispatched',
   'returnCourierDispatchedAt',
@@ -774,39 +789,97 @@ router.post('/:id/notes', authenticate, async (req: AuthRequest, res: Response) 
 router.post('/:id/courier-dispatch', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { courierCompany, trackingNumber, destinationDistrict, destinationAddress, receiverName, receiverPhone, notes } = req.body;
+    const {
+      courierCompany,
+      returnCourierCompany,
+      trackingNumber,
+      returnCourierTrackingNumber,
+      returnCourierDispatchDate,
+      destinationDistrict,
+      destinationAddress,
+      receiverName,
+      receiverPhone,
+      receiverWhatsapp,
+      courierOutCharge,
+      courierOutPaymentStatus,
+      courierOutStatus,
+      notes,
+      returnCourierNotes,
+      status
+    } = req.body;
+
+    const company = (returnCourierCompany || courierCompany || '').trim();
+    const tracking = (returnCourierTrackingNumber || trackingNumber || '').trim();
+    const now = new Date().toISOString();
+    const userId = req.user?.id || 'system';
+    const userName = req.user?.name || 'Staff';
+
+    const updatePayload: any = {
+      isCourierOut: true,
+      returnCourierCompany: company || null,
+      returnCourierTrackingNumber: tracking || null,
+      returnCourierDispatchDate: returnCourierDispatchDate || now.split('T')[0],
+      destinationDistrict: destinationDistrict ? String(destinationDistrict).trim() : null,
+      destinationAddress: destinationAddress ? String(destinationAddress).trim() : null,
+      receiverName: receiverName ? String(receiverName).trim() : null,
+      receiverPhone: receiverPhone ? String(receiverPhone).trim() : null,
+      receiverWhatsapp: receiverWhatsapp ? String(receiverWhatsapp).trim() : null,
+      returnCourierNotes: returnCourierNotes || notes || null,
+      isReturnCourierDispatched: true,
+      returnCourierDispatchedAt: now,
+      returnCourierDispatchedById: userId,
+      returnCourierDispatchedByName: userName,
+      courierOutStatus: courierOutStatus || 'DISPATCHED',
+      courierStatus: 'DISPATCHED',
+      courierOutPaymentStatus: courierOutPaymentStatus || 'UNPAID',
+      updatedAt: now,
+    };
+
+    if (courierOutCharge !== undefined && courierOutCharge !== null && courierOutCharge !== '') {
+      updatePayload.courierOutCharge = Number(courierOutCharge);
+    }
+
+    if (status) {
+      updatePayload.status = status;
+    } else {
+      updatePayload.status = 'DISPATCHED_VIA_COURIER';
+    }
 
     const { data: updated, error } = await supabaseAdmin
       .from('Repair')
-      .update({
-        isCourierOut: true,
-        returnCourierCompany: courierCompany,
-        returnCourierTrackingNumber: trackingNumber,
-        destinationDistrict,
-        destinationAddress,
-        receiverName,
-        receiverPhone,
-        returnCourierNotes: notes,
-        isReturnCourierDispatched: true,
-        returnCourierDispatchedAt: new Date().toISOString(),
-        returnCourierDispatchedById: req.user!.id,
-        returnCourierDispatchedByName: req.user!.name,
-        status: 'DISPATCHED_VIA_COURIER',
-        updatedAt: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', id)
       .select('*')
       .single();
 
     if (error) {
-      return res.status(500).json({ error: 'Test dispatch failure.' });
+      console.error('[COURIER DISPATCH UPDATE ERROR]', error);
+      return res.status(500).json({ error: error.message || 'Failed to record courier dispatch.' });
+    }
+
+    try {
+      const logId = uuidv4();
+      await supabaseAdmin.from('RepairLog').insert([
+        {
+          id: logId,
+          repairId: id,
+          action: 'COURIER_DISPATCH_UPDATED',
+          status: updatePayload.status,
+          notes: `Courier logistics updated: ${company || 'Courier'} (AWB #${tracking || 'N/A'}) by ${userName}`,
+          userId: userId,
+          createdAt: now
+        }
+      ]);
+      broadcastServerChange('RepairLog', 'CREATE', logId);
+    } catch (logErr) {
+      console.warn('[REPAIR LOG NON FATAL]', logErr);
     }
 
     await broadcastServerChange('Repair', 'UPDATE', id, updated);
 
-    return res.json({ success: true, message: 'Repair successfully dispatched with courier tracking.', repair: updated });
+    return res.json({ success: true, message: 'Repair courier logistics updated successfully.', repair: updated });
   } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to record courier dispatch.' });
+    return res.status(500).json({ error: err.message || 'Failed to record courier dispatch.' });
   }
 });
 
