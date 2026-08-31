@@ -19,7 +19,6 @@ import productsRoutes from './routes/products';
 import notificationsRoutes from './routes/notifications';
 import superAdminRoutes from './routes/superAdmin';
 import backupsRoutes from './routes/backups';
-import securityRoutes from './routes/security';
 import uploadRoutes from './routes/upload';
 import eventsRoutes from './routes/events';
 import publicRoutes from './routes/public';
@@ -34,7 +33,6 @@ export function createApp() {
   app.use('/api/users', usersRoutes);
   app.use('/api/user', usersRoutes);
   app.use('/api/staff', staffRoutes);
-  app.use('/api/security', securityRoutes);
   app.use('/api/repairs', repairsRoutes);
   app.use('/api/repairs', repairTransfersRoutes);
   app.use('/api/repair', repairsRoutes);
@@ -65,7 +63,6 @@ export function createApp() {
   app.use('/api/admin', superAdminRoutes);
   app.use('/api/share', superAdminRoutes);
   app.use('/api/access-requests', accessRequestsCompatRoutes);
-  app.use('/api/approved-devices', securityRoutes);
   app.use('/api/upload', uploadRoutes);
   app.use('/api/events', eventsRoutes);
   app.use('/api/public', publicRoutes);
