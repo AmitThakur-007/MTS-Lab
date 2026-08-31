@@ -763,9 +763,22 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 const handleBatchRepairIntake = async (req: AuthRequest, res: Response) => {
   const createdRepairs: any[] = [];
   try {
-    const { customer, devices } = req.body;
+    const rawCustomer = req.body.customer || {};
+    const customer = {
+      id: rawCustomer.id || req.body.customerId,
+      name: (rawCustomer.name || req.body.customerName || '').trim(),
+      phone: (rawCustomer.phone || req.body.customerPhone || '').trim(),
+      email: (rawCustomer.email || req.body.customerEmail || '').trim() || null,
+      district: (rawCustomer.district || req.body.customerDistrict || '').trim() || null,
+      municipality: (rawCustomer.municipality || req.body.customerMunicipality || '').trim() || null,
+      address: (rawCustomer.address || req.body.customerAddress || '').trim() || null,
+      landmark: (rawCustomer.landmark || req.body.customerLandmark || '').trim() || null,
+      alternativePhone: (rawCustomer.alternativePhone || req.body.customerAlternativePhone || '').trim() || null,
+      notes: (rawCustomer.notes || req.body.customerNotes || '').trim() || null,
+    };
+    const devices = req.body.devices || [];
 
-    if (!customer || !customer.name || !customer.phone) {
+    if (!customer.name || !customer.phone) {
       return res.status(400).json({ error: 'Customer name and phone number are required.' });
     }
 

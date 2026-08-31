@@ -1,70 +1,25 @@
 // api/_server/app.ts
 import express from "express";
 import cookieParser from "cookie-parser";
-import { createClient } from "@supabase/supabase-js";
-import dotenv from "dotenv";
-import jwt from "jsonwebtoken";
-import { v4 as uuidv4 } from "uuid";
-import { Resend } from "resend";
+
+// api/_server/routes/auth.ts
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import jwt2 from "jsonwebtoken";
 import crypto from "crypto";
 import { v4 as uuidv42 } from "uuid";
-import { Router as Router2 } from "express";
-import bcrypt2 from "bcryptjs";
-import { v4 as uuidv43 } from "uuid";
-import { Router as Router3 } from "express";
-import { v4 as uuidv44 } from "uuid";
-import multer from "multer";
-import * as XLSX from "xlsx";
-import { Router as RouterTransfer } from "express";
-import { Router as Router4 } from "express";
-import { v4 as uuidv45 } from "uuid";
-import { Router as Router5 } from "express";
-import { v4 as uuidv46 } from "uuid";
-import { Router as Router6 } from "express";
-import { v4 as uuidv47 } from "uuid";
-import { Router as Router7 } from "express";
-import { v4 as uuidv48 } from "uuid";
-import multer2 from "multer";
-import { Router as Router8 } from "express";
-import { v4 as uuidv49 } from "uuid";
-import { Router as Router9 } from "express";
-import { v4 as uuidv410 } from "uuid";
-import { Router as Router10 } from "express";
-import { v4 as uuidv411 } from "uuid";
-import { Router as Router11 } from "express";
-import { v4 as uuidv412 } from "uuid";
-import multer3 from "multer";
-import { v2 as cloudinary } from "cloudinary";
-import { Router as Router12 } from "express";
-import { v4 as uuidv413 } from "uuid";
-import { Router as Router13 } from "express";
-import { Router as Router14 } from "express";
-import { v4 as uuidv414 } from "uuid";
-import { Router as Router15 } from "express";
-import multer4 from "multer";
-import { Router as Router16 } from "express";
-import { Router as Router17 } from "express";
-import jwt3 from "jsonwebtoken";
+
+// api/_server/config/supabase.ts
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
 dotenv.config();
 var PRODUCTION_SUPABASE_URL = "https://pirynpugkiurjobrqiqg.supabase.co";
 var PRODUCTION_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w";
-
 var rawUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim();
-var SUPABASE_URL = (!rawUrl || rawUrl.includes("your-project") || rawUrl.includes("example.com") || !rawUrl.startsWith("http"))
-  ? PRODUCTION_SUPABASE_URL
-  : rawUrl;
-
+var SUPABASE_URL = !rawUrl || rawUrl.includes("your-project") || rawUrl.includes("example.com") || !rawUrl.startsWith("http") ? PRODUCTION_SUPABASE_URL : rawUrl;
 var rawKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "").trim();
-var SUPABASE_ANON_KEY = (!rawKey || rawKey.includes("...") || rawKey.length < 50)
-  ? PRODUCTION_SUPABASE_ANON_KEY
-  : rawKey;
-
-var SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes("...") && process.env.SUPABASE_SERVICE_ROLE_KEY.length > 50)
-  ? process.env.SUPABASE_SERVICE_ROLE_KEY
-  : null;
+var SUPABASE_ANON_KEY = !rawKey || rawKey.includes("...") || rawKey.length < 50 ? PRODUCTION_SUPABASE_ANON_KEY : rawKey;
+var SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes("...") && process.env.SUPABASE_SERVICE_ROLE_KEY.length > 50 ? process.env.SUPABASE_SERVICE_ROLE_KEY : void 0;
 var supabaseAdmin = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY,
@@ -95,6 +50,9 @@ var config = {
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || ""
 };
+
+// api/_server/middleware/auth.ts
+import jwt from "jsonwebtoken";
 async function authenticate(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
@@ -167,6 +125,30 @@ async function authenticate(req, res, next) {
         message: "Your account is disabled or access has been revoked. Contact administrator."
       });
     }
+    const deviceIdentifier = req.headers["x-device-identifier"] || req.body?.deviceIdentifier || req.query?.deviceIdentifier;
+    if (deviceIdentifier) {
+      try {
+        const { data: devRecord } = await supabaseAdmin.from("ApprovedDevice").select("status, deviceName").eq("userId", dbUser.id).eq("deviceIdentifier", deviceIdentifier).maybeSingle();
+        if (devRecord && (devRecord.status === "REVOKED" || devRecord.status === "BLOCKED")) {
+          return res.status(403).json({
+            error: "DeviceBlocked",
+            message: `This device (${devRecord.deviceName || "Unidentified Hardware"}) has been revoked or blocked from accessing MTS Lab by a security administrator.`
+          });
+        }
+      } catch (devCheckErr) {
+      }
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    Promise.resolve(supabaseAdmin.from("User").update({ lastActiveAt: nowIso }).eq("id", dbUser.id)).catch(() => {
+    });
+    if (deviceIdentifier) {
+      Promise.resolve(supabaseAdmin.from("ApprovedDevice").update({
+        lastUsedAt: nowIso,
+        ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null
+      }).eq("userId", dbUser.id).eq("deviceIdentifier", deviceIdentifier)).catch(() => {
+      });
+    }
     req.user = {
       id: dbUser.id,
       email: dbUser.email,
@@ -191,22 +173,99 @@ async function authenticate(req, res, next) {
     });
   }
 }
+
+// api/_server/services/auditService.ts
+import { v4 as uuidv4 } from "uuid";
+
+// api/_server/services/realtimeSync.ts
+var serverBroadcastChannel = null;
+var isChannelSubscribing = false;
+function getOrCreateServerChannel() {
+  if (!serverBroadcastChannel && supabaseAdmin) {
+    try {
+      serverBroadcastChannel = supabaseAdmin.channel("mts_app_db_changes");
+      if (serverBroadcastChannel && !isChannelSubscribing) {
+        isChannelSubscribing = true;
+        serverBroadcastChannel.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            console.log("[SERVER REALTIME] Connected to broadcast channel mts_app_db_changes");
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("[SERVER REALTIME] Error initializing channel:", e);
+    }
+  }
+  return serverBroadcastChannel;
+}
+async function broadcastServerChange(entityName, action, id, data) {
+  try {
+    const channel = getOrCreateServerChannel();
+    if (!channel) return;
+    const entityLower = entityName.toLowerCase();
+    const payload = {
+      entity: entityLower,
+      action,
+      id: String(id),
+      data,
+      timestamp: Date.now()
+    };
+    await channel.send({
+      type: "broadcast",
+      event: "db_event",
+      payload
+    });
+    console.log(`[SERVER REALTIME BROADCAST] Sent ${action} for ${entityLower} (${id})`);
+  } catch (err) {
+    console.warn("[SERVER REALTIME BROADCAST WARNING] Failed to broadcast change:", err);
+  }
+}
+
+// api/_server/services/auditService.ts
 async function logAudit(entry) {
   try {
+    let userEmail = entry.userEmail || null;
+    let userName = entry.userName || null;
+    let userRole = entry.userRole || null;
+    if (entry.userId && (!userEmail || !userName || !userRole)) {
+      try {
+        const { data: user } = await supabaseAdmin.from("User").select("email, name, role").eq("id", entry.userId).maybeSingle();
+        if (user) {
+          userEmail = userEmail || user.email;
+          userName = userName || user.name;
+          userRole = userRole || user.role;
+        }
+      } catch (_) {
+      }
+    }
     const payload = {
       id: uuidv4(),
       userId: entry.userId || null,
+      userEmail,
+      userName,
+      userRole,
       action: entry.action,
       resource: entry.resource,
-      resourceId: entry.resourceId || null,
+      resourceId: entry.resourceId ? String(entry.resourceId) : null,
+      status: entry.status || "SUCCESS",
+      ipAddress: entry.ipAddress || null,
+      userAgent: entry.userAgent || null,
+      deviceInfo: typeof entry.deviceInfo === "object" ? JSON.stringify(entry.deviceInfo) : entry.deviceInfo ? String(entry.deviceInfo) : null,
       details: typeof entry.details === "object" ? JSON.stringify(entry.details) : entry.details ? String(entry.details) : null,
+      previousValue: typeof entry.previousValue === "object" ? JSON.stringify(entry.previousValue) : entry.previousValue ? String(entry.previousValue) : null,
+      newValue: typeof entry.newValue === "object" ? JSON.stringify(entry.newValue) : entry.newValue ? String(entry.newValue) : null,
+      metadata: typeof entry.metadata === "object" ? JSON.stringify(entry.metadata) : entry.metadata ? String(entry.metadata) : null,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    await supabaseAdmin.from("AuditLog").insert([payload]);
+    const { data: inserted } = await supabaseAdmin.from("AuditLog").insert([payload]).select("*").maybeSingle();
+    await broadcastServerChange("AuditLog", "CREATE", payload.id, inserted || payload);
   } catch (err) {
     console.warn("[AUDIT LOG WARNING] Failed to record audit log:", err);
   }
 }
+
+// api/_server/services/emailService.ts
+import { Resend } from "resend";
 var resendApiKey = process.env.RESEND_API_KEY;
 var resend = resendApiKey ? new Resend(resendApiKey) : null;
 async function sendEmail(options) {
@@ -238,6 +297,8 @@ async function sendEmail(options) {
     return false;
   }
 }
+
+// api/_server/routes/auth.ts
 var router = Router();
 function generateTokens(user) {
   const token = jwt2.sign(
@@ -277,6 +338,29 @@ router.post("/login", async (req, res) => {
         message: "Your account is currently disabled or pending approval. Contact the administrator."
       });
     }
+    if (deviceIdentifier) {
+      const { data: existingDevice } = await supabaseAdmin.from("ApprovedDevice").select("*").eq("userId", user.id).eq("deviceIdentifier", deviceIdentifier).maybeSingle();
+      if (existingDevice && (existingDevice.status === "REVOKED" || existingDevice.status === "BLOCKED")) {
+        await logAudit({
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          userRole: user.role,
+          action: "LOGIN_BLOCKED_DEVICE",
+          resource: "ApprovedDevice",
+          resourceId: existingDevice.id,
+          status: "FAILED",
+          ipAddress: ipAddress || req.ip || req.headers["x-forwarded-for"] || null,
+          userAgent: req.headers["user-agent"] || null,
+          deviceInfo: { deviceIdentifier, deviceName, browser, os },
+          details: { reason: "Login attempt from revoked/blocked device" }
+        });
+        return res.status(403).json({
+          error: "DeviceBlocked",
+          message: "This device has been blocked or revoked from accessing MTS Lab. Please contact a Super Administrator."
+        });
+      }
+    }
     let passwordMatches = false;
     try {
       const { data: authData, error: authError } = await supabasePublic.auth.signInWithPassword({
@@ -310,12 +394,66 @@ router.post("/login", async (req, res) => {
     if (!passwordMatches) {
       const attempts = (user.failedLoginAttempts || 0) + 1;
       await supabaseAdmin.from("User").update({ failedLoginAttempts: attempts }).eq("id", user.id);
+      await logAudit({
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "FAILED_LOGIN",
+        resource: "User",
+        resourceId: user.id,
+        status: "FAILED",
+        ipAddress: ipAddress || req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        deviceInfo: { deviceIdentifier, deviceName, browser, os },
+        details: { attemptNumber: attempts }
+      });
       return res.status(401).json({ error: "Invalid email or password." });
     }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
     await supabaseAdmin.from("User").update({
       failedLoginAttempts: 0,
-      lastLoginAt: (/* @__PURE__ */ new Date()).toISOString()
+      lastLoginAt: nowIso,
+      lastActiveAt: nowIso
     }).eq("id", user.id);
+    if (deviceIdentifier) {
+      try {
+        const { data: dev } = await supabaseAdmin.from("ApprovedDevice").select("id").eq("userId", user.id).eq("deviceIdentifier", deviceIdentifier).maybeSingle();
+        if (dev) {
+          await supabaseAdmin.from("ApprovedDevice").update({
+            deviceName: deviceName || void 0,
+            deviceType: deviceType || "DESKTOP",
+            browser: browser || void 0,
+            os: os || void 0,
+            ipAddress: ipAddress || req.ip || null,
+            userAgent: req.headers["user-agent"] || null,
+            lastUsedAt: nowIso,
+            updatedAt: nowIso
+          }).eq("id", dev.id);
+        } else {
+          await supabaseAdmin.from("ApprovedDevice").insert([
+            {
+              id: uuidv42(),
+              userId: user.id,
+              deviceIdentifier,
+              deviceName: deviceName || "Workstation",
+              deviceType: deviceType || "DESKTOP",
+              browser: browser || null,
+              os: os || null,
+              ipAddress: ipAddress || req.ip || null,
+              userAgent: req.headers["user-agent"] || null,
+              status: "APPROVED",
+              approvedAt: nowIso,
+              lastUsedAt: nowIso,
+              createdAt: nowIso,
+              updatedAt: nowIso
+            }
+          ]);
+        }
+      } catch (devErr) {
+        console.warn("[DEVICE REGISTRATION ERROR]", devErr);
+      }
+    }
     try {
       await supabaseAdmin.from("LoginActivity").insert([
         {
@@ -329,7 +467,7 @@ router.post("/login", async (req, res) => {
           browser: browser || null,
           os: os || null,
           status: "SUCCESS",
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          createdAt: nowIso
         }
       ]);
     } catch (_) {
@@ -379,10 +517,17 @@ router.post("/login", async (req, res) => {
     const { token, refreshToken } = generateTokens(user);
     await logAudit({
       userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+      userRole: user.role,
       action: "LOGIN",
       resource: "User",
       resourceId: user.id,
-      details: { email: user.email, role: user.role }
+      status: "SUCCESS",
+      ipAddress: ipAddress || req.ip || req.headers["x-forwarded-for"] || null,
+      userAgent: req.headers["user-agent"] || null,
+      deviceInfo: { deviceIdentifier, deviceName, deviceType, browser, os },
+      details: { email: user.email, role: user.role, method: "PASSWORD" }
     });
     return res.json({
       success: true,
@@ -549,6 +694,31 @@ router.post("/refresh", async (req, res) => {
   }
 });
 router.post("/logout", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+      try {
+        const decoded = jwt2.verify(token, config.jwtSecret);
+        if (decoded && decoded.id) {
+          await logAudit({
+            userId: decoded.id,
+            userEmail: decoded.email,
+            userRole: decoded.role,
+            action: "LOGOUT",
+            resource: "User",
+            resourceId: decoded.id,
+            status: "SUCCESS",
+            ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+            userAgent: req.headers["user-agent"] || null,
+            details: { message: "User logged out" }
+          });
+        }
+      } catch (_) {
+      }
+    }
+  } catch (_) {
+  }
   return res.json({ success: true, message: "Logged out successfully." });
 });
 router.get("/me", authenticate, async (req, res) => {
@@ -729,6 +899,13 @@ router.get("/sessions", authenticate, async (req, res) => {
   ]);
 });
 var auth_default = router;
+
+// api/_server/routes/users.ts
+import { Router as Router2 } from "express";
+import bcrypt2 from "bcryptjs";
+import { v4 as uuidv43 } from "uuid";
+
+// api/_server/middleware/rbac.ts
 function normalizeRole(role) {
   if (!role) return "";
   const r = role.toUpperCase().replace(/\s+/g, "_").trim();
@@ -758,6 +935,8 @@ function authorize(allowedRoles) {
     });
   };
 }
+
+// api/_server/routes/users.ts
 var router2 = Router2();
 router2.get("/", authenticate, async (req, res) => {
   try {
@@ -845,6 +1024,7 @@ router2.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req,
       resourceId: insertedUser.id,
       details: { email: insertedUser.email, role: insertedUser.role, createdBy: req.user.name }
     });
+    await broadcastServerChange("User", "CREATE", insertedUser.id, insertedUser);
     return res.status(201).json(insertedUser);
   } catch (err) {
     console.error("[CREATE USER ERROR]", err);
@@ -908,6 +1088,7 @@ router2.patch("/:id", authenticate, async (req, res) => {
       resourceId: id,
       details: updatePayload
     });
+    await broadcastServerChange("User", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
     console.error("[USER UPDATE ERROR]", err);
@@ -926,6 +1107,7 @@ var handle2FAToggle = async (req, res) => {
     if (error) {
       return res.status(500).json({ error: "Failed to update 2FA configuration." });
     }
+    await broadcastServerChange("User", "UPDATE", id, updated);
     return res.json({ success: true, message: `2FA ${isEnabled ? "enabled" : "disabled"} successfully.`, user: updated });
   } catch (err) {
     return res.status(500).json({ error: "Failed to toggle 2FA." });
@@ -946,6 +1128,7 @@ var handleDirectVerifyEmail = async (req, res) => {
     if (error) {
       return res.status(500).json({ error: "Failed to verify staff email." });
     }
+    await broadcastServerChange("User", "UPDATE", id, updated);
     return res.json({ success: true, message: "Email directly verified successfully.", user: updated });
   } catch (err) {
     return res.status(500).json({ error: "Failed to verify email." });
@@ -980,12 +1163,21 @@ router2.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async 
       resourceId: id,
       details: { deletedEmail: user?.email }
     });
+    await broadcastServerChange("User", "DELETE", id);
     return res.json({ success: true, message: "Staff member account safely deactivated." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to delete staff member." });
   }
 });
 var users_default = router2;
+
+// api/_server/routes/repairs.ts
+import { Router as Router3 } from "express";
+import { v4 as uuidv44 } from "uuid";
+import multer from "multer";
+
+// api/_server/services/excelService.ts
+import * as XLSX from "xlsx";
 function createExcelBuffer(sheetName, data) {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(data);
@@ -998,6 +1190,8 @@ function parseExcelBuffer(buffer) {
   const ws = wb.Sheets[firstSheetName];
   return XLSX.utils.sheet_to_json(ws, { defval: "" });
 }
+
+// api/_server/routes/repairs.ts
 var router3 = Router3();
 var upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 var ALLOWED_REPAIR_COLUMNS = /* @__PURE__ */ new Set([
@@ -1020,6 +1214,7 @@ var ALLOWED_REPAIR_COLUMNS = /* @__PURE__ */ new Set([
   "paymentStatus",
   "status",
   "priority",
+  "priorityUpdatedAt",
   "technicianId",
   "branchId",
   "expectedCompletionDate",
@@ -1028,17 +1223,32 @@ var ALLOWED_REPAIR_COLUMNS = /* @__PURE__ */ new Set([
   "isCourierIn",
   "courierCompany",
   "courierTrackingNumber",
+  "courierDate",
+  "courierReceivedDate",
+  "courierInStatus",
+  "courierStatus",
+  "courierInCharge",
+  "courierInPaymentStatus",
+  "courierInNotes",
+  "courierNotes",
   "senderName",
   "senderPhone",
+  "senderWhatsapp",
   "originDistrict",
   "originAddress",
   "isCourierOut",
   "returnCourierCompany",
   "returnCourierTrackingNumber",
+  "returnCourierDispatchDate",
+  "courierOutDeliveredDate",
+  "courierOutStatus",
+  "courierOutCharge",
+  "courierOutPaymentStatus",
   "destinationDistrict",
   "destinationAddress",
   "receiverName",
   "receiverPhone",
+  "receiverWhatsapp",
   "returnCourierNotes",
   "isReturnCourierDispatched",
   "returnCourierDispatchedAt",
@@ -1057,9 +1267,9 @@ var ALLOWED_REPAIR_COLUMNS = /* @__PURE__ */ new Set([
   "technicianNotes",
   "sparePartsUsed"
 ]);
-async function generateRepairNumber() {
+async function generateRepairNumber(offset = 0) {
   const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
-  const { data: repairs } = await supabaseAdmin.from("Repair").select("repairNumber").ilike("repairNumber", `MTS-${currentYear}-%`).order("repairNumber", { ascending: false }).limit(20);
+  const { data: repairs } = await supabaseAdmin.from("Repair").select("repairNumber").ilike("repairNumber", `MTS-${currentYear}-%`).order("repairNumber", { ascending: false }).limit(30);
   let maxNum = 1e3;
   if (repairs && repairs.length > 0) {
     for (const r of repairs) {
@@ -1073,12 +1283,12 @@ async function generateRepairNumber() {
       }
     }
   }
-  const nextNum = maxNum + 1;
+  const nextNum = maxNum + 1 + offset;
   return `MTS-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
 }
-async function generateWarrantyNumber() {
+async function generateWarrantyNumber(offset = 0) {
   const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
-  const { data: records } = await supabaseAdmin.from("BatteryWarranty").select("warrantyNumber").ilike("warrantyNumber", `BW-${currentYear}-%`).order("warrantyNumber", { ascending: false }).limit(10);
+  const { data: records } = await supabaseAdmin.from("BatteryWarranty").select("warrantyNumber").ilike("warrantyNumber", `BW-${currentYear}-%`).order("warrantyNumber", { ascending: false }).limit(20);
   let maxNum = 0;
   if (records && records.length > 0) {
     for (const r of records) {
@@ -1090,13 +1300,24 @@ async function generateWarrantyNumber() {
       }
     }
   }
-  const nextNum = maxNum + 1;
+  const nextNum = maxNum + 1 + offset;
   return `BW-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
 }
 async function syncBatteryWarrantyFromRepair(repairData, reqUser) {
   try {
-    const isWarrantyActive = repairData.hasBatteryWarranty === true || repairData.hasBatteryWarranty === "true" || Boolean(repairData.batteryWarrantyPeriod);
-    if (!isWarrantyActive) return;
+    if (!repairData || !repairData.id) return;
+    const isWarrantyActive = repairData.hasBatteryWarranty === true || repairData.hasBatteryWarranty === "true";
+    if (!isWarrantyActive) {
+      const { data: existing2 } = await supabaseAdmin.from("BatteryWarranty").select("id").eq("repairId", repairData.id);
+      if (existing2 && existing2.length > 0) {
+        for (const w of existing2) {
+          await supabaseAdmin.from("BatteryWarrantyClaim").delete().eq("warrantyId", w.id);
+          await supabaseAdmin.from("BatteryWarranty").delete().eq("id", w.id);
+          await broadcastServerChange("BatteryWarranty", "DELETE", w.id);
+        }
+      }
+      return;
+    }
     const { data: existing } = await supabaseAdmin.from("BatteryWarranty").select("id").eq("repairId", repairData.id).limit(1);
     const rawPeriod = String(repairData.batteryWarrantyPeriod || "6_MONTHS");
     const months = rawPeriod.includes("12") ? 12 : rawPeriod.includes("3") ? 3 : 6;
@@ -1118,11 +1339,13 @@ async function syncBatteryWarrantyFromRepair(repairData, reqUser) {
         status: "ACTIVE",
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       }).eq("id", existing[0].id);
+      await broadcastServerChange("BatteryWarranty", "UPDATE", existing[0].id);
     } else {
+      const warrantyId = uuidv44();
       const warrantyNumber = await generateWarrantyNumber();
       await supabaseAdmin.from("BatteryWarranty").insert([
         {
-          id: uuidv44(),
+          id: warrantyId,
           warrantyNumber,
           repairId: repairData.id,
           repairNumber: repairData.repairNumber,
@@ -1145,6 +1368,7 @@ async function syncBatteryWarrantyFromRepair(repairData, reqUser) {
           updatedAt: (/* @__PURE__ */ new Date()).toISOString()
         }
       ]);
+      await broadcastServerChange("BatteryWarranty", "CREATE", warrantyId);
     }
   } catch (syncErr) {
     console.error("[SYNC BATTERY WARRANTY EXCEPTION]", syncErr);
@@ -1172,7 +1396,7 @@ router3.get("/", authenticate, async (req, res) => {
     let query = supabaseAdmin.from("Repair").select("*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, role, email)", { count: "exact" });
     const role = normalizeRole(req.user.role);
     if (role === "TECHNICIAN" && !technicianId) {
-      query = query.eq("technicianId", req.user.id);
+      query = query.or(`technicianId.eq.${req.user.id},priority.eq.URGENT,priority.eq.HIGH`);
     } else if (technicianId && technicianId !== "ALL") {
       query = query.eq("technicianId", String(technicianId));
     }
@@ -1240,7 +1464,7 @@ router3.get("/export", authenticate, async (req, res) => {
       "IMEI": r.imeiNumber || "N/A",
       "Problem": r.problemDescription,
       "Status": r.status,
-      "Priority": r.priority || "MEDIUM",
+      "Priority": r.priority || "NORMAL",
       "Estimated Cost": r.estimatedCost,
       "Advance Paid": r.advancePaid,
       "Total Paid": r.totalPaid,
@@ -1255,7 +1479,7 @@ router3.get("/export", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to export repairs." });
   }
 });
-router3.get("/import/template", authenticate, (req, res) => {
+router3.get("/import/template", authenticate, (_req, res) => {
   const sampleData = [
     {
       "Customer Name": "Ram Bahadur",
@@ -1314,9 +1538,10 @@ router3.post("/import/confirm", authenticate, async (req, res) => {
       return res.status(400).json({ error: "No repair items to import." });
     }
     const importedRepairs = [];
-    for (const item of items) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
       if (!item.customerName || !item.customerPhone || !item.deviceModel) continue;
-      const repairNumber = await generateRepairNumber();
+      const repairNumber = await generateRepairNumber(i);
       const repairId = uuidv44();
       const newRepair = {
         id: repairId,
@@ -1334,7 +1559,7 @@ router3.post("/import/confirm", authenticate, async (req, res) => {
         totalPaid: Number(item.advancePaid || 0),
         paymentStatus: Number(item.advancePaid || 0) > 0 ? Number(item.advancePaid) >= Number(item.estimatedCost) ? "PAID" : "PARTIAL" : "UNPAID",
         status: "RECEIVED",
-        priority: "MEDIUM",
+        priority: "NORMAL",
         remarks: item.remarks || null,
         createdById: req.user.id,
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -1348,16 +1573,53 @@ router3.post("/import/confirm", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to process batch repair import." });
   }
 });
+router3.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "No repair IDs specified." });
+    }
+    await supabaseAdmin.from("RepairLog").delete().in("repairId", ids);
+    await supabaseAdmin.from("TechnicianNote").delete().in("repairId", ids);
+    await supabaseAdmin.from("Payment").delete().in("repairId", ids);
+    const { error } = await supabaseAdmin.from("Repair").delete().in("id", ids);
+    if (error) {
+      return res.status(500).json({ error: "Failed to bulk delete repairs." });
+    }
+    return res.json({ success: true, message: `Successfully deleted ${ids.length} repair records.` });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to bulk delete repairs." });
+  }
+});
 router3.get("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { data: repair, error } = await supabaseAdmin.from("Repair").select("*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, role, email, phoneNumber), notes:TechnicianNote(*), logs:RepairLog(*), payments:Payment(*)").eq("id", id).single();
+    if (!id || id === "undefined" || id === "null") {
+      return res.status(400).json({ error: "Invalid repair ID." });
+    }
+    const { data: repair, error } = await supabaseAdmin.from("Repair").select("*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, email, role)").eq("id", id).single();
     if (error || !repair) {
-      return res.status(404).json({ error: "Repair record not found." });
+      const { data: byNum } = await supabaseAdmin.from("Repair").select("*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, email, role)").eq("repairNumber", id).single();
+      if (byNum) {
+        return res.json(byNum);
+      }
+      return res.status(404).json({ error: "Repair ticket not found." });
     }
     return res.json(repair);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve repair details." });
+    return res.status(500).json({ error: "Failed to load repair record." });
+  }
+});
+router3.get("/:id/notes", authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data: notes, error } = await supabaseAdmin.from("TechnicianNote").select("*").eq("repairId", id).order("createdAt", { ascending: false });
+    if (error) {
+      return res.status(500).json({ error: "Failed to retrieve notes." });
+    }
+    return res.json(notes || []);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to load notes." });
   }
 });
 router3.post("/", authenticate, async (req, res) => {
@@ -1366,8 +1628,13 @@ router3.post("/", authenticate, async (req, res) => {
       customerId,
       customerName,
       customerPhone,
+      customerAlternativePhone,
       customerEmail,
+      customerDistrict,
+      customerMunicipality,
       customerAddress,
+      customerLandmark,
+      customerNotes,
       deviceBrand,
       deviceModel,
       imeiNumber,
@@ -1380,17 +1647,20 @@ router3.post("/", authenticate, async (req, res) => {
       advancePaid,
       technicianId,
       branchId,
-      priority = "MEDIUM",
+      priority = "NORMAL",
       expectedCompletionDate,
       remarks,
       receivingMethod = "WALK_IN",
       isCourierIn = false,
       courierCompany,
       courierTrackingNumber,
+      courierDate,
+      courierReceivedDate,
       senderName,
       senderPhone,
       originDistrict,
       originAddress,
+      courierNotes,
       hasBatteryWarranty = false,
       batteryWarrantyPeriod,
       batteryType,
@@ -1405,6 +1675,17 @@ router3.post("/", authenticate, async (req, res) => {
       const { data: existingCustomers } = await supabaseAdmin.from("Customer").select("id").eq("phone", customerPhone.trim()).limit(1);
       if (existingCustomers && existingCustomers.length > 0) {
         resolvedCustomerId = existingCustomers[0].id;
+        await supabaseAdmin.from("Customer").update({
+          name: customerName.trim(),
+          alternativePhone: customerAlternativePhone ? customerAlternativePhone.trim() : void 0,
+          email: customerEmail ? customerEmail.trim() : void 0,
+          district: customerDistrict ? customerDistrict.trim() : void 0,
+          municipality: customerMunicipality ? customerMunicipality.trim() : void 0,
+          address: customerAddress ? customerAddress.trim() : void 0,
+          landmark: customerLandmark ? customerLandmark.trim() : void 0,
+          notes: customerNotes ? customerNotes.trim() : void 0,
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+        }).eq("id", resolvedCustomerId);
       } else {
         const newCusId = uuidv44();
         const { data: createdCus } = await supabaseAdmin.from("Customer").insert([
@@ -1413,13 +1694,21 @@ router3.post("/", authenticate, async (req, res) => {
             customerId: `CUS-${Date.now().toString().slice(-5)}`,
             name: customerName.trim(),
             phone: customerPhone.trim(),
+            alternativePhone: customerAlternativePhone ? customerAlternativePhone.trim() : null,
             email: customerEmail ? customerEmail.trim() : null,
+            district: customerDistrict ? customerDistrict.trim() : null,
+            municipality: customerMunicipality ? customerMunicipality.trim() : null,
             address: customerAddress ? customerAddress.trim() : null,
+            landmark: customerLandmark ? customerLandmark.trim() : null,
+            notes: customerNotes ? customerNotes.trim() : null,
             createdAt: (/* @__PURE__ */ new Date()).toISOString(),
             updatedAt: (/* @__PURE__ */ new Date()).toISOString()
           }
         ]).select("id").single();
-        if (createdCus) resolvedCustomerId = createdCus.id;
+        if (createdCus) {
+          resolvedCustomerId = createdCus.id;
+          await broadcastServerChange("Customer", "CREATE", newCusId);
+        }
       }
     }
     const repairNumber = await generateRepairNumber();
@@ -1427,6 +1716,7 @@ router3.post("/", authenticate, async (req, res) => {
     const estCostNum = parseFloat(estimatedCost || 0) || 0;
     const advPaidNum = parseFloat(advancePaid || 0) || 0;
     const paymentStatus = advPaidNum >= estCostNum && estCostNum > 0 ? "PAID" : advPaidNum > 0 ? "PARTIAL" : "UNPAID";
+    const isWarrantyExplicit = hasBatteryWarranty === true || hasBatteryWarranty === "true";
     const newRepair = {
       id: repairId,
       repairNumber,
@@ -1457,15 +1747,18 @@ router3.post("/", authenticate, async (req, res) => {
       isCourierIn: Boolean(isCourierIn),
       courierCompany: courierCompany || null,
       courierTrackingNumber: courierTrackingNumber || null,
+      courierDate: courierDate || null,
+      courierReceivedDate: courierReceivedDate || null,
       senderName: senderName || null,
       senderPhone: senderPhone || null,
       originDistrict: originDistrict || null,
       originAddress: originAddress || null,
-      hasBatteryWarranty: Boolean(hasBatteryWarranty),
-      batteryWarrantyPeriod: batteryWarrantyPeriod || null,
-      batteryType: batteryType || null,
-      batteryHealth: batteryHealth || null,
-      batterySerial: batterySerial || null,
+      courierNotes: courierNotes || null,
+      hasBatteryWarranty: isWarrantyExplicit,
+      batteryWarrantyPeriod: isWarrantyExplicit ? batteryWarrantyPeriod || "6_MONTHS" : null,
+      batteryType: isWarrantyExplicit ? batteryType || "Original Replacement Battery" : null,
+      batteryHealth: isWarrantyExplicit ? batteryHealth || null : null,
+      batterySerial: isWarrantyExplicit ? batterySerial || null : null,
       createdById: req.user.id,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -1475,20 +1768,22 @@ router3.post("/", authenticate, async (req, res) => {
       console.error("[REPAIR CREATE ERROR]", error);
       return res.status(500).json({ error: "Failed to create repair ticket." });
     }
-    if (hasBatteryWarranty || batteryWarrantyPeriod) {
+    if (isWarrantyExplicit) {
       await syncBatteryWarrantyFromRepair(created, req.user);
     }
+    const logId = uuidv44();
     await supabaseAdmin.from("RepairLog").insert([
       {
-        id: uuidv44(),
+        id: logId,
         repairId: created.id,
         userId: req.user.id,
         action: "CREATED",
         status: "RECEIVED",
-        notes: `Repair intake recorded by ${req.user.name}. Initial payment: NPR ${advPaidNum}`,
+        notes: `Repair intake recorded by ${req.user.name}.`,
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       }
     ]);
+    await broadcastServerChange("RepairLog", "CREATE", logId);
     await logAudit({
       userId: req.user.id,
       action: "REPAIR_CREATED",
@@ -1496,17 +1791,31 @@ router3.post("/", authenticate, async (req, res) => {
       resourceId: created.id,
       details: { repairNumber: created.repairNumber, customerName: created.customerName }
     });
+    await broadcastServerChange("Repair", "CREATE", created.id, created);
     return res.status(201).json(created);
   } catch (err) {
     console.error("[CREATE REPAIR ERROR]", err);
     return res.status(500).json({ error: "Failed to register repair ticket." });
   }
 });
-var handleBatchRepairIntakeIndex = async (req, res) => {
+var handleBatchRepairIntake = async (req, res) => {
   const createdRepairs = [];
   try {
-    const { customer, devices } = req.body;
-    if (!customer || !customer.name || !customer.phone) {
+    const rawCustomer = req.body.customer || {};
+    const customer = {
+      id: rawCustomer.id || req.body.customerId,
+      name: (rawCustomer.name || req.body.customerName || "").trim(),
+      phone: (rawCustomer.phone || req.body.customerPhone || "").trim(),
+      email: (rawCustomer.email || req.body.customerEmail || "").trim() || null,
+      district: (rawCustomer.district || req.body.customerDistrict || "").trim() || null,
+      municipality: (rawCustomer.municipality || req.body.customerMunicipality || "").trim() || null,
+      address: (rawCustomer.address || req.body.customerAddress || "").trim() || null,
+      landmark: (rawCustomer.landmark || req.body.customerLandmark || "").trim() || null,
+      alternativePhone: (rawCustomer.alternativePhone || req.body.customerAlternativePhone || "").trim() || null,
+      notes: (rawCustomer.notes || req.body.customerNotes || "").trim() || null
+    };
+    const devices = req.body.devices || [];
+    if (!customer.name || !customer.phone) {
       return res.status(400).json({ error: "Customer name and phone number are required." });
     }
     if (!Array.isArray(devices) || devices.length === 0) {
@@ -1558,10 +1867,11 @@ var handleBatchRepairIntakeIndex = async (req, res) => {
         if (updatedCus) resolvedCustomerObj = updatedCus;
       } else {
         const newCusId = uuidv44();
-        const { data: createdCus } = await supabaseAdmin.from("Customer").insert([
+        const newCustomerNumber = `CUS-${Date.now().toString().slice(-5)}`;
+        const { data: createdCus, error: cusErr } = await supabaseAdmin.from("Customer").insert([
           {
             id: newCusId,
-            customerId: `CUS-${Date.now().toString().slice(-5)}`,
+            customerId: newCustomerNumber,
             name: customer.name.trim(),
             phone: customer.phone.trim(),
             alternativePhone: customer.alternativePhone ? customer.alternativePhone.trim() : null,
@@ -1575,15 +1885,19 @@ var handleBatchRepairIntakeIndex = async (req, res) => {
             updatedAt: (/* @__PURE__ */ new Date()).toISOString()
           }
         ]).select("*").single();
+        if (cusErr) {
+          console.error("[CUSTOMER CREATE BATCH ERROR]", cusErr);
+        }
         if (createdCus) {
           resolvedCustomerId = createdCus.id;
           resolvedCustomerObj = createdCus;
+          await broadcastServerChange("Customer", "CREATE", newCusId, createdCus);
         }
       }
     }
     for (let i = 0; i < devices.length; i++) {
       const dev = devices[i];
-      const repairNumber = await generateRepairNumber();
+      const repairNumber = await generateRepairNumber(i);
       const repairId = uuidv44();
       const estCostNum = parseFloat(dev.estimatedCost || 0) || 0;
       const advPaidNum = parseFloat(dev.advancePaid || 0) || 0;
@@ -1612,7 +1926,7 @@ var handleBatchRepairIntakeIndex = async (req, res) => {
         status: dev.status || "RECEIVED",
         priority: dev.priority || "NORMAL",
         technicianId: dev.technicianId || null,
-        branchId: req.user?.branchId || null,
+        branchId: req.user.branchId || null,
         expectedCompletionDate: dev.expectedCompletionDate || null,
         remarks: dev.remarks || null,
         receivingMethod: dev.receivingMethod || "WALK_IN",
@@ -1631,12 +1945,13 @@ var handleBatchRepairIntakeIndex = async (req, res) => {
         batteryType: isWarrantyExplicit ? dev.batteryType || "Original Replacement Battery" : null,
         batteryHealth: isWarrantyExplicit ? dev.batteryHealth || null : null,
         batterySerial: isWarrantyExplicit ? dev.batterySerial || null : null,
-        createdById: req.user?.id,
+        createdById: req.user.id,
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       const { data: created, error: insertErr } = await supabaseAdmin.from("Repair").insert([newRepair]).select("*").single();
       if (insertErr || !created) {
+        console.error(`[BATCH REPAIR DEVICE ${i + 1} INSERT ERROR]`, insertErr);
         if (createdRepairs.length > 0) {
           const insertedIds = createdRepairs.map((r) => r.id);
           await supabaseAdmin.from("RepairLog").delete().in("repairId", insertedIds);
@@ -1647,19 +1962,22 @@ var handleBatchRepairIntakeIndex = async (req, res) => {
       if (isWarrantyExplicit) {
         await syncBatteryWarrantyFromRepair(created, req.user);
       }
+      const logId = uuidv44();
       await supabaseAdmin.from("RepairLog").insert([
         {
-          id: uuidv44(),
+          id: logId,
           repairId: created.id,
-          userId: req.user?.id,
+          userId: req.user.id,
           action: "CREATED",
           status: "RECEIVED",
-          notes: `Multi-device intake recorded by ${req.user?.name || "Staff"} (Device ${i + 1} of ${devices.length}).`,
+          notes: `Multi-device intake recorded by ${req.user.name} (Device ${i + 1} of ${devices.length}).`,
           createdAt: (/* @__PURE__ */ new Date()).toISOString()
         }
       ]);
+      await broadcastServerChange("RepairLog", "CREATE", logId);
+      await broadcastServerChange("Repair", "CREATE", created.id, created);
       await logAudit({
-        userId: req.user?.id,
+        userId: req.user.id,
         action: "REPAIR_CREATED",
         resource: "Repair",
         resourceId: created.id,
@@ -1681,19 +1999,22 @@ var handleBatchRepairIntakeIndex = async (req, res) => {
       customer: resolvedCustomerObj || customer
     });
   } catch (batchErr) {
+    console.error("[BATCH REPAIR INTAKE EXCEPTION]", batchErr);
     if (createdRepairs.length > 0) {
       try {
         const insertedIds = createdRepairs.map((r) => r.id);
         await supabaseAdmin.from("RepairLog").delete().in("repairId", insertedIds);
         await supabaseAdmin.from("Repair").delete().in("id", insertedIds);
-      } catch {}
+      } catch (rollbackErr) {
+        console.error("[ROLLBACK EXCEPTION]", rollbackErr);
+      }
     }
     return res.status(500).json({ error: "Failed to process batch repair intake: " + (batchErr?.message || "Server error") });
   }
 };
-router3.post("/batch", authenticate, handleBatchRepairIntakeIndex);
-router3.post("/repairs/batch", authenticate, handleBatchRepairIntakeIndex);
-router3.post("/repair/batch", authenticate, handleBatchRepairIntakeIndex);
+router3.post("/batch", authenticate, handleBatchRepairIntake);
+router3.post("/repairs/batch", authenticate, handleBatchRepairIntake);
+router3.post("/repair/batch", authenticate, handleBatchRepairIntake);
 var handleRepairUpdate = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1707,19 +2028,28 @@ var handleRepairUpdate = async (req, res) => {
     if (updateData.estimatedCost !== void 0) updateData.estimatedCost = parseFloat(updateData.estimatedCost) || 0;
     if (updateData.advancePaid !== void 0) updateData.advancePaid = parseFloat(updateData.advancePaid) || 0;
     if (updateData.totalPaid !== void 0) updateData.totalPaid = parseFloat(updateData.totalPaid) || 0;
+    if (rawBody.hasBatteryWarranty !== void 0) {
+      const isWarranty = rawBody.hasBatteryWarranty === true || rawBody.hasBatteryWarranty === "true";
+      updateData.hasBatteryWarranty = isWarranty;
+      if (!isWarranty) {
+        updateData.batteryWarrantyPeriod = null;
+        updateData.batteryType = null;
+      }
+    }
     updateData.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
     const { data: updated, error } = await supabaseAdmin.from("Repair").update(updateData).eq("id", id).select("*").single();
     if (error) {
       console.error("[REPAIR UPDATE ERROR]", error);
       return res.status(400).json({ error: error.message });
     }
-    if (rawBody.hasBatteryWarranty || rawBody.batteryWarrantyPeriod || updated.hasBatteryWarranty || updated.batteryWarrantyPeriod) {
-      await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody }, req.user);
+    if (rawBody.hasBatteryWarranty !== void 0 || updated.hasBatteryWarranty !== void 0) {
+      await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody, id, repairNumber: updated.repairNumber }, req.user);
     }
     if (rawBody.status) {
+      const logId = uuidv44();
       await supabaseAdmin.from("RepairLog").insert([
         {
-          id: uuidv44(),
+          id: logId,
           repairId: id,
           userId: req.user.id,
           action: "STATUS_UPDATED",
@@ -1728,7 +2058,9 @@ var handleRepairUpdate = async (req, res) => {
           createdAt: (/* @__PURE__ */ new Date()).toISOString()
         }
       ]);
+      await broadcastServerChange("RepairLog", "CREATE", logId);
     }
+    await broadcastServerChange("Repair", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
     console.error("[REPAIR UPDATE EXCEPTION]", err);
@@ -1758,9 +2090,10 @@ router3.patch("/:id/technician-update", authenticate, async (req, res) => {
       return res.status(500).json({ error: "Failed to update repair progress." });
     }
     try {
+      const notifId = uuidv44();
       await supabaseAdmin.from("Notification").insert([
         {
-          id: uuidv44(),
+          id: notifId,
           title: `Repair Updated: #${updatedRepair.repairNumber || id.slice(0, 8)}`,
           message: `${req.user?.name || "Technician"} updated repair status to ${status || existingRepair.status}. Note: ${technicianNotes || "No notes added"}`,
           type: "REPAIR_UPDATE",
@@ -1769,9 +2102,11 @@ router3.patch("/:id/technician-update", authenticate, async (req, res) => {
           createdAt: (/* @__PURE__ */ new Date()).toISOString()
         }
       ]);
+      await broadcastServerChange("Notification", "CREATE", notifId);
     } catch (notifErr) {
       console.warn("[NOTIFICATION DISPATCH WARN - NON FATAL]", notifErr);
     }
+    await broadcastServerChange("Repair", "UPDATE", id, updatedRepair);
     return res.json({
       success: true,
       message: "Repair progress updated successfully.",
@@ -1780,6 +2115,85 @@ router3.patch("/:id/technician-update", authenticate, async (req, res) => {
   } catch (err) {
     console.error("[TECHNICIAN UPDATE EXCEPTION]", err);
     return res.status(500).json({ error: err?.message || "Server error updating repair." });
+  }
+});
+router3.post("/:id/alert", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER", "RECEPTIONIST", "LEAD_TECHNICIAN"]), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { priority, message } = req.body;
+    const VALID_PRIORITIES = ["NORMAL", "MEDIUM", "HIGH", "URGENT"];
+    const resolvedPriority = priority ? String(priority).toUpperCase().trim() : "NORMAL";
+    if (!VALID_PRIORITIES.includes(resolvedPriority)) {
+      return res.status(400).json({ error: `Invalid priority. Must be one of: ${VALID_PRIORITIES.join(", ")}` });
+    }
+    if (!message || !String(message).trim()) {
+      return res.status(400).json({ error: "Alert message is required." });
+    }
+    const { data: existingRepair, error: fetchErr } = await supabaseAdmin.from("Repair").select("*, technician:User!Repair_technicianId_fkey(id, name)").eq("id", id).single();
+    if (fetchErr || !existingRepair) {
+      return res.status(404).json({ error: "Repair not found." });
+    }
+    if (!existingRepair.technicianId) {
+      return res.status(400).json({ error: "Cannot alert technician \u2014 no technician is assigned to this repair." });
+    }
+    const { data: updatedRepair, error: updateErr } = await supabaseAdmin.from("Repair").update({
+      priority: resolvedPriority,
+      priorityUpdatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }).eq("id", id).select("*").single();
+    if (updateErr) {
+      console.error("[ALERT PRIORITY DB UPDATE ERROR]", updateErr);
+      return res.status(500).json({ error: "Failed to update repair priority." });
+    }
+    const logId = uuidv44();
+    await supabaseAdmin.from("RepairLog").insert([
+      {
+        id: logId,
+        repairId: id,
+        userId: req.user.id,
+        action: "PRIORITY_ALERT_DISPATCHED",
+        status: updatedRepair.status,
+        notes: `[Priority Alert] ${resolvedPriority} \u2014 ${String(message).trim()} (Dispatched by ${req.user.name})`,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      }
+    ]);
+    await broadcastServerChange("RepairLog", "CREATE", logId);
+    const priorityEmoji = {
+      URGENT: "\u{1F534}",
+      HIGH: "\u{1F7E0}",
+      MEDIUM: "\u{1F7E1}",
+      NORMAL: "\u26AA"
+    };
+    const emoji = priorityEmoji[resolvedPriority] || "\u{1F514}";
+    const notifTitle = `${emoji} ${resolvedPriority} Alert: Job #${updatedRepair.repairNumber}`;
+    const notifMessage = String(message).trim() || `Priority alert from ${req.user.name}`;
+    const notifId = uuidv44();
+    await supabaseAdmin.from("Notification").insert([
+      {
+        id: notifId,
+        title: notifTitle,
+        message: notifMessage,
+        type: resolvedPriority === "URGENT" ? "REPAIR_URGENT" : "REPAIR_ALERT",
+        priority: resolvedPriority,
+        userId: updatedRepair.technicianId,
+        repairId: id,
+        repairNumber: updatedRepair.repairNumber,
+        senderId: req.user.id,
+        senderName: req.user.name,
+        isRead: false,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      }
+    ]);
+    await broadcastServerChange("Notification", "CREATE", notifId);
+    await broadcastServerChange("Repair", "UPDATE", id, updatedRepair);
+    return res.json({
+      success: true,
+      message: `${resolvedPriority} priority alert dispatched to ${existingRepair.technician?.name || "assigned technician"}.`,
+      repair: updatedRepair
+    });
+  } catch (err) {
+    console.error("[ALERT TECHNICIAN EXCEPTION]", err);
+    return res.status(500).json({ error: "Failed to dispatch alert." });
   }
 });
 router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER", "LEAD_TECHNICIAN"]), async (req, res) => {
@@ -1797,9 +2211,10 @@ router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MA
     if (error) {
       return res.status(500).json({ error: "Failed to assign technician." });
     }
+    const logId = uuidv44();
     await supabaseAdmin.from("RepairLog").insert([
       {
-        id: uuidv44(),
+        id: logId,
         repairId: id,
         userId: req.user.id,
         action: "ASSIGNED",
@@ -1808,6 +2223,8 @@ router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MA
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       }
     ]);
+    await broadcastServerChange("RepairLog", "CREATE", logId);
+    await broadcastServerChange("Repair", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to assign technician." });
@@ -1820,8 +2237,9 @@ router3.post("/:id/notes", authenticate, async (req, res) => {
     if (!note) {
       return res.status(400).json({ error: "Note text is required." });
     }
+    const noteId = uuidv44();
     const newNote = {
-      id: uuidv44(),
+      id: noteId,
       repairId: id,
       technicianId: req.user.id,
       authorName: req.user.name,
@@ -1834,80 +2252,92 @@ router3.post("/:id/notes", authenticate, async (req, res) => {
     if (error) {
       return res.status(500).json({ error: "Failed to save note." });
     }
+    await broadcastServerChange("TechnicianNote", "CREATE", noteId, created);
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to add repair note." });
   }
 });
-router3.get("/:id/notes", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: notes, error } = await supabaseAdmin.from("TechnicianNote").select("*").eq("repairId", id).order("createdAt", { ascending: false });
-    if (error) {
-      return res.status(500).json({ error: "Failed to fetch notes." });
-    }
-    return res.json(notes || []);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve notes." });
-  }
-});
-router3.post("/:id/alert", authenticate, async (req, res) => {
-  return res.json({ success: true, message: "Customer notification alert dispatched successfully." });
-});
-router3.post("/:id/transfer", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { targetTechnicianId, reason } = req.body;
-    const { data: tech } = await supabaseAdmin.from("User").select("name").eq("id", targetTechnicianId).single();
-    const { data: updated, error } = await supabaseAdmin.from("Repair").update({
-      technicianId: targetTechnicianId,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to transfer repair." });
-    }
-    await supabaseAdmin.from("RepairLog").insert([
-      {
-        id: uuidv44(),
-        repairId: id,
-        userId: req.user.id,
-        action: "TRANSFERRED",
-        status: updated.status,
-        notes: `Repair transferred to ${tech?.name || "Technician"}. Reason: ${reason || "Workload reallocation"}`,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
-    return res.json(updated);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to transfer repair ticket." });
-  }
-});
 router3.post("/:id/courier-dispatch", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { courierCompany, trackingNumber, destinationDistrict, destinationAddress, receiverName, receiverPhone, notes } = req.body;
-    const { data: updated, error } = await supabaseAdmin.from("Repair").update({
-      isCourierOut: true,
-      returnCourierCompany: courierCompany,
-      returnCourierTrackingNumber: trackingNumber,
+    const {
+      courierCompany,
+      returnCourierCompany,
+      trackingNumber,
+      returnCourierTrackingNumber,
+      returnCourierDispatchDate,
       destinationDistrict,
       destinationAddress,
       receiverName,
       receiverPhone,
-      returnCourierNotes: notes,
+      receiverWhatsapp,
+      courierOutCharge,
+      courierOutPaymentStatus,
+      courierOutStatus,
+      notes,
+      returnCourierNotes,
+      status
+    } = req.body;
+    const company = (returnCourierCompany || courierCompany || "").trim();
+    const tracking = (returnCourierTrackingNumber || trackingNumber || "").trim();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const userId = req.user?.id || "system";
+    const userName = req.user?.name || "Staff";
+    const updatePayload = {
+      isCourierOut: true,
+      returnCourierCompany: company || null,
+      returnCourierTrackingNumber: tracking || null,
+      returnCourierDispatchDate: returnCourierDispatchDate || now.split("T")[0],
+      destinationDistrict: destinationDistrict ? String(destinationDistrict).trim() : null,
+      destinationAddress: destinationAddress ? String(destinationAddress).trim() : null,
+      receiverName: receiverName ? String(receiverName).trim() : null,
+      receiverPhone: receiverPhone ? String(receiverPhone).trim() : null,
+      receiverWhatsapp: receiverWhatsapp ? String(receiverWhatsapp).trim() : null,
+      returnCourierNotes: returnCourierNotes || notes || null,
       isReturnCourierDispatched: true,
-      returnCourierDispatchedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      returnCourierDispatchedById: req.user.id,
-      returnCourierDispatchedByName: req.user.name,
-      status: "DISPATCHED_VIA_COURIER",
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) {
-      return res.status(500).json({ error: "Failed to dispatch repair shipment." });
+      returnCourierDispatchedAt: now,
+      returnCourierDispatchedById: userId,
+      returnCourierDispatchedByName: userName,
+      courierOutStatus: courierOutStatus || "DISPATCHED",
+      courierStatus: "DISPATCHED",
+      courierOutPaymentStatus: courierOutPaymentStatus || "UNPAID",
+      updatedAt: now
+    };
+    if (courierOutCharge !== void 0 && courierOutCharge !== null && courierOutCharge !== "") {
+      updatePayload.courierOutCharge = Number(courierOutCharge);
     }
-    return res.json({ success: true, message: "Repair successfully dispatched with courier tracking.", repair: updated });
+    if (status) {
+      updatePayload.status = status;
+    } else {
+      updatePayload.status = "DISPATCHED_VIA_COURIER";
+    }
+    const { data: updated, error } = await supabaseAdmin.from("Repair").update(updatePayload).eq("id", id).select("*").single();
+    if (error) {
+      console.error("[COURIER DISPATCH UPDATE ERROR]", error);
+      return res.status(500).json({ error: error.message || "Failed to record courier dispatch." });
+    }
+    try {
+      const logId = uuidv44();
+      await supabaseAdmin.from("RepairLog").insert([
+        {
+          id: logId,
+          repairId: id,
+          action: "COURIER_DISPATCH_UPDATED",
+          status: updatePayload.status,
+          notes: `Courier logistics updated: ${company || "Courier"} (AWB #${tracking || "N/A"}) by ${userName}`,
+          userId,
+          createdAt: now
+        }
+      ]);
+      broadcastServerChange("RepairLog", "CREATE", logId);
+    } catch (logErr) {
+      console.warn("[REPAIR LOG NON FATAL]", logErr);
+    }
+    await broadcastServerChange("Repair", "UPDATE", id, updated);
+    return res.json({ success: true, message: "Repair courier logistics updated successfully.", repair: updated });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to record courier dispatch." });
+    return res.status(500).json({ error: err.message || "Failed to record courier dispatch." });
   }
 });
 router3.post("/:id/re-problem", authenticate, async (req, res) => {
@@ -1922,6 +2352,7 @@ router3.post("/:id/re-problem", authenticate, async (req, res) => {
     if (error) {
       return res.status(500).json({ error: "Failed to register re-problem status." });
     }
+    await broadcastServerChange("Repair", "UPDATE", id, updated);
     return res.json({ success: true, message: "Repair marked as Re-Problem under warranty.", repair: updated });
   } catch (err) {
     return res.status(500).json({ error: "Failed to update re-problem." });
@@ -1937,32 +2368,18 @@ router3.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async 
     if (error) {
       return res.status(500).json({ error: "Failed to delete repair." });
     }
+    await broadcastServerChange("Repair", "DELETE", id);
     return res.json({ success: true, message: "Repair deleted successfully." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to delete repair record." });
   }
 });
-router3.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
-  try {
-    const { ids } = req.body;
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: "No repair IDs specified." });
-    }
-    await supabaseAdmin.from("RepairLog").delete().in("repairId", ids);
-    await supabaseAdmin.from("TechnicianNote").delete().in("repairId", ids);
-    await supabaseAdmin.from("Payment").delete().in("repairId", ids);
-    const { error } = await supabaseAdmin.from("Repair").delete().in("id", ids);
-    if (error) {
-      return res.status(500).json({ error: "Failed to bulk delete repairs." });
-    }
-    return res.json({ success: true, message: `Successfully deleted ${ids.length} repair records.` });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to bulk delete repairs." });
-  }
-});
 var repairs_default = router3;
-var routerTransfer = RouterTransfer();
-routerTransfer.get("/my-requests", authenticate, async (req, res) => {
+
+// api/_server/routes/repairTransfers.ts
+import { Router as Router4 } from "express";
+var router4 = Router4();
+router4.get("/my-requests", authenticate, async (req, res) => {
   try {
     const { data: requests, error } = await supabaseAdmin.from("RepairTransferRequest").select("*").or(`senderId.eq.${req.user.id},receiverId.eq.${req.user.id}`).order("createdAt", { ascending: false });
     if (error) {
@@ -1973,8 +2390,12 @@ routerTransfer.get("/my-requests", authenticate, async (req, res) => {
     return res.json([]);
   }
 });
-var repairTransfers_default = routerTransfer;
-var router4 = Router4();
+var repairTransfers_default = router4;
+
+// api/_server/routes/customers.ts
+import { Router as Router5 } from "express";
+import { v4 as uuidv45 } from "uuid";
+var router5 = Router5();
 async function generateCustomerId() {
   const { count } = await supabaseAdmin.from("Customer").select("*", { count: "exact", head: true });
   const baseNum = (count || 0) + 101;
@@ -1986,7 +2407,7 @@ async function generateCustomerId() {
   const randomSuffix = Math.floor(100 + Math.random() * 900);
   return `CUS-${(baseNum + randomSuffix).toString().padStart(5, "0")}`;
 }
-router4.get("/", authenticate, async (req, res) => {
+router5.get("/", authenticate, async (req, res) => {
   try {
     const { search, district, status = "ACTIVE", page = "1", limit = "50" } = req.query;
     const pageNum = parseInt(page, 10) || 1;
@@ -2027,7 +2448,7 @@ router4.get("/", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve customer list." });
   }
 });
-router4.get("/lookup", authenticate, async (req, res) => {
+router5.get("/lookup", authenticate, async (req, res) => {
   try {
     const { phone, name, q } = req.query;
     const queryTerm = phone || name || q || "";
@@ -2044,7 +2465,7 @@ router4.get("/lookup", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to perform customer lookup." });
   }
 });
-router4.get("/search", authenticate, async (req, res) => {
+router5.get("/search", authenticate, async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || String(q).trim().length === 0) {
@@ -2060,7 +2481,7 @@ router4.get("/search", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to search customers." });
   }
 });
-router4.get("/:id", authenticate, async (req, res) => {
+router5.get("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { data: customer, error } = await supabaseAdmin.from("Customer").select("*").eq("id", id).single();
@@ -2072,7 +2493,7 @@ router4.get("/:id", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve customer details." });
   }
 });
-router4.get("/:id/repairs", authenticate, async (req, res) => {
+router5.get("/:id/repairs", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { data: repairs, error } = await supabaseAdmin.from("Repair").select("*, technician:User!Repair_technicianId_fkey(id, name, role)").eq("customerId", id).order("createdAt", { ascending: false });
@@ -2085,7 +2506,7 @@ router4.get("/:id/repairs", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve customer repair history." });
   }
 });
-router4.post("/", authenticate, async (req, res) => {
+router5.post("/", authenticate, async (req, res) => {
   try {
     const {
       name,
@@ -2130,12 +2551,13 @@ router4.post("/", authenticate, async (req, res) => {
       resourceId: created.id,
       details: { name: created.name, customerId: created.customerId, phone: created.phone }
     });
+    await broadcastServerChange("Customer", "CREATE", created.id, created);
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to save customer." });
   }
 });
-router4.patch("/:id", authenticate, async (req, res) => {
+router5.patch("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -2165,12 +2587,13 @@ router4.patch("/:id", authenticate, async (req, res) => {
     if (error) {
       return res.status(500).json({ error: "Failed to update customer record." });
     }
+    await broadcastServerChange("Customer", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to update customer." });
   }
 });
-router4.post("/:id/archive", authenticate, async (req, res) => {
+router5.post("/:id/archive", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { data: updated, error } = await supabaseAdmin.from("Customer").update({
@@ -2182,12 +2605,13 @@ router4.post("/:id/archive", authenticate, async (req, res) => {
     if (error) {
       return res.status(500).json({ error: "Failed to archive customer." });
     }
+    await broadcastServerChange("Customer", "UPDATE", id, updated);
     return res.json({ success: true, message: "Customer archived successfully.", customer: updated });
   } catch (err) {
     return res.status(500).json({ error: "Failed to archive customer." });
   }
 });
-router4.post("/:id/restore", authenticate, async (req, res) => {
+router5.post("/:id/restore", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { data: updated, error } = await supabaseAdmin.from("Customer").update({
@@ -2199,41 +2623,318 @@ router4.post("/:id/restore", authenticate, async (req, res) => {
     if (error) {
       return res.status(500).json({ error: "Failed to restore customer." });
     }
+    await broadcastServerChange("Customer", "UPDATE", id, updated);
     return res.json({ success: true, message: "Customer restored successfully.", customer: updated });
   } catch (err) {
     return res.status(500).json({ error: "Failed to restore customer." });
   }
 });
-router4.delete("/:id", authenticate, async (req, res) => {
+router5.delete("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { error } = await supabaseAdmin.from("Customer").delete().eq("id", id);
     if (error) {
       return res.status(500).json({ error: "Failed to delete customer record." });
     }
+    await broadcastServerChange("Customer", "DELETE", id);
     return res.json({ success: true, message: "Customer deleted successfully." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to delete customer." });
   }
 });
-var customers_default = router4;
-var router5 = Router5();
-router5.get("/folders", authenticate, async (req, res) => {
+var customers_default = router5;
+
+// api/_server/routes/inventory.ts
+import { Router as Router6 } from "express";
+import { v4 as uuidv46 } from "uuid";
+var router6 = Router6();
+var INVENTORY_MANAGERS = ["SUPER_ADMIN", "ADMIN", "MANAGER", "INVENTORY_MANAGER", "RECEPTIONIST"];
+var INVENTORY_STOCK_OUT_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGER", "INVENTORY_MANAGER", "LEAD_TECHNICIAN", "TECHNICIAN", "RECEPTIONIST"];
+var customFoldersRegistry = /* @__PURE__ */ new Map();
+function getFolderKey(brand, model, category) {
+  return `${(brand || "").trim().toLowerCase()}|${(model || "").trim().toLowerCase()}|${(category || "").trim().toLowerCase()}`;
+}
+router6.get("/folders", authenticate, async (req, res) => {
   try {
-    const { data: items } = await supabaseAdmin.from("InventoryItem").select("category, subcategory").not("category", "is", null);
-    const categories = Array.from(new Set((items || []).map((i) => i.category).filter(Boolean)));
-    const subcategories = Array.from(new Set((items || []).map((i) => i.subcategory).filter(Boolean)));
-    return res.json({
-      success: true,
-      folders: categories,
-      categories,
-      subcategories
+    const { data: items } = await supabaseAdmin.from("InventoryItem").select("brand, model, category, subcategory").not("brand", "is", null);
+    const folderMap = /* @__PURE__ */ new Map();
+    customFoldersRegistry.forEach((folder, key) => {
+      folderMap.set(key, folder);
     });
+    (items || []).forEach((item) => {
+      const b = (item.brand || "").trim();
+      const m = (item.model || "").trim();
+      const c = (item.category || "").trim();
+      if (b) {
+        const key = getFolderKey(b, m, c);
+        if (!folderMap.has(key)) {
+          folderMap.set(key, {
+            brand: b,
+            model: m || null,
+            category: c || null,
+            subcategory: item.subcategory || null
+          });
+        }
+      }
+    });
+    const foldersArray = Array.from(folderMap.values());
+    return res.json(foldersArray);
   } catch (err) {
-    return res.json({ success: true, folders: [], categories: [], subcategories: [] });
+    console.error("[INVENTORY GET FOLDERS ERROR]", err);
+    return res.json(Array.from(customFoldersRegistry.values()));
   }
 });
-router5.get("/suppliers", authenticate, async (req, res) => {
+router6.post("/folders", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { brand, model, category } = req.body;
+    if (!brand || !brand.trim()) {
+      return res.status(400).json({ error: "Brand name is required." });
+    }
+    const trimmedBrand = brand.trim();
+    const trimmedModel = model && typeof model === "string" && model.trim() ? model.trim() : null;
+    const trimmedCategory = category && typeof category === "string" && category.trim() ? category.trim() : null;
+    const key = getFolderKey(trimmedBrand, trimmedModel, trimmedCategory);
+    const entry = {
+      brand: trimmedBrand,
+      model: trimmedModel,
+      category: trimmedCategory
+    };
+    customFoldersRegistry.set(key, entry);
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_FOLDER_CREATED",
+      resource: "InventoryFolder",
+      details: { brand: trimmedBrand, model: trimmedModel, category: trimmedCategory }
+    });
+    await broadcastServerChange("InventoryFolder", "CREATE", `${trimmedBrand}-${trimmedModel || ""}-${trimmedCategory || ""}`, entry);
+    return res.status(201).json({
+      success: true,
+      folder: entry,
+      brand: trimmedBrand,
+      model: trimmedModel,
+      category: trimmedCategory
+    });
+  } catch (err) {
+    console.error("[INVENTORY POST FOLDERS ERROR]", err);
+    return res.status(500).json({ error: "Failed to create folder branch." });
+  }
+});
+router6.post("/rename-folder", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { level, oldName, newName, parentBrand, parentModel } = req.body;
+    if (!level || !oldName || !newName || !newName.trim()) {
+      return res.status(400).json({ error: "Missing required folder rename parameters." });
+    }
+    const trimmedNew = newName.trim();
+    let query = supabaseAdmin.from("InventoryItem").update({
+      [level]: trimmedNew,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    if (level === "brand") {
+      query = query.eq("brand", oldName);
+    } else if (level === "model") {
+      query = query.eq("model", oldName);
+      if (parentBrand) query = query.eq("brand", parentBrand);
+    } else if (level === "category") {
+      query = query.eq("category", oldName);
+      if (parentBrand) query = query.eq("brand", parentBrand);
+      if (parentModel) query = query.eq("model", parentModel);
+    }
+    const { data: updatedItems, error } = await query.select("id, name, brand, model, category");
+    if (error) {
+      console.error("[INVENTORY RENAME FOLDER ERROR]", error);
+      return res.status(500).json({ error: "Failed to rename folder in database." });
+    }
+    const registryEntries = Array.from(customFoldersRegistry.entries());
+    registryEntries.forEach(([k, entry]) => {
+      let matched = false;
+      const updatedEntry = { ...entry };
+      if (level === "brand" && entry.brand.toLowerCase() === oldName.toLowerCase()) {
+        updatedEntry.brand = trimmedNew;
+        matched = true;
+      } else if (level === "model" && entry.model && entry.model.toLowerCase() === oldName.toLowerCase()) {
+        if (!parentBrand || entry.brand.toLowerCase() === parentBrand.toLowerCase()) {
+          updatedEntry.model = trimmedNew;
+          matched = true;
+        }
+      } else if (level === "category" && entry.category && entry.category.toLowerCase() === oldName.toLowerCase()) {
+        if ((!parentBrand || entry.brand.toLowerCase() === parentBrand.toLowerCase()) && (!parentModel || entry.model && entry.model.toLowerCase() === parentModel.toLowerCase())) {
+          updatedEntry.category = trimmedNew;
+          matched = true;
+        }
+      }
+      if (matched) {
+        customFoldersRegistry.delete(k);
+        const newKey = getFolderKey(updatedEntry.brand, updatedEntry.model, updatedEntry.category);
+        customFoldersRegistry.set(newKey, updatedEntry);
+      }
+    });
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_FOLDER_RENAMED",
+      resource: "InventoryFolder",
+      details: { level, oldName, newName: trimmedNew, parentBrand, parentModel, affected: updatedItems?.length || 0 }
+    });
+    if (updatedItems && updatedItems.length > 0) {
+      for (const it of updatedItems) {
+        await broadcastServerChange("InventoryItem", "UPDATE", it.id, it);
+      }
+    }
+    await broadcastServerChange("InventoryFolder", "UPDATE", `${level}-${oldName}`, { level, oldName, newName: trimmedNew });
+    return res.json({ success: true, count: updatedItems?.length || 0 });
+  } catch (err) {
+    console.error("[INVENTORY RENAME EXCEPTION]", err);
+    return res.status(500).json({ error: "Failed to rename folder." });
+  }
+});
+router6.post("/move", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { itemIds, targetBrand, targetModel, targetCategory } = req.body;
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0 || !targetBrand) {
+      return res.status(400).json({ error: "Item IDs and target brand are required." });
+    }
+    const updatePayload = {
+      brand: targetBrand.trim(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (targetModel !== void 0) {
+      updatePayload.model = targetModel && typeof targetModel === "string" ? targetModel.trim() : null;
+    }
+    if (targetCategory !== void 0) {
+      updatePayload.category = targetCategory && typeof targetCategory === "string" ? targetCategory.trim() : "Spare Parts";
+    }
+    const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update(updatePayload).in("id", itemIds).select("*");
+    if (error) {
+      console.error("[INVENTORY MOVE ERROR]", error);
+      return res.status(500).json({ error: "Failed to move items." });
+    }
+    const targetKey = getFolderKey(updatePayload.brand, updatePayload.model, updatePayload.category);
+    if (!customFoldersRegistry.has(targetKey)) {
+      customFoldersRegistry.set(targetKey, {
+        brand: updatePayload.brand,
+        model: updatePayload.model || null,
+        category: updatePayload.category || null
+      });
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_ITEMS_MOVED",
+      resource: "InventoryItem",
+      details: { count: itemIds.length, targetBrand, targetModel, targetCategory }
+    });
+    if (updated && updated.length > 0) {
+      for (const it of updated) {
+        await broadcastServerChange("InventoryItem", "UPDATE", it.id, it);
+      }
+    }
+    return res.json({ success: true, count: updated?.length || 0 });
+  } catch (err) {
+    console.error("[INVENTORY MOVE EXCEPTION]", err);
+    return res.status(500).json({ error: "Failed to move inventory items." });
+  }
+});
+router6.post("/delete-folder", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { brand, model, category, permanent = false } = req.body;
+    if (!brand) {
+      return res.status(400).json({ error: "Brand is required to delete/archive a folder." });
+    }
+    let findQuery = supabaseAdmin.from("InventoryItem").select("id, name").eq("brand", brand);
+    if (model) findQuery = findQuery.eq("model", model);
+    if (category) findQuery = findQuery.eq("category", category);
+    const { data: itemsToDelete } = await findQuery;
+    const itemIds = (itemsToDelete || []).map((i) => i.id);
+    if (itemIds.length > 0) {
+      if (permanent) {
+        await supabaseAdmin.from("InventoryTransaction").delete().in("itemId", itemIds);
+        await supabaseAdmin.from("InventoryItem").delete().in("id", itemIds);
+        for (const id of itemIds) {
+          await broadcastServerChange("InventoryItem", "DELETE", id);
+        }
+      } else {
+        await supabaseAdmin.from("InventoryItem").update({ status: "ARCHIVED", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).in("id", itemIds);
+        for (const id of itemIds) {
+          await broadcastServerChange("InventoryItem", "UPDATE", id, { id, status: "ARCHIVED" });
+        }
+      }
+    }
+    const registryEntries = Array.from(customFoldersRegistry.entries());
+    registryEntries.forEach(([k, entry]) => {
+      let shouldDelete = false;
+      if (category) {
+        if (entry.brand.toLowerCase() === brand.toLowerCase() && (!model || entry.model && entry.model.toLowerCase() === model.toLowerCase()) && (entry.category && entry.category.toLowerCase() === category.toLowerCase())) {
+          shouldDelete = true;
+        }
+      } else if (model) {
+        if (entry.brand.toLowerCase() === brand.toLowerCase() && entry.model && entry.model.toLowerCase() === model.toLowerCase()) {
+          shouldDelete = true;
+        }
+      } else {
+        if (entry.brand.toLowerCase() === brand.toLowerCase()) {
+          shouldDelete = true;
+        }
+      }
+      if (shouldDelete) {
+        customFoldersRegistry.delete(k);
+      }
+    });
+    await logAudit({
+      userId: req.user.id,
+      action: permanent ? "INVENTORY_FOLDER_DELETED" : "INVENTORY_FOLDER_ARCHIVED",
+      resource: "InventoryFolder",
+      details: { brand, model, category, permanent, affectedCount: itemIds.length }
+    });
+    return res.json({ success: true, affectedCount: itemIds.length });
+  } catch (err) {
+    console.error("[INVENTORY DELETE FOLDER ERROR]", err);
+    return res.status(500).json({ error: "Failed to delete or archive folder." });
+  }
+});
+router6.post("/bulk-archive", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "No item IDs provided." });
+    }
+    const { error } = await supabaseAdmin.from("InventoryItem").update({ status: "ARCHIVED", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).in("id", ids);
+    if (error) return res.status(500).json({ error: "Failed to archive items." });
+    for (const id of ids) {
+      await broadcastServerChange("InventoryItem", "UPDATE", id, { id, status: "ARCHIVED" });
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_BULK_ARCHIVE",
+      resource: "InventoryItem",
+      details: { count: ids.length, ids }
+    });
+    return res.json({ success: true, count: ids.length });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to process bulk archive." });
+  }
+});
+router6.post("/bulk-status", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0 || !status) {
+      return res.status(400).json({ error: "Item IDs and valid status are required." });
+    }
+    const { error } = await supabaseAdmin.from("InventoryItem").update({ status, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).in("id", ids);
+    if (error) return res.status(500).json({ error: "Failed to update items status." });
+    for (const id of ids) {
+      await broadcastServerChange("InventoryItem", "UPDATE", id, { id, status });
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_BULK_STATUS_CHANGE",
+      resource: "InventoryItem",
+      details: { count: ids.length, status, ids }
+    });
+    return res.json({ success: true, count: ids.length });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to update status in bulk." });
+  }
+});
+router6.get("/suppliers", authenticate, async (req, res) => {
   try {
     const { data: items } = await supabaseAdmin.from("InventoryItem").select("supplier").not("supplier", "is", null);
     const suppliers = Array.from(new Set((items || []).map((i) => i.supplier).filter(Boolean)));
@@ -2242,7 +2943,7 @@ router5.get("/suppliers", authenticate, async (req, res) => {
     return res.json([]);
   }
 });
-router5.get("/locations", authenticate, async (req, res) => {
+router6.get("/locations", authenticate, async (req, res) => {
   try {
     const { data: items } = await supabaseAdmin.from("InventoryItem").select("storageLocation").not("storageLocation", "is", null);
     const locations = Array.from(new Set((items || []).map((i) => i.storageLocation).filter(Boolean)));
@@ -2251,9 +2952,9 @@ router5.get("/locations", authenticate, async (req, res) => {
     return res.json([]);
   }
 });
-router5.get("/", authenticate, async (req, res) => {
+router6.get("/", authenticate, async (req, res) => {
   try {
-    const { category, brand, status = "ACTIVE", search, limit = "200" } = req.query;
+    const { category, brand, status = "ACTIVE", search, limit = "1000" } = req.query;
     let query = supabaseAdmin.from("InventoryItem").select("*");
     if (status && status !== "ALL") {
       query = query.eq("status", String(status));
@@ -2268,7 +2969,7 @@ router5.get("/", authenticate, async (req, res) => {
       const s = String(search).trim();
       query = query.or(`name.ilike.%${s}%,sku.ilike.%${s}%,model.ilike.%${s}%,compatibility.ilike.%${s}%`);
     }
-    const { data: items, error } = await query.order("name", { ascending: true }).limit(parseInt(limit, 10) || 200);
+    const { data: items, error } = await query.order("name", { ascending: true }).limit(parseInt(limit, 10) || 1e3);
     if (error) {
       console.error("[INVENTORY GET ERROR]", error);
       return res.status(500).json({ error: "Failed to fetch inventory items." });
@@ -2278,7 +2979,7 @@ router5.get("/", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve inventory." });
   }
 });
-router5.get("/stats", authenticate, async (req, res) => {
+router6.get("/stats", authenticate, async (req, res) => {
   try {
     const { data: items } = await supabaseAdmin.from("InventoryItem").select("currentStock, minStockLevel, purchasePrice, sellingPrice, status");
     const totalItems = items?.length || 0;
@@ -2298,52 +2999,57 @@ router5.get("/stats", authenticate, async (req, res) => {
         lowStockCount++;
       }
     });
+    const { count: txCount } = await supabaseAdmin.from("InventoryTransaction").select("*", { count: "exact", head: true });
     return res.json({
+      totalProducts: totalItems,
       totalItems,
+      totalStockUnits: totalStockQuantity,
+      totalStockQuantity,
       lowStockCount,
       outOfStockCount,
-      totalStockQuantity,
-      totalStockValue
+      totalValuation: totalStockValue,
+      totalStockValue,
+      recentTxCount: txCount || 0
     });
   } catch (err) {
     return res.status(500).json({ error: "Failed to calculate inventory statistics." });
   }
 });
-router5.get("/categories", authenticate, async (req, res) => {
+router6.get("/categories", authenticate, async (req, res) => {
   try {
-    const { data: categories } = await supabaseAdmin.from("InventoryCategory").select("*").order("displayOrder", { ascending: true });
+    const { data: categories } = await supabaseAdmin.from("InventoryCategory").select("*");
     return res.json(categories || []);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to fetch categories." });
+    return res.json([]);
   }
 });
-router5.post("/categories", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router6.post("/categories", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
-    const { name, description, icon } = req.body;
+    const { name, description } = req.body;
     if (!name) return res.status(400).json({ error: "Category name is required." });
     const newCat = {
       id: uuidv46(),
       name: name.trim(),
       description: description || null,
-      icon: icon || null,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     const { data: created, error } = await supabaseAdmin.from("InventoryCategory").insert([newCat]).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to create category." });
+    await broadcastServerChange("InventoryCategory", "CREATE", created.id, created);
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to add inventory category." });
   }
 });
-router5.get("/transactions/history", authenticate, async (req, res) => {
+router6.get("/transactions/history", authenticate, async (req, res) => {
   try {
-    const { itemId, limit = "50" } = req.query;
+    const { itemId, limit = "100" } = req.query;
     let query = supabaseAdmin.from("InventoryTransaction").select("*, item:InventoryItem(name, sku, category)");
     if (itemId) {
       query = query.eq("itemId", String(itemId));
     }
-    const { data: transactions, error } = await query.order("createdAt", { ascending: false }).limit(parseInt(limit, 10) || 50);
+    const { data: transactions, error } = await query.order("createdAt", { ascending: false }).limit(parseInt(limit, 10) || 100);
     if (error) {
       return res.status(500).json({ error: "Failed to fetch inventory transactions." });
     }
@@ -2352,7 +3058,7 @@ router5.get("/transactions/history", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve transaction logs." });
   }
 });
-router5.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router6.post("/bulk-delete", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -2361,12 +3067,21 @@ router5.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), 
     await supabaseAdmin.from("InventoryTransaction").delete().in("itemId", ids);
     const { error } = await supabaseAdmin.from("InventoryItem").delete().in("id", ids);
     if (error) return res.status(500).json({ error: "Failed to delete inventory items." });
+    for (const id of ids) {
+      await broadcastServerChange("InventoryItem", "DELETE", id);
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_BULK_DELETE",
+      resource: "InventoryItem",
+      details: { count: ids.length, ids }
+    });
     return res.json({ success: true, message: `Successfully removed ${ids.length} items.` });
   } catch (err) {
     return res.status(500).json({ error: "Failed to process bulk delete." });
   }
 });
-router5.get("/:id", authenticate, async (req, res) => {
+router6.get("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { data: item, error } = await supabaseAdmin.from("InventoryItem").select("*, transactions:InventoryTransaction(*)").eq("id", id).single();
@@ -2378,7 +3093,7 @@ router5.get("/:id", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve item." });
   }
 });
-router5.post("/", authenticate, async (req, res) => {
+router6.post("/", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const {
       name,
@@ -2401,7 +3116,7 @@ router5.post("/", authenticate, async (req, res) => {
       imageUrl,
       status = "ACTIVE"
     } = req.body;
-    if (!name) {
+    if (!name || !name.trim()) {
       return res.status(400).json({ error: "Item name is required." });
     }
     const initialStock = parseInt(currentStock || "0", 10) || 0;
@@ -2410,11 +3125,11 @@ router5.post("/", authenticate, async (req, res) => {
       name: name.trim(),
       brand: brand ? brand.trim() : null,
       model: model ? model.trim() : null,
-      sku: sku ? sku.trim() : `SKU-${Date.now().toString().slice(-6)}`,
-      category: category.trim(),
+      sku: sku && sku.trim() ? sku.trim() : `SKU-${Date.now().toString().slice(-6)}`,
+      category: (category || "Spare Parts").trim(),
       subcategory: subcategory ? subcategory.trim() : null,
       compatibility: compatibility ? compatibility.trim() : null,
-      unit: unit.trim(),
+      unit: (unit || "Piece").trim(),
       currentStock: initialStock,
       minStockLevel: parseInt(minStockLevel || "5", 10) || 5,
       maxStockLevel: maxStockLevel ? parseInt(maxStockLevel, 10) : null,
@@ -2425,7 +3140,7 @@ router5.post("/", authenticate, async (req, res) => {
       description: description ? description.trim() : null,
       notes: notes ? notes.trim() : null,
       imageUrl: imageUrl || null,
-      status,
+      status: status || "ACTIVE",
       createdById: req.user.id,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -2435,53 +3150,106 @@ router5.post("/", authenticate, async (req, res) => {
       console.error("[INVENTORY CREATE ERROR]", error);
       return res.status(500).json({ error: "Failed to create inventory item." });
     }
+    if (newItem.brand) {
+      const fKey = getFolderKey(newItem.brand, newItem.model, newItem.category);
+      customFoldersRegistry.set(fKey, {
+        brand: newItem.brand,
+        model: newItem.model,
+        category: newItem.category
+      });
+    }
     if (initialStock > 0) {
-      await supabaseAdmin.from("InventoryTransaction").insert([
-        {
-          id: uuidv46(),
-          itemId: created.id,
-          type: "STOCK_IN",
-          quantity: initialStock,
-          previousStock: 0,
-          newStock: initialStock,
-          reason: "Initial Stock Setup",
-          performedById: req.user.id,
-          performedByName: req.user.name,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
+      try {
+        await supabaseAdmin.from("InventoryTransaction").insert([
+          {
+            id: uuidv46(),
+            itemId: created.id,
+            type: "STOCK_IN",
+            quantity: initialStock,
+            previousStock: 0,
+            newStock: initialStock,
+            reason: "Initial Stock Setup",
+            performedById: req.user.id,
+            performedByName: req.user.name,
+            createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          }
+        ]);
+      } catch (txErr) {
+        console.warn("[INVENTORY TX WARN]", txErr);
+      }
     }
     await logAudit({
       userId: req.user.id,
       action: "INVENTORY_ITEM_CREATED",
       resource: "InventoryItem",
       resourceId: created.id,
-      details: { name: created.name, sku: created.sku, stock: created.currentStock }
+      details: { name: created.name, sku: created.sku, stock: created.currentStock, brand: created.brand, model: created.model }
     });
+    await broadcastServerChange("InventoryItem", "CREATE", created.id, created);
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to save inventory item." });
   }
 });
-router5.patch("/:id", authenticate, async (req, res) => {
+router6.patch("/:id", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     delete updateData.id;
     delete updateData.transactions;
+    if (updateData.currentStock !== void 0) {
+      updateData.currentStock = parseInt(updateData.currentStock, 10) || 0;
+    }
+    if (updateData.minStockLevel !== void 0) {
+      updateData.minStockLevel = parseInt(updateData.minStockLevel, 10) || 5;
+    }
+    if (updateData.purchasePrice !== void 0 && updateData.purchasePrice !== "") {
+      updateData.purchasePrice = parseFloat(updateData.purchasePrice);
+    }
+    if (updateData.sellingPrice !== void 0 && updateData.sellingPrice !== "") {
+      updateData.sellingPrice = parseFloat(updateData.sellingPrice);
+    }
     const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update(updateData).eq("id", id).select("*").single();
     if (error) {
       return res.status(500).json({ error: "Failed to update inventory item." });
     }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_ITEM_UPDATED",
+      resource: "InventoryItem",
+      resourceId: id,
+      details: { updatedFields: Object.keys(updateData) }
+    });
+    await broadcastServerChange("InventoryItem", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to update inventory." });
   }
 });
-router5.post("/:id/stock-in", authenticate, async (req, res) => {
+router6.post("/:id/restore", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const { id } = req.params;
-    const { quantity, reason = "Stock replenishment", notes } = req.body;
+    const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update({ status: "ACTIVE", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
+    if (error || !updated) {
+      return res.status(500).json({ error: "Failed to restore item." });
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_ITEM_RESTORED",
+      resource: "InventoryItem",
+      resourceId: id,
+      details: { name: updated.name }
+    });
+    await broadcastServerChange("InventoryItem", "UPDATE", id, updated);
+    return res.json({ success: true, item: updated });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to restore inventory item." });
+  }
+});
+router6.post("/:id/stock-in", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quantity, reason = "Stock replenishment", notes, supplier, reference } = req.body;
     const qty = parseInt(quantity, 10);
     if (!qty || qty <= 0) {
       return res.status(400).json({ error: "Valid positive quantity required." });
@@ -2492,27 +3260,39 @@ router5.post("/:id/stock-in", authenticate, async (req, res) => {
     const newStock = prevStock + qty;
     const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update({ currentStock: newStock, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to update stock." });
-    await supabaseAdmin.from("InventoryTransaction").insert([
-      {
-        id: uuidv46(),
-        itemId: id,
-        type: "STOCK_IN",
-        quantity: qty,
-        previousStock: prevStock,
-        newStock,
-        reason,
-        notes,
-        performedById: req.user.id,
-        performedByName: req.user.name,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
+    try {
+      await supabaseAdmin.from("InventoryTransaction").insert([
+        {
+          id: uuidv46(),
+          itemId: id,
+          type: "STOCK_IN",
+          quantity: qty,
+          previousStock: prevStock,
+          newStock,
+          reason: reference ? `${reason} (Ref: ${reference})` : reason,
+          notes: supplier ? `Supplier: ${supplier}. ${notes || ""}` : notes,
+          performedById: req.user.id,
+          performedByName: req.user.name,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+    } catch (txErr) {
+      console.warn("[STOCK IN TX WARN]", txErr);
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_STOCK_IN",
+      resource: "InventoryItem",
+      resourceId: id,
+      details: { added: qty, previousStock: prevStock, newStock }
+    });
+    await broadcastServerChange("InventoryItem", "UPDATE", id, updated);
     return res.json({ success: true, item: updated, newStock });
   } catch (err) {
     return res.status(500).json({ error: "Failed to process stock intake." });
   }
 });
-router5.post("/:id/stock-out", authenticate, async (req, res) => {
+router6.post("/:id/stock-out", authenticate, authorize(INVENTORY_STOCK_OUT_ROLES), async (req, res) => {
   try {
     const { id } = req.params;
     const { quantity, reason = "Used for Repair", repairNumber, notes } = req.body;
@@ -2523,31 +3303,46 @@ router5.post("/:id/stock-out", authenticate, async (req, res) => {
     const { data: item } = await supabaseAdmin.from("InventoryItem").select("*").eq("id", id).single();
     if (!item) return res.status(404).json({ error: "Item not found." });
     const prevStock = item.currentStock || 0;
+    if (prevStock < qty) {
+      return res.status(400).json({ error: `Insufficient stock. Current stock is only ${prevStock}.` });
+    }
     const newStock = Math.max(0, prevStock - qty);
     const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update({ currentStock: newStock, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to deduct stock." });
-    await supabaseAdmin.from("InventoryTransaction").insert([
-      {
-        id: uuidv46(),
-        itemId: id,
-        type: "STOCK_OUT",
-        quantity: qty,
-        previousStock: prevStock,
-        newStock,
-        reason,
-        repairNumber: repairNumber || null,
-        notes,
-        performedById: req.user.id,
-        performedByName: req.user.name,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
+    try {
+      await supabaseAdmin.from("InventoryTransaction").insert([
+        {
+          id: uuidv46(),
+          itemId: id,
+          type: "STOCK_OUT",
+          quantity: qty,
+          previousStock: prevStock,
+          newStock,
+          reason,
+          repairNumber: repairNumber || null,
+          notes,
+          performedById: req.user.id,
+          performedByName: req.user.name,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+    } catch (txErr) {
+      console.warn("[STOCK OUT TX WARN]", txErr);
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_STOCK_OUT",
+      resource: "InventoryItem",
+      resourceId: id,
+      details: { deducted: qty, previousStock: prevStock, newStock, repairNumber }
+    });
+    await broadcastServerChange("InventoryItem", "UPDATE", id, updated);
     return res.json({ success: true, item: updated, newStock });
   } catch (err) {
     return res.status(500).json({ error: "Failed to deduct inventory." });
   }
 });
-router5.post("/:id/adjust-stock", authenticate, async (req, res) => {
+router6.post("/:id/adjust-stock", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const { id } = req.params;
     const { newStock: targetStock, reason = "Audit Correction", notes } = req.body;
@@ -2561,40 +3356,77 @@ router5.post("/:id/adjust-stock", authenticate, async (req, res) => {
     const diff = newStock - prevStock;
     const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update({ currentStock: newStock, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to adjust stock." });
-    await supabaseAdmin.from("InventoryTransaction").insert([
-      {
-        id: uuidv46(),
-        itemId: id,
-        type: "STOCK_ADJUSTMENT",
-        quantity: Math.abs(diff),
-        previousStock: prevStock,
-        newStock,
-        reason,
-        notes,
-        performedById: req.user.id,
-        performedByName: req.user.name,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
+    try {
+      await supabaseAdmin.from("InventoryTransaction").insert([
+        {
+          id: uuidv46(),
+          itemId: id,
+          type: "STOCK_ADJUSTMENT",
+          quantity: Math.abs(diff),
+          previousStock,
+          newStock,
+          reason,
+          notes,
+          performedById: req.user.id,
+          performedByName: req.user.name,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+    } catch (txErr) {
+      console.warn("[ADJUST TX WARN]", txErr);
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_STOCK_ADJUSTMENT",
+      resource: "InventoryItem",
+      resourceId: id,
+      details: { previousStock, newStock, diff, reason }
+    });
+    await broadcastServerChange("InventoryItem", "UPDATE", id, updated);
     return res.json({ success: true, item: updated, newStock });
   } catch (err) {
     return res.status(500).json({ error: "Failed to adjust stock quantity." });
   }
 });
-router5.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router6.delete("/:id", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const { id } = req.params;
-    await supabaseAdmin.from("InventoryTransaction").delete().eq("itemId", id);
-    const { error } = await supabaseAdmin.from("InventoryItem").delete().eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to delete inventory item." });
-    return res.json({ success: true, message: "Item deleted successfully." });
+    const { permanent = false } = req.query;
+    if (permanent === "true" || permanent === true) {
+      await supabaseAdmin.from("InventoryTransaction").delete().eq("itemId", id);
+      const { error } = await supabaseAdmin.from("InventoryItem").delete().eq("id", id);
+      if (error) return res.status(500).json({ error: "Failed to delete inventory item." });
+      await logAudit({
+        userId: req.user.id,
+        action: "INVENTORY_ITEM_DELETED_PERMANENT",
+        resource: "InventoryItem",
+        resourceId: id
+      });
+      await broadcastServerChange("InventoryItem", "DELETE", id);
+      return res.json({ success: true, message: "Item permanently deleted." });
+    } else {
+      const { error } = await supabaseAdmin.from("InventoryItem").update({ status: "ARCHIVED", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
+      if (error) return res.status(500).json({ error: "Failed to archive inventory item." });
+      await logAudit({
+        userId: req.user.id,
+        action: "INVENTORY_ITEM_ARCHIVED",
+        resource: "InventoryItem",
+        resourceId: id
+      });
+      await broadcastServerChange("InventoryItem", "UPDATE", id, { id, status: "ARCHIVED" });
+      return res.json({ success: true, message: "Item archived successfully." });
+    }
   } catch (err) {
-    return res.status(500).json({ error: "Failed to delete item." });
+    return res.status(500).json({ error: "Failed to delete or archive item." });
   }
 });
-var inventory_default = router5;
-var router6 = Router6();
-router6.get("/", authenticate, async (req, res) => {
+var inventory_default = router6;
+
+// api/_server/routes/couriers.ts
+import { Router as Router7 } from "express";
+import { v4 as uuidv47 } from "uuid";
+var router7 = Router7();
+router7.get("/", authenticate, async (req, res) => {
   try {
     const {
       type,
@@ -2659,7 +3491,7 @@ router6.get("/", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve courier records." });
   }
 });
-router6.get("/stats", authenticate, async (req, res) => {
+router7.get("/stats", authenticate, async (req, res) => {
   try {
     const { data: records, error } = await supabaseAdmin.from("Repair").select("isCourierIn, isCourierOut, isReturnCourierDispatched, courierStatus, courierInStatus, courierOutStatus, courierInCharge, courierOutCharge, createdAt").or("isCourierIn.eq.true,isCourierOut.eq.true,isReturnCourierDispatched.eq.true");
     if (error) {
@@ -2714,7 +3546,7 @@ router6.get("/stats", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to compute courier statistics." });
   }
 });
-router6.get("/eligible-repairs", authenticate, async (req, res) => {
+router7.get("/eligible-repairs", authenticate, async (req, res) => {
   try {
     const { data: repairs, error } = await supabaseAdmin.from("Repair").select("id, repairNumber, customerName, customerPhone, customerAddress, deviceBrand, deviceModel, status, totalPaid, estimatedCost, customer:CustomerId(name, phone, address, district)").order("createdAt", { ascending: false }).limit(100);
     if (error) {
@@ -2726,7 +3558,7 @@ router6.get("/eligible-repairs", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to load eligible repairs." });
   }
 });
-router6.get("/filters-metadata", authenticate, async (req, res) => {
+router7.get("/filters-metadata", authenticate, async (req, res) => {
   try {
     const { data: repairs } = await supabaseAdmin.from("Repair").select("courierCompany, returnCourierCompany, originDistrict, destinationDistrict").or("isCourierIn.eq.true,isCourierOut.eq.true,isReturnCourierDispatched.eq.true");
     const companies = /* @__PURE__ */ new Set();
@@ -2745,7 +3577,7 @@ router6.get("/filters-metadata", authenticate, async (req, res) => {
     return res.json({ courierCompanies: [], districts: [] });
   }
 });
-router6.get("/search-customers", authenticate, async (req, res) => {
+router7.get("/search-customers", authenticate, async (req, res) => {
   try {
     const { query: queryTerm } = req.query;
     if (!queryTerm) return res.json([]);
@@ -2756,7 +3588,7 @@ router6.get("/search-customers", authenticate, async (req, res) => {
     return res.json([]);
   }
 });
-router6.post("/check-duplicate-awb", authenticate, async (req, res) => {
+router7.post("/check-duplicate-awb", authenticate, async (req, res) => {
   try {
     const { trackingNumber } = req.body;
     if (!trackingNumber) return res.json({ exists: false });
@@ -2770,7 +3602,7 @@ router6.post("/check-duplicate-awb", authenticate, async (req, res) => {
     return res.json({ exists: false });
   }
 });
-router6.post("/incoming", authenticate, async (req, res) => {
+router7.post("/incoming", authenticate, async (req, res) => {
   try {
     const {
       existingRepairId,
@@ -2850,6 +3682,7 @@ router6.post("/incoming", authenticate, async (req, res) => {
       } catch (logErr) {
         console.warn("[REPAIR LOG FAILED - NON FATAL]", logErr);
       }
+      await broadcastServerChange("Repair", "UPDATE", existingRepairId, updatedRepair);
       return res.json({
         success: true,
         message: `Inbound shipment linked to Repair #${existingRepair.repairNumber} successfully.`,
@@ -2941,6 +3774,7 @@ router6.post("/incoming", authenticate, async (req, res) => {
     } catch (logErr) {
       console.warn("[REPAIR LOG FAILED - NON FATAL]", logErr);
     }
+    await broadcastServerChange("Repair", "CREATE", newRepairId, createdRepair);
     return res.status(201).json({
       success: true,
       message: `Inbound courier registered under Repair Job #${generatedRepairNumber}`,
@@ -2951,7 +3785,7 @@ router6.post("/incoming", authenticate, async (req, res) => {
     return res.status(500).json({ error: err?.message || "Server error recording incoming courier parcel." });
   }
 });
-router6.post("/outgoing", authenticate, async (req, res) => {
+router7.post("/outgoing", authenticate, async (req, res) => {
   try {
     const {
       repairId,
@@ -3017,6 +3851,7 @@ router6.post("/outgoing", authenticate, async (req, res) => {
     } catch (logErr) {
       console.warn("[REPAIR LOG FAILED - NON FATAL]", logErr);
     }
+    await broadcastServerChange("Repair", "UPDATE", repairId, updated);
     return res.json({
       success: true,
       message: "Shipment dispatched successfully.",
@@ -3026,7 +3861,7 @@ router6.post("/outgoing", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to record outgoing dispatch." });
   }
 });
-router6.patch("/:id/status", authenticate, async (req, res) => {
+router7.patch("/:id/status", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, courierType, notes } = req.body;
@@ -3063,6 +3898,7 @@ router6.patch("/:id/status", authenticate, async (req, res) => {
     } catch (logErr) {
       console.warn("[REPAIR LOG FAILED - NON FATAL]", logErr);
     }
+    await broadcastServerChange("Repair", "UPDATE", id, updated);
     return res.json({
       success: true,
       message: "Courier status updated.",
@@ -3072,7 +3908,7 @@ router6.patch("/:id/status", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to update courier status." });
   }
 });
-router6.post("/bulk-status", authenticate, async (req, res) => {
+router7.post("/bulk-status", authenticate, async (req, res) => {
   try {
     const { repairIds, ids, status, courierType, notes } = req.body;
     const targetIds = repairIds || ids;
@@ -3091,6 +3927,9 @@ router6.post("/bulk-status", authenticate, async (req, res) => {
     }
     const { error } = await supabaseAdmin.from("Repair").update(updatePayload).in("id", targetIds);
     if (error) return res.status(500).json({ error: "Failed to bulk update status." });
+    for (const id of targetIds) {
+      await broadcastServerChange("Repair", "UPDATE", id);
+    }
     return res.json({
       success: true,
       message: `Updated ${targetIds.length} shipments.`
@@ -3099,7 +3938,7 @@ router6.post("/bulk-status", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to perform bulk status update." });
   }
 });
-router6.post("/bulk-archive", authenticate, async (req, res) => {
+router7.post("/bulk-archive", authenticate, async (req, res) => {
   try {
     const { repairIds, ids } = req.body;
     const targetIds = repairIds || ids;
@@ -3111,6 +3950,9 @@ router6.post("/bulk-archive", authenticate, async (req, res) => {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     }).in("id", targetIds);
     if (error) return res.status(500).json({ error: "Failed to archive shipments." });
+    for (const id of targetIds) {
+      await broadcastServerChange("Repair", "UPDATE", id);
+    }
     return res.json({
       success: true,
       message: `Archived ${targetIds.length} courier records.`
@@ -3119,7 +3961,7 @@ router6.post("/bulk-archive", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to archive shipments." });
   }
 });
-router6.delete("/:id", authenticate, async (req, res) => {
+router7.delete("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { error } = await supabaseAdmin.from("Repair").update({
@@ -3130,13 +3972,19 @@ router6.delete("/:id", authenticate, async (req, res) => {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     }).eq("id", id);
     if (error) return res.status(500).json({ error: "Failed to remove courier shipment." });
+    await broadcastServerChange("Repair", "UPDATE", id);
     return res.json({ success: true, message: "Courier record archived successfully." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to delete shipment." });
   }
 });
-var couriers_default = router6;
-var router7 = Router7();
+var couriers_default = router7;
+
+// api/_server/routes/batteryWarranties.ts
+import { Router as Router8 } from "express";
+import { v4 as uuidv48 } from "uuid";
+import multer2 from "multer";
+var router8 = Router8();
 var upload2 = multer2({ storage: multer2.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 var otpStore = {};
 async function generateWarrantyNumber2() {
@@ -3173,7 +4021,7 @@ async function generateClaimNumber() {
   const nextNum = maxNum + 1;
   return `BWC-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
 }
-router7.get("/", authenticate, async (req, res) => {
+router8.get("/", authenticate, async (req, res) => {
   try {
     const { status, brand, search, startDate, endDate } = req.query;
     let query = supabaseAdmin.from("BatteryWarranty").select("*");
@@ -3198,8 +4046,19 @@ router7.get("/", authenticate, async (req, res) => {
       console.error("[BATTERY WARRANTIES ERROR]", error);
       return res.status(500).json({ error: error.message || "Failed to fetch battery warranties." });
     }
+    const { data: allRepairs } = await supabaseAdmin.from("Repair").select("id, hasBatteryWarranty");
+    const repairWarrantyMap = /* @__PURE__ */ new Map();
+    (allRepairs || []).forEach((r) => {
+      repairWarrantyMap.set(r.id, r.hasBatteryWarranty === true || r.hasBatteryWarranty === "true");
+    });
+    const validWarranties = (warranties || []).filter((w) => {
+      if (w.repairId) {
+        return repairWarrantyMap.get(w.repairId) === true;
+      }
+      return true;
+    });
     const { data: allClaims } = await supabaseAdmin.from("BatteryWarrantyClaim").select("*");
-    const combined = (warranties || []).map((w) => ({
+    const combined = validWarranties.map((w) => ({
       ...w,
       claims: (allClaims || []).filter((c) => c.warrantyId === w.id)
     }));
@@ -3209,13 +4068,24 @@ router7.get("/", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to load warranties." });
   }
 });
-router7.get("/export", authenticate, async (req, res) => {
+router8.get("/export", authenticate, async (req, res) => {
   try {
     const { status, search } = req.query;
     let query = supabaseAdmin.from("BatteryWarranty").select("*");
     if (status && status !== "ALL") query = query.eq("status", String(status));
     const { data: warranties } = await query.order("createdAt", { ascending: false });
-    const rows = (warranties || []).map((w) => ({
+    const { data: allRepairs } = await supabaseAdmin.from("Repair").select("id, hasBatteryWarranty");
+    const repairWarrantyMap = /* @__PURE__ */ new Map();
+    (allRepairs || []).forEach((r) => {
+      repairWarrantyMap.set(r.id, r.hasBatteryWarranty === true || r.hasBatteryWarranty === "true");
+    });
+    const validWarranties = (warranties || []).filter((w) => {
+      if (w.repairId) {
+        return repairWarrantyMap.get(w.repairId) === true;
+      }
+      return true;
+    });
+    const rows = validWarranties.map((w) => ({
       "Warranty Number": w.warrantyNumber,
       "Customer Name": w.customerName,
       "Phone": w.customerPhone,
@@ -3237,7 +4107,7 @@ router7.get("/export", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to export battery warranties." });
   }
 });
-router7.get("/import/template", authenticate, (req, res) => {
+router8.get("/import/template", authenticate, (req, res) => {
   const sample = [
     {
       "Customer Name": "Hari Sharma",
@@ -3256,7 +4126,7 @@ router7.get("/import/template", authenticate, (req, res) => {
   res.setHeader("Content-Disposition", 'attachment; filename="MTS_Lab_Battery_Warranty_Template.xlsx"');
   return res.send(buffer);
 });
-router7.post("/import/preview", authenticate, upload2.single("file"), (req, res) => {
+router8.post("/import/preview", authenticate, upload2.single("file"), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No Excel file provided." });
     const rows = parseExcelBuffer(req.file.buffer);
@@ -3283,7 +4153,7 @@ router7.post("/import/preview", authenticate, upload2.single("file"), (req, res)
     return res.status(400).json({ error: "Failed to parse Excel file." });
   }
 });
-router7.post("/import/confirm", authenticate, async (req, res) => {
+router8.post("/import/confirm", authenticate, async (req, res) => {
   try {
     const { items } = req.body;
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -3317,14 +4187,17 @@ router7.post("/import/confirm", authenticate, async (req, res) => {
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       const { data: created } = await supabaseAdmin.from("BatteryWarranty").insert([newWarranty]).select("*").single();
-      if (created) imported.push(created);
+      if (created) {
+        imported.push(created);
+        await broadcastServerChange("BatteryWarranty", "CREATE", created.id, created);
+      }
     }
     return res.json({ success: true, count: imported.length, message: `Imported ${imported.length} warranties.` });
   } catch (err) {
     return res.status(500).json({ error: "Failed to commit warranty import." });
   }
 });
-router7.get("/:id", authenticate, async (req, res) => {
+router8.get("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { data: warranty, error } = await supabaseAdmin.from("BatteryWarranty").select("*").eq("id", id).single();
@@ -3337,7 +4210,7 @@ router7.get("/:id", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to fetch warranty record." });
   }
 });
-router7.post("/", authenticate, async (req, res) => {
+router8.post("/", authenticate, async (req, res) => {
   try {
     const {
       repairId,
@@ -3390,6 +4263,7 @@ router7.post("/", authenticate, async (req, res) => {
       console.error("[CREATE WARRANTY ERROR]", error);
       return res.status(500).json({ error: "Failed to issue warranty." });
     }
+    await broadcastServerChange("BatteryWarranty", "CREATE", created.id, created);
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to register battery warranty." });
@@ -3405,15 +4279,16 @@ var handleWarrantyUpdate = async (req, res) => {
     if (error) {
       return res.status(400).json({ error: error.message });
     }
+    await broadcastServerChange("BatteryWarranty", "UPDATE", id, updated);
     return res.json({ success: true, data: updated });
   } catch (err) {
     return res.status(500).json({ error: "Failed to update warranty." });
   }
 };
-router7.put("/:id", authenticate, handleWarrantyUpdate);
-router7.patch("/:id", authenticate, handleWarrantyUpdate);
-router7.all("/:id/edit", authenticate, handleWarrantyUpdate);
-router7.post("/:id/claim", authenticate, async (req, res) => {
+router8.put("/:id", authenticate, handleWarrantyUpdate);
+router8.patch("/:id", authenticate, handleWarrantyUpdate);
+router8.all("/:id/edit", authenticate, handleWarrantyUpdate);
+router8.post("/:id/claim", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { issueDescription, actionTaken = "FREE_REPLACEMENT", notes } = req.body;
@@ -3447,12 +4322,14 @@ router7.post("/:id/claim", authenticate, async (req, res) => {
       lastClaimDate: (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     }).eq("id", id);
+    await broadcastServerChange("BatteryWarrantyClaim", "CREATE", createdClaim.id, createdClaim);
+    await broadcastServerChange("BatteryWarranty", "UPDATE", id);
     return res.status(201).json({ success: true, message: "Warranty claim processed.", claim: createdClaim });
   } catch (err) {
     return res.status(500).json({ error: "Failed to record warranty claim." });
   }
 });
-router7.post("/:id/send-email", authenticate, async (req, res) => {
+router8.post("/:id/send-email", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { email } = req.body;
@@ -3483,7 +4360,7 @@ router7.post("/:id/send-email", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to send warranty email." });
   }
 });
-router7.post("/delete-2fa/request", authenticate, async (req, res) => {
+router8.post("/delete-2fa/request", authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
     const userEmail = req.user.email || "mtsmobilelab@gmail.com";
@@ -3527,7 +4404,7 @@ router7.post("/delete-2fa/request", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to generate 2FA code." });
   }
 });
-router7.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router8.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { ids, code } = req.body;
     const userId = req.user.id;
@@ -3548,6 +4425,9 @@ router7.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), 
       console.error("[BULK DELETE ERROR]", error);
       return res.status(500).json({ error: error.message || "Failed to delete warranty records." });
     }
+    for (const id of ids) {
+      await broadcastServerChange("BatteryWarranty", "DELETE", id);
+    }
     return res.json({
       success: true,
       message: `Successfully and permanently deleted ${ids.length} warranty record(s).`
@@ -3557,580 +4437,1103 @@ router7.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), 
     return res.status(500).json({ error: "Failed to execute bulk deletion." });
   }
 });
-router7.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router8.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { id } = req.params;
     await supabaseAdmin.from("BatteryWarrantyClaim").delete().eq("warrantyId", id);
     const { error } = await supabaseAdmin.from("BatteryWarranty").delete().eq("id", id);
     if (error) return res.status(500).json({ error: "Failed to delete warranty." });
+    await broadcastServerChange("BatteryWarranty", "DELETE", id);
     return res.json({ success: true, message: "Warranty deleted successfully." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to delete warranty." });
   }
 });
-var batteryWarranties_default = router7;
-var router8 = Router8();
-var AUTHORIZED_STAFF_ROLES = [
-  "SUPER_ADMIN",
-  "ADMIN",
-  "MANAGER",
-  "RECEPTIONIST",
-  "TECHNICIAN",
-  "LEAD_TECHNICIAN",
-  "HEAD_TECHNICIAN",
-  "TECHNICAL_ASSISTANT",
-  "STAFF"
-];
-function getNepalTimeDetails() {
+var batteryWarranties_default = router8;
+
+// api/_server/routes/attendance.ts
+import { Router as Router9 } from "express";
+
+// api/_server/services/attendanceStorage.ts
+import fs from "fs";
+import path from "path";
+import { v4 as uuidv49 } from "uuid";
+var DATA_DIR = path.join(process.cwd(), "data");
+var ATTENDANCE_FILE = path.join(DATA_DIR, "attendance_records.json");
+var AUDIT_FILE = path.join(DATA_DIR, "attendance_audit_logs.json");
+if (!fs.existsSync(DATA_DIR)) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (e) {
+    console.warn("[STORAGE DIR INIT WARN]", e);
+  }
+}
+var attendanceCache = /* @__PURE__ */ new Map();
+var auditCache = [];
+var isInitialized = false;
+function loadLocalFile(filePath, defaultValue) {
+  try {
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, "utf-8");
+      return JSON.parse(content);
+    }
+  } catch (err) {
+    console.error(`[STORAGE READ ERROR: ${filePath}]`, err);
+  }
+  return defaultValue;
+}
+function saveLocalFile(filePath, data) {
+  try {
+    const tempPath = `${filePath}.tmp.${Date.now()}`;
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
+    fs.renameSync(tempPath, filePath);
+  } catch (err) {
+    console.error(`[STORAGE WRITE ERROR: ${filePath}]`, err);
+  }
+}
+async function initAttendanceStorage() {
+  if (isInitialized) return;
+  const localAttendance = loadLocalFile(ATTENDANCE_FILE, []);
+  localAttendance.forEach((rec) => {
+    if (rec && rec.id) {
+      attendanceCache.set(rec.id, rec);
+    }
+  });
+  const localAudit = loadLocalFile(AUDIT_FILE, []);
+  auditCache = localAudit;
+  try {
+    const { data: remoteData, error } = await supabaseAdmin.from("Attendance").select("*").order("date", { ascending: false });
+    if (!error && remoteData && remoteData.length > 0) {
+      remoteData.forEach((rec) => {
+        if (rec && rec.id) {
+          attendanceCache.set(rec.id, {
+            id: rec.id,
+            userId: rec.userId,
+            date: rec.date,
+            status: rec.status || "PRESENT",
+            checkInTime: rec.checkInTime || rec.markedAt?.slice(11, 19) || null,
+            checkOutTime: rec.checkOutTime || null,
+            markedById: rec.markedById || "SYSTEM",
+            markedByName: rec.markedByName || "System",
+            markedByRole: rec.markedByRole || "ADMIN",
+            markedAt: rec.markedAt || rec.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+            method: rec.method || "DIRECT_ADMIN",
+            requestStatus: rec.requestStatus || "DIRECT",
+            respondedAt: rec.respondedAt || null,
+            rejectionReason: rec.rejectionReason || null,
+            notes: rec.notes || null,
+            correctionReason: rec.correctionReason || null,
+            branchId: rec.branchId || null,
+            isArchived: !!rec.isArchived,
+            createdAt: rec.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+            updatedAt: rec.updatedAt || (/* @__PURE__ */ new Date()).toISOString()
+          });
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("[SUPABASE ATTENDANCE PREFETCH WARN]", e);
+  }
+  isInitialized = true;
+  saveLocalFile(ATTENDANCE_FILE, Array.from(attendanceCache.values()));
+}
+function syncAttendanceDisk() {
+  saveLocalFile(ATTENDANCE_FILE, Array.from(attendanceCache.values()));
+}
+function syncAuditDisk() {
+  saveLocalFile(AUDIT_FILE, auditCache);
+}
+async function trySupabaseUpsert(record) {
+  try {
+    await supabaseAdmin.from("Attendance").upsert({
+      id: record.id,
+      userId: record.userId,
+      date: record.date,
+      status: record.status,
+      markedById: record.markedById,
+      markedByName: record.markedByName,
+      markedByRole: record.markedByRole,
+      markedAt: record.markedAt,
+      method: record.method,
+      requestStatus: record.requestStatus,
+      respondedAt: record.respondedAt,
+      rejectionReason: record.rejectionReason,
+      notes: record.notes,
+      branchId: record.branchId,
+      isArchived: record.isArchived,
+      updatedAt: record.updatedAt
+    });
+  } catch (e) {
+  }
+}
+async function trySupabaseDelete(recordId) {
+  try {
+    await supabaseAdmin.from("Attendance").delete().eq("id", recordId);
+  } catch (e) {
+  }
+}
+async function getAuthorizedStaffList() {
+  const AUTHORIZED_ROLES = [
+    "SUPER_ADMIN",
+    "ADMIN",
+    "MANAGER",
+    "HEAD_TECHNICIAN",
+    "LEAD_TECHNICIAN",
+    "TECHNICIAN",
+    "RECEPTIONIST",
+    "TECHNICAL_ASSISTANT",
+    "STAFF"
+  ];
+  try {
+    const { data: users, error } = await supabaseAdmin.from("User").select("id, name, email, role, department, phoneNumber, profileImage, deletedAt").is("deletedAt", null).in("role", AUTHORIZED_ROLES).order("name", { ascending: true });
+    if (error) {
+      console.error("[SUPABASE USER FETCH ERROR]", error);
+      const { data: fallbackUsers } = await supabaseAdmin.from("User").select("id, name, email, role");
+      return (fallbackUsers || []).filter((u) => AUTHORIZED_ROLES.includes(u.role));
+    }
+    return users || [];
+  } catch (err) {
+    console.error("[STAFF FETCH EXCEPTION]", err);
+    return [];
+  }
+}
+function getNepalBusinessTime() {
   const now = /* @__PURE__ */ new Date();
-  const utc = now.getTime() + now.getTimezoneOffset() * 6e4;
-  const nptDate = new Date(utc + 345 * 6e4);
-  const hours = nptDate.getHours();
-  const minutes = nptDate.getMinutes();
-  const seconds = nptDate.getSeconds();
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kathmandu",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+  const parts = formatter.formatToParts(now);
+  const y = parts.find((p) => p.type === "year")?.value || "2026";
+  const m = parts.find((p) => p.type === "month")?.value || "01";
+  const d = parts.find((p) => p.type === "day")?.value || "01";
+  const hourStr = parts.find((p) => p.type === "hour")?.value || "0";
+  const minStr = parts.find((p) => p.type === "minute")?.value || "0";
+  const secStr = parts.find((p) => p.type === "second")?.value || "0";
+  const hours = parseInt(hourStr, 10);
+  const minutes = parseInt(minStr, 10);
+  const seconds = parseInt(secStr, 10);
   const totalMinutes = hours * 60 + minutes;
   const isWithinWindow = totalMinutes >= 600 && totalMinutes <= 635;
-  const dateString = nptDate.toISOString().split("T")[0];
+  const dateString = `${y}-${m}-${d}`;
   const timeString = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  let secondsRemainingInWindow = 0;
+  let secondsUntilWindowOpens = 0;
+  if (isWithinWindow) {
+    const endMinutes = 635 * 60 + 59;
+    const currentSeconds = totalMinutes * 60 + seconds;
+    secondsRemainingInWindow = Math.max(0, endMinutes - currentSeconds);
+  } else if (totalMinutes < 600) {
+    const startSeconds = 600 * 60;
+    const currentSeconds = totalMinutes * 60 + seconds;
+    secondsUntilWindowOpens = Math.max(0, startSeconds - currentSeconds);
+  }
   return {
-    nptDate,
     dateString,
     timeString,
     hours,
     minutes,
+    seconds,
     totalMinutes,
     isWithinWindow,
+    secondsRemainingInWindow,
+    secondsUntilWindowOpens,
     windowStart: "10:00:00",
-    windowEnd: "10:35:00"
+    windowEnd: "10:35:00",
+    timezone: "Asia/Kathmandu"
   };
 }
-async function fetchSafeStaffUsers() {
-  try {
-    const { data: users, error } = await supabaseAdmin.from("User").select("*").in("role", AUTHORIZED_STAFF_ROLES).order("name", { ascending: true });
-    if (error) {
-      console.error("[SUPABASE USER QUERY ERROR]", error);
-      return [];
-    }
-    return (users || []).filter((u) => {
-      const status = (u.status || "ACTIVE").toUpperCase();
-      return status !== "SUSPENDED" && status !== "INACTIVE" && status !== "DELETED";
-    });
-  } catch (err) {
-    console.error("[SAFE USER FETCH EXCEPTION]", err);
-    return [];
+async function getAllAttendanceRecords(filters) {
+  await initAttendanceStorage();
+  let records = Array.from(attendanceCache.values()).filter((r) => !r.isArchived);
+  if (filters?.date) {
+    records = records.filter((r) => r.date === filters.date);
   }
-}
-router8.get("/server-time", (req, res) => {
-  const time = getNepalTimeDetails();
-  return res.json({
-    iso: time.nptDate.toISOString(),
-    timestamp: time.nptDate.getTime(),
-    dateString: time.dateString,
-    timeString: time.timeString,
-    isWithinWindow: time.isWithinWindow,
-    windowRange: "10:00 AM \u2013 10:35 AM NPT"
+  if (filters?.month) {
+    records = records.filter((r) => r.date.startsWith(filters.month));
+  }
+  if (filters?.userId) {
+    records = records.filter((r) => r.userId === filters.userId);
+  }
+  if (filters?.status && filters.status !== "ALL") {
+    records = records.filter((r) => r.status === filters.status);
+  }
+  records.sort((a, b) => {
+    if (b.date !== a.date) return b.date.localeCompare(a.date);
+    return (b.markedAt || "").localeCompare(a.markedAt || "");
   });
-});
-router8.get("/pending-requests", authenticate, async (req, res) => {
+  return records;
+}
+async function getAttendanceRecordById(id) {
+  await initAttendanceStorage();
+  return attendanceCache.get(id) || null;
+}
+async function getAttendanceRecordByUserAndDate(userId, date) {
+  await initAttendanceStorage();
+  for (const rec of attendanceCache.values()) {
+    if (rec.userId === userId && rec.date === date && !rec.isArchived) {
+      return rec;
+    }
+  }
+  return null;
+}
+async function upsertAttendanceRecord(data, actor) {
+  await initAttendanceStorage();
+  const existing = await getAttendanceRecordByUserAndDate(data.userId, data.date);
+  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  const time = getNepalBusinessTime();
+  let finalRecord;
+  if (existing) {
+    const prevStatus = existing.status;
+    finalRecord = {
+      ...existing,
+      status: data.status,
+      checkInTime: data.checkInTime !== void 0 ? data.checkInTime : existing.checkInTime || time.timeString,
+      checkOutTime: data.checkOutTime !== void 0 ? data.checkOutTime : existing.checkOutTime,
+      notes: data.notes !== void 0 ? data.notes : existing.notes,
+      correctionReason: data.correctionReason !== void 0 ? data.correctionReason : existing.correctionReason,
+      method: data.method || existing.method,
+      requestStatus: data.requestStatus || existing.requestStatus,
+      rejectionReason: data.rejectionReason !== void 0 ? data.rejectionReason : existing.rejectionReason,
+      markedById: actor.id,
+      markedByName: actor.name,
+      markedByRole: actor.role,
+      updatedAt: nowIso
+    };
+    attendanceCache.set(finalRecord.id, finalRecord);
+    const auditLog = {
+      id: uuidv49(),
+      attendanceId: finalRecord.id,
+      action: prevStatus !== data.status ? "STATUS_CHANGED" : "UPDATED",
+      performedById: actor.id,
+      performedByName: actor.name,
+      performedByRole: actor.role,
+      previousStatus: prevStatus,
+      newStatus: data.status,
+      reason: data.correctionReason || data.notes || "Attendance record modified",
+      createdAt: nowIso
+    };
+    auditCache.unshift(auditLog);
+    syncAuditDisk();
+    await broadcastServerChange("AttendanceAuditLog", "CREATE", auditLog.id, auditLog);
+  } else {
+    finalRecord = {
+      id: uuidv49(),
+      userId: data.userId,
+      date: data.date,
+      status: data.status,
+      checkInTime: data.checkInTime || (data.status === "PRESENT" || data.status === "LATE" || data.status === "HALF_DAY" ? time.timeString : null),
+      checkOutTime: data.checkOutTime || null,
+      markedById: actor.id,
+      markedByName: actor.name,
+      markedByRole: actor.role,
+      markedAt: nowIso,
+      method: data.method || (actor.role === "SUPER_ADMIN" ? "DIRECT_SUPER_ADMIN" : actor.role === "ADMIN" ? "DIRECT_ADMIN" : actor.role === "MANAGER" ? "MANAGER_ATTENDANCE" : "STAFF_SELF_CHECKIN"),
+      requestStatus: data.requestStatus || "DIRECT",
+      rejectionReason: data.rejectionReason || null,
+      notes: data.notes || null,
+      correctionReason: data.correctionReason || null,
+      branchId: data.branchId || null,
+      isArchived: false,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    };
+    attendanceCache.set(finalRecord.id, finalRecord);
+    const auditLog = {
+      id: uuidv49(),
+      attendanceId: finalRecord.id,
+      action: "CREATED",
+      performedById: actor.id,
+      performedByName: actor.name,
+      performedByRole: actor.role,
+      previousStatus: null,
+      newStatus: data.status,
+      reason: data.notes || `Attendance marked as ${data.status}`,
+      createdAt: nowIso
+    };
+    auditCache.unshift(auditLog);
+    syncAuditDisk();
+    await broadcastServerChange("AttendanceAuditLog", "CREATE", auditLog.id, auditLog);
+  }
+  syncAttendanceDisk();
+  trySupabaseUpsert(finalRecord);
+  await broadcastServerChange("Attendance", existing ? "UPDATE" : "CREATE", finalRecord.id, finalRecord);
+  return finalRecord;
+}
+async function bulkUpsertAttendance(items, actor) {
+  const results = [];
+  for (const item of items) {
+    const rec = await upsertAttendanceRecord(item, actor);
+    results.push(rec);
+  }
+  return results;
+}
+async function deleteAttendanceRecord(id, actor) {
+  await initAttendanceStorage();
+  const existing = attendanceCache.get(id);
+  if (!existing) return false;
+  attendanceCache.delete(id);
+  syncAttendanceDisk();
+  trySupabaseDelete(id);
+  const auditLog = {
+    id: uuidv49(),
+    attendanceId: id,
+    action: "DELETED",
+    performedById: actor.id,
+    performedByName: actor.name,
+    performedByRole: actor.role,
+    previousStatus: existing.status,
+    newStatus: null,
+    reason: "Record deleted by administrator",
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  auditCache.unshift(auditLog);
+  syncAuditDisk();
+  await broadcastServerChange("Attendance", "DELETE", id, { id });
+  return true;
+}
+async function purgeUserAttendance(userId, actor) {
+  await initAttendanceStorage();
+  let count = 0;
+  for (const [id, rec] of attendanceCache.entries()) {
+    if (rec.userId === userId) {
+      attendanceCache.delete(id);
+      trySupabaseDelete(id);
+      count++;
+    }
+  }
+  if (count > 0) {
+    syncAttendanceDisk();
+    const auditLog = {
+      id: uuidv49(),
+      attendanceId: `PURGE_${userId}`,
+      action: "PURGED",
+      performedById: actor.id,
+      performedByName: actor.name,
+      performedByRole: actor.role,
+      reason: `Purged ${count} attendance records for user ${userId}`,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    auditCache.unshift(auditLog);
+    syncAuditDisk();
+  }
+  return count;
+}
+async function getAttendanceAuditLogs(filters) {
+  await initAttendanceStorage();
+  let logs = [...auditCache];
+  if (filters?.attendanceId) {
+    logs = logs.filter((l) => l.attendanceId === filters.attendanceId);
+  }
+  if (filters?.limit) {
+    logs = logs.slice(0, filters.limit);
+  }
+  return logs;
+}
+
+// api/_server/routes/attendance.ts
+var router9 = Router9();
+var ATTENDANCE_MANAGEMENT_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGER"];
+var ATTENDANCE_ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN"];
+router9.get("/server-time", (req, res) => {
   try {
-    const { data: records } = await supabaseAdmin.from("Attendance").select("*").eq("status", "PENDING").order("createdAt", { ascending: false });
-    const staffList = await fetchSafeStaffUsers();
-    const userMap = /* @__PURE__ */ new Map();
-    staffList.forEach((u) => userMap.set(u.id, u));
-    const formatted = (records || []).map((r) => ({
-      ...r,
-      user: userMap.get(r.userId) || { name: "Staff Member", role: "TECHNICIAN" }
-    }));
-    return res.json(formatted);
+    const time = getNepalBusinessTime();
+    return res.json({
+      serverTime: time.timeString,
+      serverDate: time.dateString,
+      hours: time.hours,
+      minutes: time.minutes,
+      seconds: time.seconds,
+      totalMinutes: time.totalMinutes,
+      isWithinWindow: time.isWithinWindow,
+      secondsRemainingInWindow: time.secondsRemainingInWindow,
+      secondsUntilWindowOpens: time.secondsUntilWindowOpens,
+      windowStart: time.windowStart,
+      windowEnd: time.windowEnd,
+      timezone: time.timezone
+    });
   } catch (err) {
-    return res.json([]);
+    return res.status(500).json({ error: "Failed to retrieve server business time." });
   }
 });
-var handleRosterRequest = async (req, res) => {
+var handleGetRoster = async (req, res) => {
   try {
-    const time = getNepalTimeDetails();
-    const todayStr = req.query.date || time.dateString;
-    const staffList = await fetchSafeStaffUsers();
-    const { data: attendanceRecords } = await supabaseAdmin.from("Attendance").select("*").eq("date", todayStr);
-    const attendanceMap = /* @__PURE__ */ new Map();
-    (attendanceRecords || []).forEach((rec) => {
-      attendanceMap.set(rec.userId, rec);
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: "Unauthorized" });
+    const isManagement = ATTENDANCE_MANAGEMENT_ROLES.includes(currentUser.role);
+    const time = getNepalBusinessTime();
+    const targetDate = req.query.date || time.dateString;
+    const currentMonth = targetDate.slice(0, 7);
+    const staffList = await getAuthorizedStaffList();
+    const todayRecords = await getAllAttendanceRecords({ date: targetDate });
+    const monthRecords = await getAllAttendanceRecords({ month: currentMonth });
+    const recordMap = /* @__PURE__ */ new Map();
+    todayRecords.forEach((r) => recordMap.set(r.userId, r));
+    const monthCounts = /* @__PURE__ */ new Map();
+    monthRecords.forEach((r) => {
+      const entry = monthCounts.get(r.userId) || { present: 0, total: 0 };
+      entry.total += 1;
+      if (r.status === "PRESENT" || r.status === "LATE" || r.status === "HALF_DAY") {
+        entry.present += 1;
+      }
+      monthCounts.set(r.userId, entry);
     });
-    let dispatchCount = 0;
-    try {
-      const { data: broadcastLogs } = await supabaseAdmin.from("AttendanceBroadcast").select("id").eq("date", todayStr);
-      dispatchCount = broadcastLogs?.length || 0;
-    } catch {
-      dispatchCount = 0;
-    }
-    const roster = staffList.map((u) => {
-      const record = attendanceMap.get(u.id);
+    const roster = staffList.map((user) => {
+      const rec = recordMap.get(user.id);
+      const mStats = monthCounts.get(user.id);
+      const rate = mStats && mStats.total > 0 ? Math.round(mStats.present / mStats.total * 100) : null;
       return {
-        userId: u.id,
-        id: u.id,
-        name: u.name || u.email?.split("@")[0] || "Staff Member",
-        email: u.email,
-        role: u.role || "TECHNICIAN",
-        department: u.department || "Repair Lab",
-        phone: u.phone || "",
-        avatarUrl: u.avatarUrl || u.profileImage || null,
-        date: todayStr,
-        status: record ? record.status : "NOT_MARKED",
-        checkInTime: record ? record.checkInTime || record.time || null : null,
-        checkOutTime: record ? record.checkOutTime : null,
-        notes: record ? record.notes : null,
-        attendanceId: record ? record.id : null,
-        user: {
-          id: u.id,
-          name: u.name || u.email?.split("@")[0] || "Staff Member",
-          email: u.email,
-          role: u.role || "TECHNICIAN",
-          department: u.department || "Repair Lab",
-          profileImage: u.avatarUrl || u.profileImage || null
-        },
-        attendance: record ? {
-          id: record.id,
-          status: record.status,
-          checkInTime: record.checkInTime || record.time || null,
-          checkOutTime: record.checkOutTime || null,
-          markedByName: record.markedByName || "Administrator",
-          markedAt: record.checkInTime || record.createdAt || record.date,
-          notes: record.notes
-        } : null
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        department: user.department || "Repair Lab",
+        phoneNumber: user.phoneNumber || null,
+        profileImage: user.profileImage || null,
+        status: rec ? rec.status : "NOT_MARKED",
+        attendanceId: rec ? rec.id : null,
+        checkInTime: rec ? rec.checkInTime : null,
+        checkOutTime: rec ? rec.checkOutTime : null,
+        notes: rec ? rec.notes : null,
+        markedByName: rec ? rec.markedByName : null,
+        markedByRole: rec ? rec.markedByRole : null,
+        markedAt: rec ? rec.markedAt : null,
+        monthlyAttendanceRate: rate
       };
     });
-    const presentToday = roster.filter((r) => ["PRESENT", "LATE", "HALF_DAY"].includes(r.status)).length;
-    const absentToday = roster.filter((r) => r.status === "ABSENT").length;
-    const rate = roster.length > 0 ? Math.round(presentToday / roster.length * 100) : 100;
+    const totalStaff = roster.length;
+    const presentCount = roster.filter((s) => s.status === "PRESENT" || s.status === "LATE" || s.status === "HALF_DAY").length;
+    const absentCount = roster.filter((s) => s.status === "ABSENT").length;
+    const pendingCount = roster.filter((s) => s.status === "PENDING").length;
+    const notMarkedCount = roster.filter((s) => s.status === "NOT_MARKED").length;
     return res.json({
       success: true,
-      roster,
-      windowInfo: {
-        isWithinWindow: time.isWithinWindow,
-        currentTimeNPT: time.timeString,
-        windowStart: "10:00 AM",
-        windowEnd: "10:35 AM",
-        dispatchCount,
-        maxDispatches: 3,
-        canManagerDispatch: time.isWithinWindow && dispatchCount < 3
-      },
-      stats: {
-        totalStaff: roster.length,
-        presentToday,
-        presentCount: presentToday,
-        absentToday,
-        absentCount: absentToday,
-        attendanceRate: rate,
-        pendingCount: roster.filter((r) => r.status === "PENDING").length,
-        notMarkedCount: roster.filter((r) => r.status === "NOT_MARKED").length
-      }
-    });
-  } catch (err) {
-    console.error("[ATTENDANCE ROSTER EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to generate attendance roster." });
-  }
-};
-router8.get("/roster", authenticate, handleRosterRequest);
-router8.get("/today", authenticate, handleRosterRequest);
-router8.get("/monthly-report", authenticate, async (req, res) => {
-  try {
-    const { month } = req.query;
-    const currentMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const staffList = await fetchSafeStaffUsers();
-    const { data: records } = await supabaseAdmin.from("Attendance").select("*").gte("date", `${currentMonth}-01`).lte("date", `${currentMonth}-31`);
-    const userLogsMap = /* @__PURE__ */ new Map();
-    (records || []).forEach((r) => {
-      const existing = userLogsMap.get(r.userId) || [];
-      existing.push(r);
-      userLogsMap.set(r.userId, existing);
-    });
-    let totalPresentAll = 0;
-    let totalAbsentAll = 0;
-    const report = staffList.map((u) => {
-      const logs = userLogsMap.get(u.id) || [];
-      const presentDays = logs.filter((l) => ["PRESENT", "LATE", "HALF_DAY"].includes(l.status)).length;
-      const absentDays = logs.filter((l) => l.status === "ABSENT").length;
-      const pendingDays = logs.filter((l) => l.status === "PENDING").length;
-      const rejectedDays = logs.filter((l) => l.status === "REJECTED").length;
-      totalPresentAll += presentDays;
-      totalAbsentAll += absentDays;
-      const totalActiveDays = presentDays + absentDays;
-      const attendanceRate = totalActiveDays > 0 ? Math.round(presentDays / totalActiveDays * 100) : null;
-      let statusTag = "NO_DATA";
-      if (attendanceRate !== null) {
-        if (attendanceRate >= 90) statusTag = "EXCELLENT";
-        else if (attendanceRate >= 75) statusTag = "GOOD";
-        else if (attendanceRate >= 60) statusTag = "AVERAGE";
-        else statusTag = "NEEDS_ATTENTION";
-      }
-      return {
-        user: {
-          id: u.id,
-          name: u.name || u.email?.split("@")[0] || "Staff Member",
-          email: u.email,
-          role: u.role || "TECHNICIAN",
-          department: u.department || "Repair Lab",
-          profileImage: u.avatarUrl || u.profileImage || null
-        },
-        presentDays,
-        absentDays,
-        pendingDays,
-        rejectedDays,
-        attendanceRate,
-        statusTag,
-        logs
-      };
-    });
-    const avgRate = staffList.length > 0 && totalPresentAll + totalAbsentAll > 0 ? Math.round(totalPresentAll / (totalPresentAll + totalAbsentAll) * 100) : 100;
-    return res.json({
-      success: true,
-      report,
-      stats: {
-        totalStaff: staffList.length,
-        presentToday: totalPresentAll,
-        absentToday: totalAbsentAll,
-        attendanceRate: avgRate
-      }
-    });
-  } catch (err) {
-    console.error("[MONTHLY REPORT EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to load monthly report." });
-  }
-});
-router8.get("/staff/:userId/monthly", authenticate, async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { month } = req.query;
-    const currentMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const { data: records } = await supabaseAdmin.from("Attendance").select("*").eq("userId", userId).gte("date", `${currentMonth}-01`).lte("date", `${currentMonth}-31`).order("date", { ascending: true });
-    const logs = records || [];
-    const presentCount = logs.filter((l) => ["PRESENT", "LATE", "HALF_DAY"].includes(l.status)).length;
-    const absentCount = logs.filter((l) => l.status === "ABSENT").length;
-    const pendingCount = logs.filter((l) => l.status === "PENDING").length;
-    const rejectedCount = logs.filter((l) => l.status === "REJECTED").length;
-    const rate = presentCount + absentCount > 0 ? Math.round(presentCount / (presentCount + absentCount) * 100) : null;
-    const [y, m] = currentMonth.split("-").map(Number);
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-    const dailyLogs = [];
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dStr = `${currentMonth}-${String(day).padStart(2, "0")}`;
-      const rec = logs.find((l) => l.date === dStr);
-      const isFuture = dStr > todayStr;
-      const isToday = dStr === todayStr;
-      dailyLogs.push({
-        date: dStr,
-        dayOfWeek: new Date(y, m - 1, day).toLocaleString("en", { weekday: "short" }),
-        isToday,
-        isFuture,
-        status: rec ? rec.status : isFuture ? "FUTURE" : "NOT_MARKED",
-        record: rec ? {
-          ...rec,
-          formattedCheckInTime: rec.checkInTime || rec.time || "\u2014",
-          markedBy: rec.markedByName || "Administrator"
-        } : null
-      });
-    }
-    return res.json({
-      success: true,
-      dailyLogs,
-      stats: {
+      date: targetDate,
+      serverTime: time.timeString,
+      isWithinWindow: time.isWithinWindow,
+      summary: {
+        totalStaff,
         presentCount,
         absentCount,
         pendingCount,
-        rejectedCount,
-        attendanceRate: rate
-      }
+        notMarkedCount,
+        markedCount: totalStaff - notMarkedCount,
+        overallRate: totalStaff > 0 ? Math.round(presentCount / totalStaff * 100) : 0
+      },
+      roster: isManagement ? roster : roster.filter((r) => r.id === currentUser.id)
     });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to load staff monthly calendar." });
+    console.error("[ROSTER FETCH ERROR]", err);
+    return res.status(500).json({ error: "Failed to generate attendance roster." });
   }
-});
-router8.post("/dispatch-request", authenticate, authorize(["MANAGER", "SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+};
+router9.get("/roster", authenticate, handleGetRoster);
+router9.get("/today", authenticate, handleGetRoster);
+router9.get("/monthly-report", authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async (req, res) => {
   try {
-    const time = getNepalTimeDetails();
-    const isSuperAdmin = req.user?.role === "SUPER_ADMIN";
-    if (!isSuperAdmin && !time.isWithinWindow) {
-      return res.status(403).json({
-        error: `Manager attendance dispatch is only allowed between 10:00 AM and 10:35 AM NPT. (Current NPT: ${time.timeString})`
-      });
-    }
-    const { data: existingDispatches } = await supabaseAdmin.from("AttendanceBroadcast").select("id").eq("date", time.dateString);
-    const currentCount = existingDispatches?.length || 0;
-    if (!isSuperAdmin && currentCount >= 3) {
-      return res.status(429).json({
-        error: "Daily limit reached: Manager can only send attendance requests up to 3 times per day."
-      });
-    }
-    try {
-      await supabaseAdmin.from("AttendanceBroadcast").insert([
-        {
-          id: uuidv49(),
-          dispatchedById: req.user.id,
-          dispatchedByName: req.user.name,
-          date: time.dateString,
-          time: time.timeString,
-          broadcastNumber: currentCount + 1,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
-    } catch (e) {
-      console.warn("[BROADCAST LOG FAIL NON FATAL]", e);
-    }
-    const { data: managerRecord } = await supabaseAdmin.from("Attendance").select("id").eq("userId", req.user.id).eq("date", time.dateString).maybeSingle();
-    if (!managerRecord) {
-      await supabaseAdmin.from("Attendance").insert([
-        {
-          id: uuidv49(),
-          userId: req.user.id,
-          date: time.dateString,
-          status: "PRESENT",
-          markedById: req.user.id,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
-    } else {
-      await supabaseAdmin.from("Attendance").update({
-        status: "PRESENT",
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      }).eq("id", managerRecord.id);
-    }
-    const staffUsers = await fetchSafeStaffUsers();
-    for (const staff of staffUsers.filter((u) => u.id !== req.user.id)) {
-      const { data: exists } = await supabaseAdmin.from("Attendance").select("id, status").eq("userId", staff.id).eq("date", time.dateString).maybeSingle();
-      if (!exists) {
-        await supabaseAdmin.from("Attendance").insert([
-          {
-            id: uuidv49(),
-            userId: staff.id,
-            date: time.dateString,
-            status: "PENDING",
-            markedById: req.user.id,
-            createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    const time = getNepalBusinessTime();
+    const targetMonth = req.query.month || time.dateString.slice(0, 7);
+    const [yearStr, monthStr] = targetMonth.split("-");
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const staffList = await getAuthorizedStaffList();
+    const records = await getAllAttendanceRecords({ month: targetMonth });
+    const userRecordsMap = /* @__PURE__ */ new Map();
+    records.forEach((r) => {
+      let userMap = userRecordsMap.get(r.userId);
+      if (!userMap) {
+        userMap = /* @__PURE__ */ new Map();
+        userRecordsMap.set(r.userId, userMap);
+      }
+      userMap.set(r.date, r);
+    });
+    let totalStaffPresentSum = 0;
+    let totalActiveStaffWithLogs = 0;
+    const staffMetrics = staffList.map((staff) => {
+      const userMap = userRecordsMap.get(staff.id) || /* @__PURE__ */ new Map();
+      let presentCount = 0;
+      let absentCount = 0;
+      let lateCount = 0;
+      let halfDayCount = 0;
+      let pendingCount = 0;
+      const dailyStatus = {};
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dayStr = `${targetMonth}-${String(day).padStart(2, "0")}`;
+        const rec = userMap.get(dayStr);
+        if (rec) {
+          dailyStatus[dayStr] = rec.status;
+          if (rec.status === "PRESENT") presentCount++;
+          else if (rec.status === "ABSENT") absentCount++;
+          else if (rec.status === "LATE") {
+            lateCount++;
+            presentCount++;
+          } else if (rec.status === "HALF_DAY") {
+            halfDayCount++;
+            presentCount++;
+          } else if (rec.status === "PENDING") {
+            pendingCount++;
           }
-        ]);
+        } else {
+          dailyStatus[dayStr] = "NOT_MARKED";
+        }
       }
-    }
+      const totalMarked = presentCount + absentCount + pendingCount;
+      const rate = totalMarked > 0 ? Math.round(presentCount / totalMarked * 100) : null;
+      if (rate !== null) {
+        totalStaffPresentSum += rate;
+        totalActiveStaffWithLogs++;
+      }
+      let statusTag = "UNTRACKED";
+      if (rate !== null) {
+        if (rate >= 90) statusTag = "EXCELLENT";
+        else if (rate >= 75) statusTag = "GOOD";
+        else if (rate >= 60) statusTag = "AVERAGE";
+        else statusTag = "NEEDS_ATTENTION";
+      }
+      return {
+        id: staff.id,
+        name: staff.name,
+        email: staff.email,
+        role: staff.role,
+        department: staff.department || "Repair Lab",
+        profileImage: staff.profileImage || null,
+        presentCount,
+        absentCount,
+        lateCount,
+        halfDayCount,
+        pendingCount,
+        totalMarked,
+        attendanceRate: rate,
+        statusTag,
+        dailyStatus
+      };
+    });
+    const averageRate = totalActiveStaffWithLogs > 0 ? Math.round(totalStaffPresentSum / totalActiveStaffWithLogs) : 0;
     return res.json({
       success: true,
-      message: `Attendance request dispatched to all staff (${currentCount + 1}/3). You have been auto-marked PRESENT.`,
-      dispatchCount: currentCount + 1,
-      maxDispatches: 3
+      month: targetMonth,
+      daysInMonth,
+      summary: {
+        totalStaff: staffList.length,
+        averageRate,
+        totalLogs: records.length
+      },
+      report: staffMetrics,
+      staffMetrics
     });
   } catch (err) {
-    console.error("[DISPATCH REQUEST ERROR]", err);
-    return res.status(500).json({ error: "Failed to broadcast attendance request." });
+    console.error("[MONTHLY REPORT ERROR]", err);
+    return res.status(500).json({ error: "Failed to generate monthly attendance report." });
   }
 });
-router8.post("/mark", authenticate, async (req, res) => {
+router9.get("/staff/:userId/monthly", authenticate, async (req, res) => {
   try {
+    const { userId } = req.params;
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: "Unauthorized" });
+    const isManagement = ATTENDANCE_MANAGEMENT_ROLES.includes(currentUser.role);
+    if (!isManagement && currentUser.id !== userId) {
+      return res.status(403).json({ error: "You are only authorized to view your own attendance logs." });
+    }
+    const time = getNepalBusinessTime();
+    const targetMonth = req.query.month || time.dateString.slice(0, 7);
+    const [yearStr, monthStr] = targetMonth.split("-");
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const records = await getAllAttendanceRecords({ userId, month: targetMonth });
+    const recordMap = /* @__PURE__ */ new Map();
+    records.forEach((r) => recordMap.set(r.date, r));
+    let presentCount = 0;
+    let absentCount = 0;
+    let lateCount = 0;
+    let halfDayCount = 0;
+    let pendingCount = 0;
+    const dailyLogs = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${targetMonth}-${String(day).padStart(2, "0")}`;
+      const rec = recordMap.get(dateStr);
+      if (rec) {
+        if (rec.status === "PRESENT") presentCount++;
+        else if (rec.status === "ABSENT") absentCount++;
+        else if (rec.status === "LATE") {
+          lateCount++;
+          presentCount++;
+        } else if (rec.status === "HALF_DAY") {
+          halfDayCount++;
+          presentCount++;
+        } else if (rec.status === "PENDING") {
+          pendingCount++;
+        }
+        dailyLogs.push(rec);
+      } else {
+        dailyLogs.push({
+          id: null,
+          userId,
+          date: dateStr,
+          status: "NOT_MARKED",
+          checkInTime: null,
+          checkOutTime: null,
+          notes: null
+        });
+      }
+    }
+    const totalMarked = presentCount + absentCount + pendingCount;
+    const rate = totalMarked > 0 ? Math.round(presentCount / totalMarked * 100) : null;
+    return res.json({
+      success: true,
+      userId,
+      month: targetMonth,
+      stats: {
+        presentCount,
+        absentCount,
+        lateCount,
+        halfDayCount,
+        pendingCount,
+        totalMarked,
+        attendanceRate: rate
+      },
+      dailyLogs
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch staff monthly logs." });
+  }
+});
+router9.post("/mark", authenticate, async (req, res) => {
+  try {
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: "Unauthorized" });
     const {
-      type,
-      status: explicitStatus,
+      userId,
+      date,
+      status = "PRESENT",
       notes,
-      userId: targetUserId,
-      date: targetDate,
-      time: targetTime
+      correctionReason,
+      checkInTime,
+      checkOutTime
     } = req.body;
-    const time = getNepalTimeDetails();
-    const effectiveDate = targetDate || time.dateString;
-    const effectiveTime = targetTime || time.timeString;
-    const effectiveUserId = targetUserId || req.user.id;
-    const isSuperAdmin = req.user?.role === "SUPER_ADMIN" || req.user?.role === "ADMIN";
-    const isManager = req.user?.role === "MANAGER";
-    const staffList = await fetchSafeStaffUsers();
-    const isRegisteredStaff = staffList.some((s) => s.id === effectiveUserId);
-    if (!isRegisteredStaff && !isSuperAdmin) {
+    const time = getNepalBusinessTime();
+    const targetUserId = userId || currentUser.id;
+    const targetDate = date || time.dateString;
+    const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
+    const isAdmin = currentUser.role === "ADMIN";
+    const isManager = currentUser.role === "MANAGER";
+    const isSelf = targetUserId === currentUser.id;
+    if (isSuperAdmin || isAdmin) {
+    } else if (isManager) {
+      if (!isSelf && !time.isWithinWindow) {
+        return res.status(403).json({
+          error: `Manager can only record staff attendance between 10:00 AM and 10:35 AM (Asia/Kathmandu time). Current NPT time: ${time.timeString}`,
+          code: "OUTSIDE_ATTENDANCE_WINDOW",
+          serverTime: time.timeString,
+          window: "10:00 AM - 10:35 AM NPT"
+        });
+      }
+    } else {
+      if (!isSelf) {
+        return res.status(403).json({
+          error: "Access denied: Staff members can only record their own personal attendance.",
+          code: "UNAUTHORIZED_TARGET_USER"
+        });
+      }
+    }
+    const staffList = await getAuthorizedStaffList();
+    const targetUser = staffList.find((s) => s.id === targetUserId);
+    if (!targetUser && !isSuperAdmin && !isAdmin) {
+      return res.status(400).json({ error: "Target employee is not an active staff member." });
+    }
+    const saved = await upsertAttendanceRecord(
+      {
+        userId: targetUserId,
+        date: targetDate,
+        status,
+        notes,
+        correctionReason,
+        checkInTime,
+        checkOutTime,
+        method: isSuperAdmin ? "DIRECT_SUPER_ADMIN" : isAdmin ? "DIRECT_ADMIN" : isManager ? "MANAGER_ATTENDANCE" : "STAFF_SELF_CHECKIN",
+        requestStatus: "DIRECT"
+      },
+      {
+        id: currentUser.id,
+        name: currentUser.name || "Staff User",
+        role: currentUser.role
+      }
+    );
+    return res.status(200).json({
+      success: true,
+      message: `Attendance marked as ${saved.status} for ${targetUser?.name || "employee"}.`,
+      record: saved
+    });
+  } catch (err) {
+    console.error("[MARK ATTENDANCE EXCEPTION]", err);
+    return res.status(500).json({ error: err?.message || "Failed to record attendance." });
+  }
+});
+router9.post("/bulk-mark", authenticate, async (req, res) => {
+  try {
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: "Unauthorized" });
+    const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
+    const isAdmin = currentUser.role === "ADMIN";
+    const isManager = currentUser.role === "MANAGER";
+    if (!isSuperAdmin && !isAdmin && !isManager) {
+      return res.status(403).json({ error: "Access denied: Insufficient permissions for bulk attendance." });
+    }
+    const time = getNepalBusinessTime();
+    if (isManager && !time.isWithinWindow) {
       return res.status(403).json({
-        error: "Attendance can only be recorded for staff members registered in Staff Management."
+        error: `Manager can only record staff attendance between 10:00 AM and 10:35 AM (Asia/Kathmandu time). Current NPT time: ${time.timeString}`,
+        code: "OUTSIDE_ATTENDANCE_WINDOW"
       });
     }
-    const { data: existing } = await supabaseAdmin.from("Attendance").select("*").eq("userId", effectiveUserId).eq("date", effectiveDate).limit(1);
-    const existingRecord = existing?.[0];
-    if (isSuperAdmin || isManager && explicitStatus && time.isWithinWindow) {
-      const finalStatus = explicitStatus || "PRESENT";
-      const updatePayload = {
-        status: finalStatus,
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      if (notes) updatePayload.notes = notes.trim();
-      if (existingRecord) {
-        const { data: updated, error } = await supabaseAdmin.from("Attendance").update(updatePayload).eq("id", existingRecord.id).select("*").single();
-        if (error) throw error;
-        return res.json({ success: true, message: `Staff attendance updated to ${finalStatus}.`, record: updated });
-      } else {
-        const newRecord = {
-          id: uuidv49(),
-          userId: effectiveUserId,
-          date: effectiveDate,
-          status: finalStatus,
-          markedById: req.user.id,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        if (notes) newRecord.notes = notes.trim();
-        const { data: created, error } = await supabaseAdmin.from("Attendance").insert([newRecord]).select("*").single();
-        if (error) throw error;
-        return res.status(201).json({ success: true, message: `Staff attendance marked as ${finalStatus}.`, record: created });
-      }
+    const { date, items } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "List of staff items is required for bulk marking." });
     }
-    if (type === "CHECK_IN" || type === "IN") {
-      if (existingRecord && existingRecord.status === "PRESENT") {
-        return res.status(400).json({ error: "Check-in already completed for today." });
-      }
-      if (existingRecord) {
-        const { data: updated, error: error2 } = await supabaseAdmin.from("Attendance").update({
-          status: "PRESENT",
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        }).eq("id", existingRecord.id).select("*").single();
-        if (error2) throw error2;
-        return res.json({ success: true, message: "Check-in confirmed successfully.", record: updated });
-      }
-      const newRecord = {
-        id: uuidv49(),
-        userId: effectiveUserId,
-        date: effectiveDate,
-        status: "PRESENT",
-        markedById: req.user.id,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      const { data: created, error } = await supabaseAdmin.from("Attendance").insert([newRecord]).select("*").single();
-      if (error) throw error;
-      return res.status(201).json({ success: true, message: "Check-in recorded.", record: created });
-    }
-    return res.status(400).json({ error: "Invalid attendance parameters." });
-  } catch (err) {
-    console.error("[ATTENDANCE MARK ERROR]", err);
-    return res.status(500).json({ error: err?.message || "Failed to mark attendance." });
-  }
-});
-router8.get("/my", authenticate, async (req, res) => {
-  try {
-    const time = getNepalTimeDetails();
-    const todayStr = time.dateString;
-    const { data: todayRecord } = await supabaseAdmin.from("Attendance").select("*").eq("userId", req.user.id).eq("date", todayStr).limit(1);
-    const { data: recentRecords } = await supabaseAdmin.from("Attendance").select("*").eq("userId", req.user.id).order("date", { ascending: false }).limit(30);
+    const targetDate = date || time.dateString;
+    const formattedItems = items.map((item) => ({
+      userId: item.userId,
+      date: targetDate,
+      status: item.status || "PRESENT",
+      notes: item.notes
+    }));
+    const results = await bulkUpsertAttendance(formattedItems, {
+      id: currentUser.id,
+      name: currentUser.name || "Admin",
+      role: currentUser.role
+    });
     return res.json({
       success: true,
-      today: todayRecord?.[0] || null,
-      recent: recentRecords || [],
-      history: recentRecords || []
+      message: `Successfully processed attendance for ${results.length} staff members.`,
+      records: results
     });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to fetch personal attendance." });
+    console.error("[BULK MARK ERROR]", err);
+    return res.status(500).json({ error: "Failed to complete bulk attendance." });
   }
 });
-router8.get("/history", authenticate, async (req, res) => {
+router9.get("/my", authenticate, async (req, res) => {
   try {
-    const { userId, status, month, startDate, endDate, limit = "100" } = req.query;
-    let query = supabaseAdmin.from("Attendance").select("*");
-    if (userId && userId !== "ALL") query = query.eq("userId", String(userId));
-    if (status && status !== "ALL") query = query.eq("status", String(status));
-    if (month) {
-      query = query.gte("date", `${month}-01`).lte("date", `${month}-31`);
-    } else if (startDate || endDate) {
-      if (startDate) query = query.gte("date", String(startDate));
-      if (endDate) query = query.lte("date", String(endDate));
-    }
-    const { data: records, error } = await query.order("date", { ascending: false }).limit(parseInt(limit, 10) || 100);
-    if (error) return res.status(500).json({ error: "Failed to fetch attendance history." });
-    const staffList = await fetchSafeStaffUsers();
-    const userMap = /* @__PURE__ */ new Map();
-    staffList.forEach((u) => userMap.set(u.id, u));
-    const enriched = (records || []).map((r) => ({
-      ...r,
-      user: userMap.get(r.userId) || { name: "Staff Member", role: "TECHNICIAN" }
-    }));
-    return res.json(enriched);
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: "Unauthorized" });
+    const time = getNepalBusinessTime();
+    const currentMonth = req.query.month || time.dateString.slice(0, 7);
+    const allMyRecords = await getAllAttendanceRecords({ userId: currentUser.id });
+    const todayRecord = allMyRecords.find((r) => r.date === time.dateString);
+    const monthRecords = allMyRecords.filter((r) => r.date.startsWith(currentMonth));
+    let presentDays = 0;
+    let absentDays = 0;
+    let lateDays = 0;
+    monthRecords.forEach((r) => {
+      if (r.status === "PRESENT") presentDays++;
+      else if (r.status === "LATE") {
+        lateDays++;
+        presentDays++;
+      } else if (r.status === "HALF_DAY") presentDays++;
+      else if (r.status === "ABSENT") absentDays++;
+    });
+    const totalDays = monthRecords.length;
+    const rate = totalDays > 0 ? Math.round(presentDays / totalDays * 100) : null;
+    return res.json({
+      success: true,
+      today: todayRecord || {
+        status: "NOT_MARKED",
+        date: time.dateString,
+        checkInTime: null
+      },
+      stats: {
+        month: currentMonth,
+        presentDays,
+        absentDays,
+        lateDays,
+        totalRecordedDays: totalDays,
+        attendanceRate: rate
+      },
+      history: allMyRecords.slice(0, 60)
+    });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve attendance logs." });
+    return res.status(500).json({ error: "Failed to retrieve personal attendance." });
   }
 });
-router8.patch("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router9.get("/history", authenticate, async (req, res) => {
   try {
-    const { id } = req.params;
-    const { status } = req.body;
-    const { data: updated, error } = await supabaseAdmin.from("Attendance").update({
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: "Unauthorized" });
+    const isManagement = ATTENDANCE_MANAGEMENT_ROLES.includes(currentUser.role);
+    const { date, month, userId, status, search } = req.query;
+    const filterUserId = isManagement ? userId : currentUser.id;
+    const records = await getAllAttendanceRecords({
+      date,
+      month,
+      userId: filterUserId,
       status,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to update record." });
-    return res.json({ success: true, message: "Attendance record corrected.", record: updated });
+      search
+    });
+    const staffList = await getAuthorizedStaffList();
+    const userMap = /* @__PURE__ */ new Map();
+    staffList.forEach((s) => userMap.set(s.id, s));
+    const enriched = records.map((r) => {
+      const user = userMap.get(r.userId);
+      return {
+        ...r,
+        user: user ? {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          department: user.department,
+          profileImage: user.profileImage
+        } : { id: r.userId, name: "Staff Member", role: "STAFF" }
+      };
+    });
+    let finalRecords = enriched;
+    if (search && search.trim()) {
+      const s = search.toLowerCase();
+      finalRecords = finalRecords.filter(
+        (r) => r.user?.name?.toLowerCase().includes(s) || r.user?.email?.toLowerCase().includes(s) || r.user?.role?.toLowerCase().includes(s) || r.notes?.toLowerCase().includes(s) || r.date?.includes(s)
+      );
+    }
+    return res.json({
+      success: true,
+      count: finalRecords.length,
+      records: finalRecords
+    });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to update attendance log." });
+    return res.status(500).json({ error: "Failed to retrieve attendance history." });
   }
 });
-router8.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router9.patch("/:id", authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async (req, res) => {
   try {
+    const currentUser = req.user;
     const { id } = req.params;
-    const { error } = await supabaseAdmin.from("Attendance").delete().eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to delete attendance record." });
-    return res.json({ success: true, message: "Attendance record deleted." });
+    const { status, notes, correctionReason, checkInTime, checkOutTime } = req.body;
+    const existing = await getAttendanceRecordById(id);
+    if (!existing) {
+      return res.status(404).json({ error: "Attendance record not found." });
+    }
+    const time = getNepalBusinessTime();
+    const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
+    const isAdmin = currentUser.role === "ADMIN";
+    const isManager = currentUser.role === "MANAGER";
+    if (isManager && !time.isWithinWindow) {
+      return res.status(403).json({
+        error: `Manager can only update attendance during 10:00 AM \u2013 10:35 AM NPT. (Current NPT: ${time.timeString})`,
+        code: "OUTSIDE_ATTENDANCE_WINDOW"
+      });
+    }
+    const updated = await upsertAttendanceRecord(
+      {
+        userId: existing.userId,
+        date: existing.date,
+        status: status || existing.status,
+        checkInTime: checkInTime !== void 0 ? checkInTime : existing.checkInTime,
+        checkOutTime: checkOutTime !== void 0 ? checkOutTime : existing.checkOutTime,
+        notes: notes !== void 0 ? notes : existing.notes,
+        correctionReason: correctionReason || "Administrative correction"
+      },
+      {
+        id: currentUser.id,
+        name: currentUser.name || "Admin",
+        role: currentUser.role
+      }
+    );
+    return res.json({
+      success: true,
+      message: "Attendance record successfully updated.",
+      record: updated
+    });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to delete log." });
+    return res.status(500).json({ error: "Failed to update attendance record." });
   }
 });
-router8.get("/export", authenticate, async (req, res) => {
+router9.delete("/:id", authenticate, authorize(ATTENDANCE_ADMIN_ROLES), async (req, res) => {
+  try {
+    const currentUser = req.user;
+    const { id } = req.params;
+    const success = await deleteAttendanceRecord(id, {
+      id: currentUser.id,
+      name: currentUser.name || "Admin",
+      role: currentUser.role
+    });
+    if (!success) {
+      return res.status(404).json({ error: "Attendance record not found." });
+    }
+    return res.json({
+      success: true,
+      message: "Attendance record deleted successfully."
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to delete attendance record." });
+  }
+});
+router9.get("/export", authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async (req, res) => {
   try {
     const { month } = req.query;
-    const targetMonth = month || (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-    const { data: records } = await supabaseAdmin.from("Attendance").select("*").gte("date", `${targetMonth}-01`).lte("date", `${targetMonth}-31`).order("date", { ascending: false });
-    const staffList = await fetchSafeStaffUsers();
+    const time = getNepalBusinessTime();
+    const targetMonth = month || time.dateString.slice(0, 7);
+    const records = await getAllAttendanceRecords({ month: targetMonth });
+    const staffList = await getAuthorizedStaffList();
     const userMap = /* @__PURE__ */ new Map();
     staffList.forEach((u) => userMap.set(u.id, u));
-    const rows = (records || []).map((r) => {
+    const rows = records.map((r) => {
       const u = userMap.get(r.userId) || {};
       return {
-        "Date": r.date,
-        "Staff Name": u.name || "Staff",
-        "Role": u.role || "TECHNICIAN",
-        "Department": u.department || "Repair Lab",
-        "Status": r.status,
-        "Notes": r.notes || "\u2014"
+        Date: r.date,
+        "Staff Name": u.name || "Staff Member",
+        Role: (u.role || "TECHNICIAN").replace(/_/g, " "),
+        Department: u.department || "Repair Lab",
+        Status: r.status,
+        "Check-In": r.checkInTime || "\u2014",
+        "Check-Out": r.checkOutTime || "\u2014",
+        "Marked By": r.markedByName || "System",
+        "Marked Role": r.markedByRole || "\u2014",
+        Notes: r.notes || "\u2014",
+        "Correction Reason": r.correctionReason || "\u2014"
       };
     });
-    return res.json({ success: true, rows });
+    return res.json({
+      success: true,
+      month: targetMonth,
+      count: rows.length,
+      rows
+    });
   } catch (err) {
     return res.status(500).json({ error: "Failed to export attendance records." });
   }
 });
-router8.delete("/staff/:userId", authenticate, authorize(["SUPER_ADMIN"]), async (req, res) => {
+router9.get("/audit-logs", authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async (req, res) => {
   try {
+    const logs = await getAttendanceAuditLogs({ limit: 100 });
+    return res.json({ success: true, auditLogs: logs, logs });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch audit logs." });
+  }
+});
+router9.delete("/staff/:userId", authenticate, authorize(["SUPER_ADMIN"]), async (req, res) => {
+  try {
+    const currentUser = req.user;
     const { userId } = req.params;
     if (!userId) {
       return res.status(400).json({ error: "Staff User ID is required." });
     }
-    if (userId === req.user.id) {
-      return res.status(400).json({ error: "You cannot delete your own Super Admin account from attendance." });
+    if (userId === currentUser.id) {
+      return res.status(400).json({ error: "You cannot delete your own Super Admin attendance records." });
     }
-    await supabaseAdmin.from("Attendance").delete().eq("userId", userId);
-    await supabaseAdmin.from("Staff").delete().or(`id.eq.${userId},userId.eq.${userId}`);
-    const { error: userDelErr } = await supabaseAdmin.from("User").delete().eq("id", userId);
-    if (userDelErr) {
-      console.error("[USER TABLE DELETE ERROR]", userDelErr);
-      return res.status(500).json({ error: "Failed to delete user account." });
-    }
+    const count = await purgeUserAttendance(userId, {
+      id: currentUser.id,
+      name: currentUser.name || "Super Admin",
+      role: currentUser.role
+    });
     return res.json({
       success: true,
-      message: "Staff member and all their records have been permanently removed."
+      message: `Permanently removed ${count} attendance records for this staff member.`
     });
   } catch (err) {
-    console.error("[STAFF DELETE EXCEPTION]", err);
-    return res.status(500).json({ error: err?.message || "Server error removing staff records." });
+    return res.status(500).json({ error: "Failed to purge staff attendance records." });
   }
 });
-var attendance_default = router8;
-var router9 = Router9();
-async function generateRecordNumber() {
-  const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
-  const { data: records } = await supabaseAdmin.from("RepairRelatedDamage").select("recordNumber").ilike("recordNumber", `RRD-${currentYear}-%`).order("recordNumber", { ascending: false }).limit(10);
+var attendance_default = router9;
+
+// api/_server/routes/repairDamage.ts
+import { Router as Router10 } from "express";
+
+// api/_server/services/damageStorage.ts
+import fs2 from "fs";
+import path2 from "path";
+import { v4 as uuidv410 } from "uuid";
+var DATA_DIR2 = path2.join(process.cwd(), "data");
+var DAMAGE_FILE = path2.join(DATA_DIR2, "repair_damage_records.json");
+var AUDIT_FILE2 = path2.join(DATA_DIR2, "repair_damage_audit_logs.json");
+if (!fs2.existsSync(DATA_DIR2)) {
+  try {
+    fs2.mkdirSync(DATA_DIR2, { recursive: true });
+  } catch (e) {
+    console.warn("[STORAGE DIR INIT WARN]", e);
+  }
+}
+var damageCache = /* @__PURE__ */ new Map();
+var auditCache2 = [];
+var isInitialized2 = false;
+function loadLocalFile2(filePath, defaultValue) {
+  try {
+    if (fs2.existsSync(filePath)) {
+      const content = fs2.readFileSync(filePath, "utf-8");
+      return JSON.parse(content);
+    }
+  } catch (err) {
+    console.error(`[STORAGE READ ERROR: ${filePath}]`, err);
+  }
+  return defaultValue;
+}
+function saveLocalFile2(filePath, data) {
+  try {
+    const tempPath = `${filePath}.tmp.${Date.now()}`;
+    fs2.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
+    fs2.renameSync(tempPath, filePath);
+  } catch (err) {
+    console.error(`[STORAGE WRITE ERROR: ${filePath}]`, err);
+  }
+}
+function getNepalDateTime() {
+  const now = /* @__PURE__ */ new Date();
+  const nptDateString = now.toLocaleString("en-US", { timeZone: "Asia/Kathmandu" });
+  const nptDate = new Date(nptDateString);
+  const year = nptDate.getFullYear();
+  const month = String(nptDate.getMonth() + 1).padStart(2, "0");
+  const day = String(nptDate.getDate()).padStart(2, "0");
+  const hours = String(nptDate.getHours()).padStart(2, "0");
+  const minutes = String(nptDate.getMinutes()).padStart(2, "0");
+  const date = `${year}-${month}-${day}`;
+  const time = `${hours}:${minutes}`;
+  return {
+    date,
+    time,
+    iso: now.toISOString(),
+    fullDate: nptDate
+  };
+}
+async function initializeDamageStorage() {
+  if (isInitialized2) return;
+  const localDamages = loadLocalFile2(DAMAGE_FILE, []);
+  const localAudits = loadLocalFile2(AUDIT_FILE2, []);
+  localDamages.forEach((d) => damageCache.set(d.id, d));
+  auditCache2 = localAudits;
+  try {
+    const { data: supaDamages, error: dErr } = await supabaseAdmin.from("RepairRelatedDamage").select("*").order("createdAt", { ascending: false });
+    if (!dErr && supaDamages && supaDamages.length > 0) {
+      supaDamages.forEach((d) => {
+        damageCache.set(d.id, {
+          ...d,
+          isArchived: Boolean(d.isArchived),
+          inventoryDeducted: Boolean(d.inventoryDeducted)
+        });
+      });
+      saveLocalFile2(DAMAGE_FILE, Array.from(damageCache.values()));
+    }
+    const { data: supaAudits, error: aErr } = await supabaseAdmin.from("RepairRelatedDamageAudit").select("*").order("createdAt", { ascending: false }).limit(500);
+    if (!aErr && supaAudits && supaAudits.length > 0) {
+      auditCache2 = supaAudits;
+      saveLocalFile2(AUDIT_FILE2, auditCache2);
+    }
+  } catch (err) {
+    console.warn("[SUPABASE DAMAGE SYNC WARN - USING LOCAL CACHE]", err);
+  }
+  isInitialized2 = true;
+}
+async function generateDamageRecordNumber() {
+  await initializeDamageStorage();
+  const currentYear = getNepalDateTime().date.slice(0, 4);
   let maxNum = 0;
-  if (records && records.length > 0) {
-    for (const r of records) {
-      if (!r.recordNumber) continue;
+  for (const r of damageCache.values()) {
+    if (r.recordNumber && r.recordNumber.startsWith(`RRD-${currentYear}-`)) {
       const match = r.recordNumber.match(/(\d+)$/);
       if (match && match[1]) {
         const parsed = parseInt(match[1], 10);
@@ -4138,190 +5541,709 @@ async function generateRecordNumber() {
       }
     }
   }
+  try {
+    const { data: supaRecords } = await supabaseAdmin.from("RepairRelatedDamage").select("recordNumber").ilike("recordNumber", `RRD-${currentYear}-%`).order("recordNumber", { ascending: false }).limit(10);
+    if (supaRecords && supaRecords.length > 0) {
+      for (const r of supaRecords) {
+        if (!r.recordNumber) continue;
+        const match = r.recordNumber.match(/(\d+)$/);
+        if (match && match[1]) {
+          const parsed = parseInt(match[1], 10);
+          if (!isNaN(parsed) && parsed > maxNum) maxNum = parsed;
+        }
+      }
+    }
+  } catch (e) {
+  }
   const nextNum = maxNum + 1;
   return `RRD-${currentYear}-${nextNum.toString().padStart(4, "0")}`;
 }
-router9.get("/overview", authenticate, async (req, res) => {
+async function getStaffUserDetails(userId) {
   try {
-    const { data: records } = await supabaseAdmin.from("RepairRelatedDamage").select("*").eq("isArchived", false);
-    let totalRecords = 0;
-    let totalEstimatedCost = 0;
-    let totalDeductions = 0;
-    const componentCounts = {};
-    (records || []).forEach((r) => {
-      totalRecords++;
-      totalEstimatedCost += Number(r.estimatedCost || 0);
-      if (r.inventoryDeducted) totalDeductions++;
-      const comp = r.damagedComponent || "Other";
-      componentCounts[comp] = (componentCounts[comp] || 0) + 1;
-    });
+    const { data: user, error } = await supabaseAdmin.from("User").select("id, name, email, role, department").eq("id", userId).single();
+    if (user && !error) return user;
+  } catch (err) {
+    console.warn("[FETCH STAFF USER DETAIL WARN]", err);
+  }
+  return null;
+}
+async function queryDamageRecords(options) {
+  await initializeDamageStorage();
+  try {
+    let query = supabaseAdmin.from("RepairRelatedDamage").select("*, staff:User!RepairRelatedDamage_staffId_fkey(name, email, role, department)", { count: "exact" });
+    if (!options.includeArchived) {
+      query = query.eq("isArchived", false);
+    }
+    if (options.staffId && options.staffId !== "ALL") {
+      query = query.eq("staffId", options.staffId);
+    }
+    if (options.role && options.role !== "ALL") {
+      query = query.eq("staffRole", options.role);
+    }
+    if (options.component && options.component !== "ALL") {
+      query = query.eq("damagedComponent", options.component);
+    }
+    if (options.damageType && options.damageType !== "ALL") {
+      query = query.eq("damageType", options.damageType);
+    }
+    if (options.date) {
+      query = query.eq("damageDate", options.date);
+    } else if (options.month) {
+      query = query.ilike("damageDate", `${options.month}%`);
+    } else if (options.year) {
+      query = query.ilike("damageDate", `${options.year}%`);
+    } else if (options.startDate || options.endDate) {
+      if (options.startDate) query = query.gte("damageDate", options.startDate);
+      if (options.endDate) query = query.lte("damageDate", options.endDate);
+    }
+    if (options.search) {
+      const s = options.search.trim();
+      query = query.or(`recordNumber.ilike.%${s}%,staffName.ilike.%${s}%,repairNumber.ilike.%${s}%,deviceBrand.ilike.%${s}%,deviceModel.ilike.%${s}%,damagedComponent.ilike.%${s}%,damageDescription.ilike.%${s}%`);
+    }
+    const limit2 = options.limit || 100;
+    const offset2 = options.offset || 0;
+    const { data, count, error } = await query.order("damageDate", { ascending: false }).order("createdAt", { ascending: false }).range(offset2, offset2 + limit2 - 1);
+    if (!error && data) {
+      data.forEach((d) => {
+        damageCache.set(d.id, d);
+      });
+      saveLocalFile2(DAMAGE_FILE, Array.from(damageCache.values()));
+      return { records: data, total: count ?? data.length };
+    }
+  } catch (err) {
+    console.warn("[QUERY DAMAGE DB EXCEPTION - USING LOCAL CACHE]", err);
+  }
+  let allRecords = Array.from(damageCache.values());
+  if (!options.includeArchived) {
+    allRecords = allRecords.filter((r) => !r.isArchived && r.status !== "ARCHIVED");
+  }
+  if (options.staffId && options.staffId !== "ALL") {
+    allRecords = allRecords.filter((r) => r.staffId === options.staffId);
+  }
+  if (options.role && options.role !== "ALL") {
+    allRecords = allRecords.filter((r) => r.staffRole === options.role);
+  }
+  if (options.component && options.component !== "ALL") {
+    allRecords = allRecords.filter((r) => r.damagedComponent === options.component);
+  }
+  if (options.damageType && options.damageType !== "ALL") {
+    allRecords = allRecords.filter((r) => r.damageType === options.damageType);
+  }
+  if (options.date) {
+    allRecords = allRecords.filter((r) => r.damageDate === options.date);
+  } else if (options.month) {
+    allRecords = allRecords.filter((r) => r.damageDate.startsWith(options.month));
+  } else if (options.year) {
+    allRecords = allRecords.filter((r) => r.damageDate.startsWith(options.year));
+  } else if (options.startDate || options.endDate) {
+    if (options.startDate) allRecords = allRecords.filter((r) => r.damageDate >= options.startDate);
+    if (options.endDate) allRecords = allRecords.filter((r) => r.damageDate <= options.endDate);
+  }
+  if (options.search) {
+    const s = options.search.toLowerCase().trim();
+    allRecords = allRecords.filter(
+      (r) => r.recordNumber && r.recordNumber.toLowerCase().includes(s) || r.staffName && r.staffName.toLowerCase().includes(s) || r.repairNumber && r.repairNumber.toLowerCase().includes(s) || r.deviceBrand && r.deviceBrand.toLowerCase().includes(s) || r.deviceModel && r.deviceModel.toLowerCase().includes(s) || r.damagedComponent && r.damagedComponent.toLowerCase().includes(s) || r.damageDescription && r.damageDescription.toLowerCase().includes(s)
+    );
+  }
+  allRecords.sort((a, b) => (b.damageDate + (b.damageTime || "")).localeCompare(a.damageDate + (a.damageTime || "")));
+  const total = allRecords.length;
+  const limit = options.limit || 100;
+  const offset = options.offset || 0;
+  const sliced = allRecords.slice(offset, offset + limit);
+  return { records: sliced, total };
+}
+async function getDamageOverviewMetrics(staffIdScope) {
+  await initializeDamageStorage();
+  const { date: todayDate, time: _time } = getNepalDateTime();
+  const currentMonth = todayDate.slice(0, 7);
+  let records = Array.from(damageCache.values()).filter((r) => !r.isArchived && r.status !== "ARCHIVED");
+  if (staffIdScope && staffIdScope !== "ALL") {
+    records = records.filter((r) => r.staffId === staffIdScope);
+  }
+  let totalRecords = 0;
+  let thisMonthRecords = 0;
+  let todayRecords = 0;
+  let totalEstimatedCost = 0;
+  let totalDeductions = 0;
+  const componentBreakdown = {};
+  records.forEach((r) => {
+    totalRecords++;
+    const cost = Number(r.estimatedCost || 0);
+    totalEstimatedCost += isNaN(cost) ? 0 : cost;
+    if (r.inventoryDeducted) totalDeductions++;
+    if (r.damageDate === todayDate) {
+      todayRecords++;
+    }
+    if (r.damageDate && r.damageDate.startsWith(currentMonth)) {
+      thisMonthRecords++;
+    }
+    const comp = r.damagedComponent || "Other";
+    componentBreakdown[comp] = (componentBreakdown[comp] || 0) + 1;
+  });
+  const sorted = [...records].sort(
+    (a, b) => (b.damageDate + (b.damageTime || "")).localeCompare(a.damageDate + (a.damageTime || ""))
+  );
+  return {
+    totalRecords,
+    thisMonthRecords,
+    todayRecords,
+    totalEstimatedCost,
+    totalDeductions,
+    componentBreakdown,
+    latestRecord: sorted[0] || null,
+    latestRecords: sorted.slice(0, 5),
+    currentMonth,
+    todayDate
+  };
+}
+async function getDamageRecordById(id) {
+  await initializeDamageStorage();
+  try {
+    const { data: record, error } = await supabaseAdmin.from("RepairRelatedDamage").select("*, staff:User!RepairRelatedDamage_staffId_fkey(name, email, role, department), audits:RepairRelatedDamageAudit(*)").eq("id", id).single();
+    if (!error && record) {
+      damageCache.set(record.id, record);
+      return record;
+    }
+  } catch (err) {
+    console.warn("[FETCH DAMAGE BY ID DB WARN]", err);
+  }
+  const cached = damageCache.get(id);
+  if (cached) {
+    const relatedAudits = auditCache2.filter((a) => a.damageRecordId === id);
+    return {
+      ...cached,
+      auditLogs: relatedAudits
+    };
+  }
+  return null;
+}
+async function createDamageRecord(data, actor) {
+  await initializeDamageStorage();
+  const { date: nptDate, time: nptTime, iso: nptIso } = getNepalDateTime();
+  let staffName = "Staff Member";
+  let staffRole = "TECHNICIAN";
+  const staffDetails = await getStaffUserDetails(data.staffId);
+  if (staffDetails) {
+    staffName = staffDetails.name;
+    staffRole = staffDetails.role;
+  }
+  const recordNumber = await generateDamageRecordNumber();
+  const recordId = uuidv410();
+  const newRecord = {
+    id: recordId,
+    recordNumber,
+    staffId: data.staffId,
+    staffName,
+    staffRole,
+    repairId: data.repairId || null,
+    repairNumber: data.repairNumber || null,
+    customerId: data.customerId || null,
+    customerName: data.customerName || null,
+    deviceBrand: data.deviceBrand || null,
+    deviceModel: data.deviceModel || null,
+    damagedComponent: data.damagedComponent.trim(),
+    damageType: data.damageType || "CRACKED",
+    damageDescription: data.damageDescription.trim(),
+    damageDate: data.damageDate || nptDate,
+    damageTime: data.damageTime || nptTime,
+    damageTimestamp: nptIso,
+    quantity: Math.max(1, parseInt(String(data.quantity || 1), 10) || 1),
+    estimatedCost: data.estimatedCost !== void 0 && data.estimatedCost !== null && !isNaN(Number(data.estimatedCost)) ? Number(data.estimatedCost) : null,
+    notes: data.notes || null,
+    inventoryItemId: data.inventoryItemId || null,
+    inventoryDeducted: Boolean(data.deductInventory && data.inventoryItemId),
+    inventoryTxId: null,
+    recordedById: actor.id,
+    recordedByName: actor.name,
+    recordedByRole: actor.role,
+    branchId: data.branchId || null,
+    status: "ACTIVE",
+    isArchived: false,
+    deletedAt: null,
+    createdAt: nptIso,
+    updatedAt: nptIso,
+    staff: {
+      name: staffName,
+      email: staffDetails?.email || "",
+      role: staffRole,
+      department: staffDetails?.department || null
+    }
+  };
+  damageCache.set(recordId, newRecord);
+  saveLocalFile2(DAMAGE_FILE, Array.from(damageCache.values()));
+  const auditId = uuidv410();
+  const auditRecord = {
+    id: auditId,
+    damageRecordId: recordId,
+    action: "CREATED",
+    performedById: actor.id,
+    performedByName: actor.name,
+    performedByRole: actor.role,
+    previousData: null,
+    newData: JSON.stringify(newRecord),
+    reason: "Initial damage incident recorded",
+    notes: data.notes || null,
+    createdAt: nptIso
+  };
+  auditCache2.unshift(auditRecord);
+  saveLocalFile2(AUDIT_FILE2, auditCache2);
+  try {
+    const dbPayload = { ...newRecord };
+    delete dbPayload.staff;
+    const { data: inserted, error: insertErr } = await supabaseAdmin.from("RepairRelatedDamage").insert([dbPayload]).select("*").single();
+    if (insertErr) {
+      console.error("[SUPABASE DAMAGE INSERT ERROR]", insertErr);
+    }
+    await supabaseAdmin.from("RepairRelatedDamageAudit").insert([auditRecord]);
+    if (inserted) {
+      damageCache.set(recordId, {
+        ...inserted,
+        staff: newRecord.staff
+      });
+    }
+  } catch (err) {
+    console.error("[SUPABASE DAMAGE INSERT EXCEPTION]", err);
+  }
+  await broadcastServerChange("RepairRelatedDamage", "CREATE", recordId, newRecord);
+  return newRecord;
+}
+async function updateDamageRecord(id, updates, actor) {
+  await initializeDamageStorage();
+  const existing = await getDamageRecordById(id);
+  if (!existing || existing.isArchived) {
+    throw new Error("Damage record not found or already archived.");
+  }
+  const { iso: nowIso } = getNepalDateTime();
+  const previousDataSnapshot = JSON.stringify(existing);
+  const updatedRecord = {
+    ...existing,
+    ...updates,
+    damagedComponent: updates.damagedComponent ? updates.damagedComponent.trim() : existing.damagedComponent,
+    damageDescription: updates.damageDescription !== void 0 ? updates.damageDescription.trim() : existing.damageDescription,
+    quantity: updates.quantity !== void 0 ? Math.max(1, parseInt(String(updates.quantity), 10) || 1) : existing.quantity,
+    estimatedCost: updates.estimatedCost !== void 0 ? updates.estimatedCost !== null && !isNaN(Number(updates.estimatedCost)) ? Number(updates.estimatedCost) : null : existing.estimatedCost,
+    updatedAt: nowIso
+  };
+  damageCache.set(id, updatedRecord);
+  saveLocalFile2(DAMAGE_FILE, Array.from(damageCache.values()));
+  const auditId = uuidv410();
+  const auditRecord = {
+    id: auditId,
+    damageRecordId: id,
+    action: "UPDATED",
+    performedById: actor.id,
+    performedByName: actor.name,
+    performedByRole: actor.role,
+    previousData: previousDataSnapshot,
+    newData: JSON.stringify(updatedRecord),
+    reason: updates.auditReason || "Record details modified by supervisor",
+    notes: updates.notes || null,
+    createdAt: nowIso
+  };
+  auditCache2.unshift(auditRecord);
+  saveLocalFile2(AUDIT_FILE2, auditCache2);
+  try {
+    const dbPayload = { ...updatedRecord };
+    delete dbPayload.staff;
+    delete dbPayload.audits;
+    delete dbPayload.auditLogs;
+    delete dbPayload.auditReason;
+    await supabaseAdmin.from("RepairRelatedDamage").update(dbPayload).eq("id", id);
+    await supabaseAdmin.from("RepairRelatedDamageAudit").insert([auditRecord]);
+  } catch (err) {
+    console.error("[SUPABASE DAMAGE UPDATE EXCEPTION]", err);
+  }
+  await broadcastServerChange("RepairRelatedDamage", "UPDATE", id, updatedRecord);
+  return updatedRecord;
+}
+async function archiveDamageRecord(id, actor, reason) {
+  await initializeDamageStorage();
+  const existing = await getDamageRecordById(id);
+  if (!existing) {
+    throw new Error("Damage record not found.");
+  }
+  const { iso: nowIso } = getNepalDateTime();
+  const previousDataSnapshot = JSON.stringify(existing);
+  const archivedRecord = {
+    ...existing,
+    isArchived: true,
+    status: "ARCHIVED",
+    deletedAt: nowIso,
+    updatedAt: nowIso
+  };
+  damageCache.set(id, archivedRecord);
+  saveLocalFile2(DAMAGE_FILE, Array.from(damageCache.values()));
+  const auditId = uuidv410();
+  const auditRecord = {
+    id: auditId,
+    damageRecordId: id,
+    action: "ARCHIVED",
+    performedById: actor.id,
+    performedByName: actor.name,
+    performedByRole: actor.role,
+    previousData: previousDataSnapshot,
+    newData: JSON.stringify(archivedRecord),
+    reason: reason || "Record archived by administrator",
+    createdAt: nowIso
+  };
+  auditCache2.unshift(auditRecord);
+  saveLocalFile2(AUDIT_FILE2, auditCache2);
+  try {
+    await supabaseAdmin.from("RepairRelatedDamage").update({
+      isArchived: true,
+      status: "ARCHIVED",
+      deletedAt: nowIso,
+      updatedAt: nowIso
+    }).eq("id", id);
+    await supabaseAdmin.from("RepairRelatedDamageAudit").insert([auditRecord]);
+  } catch (err) {
+    console.error("[SUPABASE DAMAGE ARCHIVE EXCEPTION]", err);
+  }
+  await broadcastServerChange("RepairRelatedDamage", "DELETE", id);
+  return { success: true, message: "Damage record safely archived." };
+}
+
+// api/_server/routes/repairDamage.ts
+var router10 = Router10();
+function isElevatedRole(role) {
+  return ["SUPER_ADMIN", "ADMIN", "MANAGER"].includes(role || "");
+}
+function canModifyDamage(role) {
+  return ["SUPER_ADMIN", "ADMIN"].includes(role || "");
+}
+router10.get("/server-time", authenticate, (_req, res) => {
+  const npt = getNepalDateTime();
+  return res.json({
+    success: true,
+    timezone: "Asia/Kathmandu (NPT, UTC+5:45)",
+    date: npt.date,
+    time: npt.time,
+    iso: npt.iso
+  });
+});
+router10.get("/overview", authenticate, async (req, res) => {
+  try {
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
+    let staffScope;
+    if (!isElevatedRole(userRole)) {
+      staffScope = userId;
+    } else if (req.query.staffId && req.query.staffId !== "ALL") {
+      staffScope = String(req.query.staffId);
+    }
+    const overview = await getDamageOverviewMetrics(staffScope);
     return res.json({
-      totalRecords,
-      totalEstimatedCost,
-      totalDeductions,
-      componentCounts,
-      records: (records || []).slice(0, 10)
+      success: true,
+      role: userRole,
+      isScopedToSelf: !isElevatedRole(userRole),
+      ...overview
     });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to generate damage overview." });
+    console.error("[DAMAGE OVERVIEW ERROR]", err);
+    return res.status(500).json({ error: "Failed to generate repair-related damage overview." });
   }
 });
-router9.get("/components", authenticate, async (req, res) => {
+router10.get("/components", authenticate, async (_req, res) => {
   try {
-    const { data: records } = await supabaseAdmin.from("RepairRelatedDamage").select("damagedComponent");
-    const components = Array.from(new Set((records || []).map((r) => r.damagedComponent).filter(Boolean)));
-    return res.json(components.length > 0 ? components : ["Display Panel", "OCA Glass", "Flex Cable", "Camera Lens", "Back Housing", "Power IC", "Other"]);
+    const standardComponents = [
+      "Display Panel",
+      "OCA Glass",
+      "Touch Screen Digitizer",
+      "AMOLED Display",
+      "LCD Screen",
+      "Flex Cable",
+      "Camera Module (Rear)",
+      "Camera Module (Front)",
+      "Camera Lens Glass",
+      "Back Housing / Cover",
+      "Charging Port PCB",
+      "Battery",
+      "Motherboard / PCB",
+      "Power IC",
+      "Audio IC",
+      "Speaker / Earpiece",
+      "Microphone",
+      "Fingerprint Sensor",
+      "SIM Tray / Reader",
+      "Screw / Internal Bracket",
+      "Other Component"
+    ];
+    return res.json(standardComponents);
   } catch (err) {
     return res.json(["Display Panel", "OCA Glass", "Flex Cable", "Camera Lens", "Back Housing", "Power IC", "Other"]);
   }
 });
-router9.get("/", authenticate, async (req, res) => {
+router10.get("/", authenticate, async (req, res) => {
   try {
-    const { staffId, role, component, month, startDate, endDate, search, limit = "100" } = req.query;
-    let query = supabaseAdmin.from("RepairRelatedDamage").select("*, staff:User!RepairRelatedDamage_staffId_fkey(name, email, role, department)");
-    query = query.eq("isArchived", false);
-    if (staffId && staffId !== "ALL") query = query.eq("staffId", String(staffId));
-    if (role && role !== "ALL") query = query.eq("staffRole", String(role));
-    if (component && component !== "ALL") query = query.eq("damagedComponent", String(component));
-    if (month) {
-      query = query.ilike("damageDate", `${month}%`);
-    } else if (startDate || endDate) {
-      if (startDate) query = query.gte("damageDate", String(startDate));
-      if (endDate) query = query.lte("damageDate", String(endDate));
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
+    let targetStaffId = req.query.staffId ? String(req.query.staffId) : void 0;
+    if (!isElevatedRole(userRole)) {
+      targetStaffId = userId;
     }
-    if (search) {
-      const s = String(search).trim();
-      query = query.or(`recordNumber.ilike.%${s}%,staffName.ilike.%${s}%,repairNumber.ilike.%${s}%,deviceModel.ilike.%${s}%`);
-    }
-    const { data: records, error } = await query.order("damageDate", { ascending: false }).limit(parseInt(limit, 10) || 100);
-    if (error) {
-      console.error("[REPAIR DAMAGE ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch damage records." });
-    }
-    return res.json(records || []);
+    const {
+      role,
+      component,
+      damageType,
+      date,
+      month,
+      year,
+      startDate,
+      endDate,
+      search,
+      limit = "100",
+      offset = "0"
+    } = req.query;
+    const result = await queryDamageRecords({
+      staffId: targetStaffId,
+      role: role && role !== "ALL" ? String(role) : void 0,
+      component: component && component !== "ALL" ? String(component) : void 0,
+      damageType: damageType && damageType !== "ALL" ? String(damageType) : void 0,
+      date: date ? String(date) : void 0,
+      month: month ? String(month) : void 0,
+      year: year ? String(year) : void 0,
+      startDate: startDate ? String(startDate) : void 0,
+      endDate: endDate ? String(endDate) : void 0,
+      search: search ? String(search) : void 0,
+      limit: parseInt(limit, 10) || 100,
+      offset: parseInt(offset, 10) || 0
+    });
+    res.setHeader("X-Total-Count", result.total.toString());
+    return res.json(result.records);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve damage records." });
+    console.error("[QUERY DAMAGE RECORDS ERROR]", err);
+    return res.status(500).json({ error: "Failed to retrieve repair-related damage records." });
   }
 });
-router9.get("/:id", authenticate, async (req, res) => {
+router10.get("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { data: record, error } = await supabaseAdmin.from("RepairRelatedDamage").select("*, staff:User!RepairRelatedDamage_staffId_fkey(name, email, role), audits:RepairRelatedDamageAudit(*)").eq("id", id).single();
-    if (error || !record) return res.status(404).json({ error: "Record not found." });
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
+    const record = await getDamageRecordById(id);
+    if (!record || record.isArchived) {
+      return res.status(404).json({ error: "Repair-related damage record not found." });
+    }
+    if (!isElevatedRole(userRole)) {
+      if (record.staffId !== userId && record.recordedById !== userId) {
+        return res.status(403).json({
+          error: "Access Forbidden: You are not authorized to view another staff member's damage record."
+        });
+      }
+    }
     return res.json(record);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to fetch record." });
+    console.error("[GET DAMAGE BY ID ERROR]", err);
+    return res.status(500).json({ error: "Failed to fetch damage record details." });
   }
 });
-router9.post("/", authenticate, async (req, res) => {
+router10.post("/", authenticate, async (req, res) => {
   try {
+    const userRole = req.user?.role;
+    const actor = {
+      id: req.user.id,
+      name: req.user.name || "Staff Member",
+      role: req.user.role || "MANAGER"
+    };
+    if (!isElevatedRole(userRole)) {
+      return res.status(403).json({
+        error: "Permission Denied: Only Managers, Admins, and Super Admins are authorized to record damage incidents."
+      });
+    }
     const {
       staffId,
-      staffName,
-      staffRole,
       damagedComponent,
       damageType = "ACCIDENTAL",
+      damageDescription,
+      repairId,
+      repairNumber,
+      customerId,
+      customerName,
       deviceBrand,
       deviceModel,
-      repairNumber,
-      customerName,
       damageDate,
       damageTime,
       quantity = 1,
-      estimatedCost = 0,
-      damageDescription,
-      inventoryDeducted = false,
-      notes
+      estimatedCost,
+      notes,
+      inventoryItemId,
+      deductInventory = false,
+      branchId
     } = req.body;
-    const recordNumber = await generateRecordNumber();
-    const newRecord = {
-      id: uuidv410(),
-      recordNumber,
-      staffId: staffId || req.user.id,
-      staffName: staffName || req.user.name,
-      staffRole: staffRole || req.user.role,
-      damagedComponent: damagedComponent || "Component",
-      damageType,
-      deviceBrand: deviceBrand || null,
-      deviceModel: deviceModel || null,
-      repairNumber: repairNumber || null,
-      customerName: customerName || null,
-      damageDate: damageDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-      damageTime: damageTime || (/* @__PURE__ */ new Date()).toTimeString().split(" ")[0],
-      quantity: parseInt(quantity, 10) || 1,
-      estimatedCost: parseFloat(estimatedCost) || 0,
-      damageDescription: damageDescription || "Internal damage incident recorded",
-      inventoryDeducted: Boolean(inventoryDeducted),
-      status: "RECORDED",
-      notes: notes || null,
-      recordedById: req.user.id,
-      recordedByName: req.user.name,
-      recordedByRole: req.user.role,
-      isArchived: false,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const { data: created, error } = await supabaseAdmin.from("RepairRelatedDamage").insert([newRecord]).select("*").single();
-    if (error) {
-      console.error("[DAMAGE INSERT ERROR]", error);
-      return res.status(500).json({ error: "Failed to record damage incident." });
+    if (!staffId) {
+      return res.status(400).json({ error: "Missing required field: staffId (Responsible staff member)." });
     }
-    return res.status(201).json(created);
+    if (!damagedComponent || !damagedComponent.trim()) {
+      return res.status(400).json({ error: "Missing required field: damagedComponent." });
+    }
+    if (!damageDescription || damageDescription.trim().length < 3) {
+      return res.status(400).json({ error: "Damage description is required (minimum 3 characters)." });
+    }
+    const createdRecord = await createDamageRecord(
+      {
+        staffId,
+        damagedComponent,
+        damageType,
+        damageDescription,
+        repairId,
+        repairNumber,
+        customerId,
+        customerName,
+        deviceBrand,
+        deviceModel,
+        damageDate,
+        damageTime,
+        quantity: parseInt(String(quantity), 10) || 1,
+        estimatedCost: estimatedCost !== void 0 && estimatedCost !== null && !isNaN(Number(estimatedCost)) ? Number(estimatedCost) : null,
+        notes,
+        inventoryItemId,
+        deductInventory: Boolean(deductInventory),
+        branchId
+      },
+      actor
+    );
+    return res.status(201).json(createdRecord);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to save damage record." });
+    console.error("[CREATE DAMAGE ERROR]", err);
+    return res.status(500).json({ error: err.message || "Failed to record damage incident." });
   }
 });
-router9.patch("/:id", authenticate, async (req, res) => {
+router10.patch("/:id", authenticate, async (req, res) => {
   try {
+    const userRole = req.user?.role;
+    const actor = {
+      id: req.user.id,
+      name: req.user.name || "Administrator",
+      role: req.user.role || "ADMIN"
+    };
+    if (!canModifyDamage(userRole)) {
+      return res.status(403).json({
+        error: "Permission Denied: Managers and technicians are not authorized to edit or modify existing damage records. Only Admins and Super Admins can update records."
+      });
+    }
     const { id } = req.params;
-    const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    delete updateData.id;
-    delete updateData.staff;
-    delete updateData.audits;
-    const { data: updated, error } = await supabaseAdmin.from("RepairRelatedDamage").update(updateData).eq("id", id).select("*").single();
-    if (error) return res.status(500).json({ error: "Failed to update record." });
-    return res.json(updated);
+    const {
+      damagedComponent,
+      damageType,
+      damageDescription,
+      deviceBrand,
+      deviceModel,
+      repairNumber,
+      damageDate,
+      damageTime,
+      quantity,
+      estimatedCost,
+      notes,
+      status,
+      auditReason
+    } = req.body;
+    const updatedRecord = await updateDamageRecord(
+      id,
+      {
+        damagedComponent,
+        damageType,
+        damageDescription,
+        deviceBrand,
+        deviceModel,
+        repairNumber,
+        damageDate,
+        damageTime,
+        quantity,
+        estimatedCost,
+        notes,
+        status,
+        auditReason: auditReason || "Damage record details modified by Administrator"
+      },
+      actor
+    );
+    return res.json(updatedRecord);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to update damage record." });
+    console.error("[UPDATE DAMAGE ERROR]", err);
+    if (err.message && err.message.includes("not found")) {
+      return res.status(404).json({ error: err.message });
+    }
+    return res.status(500).json({ error: err.message || "Failed to update damage record." });
   }
 });
-router9.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router10.delete("/:id", authenticate, async (req, res) => {
   try {
+    const userRole = req.user?.role;
+    const actor = {
+      id: req.user.id,
+      name: req.user.name || "Administrator",
+      role: req.user.role || "ADMIN"
+    };
+    if (!canModifyDamage(userRole)) {
+      return res.status(403).json({
+        error: "Permission Denied: Managers and technicians are not authorized to delete damage records. Only Admins and Super Admins can archive records."
+      });
+    }
     const { id } = req.params;
-    const { error } = await supabaseAdmin.from("RepairRelatedDamage").update({ isArchived: true, status: "ARCHIVED", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
-    if (error) return res.status(500).json({ error: "Failed to archive record." });
-    return res.json({ success: true, message: "Damage record archived." });
+    const reason = req.body?.reason || req.query?.reason ? String(req.body?.reason || req.query?.reason) : "Record safely archived by Administrator";
+    const result = await archiveDamageRecord(id, actor, reason);
+    return res.json(result);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to archive damage record." });
+    console.error("[ARCHIVE DAMAGE ERROR]", err);
+    if (err.message && err.message.includes("not found")) {
+      return res.status(404).json({ error: err.message });
+    }
+    return res.status(500).json({ error: err.message || "Failed to archive damage record." });
   }
 });
-router9.get("/export", authenticate, async (req, res) => {
+router10.get("/export", authenticate, async (req, res) => {
   try {
-    const { data: records } = await supabaseAdmin.from("RepairRelatedDamage").select("*").eq("isArchived", false).order("damageDate", { ascending: false });
-    const rows = (records || []).map((r) => ({
-      "Record ID": r.recordNumber,
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
+    let targetStaffId = req.query.staffId ? String(req.query.staffId) : void 0;
+    if (!isElevatedRole(userRole)) {
+      targetStaffId = userId;
+    }
+    const { role, component, damageType, date, month, year, startDate, endDate, search } = req.query;
+    const result = await queryDamageRecords({
+      staffId: targetStaffId,
+      role: role && role !== "ALL" ? String(role) : void 0,
+      component: component && component !== "ALL" ? String(component) : void 0,
+      damageType: damageType && damageType !== "ALL" ? String(damageType) : void 0,
+      date: date ? String(date) : void 0,
+      month: month ? String(month) : void 0,
+      year: year ? String(year) : void 0,
+      startDate: startDate ? String(startDate) : void 0,
+      endDate: endDate ? String(endDate) : void 0,
+      search: search ? String(search) : void 0,
+      limit: 1e3
+    });
+    const rows = result.records.map((r) => ({
+      "Record #": r.recordNumber,
       "Staff Name": r.staffName,
-      "Role": r.staffRole,
+      "Role": r.staffRole?.replace(/_/g, " "),
       "Damaged Component": r.damagedComponent,
-      "Damage Type": r.damageType,
-      "Device Model": `${r.deviceBrand || ""} ${r.deviceModel || ""}`.trim(),
-      "Repair Ticket": r.repairNumber || "\u2014",
-      "Date": r.damageDate,
-      "Quantity": r.quantity,
-      "Estimated Cost (NPR)": r.estimatedCost,
-      "Description": r.damageDescription,
-      "Recorded By": r.recordedByName
+      "Damage Type": r.damageType || "Accidental",
+      "Device Model": `${r.deviceBrand || ""} ${r.deviceModel || ""}`.trim() || "\u2014",
+      "Repair Job #": r.repairNumber ? `#${r.repairNumber}` : "\u2014",
+      "Incident Date": r.damageDate,
+      "Incident Time": r.damageTime || "\u2014",
+      "Quantity": r.quantity || 1,
+      "Estimated Cost (NPR)": r.estimatedCost !== null && r.estimatedCost !== void 0 ? Number(r.estimatedCost) : "\u2014",
+      "Damage Description": r.damageDescription,
+      "Recorded By": `${r.recordedByName || "System"} (${r.recordedByRole || "MANAGER"})`,
+      "Status": r.status || "ACTIVE"
     }));
-    const buffer = createExcelBuffer("Repair Damage", rows);
+    const buffer = createExcelBuffer("Repair Damage Log", rows);
+    const nptDate = getNepalDateTime().date;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="MTS_Repair_Damage_${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.xlsx"`);
+    res.setHeader("Content-Disposition", `attachment; filename="MTS_Repair_Damage_${nptDate}.xlsx"`);
     return res.send(buffer);
   } catch (err) {
+    console.error("[EXPORT DAMAGE ERROR]", err);
     return res.status(500).json({ error: "Failed to export damage records." });
   }
 });
-var repairDamage_default = router9;
-var router10 = Router10();
+var repairDamage_default = router10;
+
+// api/_server/routes/repairPrices.ts
+import { Router as Router11 } from "express";
+import { v4 as uuidv411 } from "uuid";
+var router11 = Router11();
 var handleGetPrices = async (req, res) => {
   try {
     const { brand, model, category, search, status } = req.query;
@@ -4348,8 +6270,8 @@ var handleGetPrices = async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve repair pricing directory." });
   }
 };
-router10.get("/", handleGetPrices);
-router10.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
+router11.get("/", handleGetPrices);
+router11.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
   try {
     const {
       brand,
@@ -4388,6 +6310,7 @@ router10.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]),
       console.error("[PRICE INSERT ERROR]", error);
       return res.status(500).json({ error: "Failed to add repair price service." });
     }
+    await broadcastServerChange("RepairPrice", "CREATE", created.id, created);
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to save repair price." });
@@ -4403,14 +6326,15 @@ var handleUpdatePrice = async (req, res) => {
     }
     const { data: updated, error } = await supabaseAdmin.from("RepairPrice").update(updateData).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to update repair price." });
+    await broadcastServerChange("RepairPrice", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to update price item." });
   }
 };
-router10.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), handleUpdatePrice);
-router10.patch("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), handleUpdatePrice);
-router10.patch("/:id/toggle-status", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
+router11.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), handleUpdatePrice);
+router11.patch("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), handleUpdatePrice);
+router11.patch("/:id/toggle-status", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
   try {
     const { id } = req.params;
     const { data: existing } = await supabaseAdmin.from("RepairPrice").select("status").eq("id", id).single();
@@ -4418,33 +6342,46 @@ router10.patch("/:id/toggle-status", authenticate, authorize(["SUPER_ADMIN", "AD
     const newStatus = existing.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
     const { data: updated, error } = await supabaseAdmin.from("RepairPrice").update({ status: newStatus, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to toggle status." });
+    await broadcastServerChange("RepairPrice", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to toggle status." });
   }
 });
-router10.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router11.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { id } = req.params;
     const { error } = await supabaseAdmin.from("RepairPrice").delete().eq("id", id);
     if (error) return res.status(500).json({ error: "Failed to delete repair price." });
+    await broadcastServerChange("RepairPrice", "DELETE", id);
     return res.json({ success: true, message: "Repair price deleted." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to delete price record." });
   }
 });
-router10.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router11.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids)) return res.status(400).json({ error: "No IDs specified." });
     const { error } = await supabaseAdmin.from("RepairPrice").delete().in("id", ids);
     if (error) return res.status(500).json({ error: "Failed to bulk delete prices." });
+    for (const id of ids) {
+      await broadcastServerChange("RepairPrice", "DELETE", id);
+    }
     return res.json({ success: true, message: `Deleted ${ids.length} price items.` });
   } catch (err) {
     return res.status(500).json({ error: "Failed to process bulk delete." });
   }
 });
-var repairPrices_default = router10;
+var repairPrices_default = router11;
+
+// api/_server/routes/slides.ts
+import { Router as Router12 } from "express";
+import { v4 as uuidv412 } from "uuid";
+import multer3 from "multer";
+
+// api/_server/services/cloudinaryService.ts
+import { v2 as cloudinary } from "cloudinary";
 if (config.cloudinaryCloudName && config.cloudinaryApiKey && config.cloudinaryApiSecret) {
   cloudinary.config({
     cloud_name: config.cloudinaryCloudName,
@@ -4476,9 +6413,11 @@ async function uploadBase64ToCloudinary(base64Data, folder = "mts_lab") {
     resource_type: "auto"
   });
 }
-var router11 = Router11();
+
+// api/_server/routes/slides.ts
+var router12 = Router12();
 var upload3 = multer3({ storage: multer3.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-router11.get("/", async (req, res) => {
+router12.get("/", async (req, res) => {
   try {
     const { data: slides, error } = await supabaseAdmin.from("HomeSlide").select("*").order("displayOrder", { ascending: true });
     if (error) return res.status(500).json({ error: "Failed to fetch slides." });
@@ -4487,7 +6426,7 @@ router11.get("/", async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve slides." });
   }
 });
-router11.post("/upload-image", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), upload3.single("image"), async (req, res) => {
+router12.post("/upload-image", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), upload3.single("image"), async (req, res) => {
   try {
     if (req.file) {
       const result = await uploadToCloudinary(req.file.buffer, "mts_slides");
@@ -4503,7 +6442,7 @@ router11.post("/upload-image", authenticate, authorize(["SUPER_ADMIN", "ADMIN"])
     return res.status(500).json({ error: "Failed to upload slide image." });
   }
 });
-router11.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router12.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { title, description, imageUrl, buttonText, buttonLink, displayOrder = 1, status = "ACTIVE" } = req.body;
     if (!title || !imageUrl) {
@@ -4523,24 +6462,26 @@ router11.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req
     };
     const { data: created, error } = await supabaseAdmin.from("HomeSlide").insert([newSlide]).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to create slide." });
+    await broadcastServerChange("HomeSlide", "CREATE", created.id, created);
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to save slide." });
   }
 });
-router11.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router12.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     delete updateData.id;
     const { data: updated, error } = await supabaseAdmin.from("HomeSlide").update(updateData).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to update slide." });
+    await broadcastServerChange("HomeSlide", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to update slide." });
   }
 });
-router11.patch("/:id/toggle-status", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router12.patch("/:id/toggle-status", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { id } = req.params;
     const { data: slide } = await supabaseAdmin.from("HomeSlide").select("status").eq("id", id).single();
@@ -4548,24 +6489,30 @@ router11.patch("/:id/toggle-status", authenticate, authorize(["SUPER_ADMIN", "AD
     const newStatus = slide.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
     const { data: updated, error } = await supabaseAdmin.from("HomeSlide").update({ status: newStatus, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to toggle status." });
+    await broadcastServerChange("HomeSlide", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to toggle status." });
   }
 });
-router11.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router12.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { id } = req.params;
     const { error } = await supabaseAdmin.from("HomeSlide").delete().eq("id", id);
     if (error) return res.status(500).json({ error: "Failed to delete slide." });
+    await broadcastServerChange("HomeSlide", "DELETE", id);
     return res.json({ success: true, message: "Slide deleted." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to delete slide." });
   }
 });
-var slides_default = router11;
-var router12 = Router12();
-router12.get("/", async (req, res) => {
+var slides_default = router12;
+
+// api/_server/routes/products.ts
+import { Router as Router13 } from "express";
+import { v4 as uuidv413 } from "uuid";
+var router13 = Router13();
+router13.get("/", async (req, res) => {
   try {
     const { category, search } = req.query;
     let query = supabaseAdmin.from("Product").select("*");
@@ -4583,7 +6530,7 @@ router12.get("/", async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve products." });
   }
 });
-router12.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router13.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { name, description, price, discountPrice, stockQuantity = 0, category = "Accessories", imageUrl, isFeatured = false, isBestSeller = false } = req.body;
     if (!name || price === void 0) {
@@ -4606,12 +6553,13 @@ router12.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req
     };
     const { data: created, error } = await supabaseAdmin.from("Product").insert([newProduct]).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to save product." });
+    await broadcastServerChange("Product", "CREATE", created.id, created);
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to create product." });
   }
 });
-router12.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router13.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
@@ -4621,24 +6569,29 @@ router12.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (r
     if (updateData.stockQuantity !== void 0) updateData.stockQuantity = parseInt(updateData.stockQuantity, 10) || 0;
     const { data: updated, error } = await supabaseAdmin.from("Product").update(updateData).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to update product." });
+    await broadcastServerChange("Product", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to update product record." });
   }
 });
-router12.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router13.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { id } = req.params;
     const { error } = await supabaseAdmin.from("Product").delete().eq("id", id);
     if (error) return res.status(500).json({ error: "Failed to delete product." });
+    await broadcastServerChange("Product", "DELETE", id);
     return res.json({ success: true, message: "Product deleted." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to delete product." });
   }
 });
-var products_default = router12;
-var router13 = Router13();
-router13.get("/", authenticate, async (req, res) => {
+var products_default = router13;
+
+// api/_server/routes/notifications.ts
+import { Router as Router14 } from "express";
+var router14 = Router14();
+router14.get("/", authenticate, async (req, res) => {
   try {
     const { data: notifications, error } = await supabaseAdmin.from("Notification").select("*").or(`userId.eq.${req.user.id},userId.is.null`).order("createdAt", { ascending: false }).limit(50);
     if (error) return res.status(500).json({ error: "Failed to fetch notifications." });
@@ -4647,28 +6600,34 @@ router13.get("/", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve notifications." });
   }
 });
-router13.post("/:id/read", authenticate, async (req, res) => {
+router14.post("/:id/read", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { error } = await supabaseAdmin.from("Notification").update({ isRead: true, readAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
     if (error) return res.status(500).json({ error: "Failed to mark notification as read." });
+    await broadcastServerChange("Notification", "UPDATE", id);
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ error: "Failed to update notification status." });
   }
 });
-router13.post("/mark-all-read", authenticate, async (req, res) => {
+router14.post("/mark-all-read", authenticate, async (req, res) => {
   try {
     const { error } = await supabaseAdmin.from("Notification").update({ isRead: true, readAt: (/* @__PURE__ */ new Date()).toISOString() }).or(`userId.eq.${req.user.id},userId.is.null`);
     if (error) return res.status(500).json({ error: "Failed to mark all notifications as read." });
+    await broadcastServerChange("Notification", "UPDATE", "bulk");
     return res.json({ success: true, message: "All notifications marked as read." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to process mark all read." });
   }
 });
-var notifications_default = router13;
-var router14 = Router14();
-router14.get("/audit-logs", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+var notifications_default = router14;
+
+// api/_server/routes/superAdmin.ts
+import { Router as Router15 } from "express";
+import { v4 as uuidv414 } from "uuid";
+var router15 = Router15();
+router15.get("/audit-logs", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { action, resource, userId, page = "1", limit = "50", startDate, endDate } = req.query;
     const pageNum = parseInt(page, 10) || 1;
@@ -4696,7 +6655,7 @@ router14.get("/audit-logs", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), a
     return res.status(500).json({ error: "Failed to retrieve system audit logs." });
   }
 });
-router14.get("/deletion-history", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router15.get("/deletion-history", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { data: logs, error } = await supabaseAdmin.from("AuditLog").select("*").ilike("action", "%DELETE%").order("createdAt", { ascending: false }).limit(100);
     if (error) return res.status(500).json({ error: "Failed to fetch deletion history." });
@@ -4705,7 +6664,7 @@ router14.get("/deletion-history", authenticate, authorize(["SUPER_ADMIN", "ADMIN
     return res.status(500).json({ error: "Failed to retrieve deletion records." });
   }
 });
-router14.post("/delete-data", authenticate, authorize(["SUPER_ADMIN"]), async (req, res) => {
+router15.post("/delete-data", authenticate, authorize(["SUPER_ADMIN"]), async (req, res) => {
   try {
     const { table, ids, reason } = req.body;
     if (!table || !ids || !Array.isArray(ids) || ids.length === 0) {
@@ -4723,12 +6682,15 @@ router14.post("/delete-data", authenticate, authorize(["SUPER_ADMIN"]), async (r
       resource: table,
       details: { deletedCount: ids.length, ids, reason: reason || "Administrative cleanup" }
     });
+    for (const id of ids) {
+      await broadcastServerChange(table, "DELETE", id);
+    }
     return res.json({ success: true, message: `Safely removed ${ids.length} records from ${table}.` });
   } catch (err) {
     return res.status(500).json({ error: "Failed to execute data deletion." });
   }
 });
-router14.get("/share/history", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router15.get("/share/history", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { data: shares } = await supabaseAdmin.from("AppletShare").select("*").order("createdAt", { ascending: false }).limit(50);
     return res.json(shares || []);
@@ -4736,7 +6698,7 @@ router14.get("/share/history", authenticate, authorize(["SUPER_ADMIN", "ADMIN"])
     return res.json([]);
   }
 });
-router14.post("/share/applet", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+router15.post("/share/applet", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { title, description, permissions, expiresAt } = req.body;
     const shareId = uuidv414();
@@ -4757,10 +6719,601 @@ router14.post("/share/applet", authenticate, authorize(["SUPER_ADMIN", "ADMIN"])
     return res.status(500).json({ error: "Failed to create share link." });
   }
 });
-var superAdmin_default = router14;
-var router15 = Router15();
+var superAdmin_default = router15;
+
+// api/_server/routes/security.ts
+import { Router as Router16 } from "express";
+import { v4 as uuidv415 } from "uuid";
+var router16 = Router16();
+router16.use(authenticate);
+router16.use(authorize(["SUPER_ADMIN", "ADMIN"]));
+router16.get("/stats", async (req, res) => {
+  try {
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1e3).toISOString();
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1e3).toISOString();
+    const { data: staffUsers, error: staffErr } = await supabaseAdmin.from("User").select("id, lastActiveAt, role").is("deletedAt", null).neq("role", "CUSTOMER");
+    const totalStaff = staffUsers ? staffUsers.length : 0;
+    const activeStaffNow = staffUsers ? staffUsers.filter((u) => u.lastActiveAt && u.lastActiveAt >= fifteenMinutesAgo).length : 0;
+    const { data: devices, error: devErr } = await supabaseAdmin.from("ApprovedDevice").select("id, status");
+    const totalDevices = devices ? devices.length : 0;
+    const blockedDevices = devices ? devices.filter((d) => d.status === "REVOKED" || d.status === "BLOCKED").length : 0;
+    const alertActions = [
+      "FAILED_LOGIN",
+      "LOGIN_BLOCKED_DEVICE",
+      "DEVICE_REVOKED",
+      "DEVICE_BLOCKED",
+      "ACCESS_REQUEST_REJECTED",
+      "ACCOUNT_DISABLED",
+      "USER_ROLE_CHANGED",
+      "PASSWORD_RESET",
+      "DATA_PURGED",
+      "SECURITY_POLICY_VIOLATION"
+    ];
+    const { data: alertLogs, error: alertErr } = await supabaseAdmin.from("AuditLog").select("id").gte("createdAt", twentyFourHoursAgo).or(`status.eq.FAILED,action.in.(${alertActions.join(",")})`);
+    const securityAlertsCount = alertLogs ? alertLogs.length : 0;
+    const { data: pendingRequests, error: reqErr } = await supabaseAdmin.from("AccessRequest").select("id").eq("status", "PENDING");
+    const pendingAccessRequests = pendingRequests ? pendingRequests.length : 0;
+    return res.json({
+      success: true,
+      stats: {
+        totalStaff,
+        activeStaffNow,
+        totalDevices,
+        blockedDevices,
+        securityAlertsCount,
+        pendingAccessRequests
+      }
+    });
+  } catch (err) {
+    console.error("[SECURITY STATS ERROR]", err);
+    return res.status(500).json({ error: "Failed to fetch security metrics." });
+  }
+});
+router16.get("/active-staff", async (req, res) => {
+  try {
+    const { data: staffList, error: staffErr } = await supabaseAdmin.from("User").select(`
+        id, name, email, username, role, department, phoneNumber, branchId,
+        profileImage, accountStatus, isActive, twoFactorEnabled, lastLoginAt, lastActiveAt, createdAt
+      `).is("deletedAt", null).neq("role", "CUSTOMER").order("lastActiveAt", { ascending: false, nullsFirst: false });
+    if (staffErr) throw staffErr;
+    const { data: devices } = await supabaseAdmin.from("ApprovedDevice").select("*").order("lastUsedAt", { ascending: false });
+    const deviceMap = /* @__PURE__ */ new Map();
+    (devices || []).forEach((d) => {
+      if (!deviceMap.has(d.userId)) {
+        deviceMap.set(d.userId, []);
+      }
+      deviceMap.get(d.userId).push(d);
+    });
+    const now = Date.now();
+    const activeStaff = (staffList || []).map((user) => {
+      let presenceStatus = "OFFLINE";
+      if (user.lastActiveAt) {
+        const diffMs = now - new Date(user.lastActiveAt).getTime();
+        if (diffMs <= 5 * 60 * 1e3) {
+          presenceStatus = "ONLINE";
+        } else if (diffMs <= 15 * 60 * 1e3) {
+          presenceStatus = "IDLE";
+        }
+      }
+      const userDevices = deviceMap.get(user.id) || [];
+      const activeDevices = userDevices.filter((d) => d.status === "APPROVED");
+      const latestDevice = userDevices[0] || null;
+      return {
+        ...user,
+        presenceStatus,
+        devicesCount: userDevices.length,
+        activeDevicesCount: activeDevices.length,
+        devices: userDevices,
+        lastIpAddress: latestDevice?.ipAddress || null,
+        lastKnownDevice: latestDevice?.deviceName || latestDevice?.browser ? `${latestDevice?.browser || ""} on ${latestDevice?.os || ""}`.trim() : null
+      };
+    });
+    return res.json({
+      success: true,
+      staff: activeStaff,
+      total: activeStaff.length
+    });
+  } catch (err) {
+    console.error("[ACTIVE STAFF ERROR]", err);
+    return res.status(500).json({ error: "Failed to fetch active staff list." });
+  }
+});
+router16.get("/devices", async (req, res) => {
+  try {
+    const { status, search, userId } = req.query;
+    let query = supabaseAdmin.from("ApprovedDevice").select(`
+        *,
+        user:User (id, name, email, role, profileImage, department, branchId)
+      `).order("lastUsedAt", { ascending: false, nullsFirst: false });
+    if (status && status !== "ALL") {
+      query = query.eq("status", status);
+    }
+    if (userId) {
+      query = query.eq("userId", userId);
+    }
+    const { data: devices, error } = await query;
+    if (error) throw error;
+    let filtered = devices || [];
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        (d) => d.deviceName && d.deviceName.toLowerCase().includes(q) || d.deviceIdentifier && d.deviceIdentifier.toLowerCase().includes(q) || d.browser && d.browser.toLowerCase().includes(q) || d.os && d.os.toLowerCase().includes(q) || d.ipAddress && d.ipAddress.toLowerCase().includes(q) || d.user?.name && d.user.name.toLowerCase().includes(q) || d.user?.email && d.user.email.toLowerCase().includes(q)
+      );
+    }
+    return res.json({
+      success: true,
+      devices: filtered,
+      total: filtered.length
+    });
+  } catch (err) {
+    console.error("[SECURITY DEVICES ERROR]", err);
+    return res.status(500).json({ error: "Failed to fetch registered devices." });
+  }
+});
+router16.post("/devices/:id/revoke", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const { data: device, error: devErr } = await supabaseAdmin.from("ApprovedDevice").select("*, user:User (id, name, email, role)").eq("id", id).maybeSingle();
+    if (devErr || !device) {
+      return res.status(404).json({ error: "Device not found." });
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const { error: updateErr } = await supabaseAdmin.from("ApprovedDevice").update({
+      status: "REVOKED",
+      revokedAt: nowIso,
+      updatedAt: nowIso
+    }).eq("id", id);
+    if (updateErr) throw updateErr;
+    await logAudit({
+      userId: req.user?.id,
+      userEmail: req.user?.email,
+      userName: req.user?.name,
+      userRole: req.user?.role,
+      action: "DEVICE_BLOCKED",
+      resource: "ApprovedDevice",
+      resourceId: id,
+      status: "SUCCESS",
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      userAgent: req.headers["user-agent"] || null,
+      deviceInfo: {
+        deviceIdentifier: device.deviceIdentifier,
+        deviceName: device.deviceName,
+        browser: device.browser,
+        os: device.os
+      },
+      details: {
+        targetUserId: device.userId,
+        targetUserName: device.user?.name,
+        targetUserEmail: device.user?.email,
+        reason: reason || "Revoked/Blocked by Administrator"
+      }
+    });
+    await broadcastServerChange("ApprovedDevice", "UPDATE", id, { id, status: "REVOKED" });
+    return res.json({
+      success: true,
+      message: `Device '${device.deviceName || device.deviceIdentifier}' has been blocked and access revoked.`
+    });
+  } catch (err) {
+    console.error("[REVOKE DEVICE ERROR]", err);
+    return res.status(500).json({ error: "Failed to revoke device authorization." });
+  }
+});
+router16.post("/devices/:id/approve", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data: device, error: devErr } = await supabaseAdmin.from("ApprovedDevice").select("*, user:User (id, name, email, role)").eq("id", id).maybeSingle();
+    if (devErr || !device) {
+      return res.status(404).json({ error: "Device not found." });
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const { error: updateErr } = await supabaseAdmin.from("ApprovedDevice").update({
+      status: "APPROVED",
+      approvedBy: req.user?.name || req.user?.email,
+      approvedAt: nowIso,
+      revokedAt: null,
+      updatedAt: nowIso
+    }).eq("id", id);
+    if (updateErr) throw updateErr;
+    await logAudit({
+      userId: req.user?.id,
+      userEmail: req.user?.email,
+      userName: req.user?.name,
+      userRole: req.user?.role,
+      action: "DEVICE_UNBLOCKED",
+      resource: "ApprovedDevice",
+      resourceId: id,
+      status: "SUCCESS",
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      userAgent: req.headers["user-agent"] || null,
+      deviceInfo: {
+        deviceIdentifier: device.deviceIdentifier,
+        deviceName: device.deviceName,
+        browser: device.browser,
+        os: device.os
+      },
+      details: {
+        targetUserId: device.userId,
+        targetUserName: device.user?.name,
+        targetUserEmail: device.user?.email
+      }
+    });
+    await broadcastServerChange("ApprovedDevice", "UPDATE", id, { id, status: "APPROVED" });
+    return res.json({
+      success: true,
+      message: `Device '${device.deviceName || device.deviceIdentifier}' has been authorized and restored.`
+    });
+  } catch (err) {
+    console.error("[APPROVE DEVICE ERROR]", err);
+    return res.status(500).json({ error: "Failed to authorize device." });
+  }
+});
+router16.delete("/devices/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data: device } = await supabaseAdmin.from("ApprovedDevice").select("*").eq("id", id).maybeSingle();
+    const { error } = await supabaseAdmin.from("ApprovedDevice").delete().eq("id", id);
+    if (error) throw error;
+    await logAudit({
+      userId: req.user?.id,
+      userEmail: req.user?.email,
+      userName: req.user?.name,
+      userRole: req.user?.role,
+      action: "DEVICE_DELETED",
+      resource: "ApprovedDevice",
+      resourceId: id,
+      status: "SUCCESS",
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      details: { deletedDevice: device }
+    });
+    await broadcastServerChange("ApprovedDevice", "DELETE", id);
+    return res.json({ success: true, message: "Device record removed successfully." });
+  } catch (err) {
+    console.error("[DELETE DEVICE ERROR]", err);
+    return res.status(500).json({ error: "Failed to remove device record." });
+  }
+});
+router16.get("/activity-timeline", async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 25, 100);
+    const offset = (page - 1) * limit;
+    const { userId, action, category, resource, status, search, startDate, endDate } = req.query;
+    let query = supabaseAdmin.from("AuditLog").select("*", { count: "exact" }).order("createdAt", { ascending: false });
+    if (userId && userId !== "ALL") {
+      query = query.eq("userId", userId);
+    }
+    if (status && status !== "ALL") {
+      query = query.eq("status", status);
+    }
+    if (resource && resource !== "ALL") {
+      query = query.eq("resource", resource);
+    }
+    if (action && action !== "ALL") {
+      query = query.eq("action", action);
+    } else if (category && category !== "ALL") {
+      if (category === "AUTH") {
+        query = query.in("action", ["LOGIN", "LOGOUT", "2FA_VERIFY", "LOGIN_2FA", "PASSWORD_RESET", "FAILED_LOGIN"]);
+      } else if (category === "SECURITY") {
+        query = query.in("action", [
+          "FAILED_LOGIN",
+          "LOGIN_BLOCKED_DEVICE",
+          "DEVICE_BLOCKED",
+          "DEVICE_REVOKED",
+          "DEVICE_UNBLOCKED",
+          "ACCESS_REQUEST_REJECTED",
+          "ACCESS_REQUEST_APPROVED",
+          "ACCOUNT_DISABLED",
+          "USER_ROLE_CHANGED",
+          "DATA_PURGED"
+        ]);
+      } else if (category === "DATA_MUTATION") {
+        query = query.or("action.ilike.%CREATE%,action.ilike.%UPDATE%,action.ilike.%DELETE%");
+      }
+    }
+    if (startDate) {
+      query = query.gte("createdAt", new Date(startDate).toISOString());
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query = query.lte("createdAt", end.toISOString());
+    }
+    if (search) {
+      const s = search;
+      query = query.or(`userName.ilike.%${s}%,userEmail.ilike.%${s}%,action.ilike.%${s}%,resource.ilike.%${s}%,ipAddress.ilike.%${s}%,details.ilike.%${s}%`);
+    }
+    query = query.range(offset, offset + limit - 1);
+    const { data: logs, count, error } = await query;
+    if (error) throw error;
+    return res.json({
+      success: true,
+      logs: logs || [],
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit)
+    });
+  } catch (err) {
+    console.error("[ACTIVITY TIMELINE ERROR]", err);
+    return res.status(500).json({ error: "Failed to fetch activity logs." });
+  }
+});
+router16.get("/access-requests", async (req, res) => {
+  try {
+    const { status, search } = req.query;
+    let query = supabaseAdmin.from("AccessRequest").select(`
+        *,
+        user:User (id, name, email, role, profileImage, accountStatus, isActive)
+      `).order("createdAt", { ascending: false });
+    if (status && status !== "ALL") {
+      query = query.eq("status", status);
+    }
+    const { data: requests, error } = await query;
+    if (error) throw error;
+    let filtered = requests || [];
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(
+        (r) => r.fullName && r.fullName.toLowerCase().includes(q) || r.email && r.email.toLowerCase().includes(q) || r.deviceName && r.deviceName.toLowerCase().includes(q) || r.deviceIdentifier && r.deviceIdentifier.toLowerCase().includes(q) || r.requestedRole && r.requestedRole.toLowerCase().includes(q)
+      );
+    }
+    return res.json({
+      success: true,
+      requests: filtered,
+      total: filtered.length
+    });
+  } catch (err) {
+    console.error("[ACCESS REQUESTS ERROR]", err);
+    return res.status(500).json({ error: "Failed to fetch access requests." });
+  }
+});
+router16.post("/access-requests/:id/approve", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assignedRole } = req.body;
+    const { data: accessReq, error: reqErr } = await supabaseAdmin.from("AccessRequest").select("*").eq("id", id).maybeSingle();
+    if (reqErr || !accessReq) {
+      return res.status(404).json({ error: "Access request not found." });
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const finalRole = assignedRole || accessReq.requestedRole || "RECEPTIONIST";
+    await supabaseAdmin.from("AccessRequest").update({
+      status: "APPROVED",
+      requestedRole: finalRole,
+      approvedBy: req.user?.name || req.user?.email,
+      approvedAt: nowIso,
+      updatedAt: nowIso
+    }).eq("id", id);
+    if (accessReq.userId || accessReq.email) {
+      const userCondition = accessReq.userId ? { id: accessReq.userId } : { email: accessReq.email.toLowerCase() };
+      const { data: existingUser } = await supabaseAdmin.from("User").select("id, name, email").match(userCondition).maybeSingle();
+      if (existingUser) {
+        await supabaseAdmin.from("User").update({
+          role: finalRole,
+          accountStatus: "ACTIVE",
+          isActive: true,
+          emailVerified: true,
+          failedLoginAttempts: 0,
+          updatedAt: nowIso
+        }).eq("id", existingUser.id);
+        if (accessReq.deviceIdentifier) {
+          const { data: dev } = await supabaseAdmin.from("ApprovedDevice").select("id").eq("userId", existingUser.id).eq("deviceIdentifier", accessReq.deviceIdentifier).maybeSingle();
+          if (dev) {
+            await supabaseAdmin.from("ApprovedDevice").update({
+              status: "APPROVED",
+              approvedBy: req.user?.name || req.user?.email,
+              approvedAt: nowIso,
+              revokedAt: null,
+              updatedAt: nowIso
+            }).eq("id", dev.id);
+          } else {
+            await supabaseAdmin.from("ApprovedDevice").insert([
+              {
+                id: uuidv415(),
+                userId: existingUser.id,
+                deviceIdentifier: accessReq.deviceIdentifier,
+                deviceName: accessReq.deviceName || "Workstation",
+                deviceType: accessReq.deviceType || "DESKTOP",
+                browser: accessReq.browser || null,
+                os: accessReq.os || null,
+                ipAddress: accessReq.ipAddress || null,
+                userAgent: accessReq.userAgent || null,
+                status: "APPROVED",
+                approvedBy: req.user?.name || req.user?.email,
+                approvedAt: nowIso,
+                lastUsedAt: nowIso,
+                createdAt: nowIso,
+                updatedAt: nowIso
+              }
+            ]);
+          }
+        }
+      }
+    }
+    await logAudit({
+      userId: req.user?.id,
+      userEmail: req.user?.email,
+      userName: req.user?.name,
+      userRole: req.user?.role,
+      action: "ACCESS_REQUEST_APPROVED",
+      resource: "AccessRequest",
+      resourceId: id,
+      status: "SUCCESS",
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      userAgent: req.headers["user-agent"] || null,
+      details: {
+        applicantName: accessReq.fullName,
+        applicantEmail: accessReq.email,
+        assignedRole: finalRole,
+        deviceIdentifier: accessReq.deviceIdentifier
+      }
+    });
+    await broadcastServerChange("AccessRequest", "UPDATE", id, { id, status: "APPROVED", role: finalRole });
+    return res.json({
+      success: true,
+      message: `Access granted for ${accessReq.fullName} with role '${finalRole}' and device authorization.`
+    });
+  } catch (err) {
+    console.error("[APPROVE ACCESS REQUEST ERROR]", err);
+    return res.status(500).json({ error: "Failed to approve access request." });
+  }
+});
+router16.post("/access-requests/:id/reject", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const { data: accessReq, error: reqErr } = await supabaseAdmin.from("AccessRequest").select("*").eq("id", id).maybeSingle();
+    if (reqErr || !accessReq) {
+      return res.status(404).json({ error: "Access request not found." });
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    await supabaseAdmin.from("AccessRequest").update({
+      status: "REJECTED",
+      rejectedBy: req.user?.name || req.user?.email,
+      rejectedAt: nowIso,
+      updatedAt: nowIso
+    }).eq("id", id);
+    if (accessReq.deviceIdentifier) {
+      await supabaseAdmin.from("ApprovedDevice").update({
+        status: "REVOKED",
+        revokedAt: nowIso,
+        updatedAt: nowIso
+      }).eq("deviceIdentifier", accessReq.deviceIdentifier);
+    }
+    await logAudit({
+      userId: req.user?.id,
+      userEmail: req.user?.email,
+      userName: req.user?.name,
+      userRole: req.user?.role,
+      action: "ACCESS_REQUEST_REJECTED",
+      resource: "AccessRequest",
+      resourceId: id,
+      status: "SUCCESS",
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      userAgent: req.headers["user-agent"] || null,
+      details: {
+        applicantName: accessReq.fullName,
+        applicantEmail: accessReq.email,
+        reason: reason || "Access denied by administrator",
+        deviceIdentifier: accessReq.deviceIdentifier
+      }
+    });
+    await broadcastServerChange("AccessRequest", "UPDATE", id, { id, status: "REJECTED" });
+    return res.json({
+      success: true,
+      message: `Access request for ${accessReq.fullName} has been rejected.`
+    });
+  } catch (err) {
+    console.error("[REJECT ACCESS REQUEST ERROR]", err);
+    return res.status(500).json({ error: "Failed to reject access request." });
+  }
+});
+router16.post("/access-requests/:id/reset-attempts", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data: accessReq, error: reqErr } = await supabaseAdmin.from("AccessRequest").select("*").eq("id", id).maybeSingle();
+    if (reqErr || !accessReq) {
+      return res.status(404).json({ error: "Access request not found." });
+    }
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    await supabaseAdmin.from("AccessRequest").update({
+      requestNumber: 1,
+      totalRequests: 1,
+      status: "PENDING",
+      updatedAt: nowIso
+    }).eq("id", id);
+    if (accessReq.userId || accessReq.email) {
+      const match = accessReq.userId ? { id: accessReq.userId } : { email: accessReq.email.toLowerCase() };
+      await supabaseAdmin.from("User").update({ failedLoginAttempts: 0, accountStatus: "PENDING" }).match(match);
+    }
+    await logAudit({
+      userId: req.user?.id,
+      userEmail: req.user?.email,
+      userName: req.user?.name,
+      userRole: req.user?.role,
+      action: "ACCESS_ATTEMPTS_RESET",
+      resource: "AccessRequest",
+      resourceId: id,
+      status: "SUCCESS",
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      details: { email: accessReq.email }
+    });
+    await broadcastServerChange("AccessRequest", "UPDATE", id);
+    return res.json({ success: true, message: "Attempts reset and request reset to PENDING." });
+  } catch (err) {
+    console.error("[RESET ATTEMPTS ERROR]", err);
+    return res.status(500).json({ error: "Failed to reset attempts." });
+  }
+});
+router16.post("/access-requests/system-repair", async (req, res) => {
+  try {
+    let repairedCount = 0;
+    const { data: unlinkedRequests } = await supabaseAdmin.from("AccessRequest").select("id, email, userId").is("userId", null);
+    if (unlinkedRequests && unlinkedRequests.length > 0) {
+      for (const reqItem of unlinkedRequests) {
+        if (reqItem.email) {
+          const { data: user } = await supabaseAdmin.from("User").select("id").eq("email", reqItem.email.toLowerCase().trim()).maybeSingle();
+          if (user) {
+            await supabaseAdmin.from("AccessRequest").update({ userId: user.id }).eq("id", reqItem.id);
+            repairedCount++;
+          }
+        }
+      }
+    }
+    const { data: activeUsers } = await supabaseAdmin.from("User").select("id, name, email").eq("isActive", true).neq("role", "CUSTOMER");
+    if (activeUsers) {
+      for (const usr of activeUsers) {
+        const { data: dev } = await supabaseAdmin.from("ApprovedDevice").select("id").eq("userId", usr.id).maybeSingle();
+        if (!dev) {
+          await supabaseAdmin.from("ApprovedDevice").insert([
+            {
+              id: uuidv415(),
+              userId: usr.id,
+              deviceIdentifier: `legacy_${usr.id.substring(0, 8)}`,
+              deviceName: "Primary Workstation",
+              deviceType: "DESKTOP",
+              status: "APPROVED",
+              approvedBy: "System Auto-Repair",
+              approvedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              lastUsedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+              updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+            }
+          ]);
+          repairedCount++;
+        }
+      }
+    }
+    await logAudit({
+      userId: req.user?.id,
+      userEmail: req.user?.email,
+      userName: req.user?.name,
+      userRole: req.user?.role,
+      action: "SECURITY_SYSTEM_REPAIR",
+      resource: "SecurityCenter",
+      status: "SUCCESS",
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      details: { repairedCount }
+    });
+    return res.json({
+      success: true,
+      message: `System integrity repair complete. Synchronized ${repairedCount} security and device records.`,
+      repairedCount
+    });
+  } catch (err) {
+    console.error("[SECURITY REPAIR ERROR]", err);
+    return res.status(500).json({ error: "Failed to run security system repair." });
+  }
+});
+var security_default = router16;
+
+// api/_server/routes/upload.ts
+import { Router as Router17 } from "express";
+import multer4 from "multer";
+var router17 = Router17();
 var upload4 = multer4({ storage: multer4.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-router15.post("/", authenticate, upload4.single("file"), async (req, res) => {
+router17.post("/", authenticate, upload4.single("file"), async (req, res) => {
   try {
     const folder = req.query.folder || req.body?.folder || "mts_lab";
     if (req.file) {
@@ -4788,8 +7341,59 @@ router15.post("/", authenticate, upload4.single("file"), async (req, res) => {
     return res.status(500).json({ error: "Failed to upload asset to Cloudinary." });
   }
 });
-var upload_default = router15;
-var router16 = Router16();
+var upload_default = router17;
+
+// api/_server/routes/events.ts
+import { Router as Router18 } from "express";
+import jwt3 from "jsonwebtoken";
+var router18 = Router18();
+router18.get("/", (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace("Bearer ", "");
+  let isAuthenticated = false;
+  if (token) {
+    try {
+      jwt3.verify(token, config.jwtSecret);
+      isAuthenticated = true;
+    } catch (_) {
+      isAuthenticated = true;
+    }
+  }
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.flushHeaders();
+  res.write(`event: connected
+data: ${JSON.stringify({ status: "connected", transport: "supabase-realtime", message: "Real-time sync via Supabase WebSocket channel." })}
+
+`);
+  res.write(`event: ping
+data: ${JSON.stringify({ ts: Date.now() })}
+
+`);
+  req.on("close", () => {
+    res.end();
+  });
+  const closeTimer = setTimeout(() => {
+    try {
+      res.write(`event: ping
+data: ${JSON.stringify({ ts: Date.now() })}
+
+`);
+      res.end();
+    } catch (_) {
+    }
+  }, 2e4);
+  req.on("close", () => {
+    clearTimeout(closeTimer);
+  });
+});
+var events_default = router18;
+
+// api/_server/routes/public.ts
+import { Router as Router19 } from "express";
+var router19 = Router19();
 var handlePublicTrack = async (req, res) => {
   try {
     const rawRepairNumber = req.body?.repairNumber || req.query?.repairNumber || req.body?.ticketNumber || req.query?.ticketNumber || "";
@@ -4827,8 +7431,7 @@ var handlePublicTrack = async (req, res) => {
       createdAt,
       updatedAt,
       completedAt,
-      deliveredAt,
-      logs:RepairLog(action, status, notes, createdAt)
+      deliveredAt
     `;
     let repairRecord = null;
     if (cleanRepairNumber) {
@@ -4854,6 +7457,21 @@ var handlePublicTrack = async (req, res) => {
     if (!repairRecord) {
       return res.status(404).json({ error: "No repair records found matching your tracking information." });
     }
+    const { data: explicitLogs } = await supabaseAdmin.from("RepairLog").select("id, action, status, notes, message, createdAt").eq("repairId", repairRecord.id).order("createdAt", { ascending: false });
+    let combinedLogs = explicitLogs || [];
+    if (combinedLogs.length === 0) {
+      combinedLogs = [
+        {
+          id: `synth-${repairRecord.id}`,
+          action: "STATUS_UPDATED",
+          status: repairRecord.status || "RECEIVED",
+          notes: `Device checked in and status currently registered as ${repairRecord.status || "RECEIVED"}.`,
+          message: `Device status: ${repairRecord.status || "RECEIVED"}`,
+          createdAt: repairRecord.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ];
+    }
+    repairRecord.logs = combinedLogs;
     if (repairRecord.logs && Array.isArray(repairRecord.logs)) {
       repairRecord.logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
@@ -4873,11 +7491,11 @@ var handlePublicTrack = async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve tracking details." });
   }
 };
-router16.get("/track", handlePublicTrack);
-router16.post("/track", handlePublicTrack);
-router16.get("/public/track", handlePublicTrack);
-router16.post("/public/track", handlePublicTrack);
-router16.get("/manager/stats", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
+router19.get("/track", handlePublicTrack);
+router19.post("/track", handlePublicTrack);
+router19.get("/public/track", handlePublicTrack);
+router19.post("/public/track", handlePublicTrack);
+router19.get("/manager/stats", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
   try {
     const { data: repairs } = await supabaseAdmin.from("Repair").select("technicianId, status, priority, estimatedCost, advancePaid, totalPaid");
     let totalRepairs = 0;
@@ -4926,7 +7544,7 @@ router16.get("/manager/stats", authenticate, authorize(["SUPER_ADMIN", "ADMIN", 
     return res.status(500).json({ error: "Failed to compute manager stats." });
   }
 });
-router16.get("/manager/workload", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
+router19.get("/manager/workload", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
   try {
     const { data: staff } = await supabaseAdmin.from("User").select("id, name, role, department").in("role", ["TECHNICIAN", "LEAD_TECHNICIAN", "HEAD_TECHNICIAN", "TECHNICAL_ASSISTANT"]).is("deletedAt", null);
     const { data: repairs } = await supabaseAdmin.from("Repair").select("technicianId, status, priority").not("status", "in", '("COMPLETED","DELIVERED","CANCELLED")');
@@ -4968,7 +7586,7 @@ router16.get("/manager/workload", authenticate, authorize(["SUPER_ADMIN", "ADMIN
     return res.status(500).json({ error: "Failed to calculate technician workloads." });
   }
 });
-router16.get("/dashboard/stats", authenticate, async (req, res) => {
+router19.get("/dashboard/stats", authenticate, async (req, res) => {
   try {
     const { data: repairs } = await supabaseAdmin.from("Repair").select("status, priority, totalPaid, advancePaid, estimatedCost");
     const { count: totalCustomers } = await supabaseAdmin.from("Customer").select("*", { count: "exact", head: true });
@@ -4996,124 +7614,55 @@ router16.get("/dashboard/stats", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve dashboard overview." });
   }
 });
-var public_default = router16;
-var router17 = Router17();
-router17.get("/", (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace("Bearer ", "");
-  let isAuthenticated = false;
-  if (token) {
-    try {
-      jwt3.verify(token, config.jwtSecret);
-      isAuthenticated = true;
-    } catch (_) {
-      isAuthenticated = true;
-    }
-  }
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.flushHeaders();
-  res.write(`event: connected
-data: ${JSON.stringify({ status: "connected", transport: "supabase-realtime", message: "Real-time sync via Supabase WebSocket channel." })}
+var public_default = router19;
 
-`);
-  res.write(`event: ping
-data: ${JSON.stringify({ ts: Date.now() })}
-
-`);
-  req.on("close", () => {
-    res.end();
-  });
-  const closeTimer = setTimeout(() => {
-    try {
-      res.write(`event: ping
-data: ${JSON.stringify({ ts: Date.now() })}
-
-`);
-      res.end();
-    } catch (_) {
-    }
-  }, 2e4);
-  req.on("close", () => {
-    clearTimeout(closeTimer);
-  });
-});
-var events_default = router17;
+// api/_server/app.ts
 function createApp() {
-  const app22 = express();
-  app22.use(express.json({ limit: "20mb" }));
-  app22.use(express.urlencoded({ extended: true, limit: "20mb" }));
-  app22.use(cookieParser());
-  app22.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-refresh-token, X-Requested-With, Accept");
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    if (req.method === "OPTIONS") {
-      return res.status(200).end();
-    }
-    next();
-  });
-  app22.use("/api", public_default);
-  app22.use("/api/public", public_default);
-  app22.use("/api/auth", auth_default);
-  app22.use("/api/users", users_default);
-  app22.use("/api/staff", users_default);
-  app22.use("/api/repairs", repairs_default);
-  app22.use("/api/repair", repairs_default);
-  app22.use("/api/repair-transfers", repairTransfers_default);
-  app22.use("/api/customers", customers_default);
-  app22.use("/api/inventory", inventory_default);
-  app22.use("/api/couriers", couriers_default);
-  app22.use("/api/battery-warranties", batteryWarranties_default);
-  app22.use("/api/battery-warranty", batteryWarranties_default);
-  app22.use("/api/warranties", batteryWarranties_default);
-  app22.use("/api/attendance", attendance_default);
-  app22.use("/api/repair-damage", repairDamage_default);
-  app22.use("/api/repair-prices", repairPrices_default);
-  app22.use("/api/public/repair-prices", repairPrices_default);
-  app22.use("/api/slides", slides_default);
-  app22.use("/api/admin/slides", slides_default);
-  app22.use("/api/products", products_default);
-  app22.use("/api/public/products", products_default);
-  app22.use("/api/notifications", notifications_default);
-  app22.use("/api/admin", superAdmin_default);
-  app22.use("/api/share", superAdmin_default);
-  app22.use("/api/access-requests", superAdmin_default);
-  app22.use("/api/approved-devices", superAdmin_default);
-  app22.get("/api/inventory/folders", (req, res) => res.json([]));
-  app22.get("/api/inventory/suppliers", (req, res) => res.json([]));
-  app22.get("/api/inventory/locations", (req, res) => res.json([]));
-  app22.get("/api/repair-prices/folders", (req, res) => res.json([]));
-  app22.get("/api/access-requests", (req, res) => res.json([]));
-  app22.get("/api/approved-devices", (req, res) => res.json([]));
-  app22.use("/api/upload", upload_default);
-  app22.use("/api/events", events_default);
-  app22.get("/api/health", (req, res) => {
+  const app = express();
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+  app.use(cookieParser());
+  app.use("/api/auth", auth_default);
+  app.use("/api/users", users_default);
+  app.use("/api/user", users_default);
+  app.use("/api/security", security_default);
+  app.use("/api/repairs", repairs_default);
+  app.use("/api/repair", repairs_default);
+  app.use("/api/repair-transfers", repairTransfers_default);
+  app.use("/api/repair-transfer", repairTransfers_default);
+  app.use("/api/customers", customers_default);
+  app.use("/api/customer", customers_default);
+  app.use("/api/inventory", inventory_default);
+  app.use("/api/couriers", couriers_default);
+  app.use("/api/courier", couriers_default);
+  app.use("/api/battery-warranties", batteryWarranties_default);
+  app.use("/api/battery-warranty", batteryWarranties_default);
+  app.use("/api/warranties", batteryWarranties_default);
+  app.use("/api/warranty", batteryWarranties_default);
+  app.use("/api/attendance", attendance_default);
+  app.use("/api/repair-damage", repairDamage_default);
+  app.use("/api/repair-prices", repairPrices_default);
+  app.use("/api/public/repair-prices", repairPrices_default);
+  app.use("/api/slides", slides_default);
+  app.use("/api/admin/slides", slides_default);
+  app.use("/api/products", products_default);
+  app.use("/api/public/products", products_default);
+  app.use("/api/notifications", notifications_default);
+  app.use("/api/admin", superAdmin_default);
+  app.use("/api/share", superAdmin_default);
+  app.use("/api/access-requests", security_default);
+  app.use("/api/approved-devices", security_default);
+  app.use("/api/upload", upload_default);
+  app.use("/api/events", events_default);
+  app.use("/api/public", public_default);
+  app.use("/api", public_default);
+  app.get("/api/health", (req, res) => {
     res.json({ status: "healthy", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   });
-  app22.all("/api/*", (req, res) => {
-    res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.path}` });
-  });
-  app22.use((err, req, res, next) => {
-    console.error("[API UNHANDLED ERROR]", err);
-    if (res.headersSent) {
-      return next(err);
-    }
-    res.status(err.status || 500).json({
-      error: "Internal Server Error",
-      message: err.message || "An unexpected error occurred."
-    });
-  });
-  return app22;
+  return app;
 }
-var app = createApp();
-
-// api/_server/index.ts
-var app2 = createApp();
-var index_default = app2;
+var app_default = createApp();
 export {
-  index_default as default
+  createApp,
+  app_default as default
 };
