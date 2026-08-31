@@ -59,7 +59,9 @@ export function createApp() {
   app.use('/api/products', productsRoutes);
   app.use('/api/public/products', productsRoutes);
   app.use('/api/notifications', notificationsRoutes);
-  app.use('/api/admin/backups', backupsRoutes);
+  // The backups router defines /backups, /backups/:id, etc.; mount it at the
+  // admin namespace so the public API contract is /api/admin/backups/*.
+  app.use('/api/admin', backupsRoutes);
   app.use('/api/admin', superAdminRoutes);
   app.use('/api/share', superAdminRoutes);
   app.use('/api/access-requests', accessRequestsCompatRoutes);
