@@ -157,7 +157,7 @@ export default function Inventory() {
   const isTechnician = user?.role === 'TECHNICIAN' || user?.role === 'LEAD_TECHNICIAN';
 
   const canManage = isSuperAdmin || isAdmin || isManager || isReceptionist || isInventoryManager;
-  const canDelete = isSuperAdmin || isAdmin;
+  const canDelete = isSuperAdmin || isAdmin || isManager || isInventoryManager;
 
   // Data states
   const [items, setItems] = useState<InventoryItemData[]>([]);
@@ -971,7 +971,7 @@ export default function Inventory() {
         brand: b,
         model: m,
         category: c,
-        permanent: permanent && isSuperAdmin
+        permanent: permanent && canDelete
       });
 
       toast.success(`✓ ${permanent ? 'Deleted' : 'Archived'} folder and ${res.affectedCount} contained items.`);

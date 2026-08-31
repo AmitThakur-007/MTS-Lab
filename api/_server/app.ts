@@ -2573,21 +2573,234 @@ var customers_default = router4;
 import { Router as Router5 } from "express";
 import { v4 as uuidv46 } from "uuid";
 var router5 = Router5();
+
+var INVENTORY_MANAGERS = ["SUPER_ADMIN", "ADMIN", "MANAGER", "INVENTORY_MANAGER"];
+var INVENTORY_STOCK_OUT_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGER", "INVENTORY_MANAGER", "LEAD_TECHNICIAN", "TECHNICIAN"];
+
+// GET /api/inventory/folders
 router5.get("/folders", authenticate, async (req, res) => {
   try {
-    const { data: items } = await supabaseAdmin.from("InventoryItem").select("category, subcategory").not("category", "is", null);
-    const categories = Array.from(new Set((items || []).map((i) => i.category).filter(Boolean)));
-    const subcategories = Array.from(new Set((items || []).map((i) => i.subcategory).filter(Boolean)));
-    return res.json({
-      success: true,
-      folders: categories,
-      categories,
-      subcategories
+    const { data: items } = await supabaseAdmin.from("InventoryItem").select("brand, model, category, subcategory").not("category", "is", null);
+    const folderMap = new Map();
+    (items || []).forEach((item) => {
+      const b = (item.brand || "").trim();
+      const m = (item.model || "").trim();
+      const c = (item.category || "").trim();
+      const key = `${b}|${m}|${c}`;
+      if (b && !folderMap.has(key)) {
+        folderMap.set(key, {
+          brand: b,
+          model: m || null,
+          category: c || null,
+          subcategory: item.subcategory || null
+        });
+      }
     });
+    return res.json(Array.from(folderMap.values()));
   } catch (err) {
-    return res.json({ success: true, folders: [], categories: [], subcategories: [] });
+    return res.json([]);
   }
 });
+
+// POST /api/inventory/folders - Create/register new folder
+router5.post("/folders", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { brand, model, category } = req.body;
+    if (!brand || !brand.trim()) {
+      return res.status(400).json({ error: "Brand name is required." });
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_FOLDER_CREATED",
+      resource: "InventoryFolder",
+      details: { brand, model, category }
+    });
+    await broadcastServerChange("InventoryFolder", "CREATE", `${brand}-${model || ""}-${category || ""}`, {
+      brand: brand.trim(),
+      model: model ? model.trim() : null,
+      category: category ? category.trim() : null
+    });
+    return res.status(201).json({
+      success: true,
+      brand: brand.trim(),
+      model: model ? model.trim() : null,
+      category: category ? category.trim() : null
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to create folder branch." });
+  }
+});
+
+// POST /api/inventory/rename-folder
+router5.post("/rename-folder", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { level, oldName, newName, parentBrand, parentModel } = req.body;
+    if (!level || !oldName || !newName || !newName.trim()) {
+      return res.status(400).json({ error: "Missing required folder rename parameters." });
+    }
+    const trimmedNew = newName.trim();
+    let query = supabaseAdmin.from("InventoryItem").update({
+      [level]: trimmedNew,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    if (level === "brand") {
+      query = query.eq("brand", oldName);
+    } else if (level === "model") {
+      query = query.eq("model", oldName);
+      if (parentBrand) query = query.eq("brand", parentBrand);
+    } else if (level === "category") {
+      query = query.eq("category", oldName);
+      if (parentBrand) query = query.eq("brand", parentBrand);
+      if (parentModel) query = query.eq("model", parentModel);
+    }
+    const { data: updatedItems, error } = await query.select("id, name, brand, model, category");
+    if (error) {
+      console.error("[INVENTORY RENAME FOLDER ERROR]", error);
+      return res.status(500).json({ error: "Failed to rename folder." });
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_FOLDER_RENAMED",
+      resource: "InventoryFolder",
+      details: { level, oldName, newName: trimmedNew, parentBrand, parentModel, affected: updatedItems?.length || 0 }
+    });
+    if (updatedItems && updatedItems.length > 0) {
+      for (const it of updatedItems) {
+        await broadcastServerChange("InventoryItem", "UPDATE", it.id, it);
+      }
+    }
+    await broadcastServerChange("InventoryFolder", "UPDATE", `${level}-${oldName}`, { level, oldName, newName: trimmedNew });
+    return res.json({ success: true, count: updatedItems?.length || 0 });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to rename folder." });
+  }
+});
+
+// POST /api/inventory/move
+router5.post("/move", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { itemIds, targetBrand, targetModel, targetCategory } = req.body;
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0 || !targetBrand) {
+      return res.status(400).json({ error: "Item IDs and target brand are required." });
+    }
+    const updatePayload = {
+      brand: targetBrand.trim(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (targetModel !== void 0) {
+      updatePayload.model = targetModel ? targetModel.trim() : null;
+    }
+    if (targetCategory !== void 0) {
+      updatePayload.category = targetCategory ? targetCategory.trim() : "Spare Parts";
+    }
+    const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update(updatePayload).in("id", itemIds).select("*");
+    if (error) {
+      return res.status(500).json({ error: "Failed to move items." });
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_ITEMS_MOVED",
+      resource: "InventoryItem",
+      details: { count: itemIds.length, targetBrand, targetModel, targetCategory }
+    });
+    if (updated && updated.length > 0) {
+      for (const it of updated) {
+        await broadcastServerChange("InventoryItem", "UPDATE", it.id, it);
+      }
+    }
+    return res.json({ success: true, count: updated?.length || 0 });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to move inventory items." });
+  }
+});
+
+// POST /api/inventory/delete-folder
+router5.post("/delete-folder", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { brand, model, category, permanent = false } = req.body;
+    if (!brand) {
+      return res.status(400).json({ error: "Brand is required to delete/archive a folder." });
+    }
+    let findQuery = supabaseAdmin.from("InventoryItem").select("id, name").eq("brand", brand);
+    if (model) findQuery = findQuery.eq("model", model);
+    if (category) findQuery = findQuery.eq("category", category);
+    const { data: itemsToDelete } = await findQuery;
+    const itemIds = (itemsToDelete || []).map((i) => i.id);
+    if (itemIds.length === 0) {
+      return res.json({ success: true, affectedCount: 0 });
+    }
+    if (permanent) {
+      await supabaseAdmin.from("InventoryTransaction").delete().in("itemId", itemIds);
+      await supabaseAdmin.from("InventoryItem").delete().in("id", itemIds);
+      for (const id of itemIds) {
+        await broadcastServerChange("InventoryItem", "DELETE", id);
+      }
+    } else {
+      await supabaseAdmin.from("InventoryItem").update({ status: "ARCHIVED", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).in("id", itemIds);
+      for (const id of itemIds) {
+        await broadcastServerChange("InventoryItem", "UPDATE", id, { id, status: "ARCHIVED" });
+      }
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: permanent ? "INVENTORY_FOLDER_DELETED" : "INVENTORY_FOLDER_ARCHIVED",
+      resource: "InventoryFolder",
+      details: { brand, model, category, permanent, affectedCount: itemIds.length }
+    });
+    return res.json({ success: true, affectedCount: itemIds.length });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to delete or archive folder." });
+  }
+});
+
+// POST /api/inventory/bulk-archive
+router5.post("/bulk-archive", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "No item IDs provided." });
+    }
+    const { error } = await supabaseAdmin.from("InventoryItem").update({ status: "ARCHIVED", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).in("id", ids);
+    if (error) return res.status(500).json({ error: "Failed to archive items." });
+    for (const id of ids) {
+      await broadcastServerChange("InventoryItem", "UPDATE", id, { id, status: "ARCHIVED" });
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_BULK_ARCHIVE",
+      resource: "InventoryItem",
+      details: { count: ids.length, ids }
+    });
+    return res.json({ success: true, count: ids.length });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to process bulk archive." });
+  }
+});
+
+// POST /api/inventory/bulk-status
+router5.post("/bulk-status", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0 || !status) {
+      return res.status(400).json({ error: "Item IDs and valid status are required." });
+    }
+    const { error } = await supabaseAdmin.from("InventoryItem").update({ status, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).in("id", ids);
+    if (error) return res.status(500).json({ error: "Failed to update items status." });
+    for (const id of ids) {
+      await broadcastServerChange("InventoryItem", "UPDATE", id, { id, status });
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_BULK_STATUS_CHANGE",
+      resource: "InventoryItem",
+      details: { count: ids.length, status, ids }
+    });
+    return res.json({ success: true, count: ids.length });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to update status in bulk." });
+  }
+});
+
 router5.get("/suppliers", authenticate, async (req, res) => {
   try {
     const { data: items } = await supabaseAdmin.from("InventoryItem").select("supplier").not("supplier", "is", null);
@@ -2597,6 +2810,7 @@ router5.get("/suppliers", authenticate, async (req, res) => {
     return res.json([]);
   }
 });
+
 router5.get("/locations", authenticate, async (req, res) => {
   try {
     const { data: items } = await supabaseAdmin.from("InventoryItem").select("storageLocation").not("storageLocation", "is", null);
@@ -2606,9 +2820,10 @@ router5.get("/locations", authenticate, async (req, res) => {
     return res.json([]);
   }
 });
+
 router5.get("/", authenticate, async (req, res) => {
   try {
-    const { category, brand, status = "ACTIVE", search, limit = "200" } = req.query;
+    const { category, brand, status = "ACTIVE", search, limit = "500" } = req.query;
     let query = supabaseAdmin.from("InventoryItem").select("*");
     if (status && status !== "ALL") {
       query = query.eq("status", String(status));
@@ -2623,7 +2838,7 @@ router5.get("/", authenticate, async (req, res) => {
       const s = String(search).trim();
       query = query.or(`name.ilike.%${s}%,sku.ilike.%${s}%,model.ilike.%${s}%,compatibility.ilike.%${s}%`);
     }
-    const { data: items, error } = await query.order("name", { ascending: true }).limit(parseInt(limit, 10) || 200);
+    const { data: items, error } = await query.order("name", { ascending: true }).limit(parseInt(limit, 10) || 500);
     if (error) {
       console.error("[INVENTORY GET ERROR]", error);
       return res.status(500).json({ error: "Failed to fetch inventory items." });
@@ -2633,6 +2848,7 @@ router5.get("/", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve inventory." });
   }
 });
+
 router5.get("/stats", authenticate, async (req, res) => {
   try {
     const { data: items } = await supabaseAdmin.from("InventoryItem").select("currentStock, minStockLevel, purchasePrice, sellingPrice, status");
@@ -2653,17 +2869,23 @@ router5.get("/stats", authenticate, async (req, res) => {
         lowStockCount++;
       }
     });
+    const { count: txCount } = await supabaseAdmin.from("InventoryTransaction").select("*", { count: "exact", head: true });
     return res.json({
+      totalProducts: totalItems,
       totalItems,
+      totalStockUnits: totalStockQuantity,
+      totalStockQuantity,
       lowStockCount,
       outOfStockCount,
-      totalStockQuantity,
-      totalStockValue
+      totalValuation: totalStockValue,
+      totalStockValue,
+      recentTxCount: txCount || 0
     });
   } catch (err) {
     return res.status(500).json({ error: "Failed to calculate inventory statistics." });
   }
 });
+
 router5.get("/categories", authenticate, async (req, res) => {
   try {
     const { data: categories } = await supabaseAdmin.from("InventoryCategory").select("*").order("displayOrder", { ascending: true });
@@ -2672,7 +2894,8 @@ router5.get("/categories", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to fetch categories." });
   }
 });
-router5.post("/categories", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+
+router5.post("/categories", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const { name, description, icon } = req.body;
     if (!name) return res.status(400).json({ error: "Category name is required." });
@@ -2686,19 +2909,21 @@ router5.post("/categories", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), a
     };
     const { data: created, error } = await supabaseAdmin.from("InventoryCategory").insert([newCat]).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to create category." });
+    await broadcastServerChange("InventoryCategory", "CREATE", created.id, created);
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to add inventory category." });
   }
 });
+
 router5.get("/transactions/history", authenticate, async (req, res) => {
   try {
-    const { itemId, limit = "50" } = req.query;
+    const { itemId, limit = "100" } = req.query;
     let query = supabaseAdmin.from("InventoryTransaction").select("*, item:InventoryItem(name, sku, category)");
     if (itemId) {
       query = query.eq("itemId", String(itemId));
     }
-    const { data: transactions, error } = await query.order("createdAt", { ascending: false }).limit(parseInt(limit, 10) || 50);
+    const { data: transactions, error } = await query.order("createdAt", { ascending: false }).limit(parseInt(limit, 10) || 100);
     if (error) {
       return res.status(500).json({ error: "Failed to fetch inventory transactions." });
     }
@@ -2707,7 +2932,8 @@ router5.get("/transactions/history", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve transaction logs." });
   }
 });
-router5.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+
+router5.post("/bulk-delete", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -2716,11 +2942,21 @@ router5.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), 
     await supabaseAdmin.from("InventoryTransaction").delete().in("itemId", ids);
     const { error } = await supabaseAdmin.from("InventoryItem").delete().in("id", ids);
     if (error) return res.status(500).json({ error: "Failed to delete inventory items." });
+    for (const id of ids) {
+      await broadcastServerChange("InventoryItem", "DELETE", id);
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_BULK_DELETE",
+      resource: "InventoryItem",
+      details: { count: ids.length, ids }
+    });
     return res.json({ success: true, message: `Successfully removed ${ids.length} items.` });
   } catch (err) {
     return res.status(500).json({ error: "Failed to process bulk delete." });
   }
 });
+
 router5.get("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2733,7 +2969,8 @@ router5.get("/:id", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve item." });
   }
 });
-router5.post("/", authenticate, async (req, res) => {
+
+router5.post("/", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const {
       name,
@@ -2756,7 +2993,7 @@ router5.post("/", authenticate, async (req, res) => {
       imageUrl,
       status = "ACTIVE"
     } = req.body;
-    if (!name) {
+    if (!name || !name.trim()) {
       return res.status(400).json({ error: "Item name is required." });
     }
     const initialStock = parseInt(currentStock || "0", 10) || 0;
@@ -2766,10 +3003,10 @@ router5.post("/", authenticate, async (req, res) => {
       brand: brand ? brand.trim() : null,
       model: model ? model.trim() : null,
       sku: sku ? sku.trim() : `SKU-${Date.now().toString().slice(-6)}`,
-      category: category.trim(),
+      category: (category || "Spare Parts").trim(),
       subcategory: subcategory ? subcategory.trim() : null,
       compatibility: compatibility ? compatibility.trim() : null,
-      unit: unit.trim(),
+      unit: (unit || "Piece").trim(),
       currentStock: initialStock,
       minStockLevel: parseInt(minStockLevel || "5", 10) || 5,
       maxStockLevel: maxStockLevel ? parseInt(maxStockLevel, 10) : null,
@@ -2780,7 +3017,7 @@ router5.post("/", authenticate, async (req, res) => {
       description: description ? description.trim() : null,
       notes: notes ? notes.trim() : null,
       imageUrl: imageUrl || null,
-      status,
+      status: status || "ACTIVE",
       createdById: req.user.id,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -2791,52 +3028,100 @@ router5.post("/", authenticate, async (req, res) => {
       return res.status(500).json({ error: "Failed to create inventory item." });
     }
     if (initialStock > 0) {
-      await supabaseAdmin.from("InventoryTransaction").insert([
-        {
-          id: uuidv46(),
-          itemId: created.id,
-          type: "STOCK_IN",
-          quantity: initialStock,
-          previousStock: 0,
-          newStock: initialStock,
-          reason: "Initial Stock Setup",
-          performedById: req.user.id,
-          performedByName: req.user.name,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
+      try {
+        await supabaseAdmin.from("InventoryTransaction").insert([
+          {
+            id: uuidv46(),
+            itemId: created.id,
+            type: "STOCK_IN",
+            quantity: initialStock,
+            previousStock: 0,
+            newStock: initialStock,
+            reason: "Initial Stock Setup",
+            performedById: req.user.id,
+            performedByName: req.user.name,
+            createdAt: (/* @__PURE__ */ new Date()).toISOString()
+          }
+        ]);
+      } catch (txErr) {
+        console.warn("[INVENTORY TX WARN]", txErr);
+      }
     }
     await logAudit({
       userId: req.user.id,
       action: "INVENTORY_ITEM_CREATED",
       resource: "InventoryItem",
       resourceId: created.id,
-      details: { name: created.name, sku: created.sku, stock: created.currentStock }
+      details: { name: created.name, sku: created.sku, stock: created.currentStock, brand: created.brand, model: created.model }
     });
+    await broadcastServerChange("InventoryItem", "CREATE", created.id, created);
     return res.status(201).json(created);
   } catch (err) {
     return res.status(500).json({ error: "Failed to save inventory item." });
   }
 });
-router5.patch("/:id", authenticate, async (req, res) => {
+
+router5.patch("/:id", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
     delete updateData.id;
     delete updateData.transactions;
+    if (updateData.currentStock !== void 0) {
+      updateData.currentStock = parseInt(updateData.currentStock, 10) || 0;
+    }
+    if (updateData.minStockLevel !== void 0) {
+      updateData.minStockLevel = parseInt(updateData.minStockLevel, 10) || 5;
+    }
+    if (updateData.purchasePrice !== void 0 && updateData.purchasePrice !== "") {
+      updateData.purchasePrice = parseFloat(updateData.purchasePrice);
+    }
+    if (updateData.sellingPrice !== void 0 && updateData.sellingPrice !== "") {
+      updateData.sellingPrice = parseFloat(updateData.sellingPrice);
+    }
     const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update(updateData).eq("id", id).select("*").single();
     if (error) {
       return res.status(500).json({ error: "Failed to update inventory item." });
     }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_ITEM_UPDATED",
+      resource: "InventoryItem",
+      resourceId: id,
+      details: { updatedFields: Object.keys(updateData) }
+    });
+    await broadcastServerChange("InventoryItem", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to update inventory." });
   }
 });
-router5.post("/:id/stock-in", authenticate, async (req, res) => {
+
+router5.post("/:id/restore", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const { id } = req.params;
-    const { quantity, reason = "Stock replenishment", notes } = req.body;
+    const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update({ status: "ACTIVE", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
+    if (error || !updated) {
+      return res.status(500).json({ error: "Failed to restore item." });
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_ITEM_RESTORED",
+      resource: "InventoryItem",
+      resourceId: id,
+      details: { name: updated.name }
+    });
+    await broadcastServerChange("InventoryItem", "UPDATE", id, updated);
+    return res.json({ success: true, item: updated });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to restore inventory item." });
+  }
+});
+
+router5.post("/:id/stock-in", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quantity, reason = "Stock replenishment", notes, supplier, reference } = req.body;
     const qty = parseInt(quantity, 10);
     if (!qty || qty <= 0) {
       return res.status(400).json({ error: "Valid positive quantity required." });
@@ -2847,27 +3132,40 @@ router5.post("/:id/stock-in", authenticate, async (req, res) => {
     const newStock = prevStock + qty;
     const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update({ currentStock: newStock, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to update stock." });
-    await supabaseAdmin.from("InventoryTransaction").insert([
-      {
-        id: uuidv46(),
-        itemId: id,
-        type: "STOCK_IN",
-        quantity: qty,
-        previousStock: prevStock,
-        newStock,
-        reason,
-        notes,
-        performedById: req.user.id,
-        performedByName: req.user.name,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
+    try {
+      await supabaseAdmin.from("InventoryTransaction").insert([
+        {
+          id: uuidv46(),
+          itemId: id,
+          type: "STOCK_IN",
+          quantity: qty,
+          previousStock: prevStock,
+          newStock,
+          reason: reference ? `${reason} (Ref: ${reference})` : reason,
+          notes: supplier ? `Supplier: ${supplier}. ${notes || ""}` : notes,
+          performedById: req.user.id,
+          performedByName: req.user.name,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+    } catch (txErr) {
+      console.warn("[STOCK IN TX WARN]", txErr);
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_STOCK_IN",
+      resource: "InventoryItem",
+      resourceId: id,
+      details: { added: qty, previousStock: prevStock, newStock }
+    });
+    await broadcastServerChange("InventoryItem", "UPDATE", id, updated);
     return res.json({ success: true, item: updated, newStock });
   } catch (err) {
     return res.status(500).json({ error: "Failed to process stock intake." });
   }
 });
-router5.post("/:id/stock-out", authenticate, async (req, res) => {
+
+router5.post("/:id/stock-out", authenticate, authorize(INVENTORY_STOCK_OUT_ROLES), async (req, res) => {
   try {
     const { id } = req.params;
     const { quantity, reason = "Used for Repair", repairNumber, notes } = req.body;
@@ -2881,28 +3179,41 @@ router5.post("/:id/stock-out", authenticate, async (req, res) => {
     const newStock = Math.max(0, prevStock - qty);
     const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update({ currentStock: newStock, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to deduct stock." });
-    await supabaseAdmin.from("InventoryTransaction").insert([
-      {
-        id: uuidv46(),
-        itemId: id,
-        type: "STOCK_OUT",
-        quantity: qty,
-        previousStock: prevStock,
-        newStock,
-        reason,
-        repairNumber: repairNumber || null,
-        notes,
-        performedById: req.user.id,
-        performedByName: req.user.name,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
+    try {
+      await supabaseAdmin.from("InventoryTransaction").insert([
+        {
+          id: uuidv46(),
+          itemId: id,
+          type: "STOCK_OUT",
+          quantity: qty,
+          previousStock: prevStock,
+          newStock,
+          reason,
+          repairNumber: repairNumber || null,
+          notes,
+          performedById: req.user.id,
+          performedByName: req.user.name,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+    } catch (txErr) {
+      console.warn("[STOCK OUT TX WARN]", txErr);
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_STOCK_OUT",
+      resource: "InventoryItem",
+      resourceId: id,
+      details: { deducted: qty, previousStock: prevStock, newStock, repairNumber }
+    });
+    await broadcastServerChange("InventoryItem", "UPDATE", id, updated);
     return res.json({ success: true, item: updated, newStock });
   } catch (err) {
     return res.status(500).json({ error: "Failed to deduct inventory." });
   }
 });
-router5.post("/:id/adjust-stock", authenticate, async (req, res) => {
+
+router5.post("/:id/adjust-stock", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const { id } = req.params;
     const { newStock: targetStock, reason = "Audit Correction", notes } = req.body;
@@ -2916,32 +3227,52 @@ router5.post("/:id/adjust-stock", authenticate, async (req, res) => {
     const diff = newStock - prevStock;
     const { data: updated, error } = await supabaseAdmin.from("InventoryItem").update({ currentStock: newStock, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).select("*").single();
     if (error) return res.status(500).json({ error: "Failed to adjust stock." });
-    await supabaseAdmin.from("InventoryTransaction").insert([
-      {
-        id: uuidv46(),
-        itemId: id,
-        type: "STOCK_ADJUSTMENT",
-        quantity: Math.abs(diff),
-        previousStock: prevStock,
-        newStock,
-        reason,
-        notes,
-        performedById: req.user.id,
-        performedByName: req.user.name,
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
+    try {
+      await supabaseAdmin.from("InventoryTransaction").insert([
+        {
+          id: uuidv46(),
+          itemId: id,
+          type: "STOCK_ADJUSTMENT",
+          quantity: Math.abs(diff),
+          previousStock: prevStock,
+          newStock,
+          reason,
+          notes,
+          performedById: req.user.id,
+          performedByName: req.user.name,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      ]);
+    } catch (txErr) {
+      console.warn("[ADJUST TX WARN]", txErr);
+    }
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_STOCK_ADJUSTMENT",
+      resource: "InventoryItem",
+      resourceId: id,
+      details: { previousStock: prevStock, newStock, diff, reason }
+    });
+    await broadcastServerChange("InventoryItem", "UPDATE", id, updated);
     return res.json({ success: true, item: updated, newStock });
   } catch (err) {
     return res.status(500).json({ error: "Failed to adjust stock quantity." });
   }
 });
-router5.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+
+router5.delete("/:id", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
   try {
     const { id } = req.params;
     await supabaseAdmin.from("InventoryTransaction").delete().eq("itemId", id);
     const { error } = await supabaseAdmin.from("InventoryItem").delete().eq("id", id);
     if (error) return res.status(500).json({ error: "Failed to delete inventory item." });
+    await logAudit({
+      userId: req.user.id,
+      action: "INVENTORY_ITEM_DELETED",
+      resource: "InventoryItem",
+      resourceId: id
+    });
+    await broadcastServerChange("InventoryItem", "DELETE", id);
     return res.json({ success: true, message: "Item deleted successfully." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to delete item." });
