@@ -49,9 +49,22 @@ import { Router as Router16 } from "express";
 import { Router as Router17 } from "express";
 import jwt3 from "jsonwebtoken";
 dotenv.config();
-var SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://pirynpugkiurjobrqiqg.supabase.co";
-var SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w";
-var SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+var PRODUCTION_SUPABASE_URL = "https://pirynpugkiurjobrqiqg.supabase.co";
+var PRODUCTION_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w";
+
+var rawUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim();
+var SUPABASE_URL = (!rawUrl || rawUrl.includes("your-project") || rawUrl.includes("example.com") || !rawUrl.startsWith("http"))
+  ? PRODUCTION_SUPABASE_URL
+  : rawUrl;
+
+var rawKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "").trim();
+var SUPABASE_ANON_KEY = (!rawKey || rawKey.includes("...") || rawKey.length < 50)
+  ? PRODUCTION_SUPABASE_ANON_KEY
+  : rawKey;
+
+var SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes("...") && process.env.SUPABASE_SERVICE_ROLE_KEY.length > 50)
+  ? process.env.SUPABASE_SERVICE_ROLE_KEY
+  : null;
 var supabaseAdmin = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY,

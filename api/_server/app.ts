@@ -6,9 +6,22 @@ import cookieParser from "cookie-parser";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 dotenv.config();
-var SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://pirynpugkiurjobrqiqg.supabase.co";
-var SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w";
-var SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+var PRODUCTION_SUPABASE_URL = "https://pirynpugkiurjobrqiqg.supabase.co";
+var PRODUCTION_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w";
+
+var rawUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim();
+var SUPABASE_URL = (!rawUrl || rawUrl.includes("your-project") || rawUrl.includes("example.com") || !rawUrl.startsWith("http"))
+  ? PRODUCTION_SUPABASE_URL
+  : rawUrl;
+
+var rawKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "").trim();
+var SUPABASE_ANON_KEY = (!rawKey || rawKey.includes("...") || rawKey.length < 50)
+  ? PRODUCTION_SUPABASE_ANON_KEY
+  : rawKey;
+
+var SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes("...") && process.env.SUPABASE_SERVICE_ROLE_KEY.length > 50)
+  ? process.env.SUPABASE_SERVICE_ROLE_KEY
+  : null;
 var supabaseAdmin = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY,
@@ -40,24 +53,47 @@ var config = {
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || ""
 };
 
+const sseConnectedClients = new Set<express.Response>();
+let serverBroadcastChannel: any = null;
+
+function getActiveServerBroadcastChannel() {
+  if (!serverBroadcastChannel) {
+    serverBroadcastChannel = supabaseAdmin.channel('mts_app_db_changes', {
+      config: { broadcast: { self: true } }
+    });
+    serverBroadcastChannel.subscribe((status: string) => {
+      console.log('[SERVER SUPABASE REALTIME CHANNEL STATUS]', status);
+    });
+  }
+  return serverBroadcastChannel;
+}
+
 async function broadcastServerChange(entityName: string, action: 'CREATE' | 'UPDATE' | 'DELETE', id: string, data?: any) {
+  const entityLower = entityName.toLowerCase();
+  const payload = {
+    entity: entityLower,
+    action,
+    id: String(id),
+    data,
+    timestamp: Date.now()
+  };
+
+  // 1. Deliver via Server-Sent Events (SSE) directly to all connected browser sessions
+  sseConnectedClients.forEach((client) => {
+    try {
+      client.write(`event: message\ndata: ${JSON.stringify(payload)}\n\n`);
+    } catch (sseErr) {
+      sseConnectedClients.delete(client);
+    }
+  });
+
+  // 2. Deliver via Supabase Realtime Channel
   try {
-    const channel = supabaseAdmin.channel('mts_app_db_changes');
-    channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        const entityLower = entityName.toLowerCase();
-        await channel.send({
-          type: 'broadcast',
-          event: 'db_event',
-          payload: {
-            entity: entityLower,
-            action,
-            id: String(id),
-            data,
-            timestamp: Date.now()
-          }
-        });
-      }
+    const channel = getActiveServerBroadcastChannel();
+    await channel.send({
+      type: 'broadcast',
+      event: 'db_event',
+      payload
     });
   } catch (err) {
     console.warn('[SERVER REALTIME BROADCAST WARNING]', err);
@@ -5133,29 +5169,24 @@ router17.get("/", (req, res) => {
   res.setHeader("X-Accel-Buffering", "no");
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.flushHeaders();
-  res.write(`event: connected
-data: ${JSON.stringify({ status: "connected", transport: "supabase-realtime", message: "Real-time sync via Supabase WebSocket channel." })}
 
-`);
-  res.write(`event: ping
-data: ${JSON.stringify({ ts: Date.now() })}
+  sseConnectedClients.add(res);
 
-`);
-  req.on("close", () => {
-    res.end();
-  });
-  const closeTimer = setTimeout(() => {
+  res.write(`event: connected\ndata: ${JSON.stringify({ status: "connected", transport: "sse-and-supabase", message: "Real-time sync active." })}\n\n`);
+
+  const pingInterval = setInterval(() => {
     try {
-      res.write(`event: ping
-data: ${JSON.stringify({ ts: Date.now() })}
-
-`);
-      res.end();
+      res.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
     } catch (_) {
+      clearInterval(pingInterval);
+      sseConnectedClients.delete(res);
     }
-  }, 2e4);
+  }, 15000);
+
   req.on("close", () => {
-    clearTimeout(closeTimer);
+    clearInterval(pingInterval);
+    sseConnectedClients.delete(res);
+    res.end();
   });
 });
 var events_default = router17;

@@ -1,29 +1,56 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Safe environment variable resolution for Vite and Node
-const getEnvVar = (viteKey: string, nodeKey: string, fallback: string = ''): string => {
+const PRODUCTION_SUPABASE_URL = 'https://pirynpugkiurjobrqiqg.supabase.co';
+const PRODUCTION_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w';
+
+// Safe environment variable resolution for Vite and Node with placeholder sanitizer
+const resolveSupabaseUrl = (): string => {
+  let url = '';
   try {
-    if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env[viteKey]) {
-      return String((import.meta as any).env[viteKey]);
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL) {
+      url = String((import.meta as any).env.VITE_SUPABASE_URL).trim();
     }
   } catch (_) { }
 
-  try {
-    if (typeof process !== 'undefined' && process.env) {
-      if (process.env[nodeKey]) return String(process.env[nodeKey]);
-      if (process.env[viteKey]) return String(process.env[viteKey]);
-    }
-  } catch (_) { }
+  if (!url) {
+    try {
+      if (typeof process !== 'undefined' && process.env) {
+        url = String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+      }
+    } catch (_) { }
+  }
 
-  return fallback;
+  if (!url || url.includes('your-project') || url.includes('example.com') || !url.startsWith('http')) {
+    return PRODUCTION_SUPABASE_URL;
+  }
+  return url;
 };
 
-const SUPABASE_URL = getEnvVar('VITE_SUPABASE_URL', 'SUPABASE_URL', 'https://pirynpugkiurjobrqiqg.supabase.co');
-const SUPABASE_ANON_KEY = getEnvVar(
-  'VITE_SUPABASE_ANON_KEY',
-  'SUPABASE_ANON_KEY',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w'
-);
+const resolveSupabaseKey = (): string => {
+  let key = '';
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY) {
+      key = String((import.meta as any).env.VITE_SUPABASE_ANON_KEY).trim();
+    }
+  } catch (_) { }
+
+  if (!key) {
+    try {
+      if (typeof process !== 'undefined' && process.env) {
+        key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim();
+      }
+    } catch (_) { }
+  }
+
+  if (!key || key.includes('...') || key.length < 50) {
+    return PRODUCTION_SUPABASE_ANON_KEY;
+  }
+  return key;
+};
+
+const SUPABASE_URL = resolveSupabaseUrl();
+const SUPABASE_ANON_KEY = resolveSupabaseKey();
 
 let supabaseInstance: SupabaseClient | null = null;
 
@@ -99,6 +126,19 @@ export async function syncRepairToSupabase(repair: any) {
   if (!repair || !repair.id) return;
   try {
     const sanitized = sanitizeRepairForSupabase(repair);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('mts-realtime-update', {
+          detail: {
+            entity: 'repair',
+            action: 'UPDATE',
+            id: String(repair.id),
+            data: sanitized,
+            timestamp: Date.now()
+          }
+        })
+      );
+    }
     const channel = supabase.channel('mts_app_db_changes');
     if (channel.state !== 'joined') {
       await channel.subscribe();
@@ -106,7 +146,13 @@ export async function syncRepairToSupabase(repair: any) {
     await channel.send({
       type: 'broadcast',
       event: 'repair_sync',
-      payload: sanitized
+      payload: {
+        entity: 'repair',
+        action: 'UPDATE',
+        id: String(repair.id),
+        data: sanitized,
+        ...sanitized
+      }
     });
   } catch (err) {
     console.warn('[SUPABASE REALTIME] Sync repair notice:', err);
