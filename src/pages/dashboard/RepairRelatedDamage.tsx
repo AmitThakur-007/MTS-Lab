@@ -26,6 +26,8 @@ import {
   AlertTriangle, 
   ShieldAlert, 
   ShieldCheck, 
+  Shield,
+  Info,
   History, 
   Loader2, 
   ArrowUpRight, 
@@ -74,37 +76,46 @@ import { cn } from '@/lib/utils';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 
 const STANDARD_COMPONENTS = [
-  'Display',
+  'Display Panel',
+  'OCA Glass',
+  'Touch Screen Digitizer',
+  'AMOLED Display',
+  'LCD Screen',
   'Back Glass / Back Panel',
   'Battery',
-  'Camera',
-  'Charging Port',
-  'Speaker',
-  'Earpiece',
+  'Camera Module (Rear)',
+  'Camera Module (Front)',
+  'Camera Lens Glass',
+  'Charging Port PCB',
+  'Speaker / Earpiece',
   'Flex Cable',
-  'Connector',
-  'IC / Board Component',
-  'Other'
+  'Motherboard / PCB',
+  'Power IC',
+  'Audio IC',
+  'Other Component'
 ];
 
 const DAMAGE_TYPES = [
-  { value: 'CRACKED', label: 'Cracked / Shattered' },
-  { value: 'TORN_FLEX', label: 'Torn Flex Ribbon' },
-  { value: 'SHORT_CIRCUIT', label: 'Short Circuit / Electrical Defect' },
+  { value: 'CRACKED', label: 'Cracked / Shattered Glass' },
+  { value: 'TORN_FLEX', label: 'Torn Flex Ribbon Cable' },
+  { value: 'SHORT_CIRCUIT', label: 'Short Circuit / Electrical Burn' },
+  { value: 'HEAT_DAMAGE', label: 'Heat Separation Damage' },
+  { value: 'PRESSURE_BLEED', label: 'Pressure / OLED Bleed / Line' },
   { value: 'SCRATCHED', label: 'Scratched / Cosmetic Dent' },
-  { value: 'BURNT', label: 'Overheated / Burnt Component' },
   { value: 'COMPONENT_LOST', label: 'Lost / Displaced Small Part' },
-  { value: 'OTHER', label: 'Other Mishap / Defect' }
+  { value: 'OTHER', label: 'Other Handling Mishap' }
 ];
 
 export default function RepairRelatedDamage() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
 
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const isAdmin = user?.role === 'ADMIN';
-  const isManager = user?.role === 'MANAGER';
-  const canManage = isSuperAdmin || isAdmin || isManager;
+  const userRole = user?.role || 'TECHNICIAN';
+  const isSuperAdmin = userRole === 'SUPER_ADMIN';
+  const isAdmin = userRole === 'ADMIN';
+  const isManager = userRole === 'MANAGER';
+  const isElevated = isSuperAdmin || isAdmin || isManager;
+  const canRecordDamage = isSuperAdmin || isAdmin || isManager;
   const canEditOrDelete = isSuperAdmin || isAdmin;
 
   // Overview Stats
@@ -116,7 +127,7 @@ export default function RepairRelatedDamage() {
   const [loadingRecords, setLoadingRecords] = useState(true);
   const [totalRecordsCount, setTotalRecordsCount] = useState(0);
 
-  // Staff members for dropdowns
+  // Staff members & inventory items
   const [staffList, setStaffList] = useState<any[]>([]);
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
 
@@ -146,7 +157,7 @@ export default function RepairRelatedDamage() {
   // Form State: Create Damage Record
   const [formData, setFormData] = useState({
     staffId: '',
-    damagedComponent: 'Display',
+    damagedComponent: 'Display Panel',
     damageType: 'CRACKED',
     damageDescription: '',
     repairNumber: '',
@@ -189,14 +200,18 @@ export default function RepairRelatedDamage() {
   // Fetch Overview Stats
   const fetchOverviewStats = useCallback(async () => {
     try {
-      const data = await api.get('/repair-damage/overview');
+      const params = new URLSearchParams();
+      if (isElevated && selectedStaffFilter !== 'ALL') {
+        params.append('staffId', selectedStaffFilter);
+      }
+      const data = await api.get(`/repair-damage/overview?${params.toString()}`);
       setOverviewStats(data);
     } catch (err: any) {
-      console.error("[FETCH DAMAGE OVERVIEW ERROR]", err);
+      console.error('[FETCH DAMAGE OVERVIEW ERROR]', err);
     } finally {
       setLoadingOverview(false);
     }
-  }, []);
+  }, [isElevated, selectedStaffFilter]);
 
   // Fetch Records with applied filters
   const fetchRecords = useCallback(async () => {
@@ -204,7 +219,9 @@ export default function RepairRelatedDamage() {
     try {
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.append('search', searchQuery.trim());
-      if (selectedStaffFilter !== 'ALL') params.append('staffId', selectedStaffFilter);
+      if (isElevated && selectedStaffFilter !== 'ALL') {
+        params.append('staffId', selectedStaffFilter);
+      }
       if (selectedComponentFilter !== 'ALL') params.append('component', selectedComponentFilter);
       if (selectedTypeFilter !== 'ALL') params.append('damageType', selectedTypeFilter);
 
@@ -238,14 +255,17 @@ export default function RepairRelatedDamage() {
       } else if (Array.isArray(res)) {
         setRecords(res);
         setTotalRecordsCount(res.length);
+      } else {
+        setRecords([]);
+        setTotalRecordsCount(0);
       }
     } catch (err: any) {
-      console.error("[FETCH DAMAGE RECORDS ERROR]", err);
-      toast.error(err?.message || "Failed to load repair-related damage records.");
+      console.error('[FETCH DAMAGE RECORDS ERROR]', err);
+      toast.error(err?.message || 'Failed to load repair-related damage records.');
     } finally {
       setLoadingRecords(false);
     }
-  }, [searchQuery, selectedStaffFilter, selectedComponentFilter, selectedTypeFilter, periodTab, customDate, customMonth, customYear, startDate, endDate]);
+  }, [searchQuery, isElevated, selectedStaffFilter, selectedComponentFilter, selectedTypeFilter, periodTab, customDate, customMonth, customYear, startDate, endDate]);
 
   // Fetch Staff List & Inventory items for form selectors
   const fetchSupportingData = async () => {
@@ -266,14 +286,16 @@ export default function RepairRelatedDamage() {
         setInventoryItems(iList);
       }
     } catch (err) {
-      console.error("[FETCH SUPPORTING DATA ERROR]", err);
+      console.error('[FETCH SUPPORTING DATA ERROR]', err);
     }
   };
 
   useEffect(() => {
     fetchOverviewStats();
-    fetchSupportingData();
-  }, [fetchOverviewStats]);
+    if (isElevated) {
+      fetchSupportingData();
+    }
+  }, [fetchOverviewStats, isElevated]);
 
   useEffect(() => {
     fetchRecords();
@@ -328,17 +350,21 @@ export default function RepairRelatedDamage() {
       const fullRecord = await api.get(`/repair-damage/${record.id}`);
       setSelectedRecord(fullRecord);
     } catch (err: any) {
-      console.error("[FETCH DAMAGE DETAILS ERROR]", err);
+      console.error('[FETCH DAMAGE DETAILS ERROR]', err);
     } finally {
       setRecordDetailsLoading(false);
     }
   };
 
-  // Open Edit Modal
+  // Open Edit Modal (Super Admin / Admin Only)
   const handleOpenEdit = (record: any) => {
+    if (!canEditOrDelete) {
+      toast.error('Permission Denied: Only Admins can modify records.');
+      return;
+    }
     setSelectedRecord(record);
     setEditFormData({
-      damagedComponent: record.damagedComponent || 'Display',
+      damagedComponent: record.damagedComponent || 'Display Panel',
       damageType: record.damageType || 'CRACKED',
       damageDescription: record.damageDescription || '',
       damageDate: record.damageDate || '',
@@ -355,8 +381,12 @@ export default function RepairRelatedDamage() {
     setIsEditModalOpen(true);
   };
 
-  // Open Delete / Archive Modal
+  // Open Delete / Archive Modal (Super Admin / Admin Only)
   const handleOpenDelete = (record: any) => {
+    if (!canEditOrDelete) {
+      toast.error('Permission Denied: Only Admins can archive records.');
+      return;
+    }
     setSelectedRecord(record);
     setIsDeleteModalOpen(true);
   };
@@ -365,15 +395,15 @@ export default function RepairRelatedDamage() {
   const handleCreateDamage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.staffId) {
-      toast.error("Please select the responsible staff member.");
+      toast.error('Please select the responsible staff member.');
       return;
     }
-    if (!formData.damagedComponent) {
-      toast.error("Please select the damaged component.");
+    if (!formData.damagedComponent || !formData.damagedComponent.trim()) {
+      toast.error('Please select the damaged component.');
       return;
     }
-    if (!formData.damageDescription.trim()) {
-      toast.error("Please provide a detailed damage description.");
+    if (!formData.damageDescription || formData.damageDescription.trim().length < 3) {
+      toast.error('Please provide a detailed damage description (at least 3 characters).');
       return;
     }
 
@@ -384,12 +414,12 @@ export default function RepairRelatedDamage() {
         quantity: Number(formData.quantity) || 1,
         estimatedCost: formData.estimatedCost ? parseFloat(formData.estimatedCost) : undefined
       });
-      toast.success("Repair-related damage record created successfully.");
+      toast.success('Repair-related damage record logged successfully.');
       setIsRecordModalOpen(false);
       // Reset form
       setFormData({
         staffId: '',
-        damagedComponent: 'Display',
+        damagedComponent: 'Display Panel',
         damageType: 'CRACKED',
         damageDescription: '',
         repairNumber: '',
@@ -409,8 +439,8 @@ export default function RepairRelatedDamage() {
       fetchOverviewStats();
       fetchRecords();
     } catch (err: any) {
-      console.error("[CREATE DAMAGE ERROR]", err);
-      toast.error(err?.message || "Failed to record repair-related damage.");
+      console.error('[CREATE DAMAGE ERROR]', err);
+      toast.error(err?.message || 'Failed to record repair-related damage.');
     } finally {
       setSubmitting(false);
     }
@@ -421,7 +451,7 @@ export default function RepairRelatedDamage() {
     e.preventDefault();
     if (!selectedRecord) return;
     if (!editFormData.damageDescription.trim()) {
-      toast.error("Description cannot be empty.");
+      toast.error('Description cannot be empty.');
       return;
     }
 
@@ -432,13 +462,13 @@ export default function RepairRelatedDamage() {
         quantity: Number(editFormData.quantity) || 1,
         estimatedCost: editFormData.estimatedCost ? parseFloat(editFormData.estimatedCost) : null
       });
-      toast.success("Damage record updated successfully.");
+      toast.success('Damage record updated with audit log.');
       setIsEditModalOpen(false);
       fetchOverviewStats();
       fetchRecords();
     } catch (err: any) {
-      console.error("[UPDATE DAMAGE ERROR]", err);
-      toast.error(err?.message || "Failed to update damage record.");
+      console.error('[UPDATE DAMAGE ERROR]', err);
+      toast.error(err?.message || 'Failed to update damage record.');
     } finally {
       setSubmitting(false);
     }
@@ -450,13 +480,13 @@ export default function RepairRelatedDamage() {
     setSubmitting(true);
     try {
       await api.delete(`/repair-damage/${selectedRecord.id}`);
-      toast.success("Damage record safely archived.");
+      toast.success('Damage record safely archived.');
       setIsDeleteModalOpen(false);
       fetchOverviewStats();
       fetchRecords();
     } catch (err: any) {
-      console.error("[DELETE DAMAGE ERROR]", err);
-      toast.error(err?.message || "Failed to archive damage record.");
+      console.error('[DELETE DAMAGE ERROR]', err);
+      toast.error(err?.message || 'Failed to archive damage record.');
     } finally {
       setSubmitting(false);
     }
@@ -467,8 +497,11 @@ export default function RepairRelatedDamage() {
     setExporting(true);
     try {
       const params = new URLSearchParams();
-      if (selectedStaffFilter !== 'ALL') params.append('staffId', selectedStaffFilter);
+      if (isElevated && selectedStaffFilter !== 'ALL') {
+        params.append('staffId', selectedStaffFilter);
+      }
       if (selectedComponentFilter !== 'ALL') params.append('component', selectedComponentFilter);
+      if (selectedTypeFilter !== 'ALL') params.append('damageType', selectedTypeFilter);
       if (periodTab === 'CUSTOM') {
         if (customMonth) params.append('month', customMonth);
         else if (customYear) params.append('year', customYear);
@@ -476,10 +509,10 @@ export default function RepairRelatedDamage() {
         if (endDate) params.append('endDate', endDate);
       }
       await api.download(`/repair-damage/export?${params.toString()}`, `MTS_Repair_Related_Damage_${new Date().toISOString().split('T')[0]}.xlsx`);
-      toast.success("Damage records exported successfully.");
+      toast.success('Damage records exported successfully.');
     } catch (err: any) {
-      console.error("[EXPORT DAMAGE ERROR]", err);
-      toast.error(err?.message || "Failed to export damage records.");
+      console.error('[EXPORT DAMAGE ERROR]', err);
+      toast.error(err?.message || 'Failed to export damage records.');
     } finally {
       setExporting(false);
     }
@@ -487,42 +520,65 @@ export default function RepairRelatedDamage() {
 
   // Helper for component badge colors
   const getComponentBadgeColor = (comp: string) => {
-    switch (comp) {
-      case 'Display': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-      case 'Back Glass / Back Panel': return 'bg-purple-50 text-purple-700 border-purple-200';
-      case 'Battery': return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'Camera': return 'bg-sky-50 text-sky-700 border-sky-200';
-      case 'Charging Port': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'Speaker':
-      case 'Earpiece': return 'bg-cyan-50 text-cyan-700 border-cyan-200';
-      case 'Flex Cable':
-      case 'Connector': return 'bg-orange-50 text-orange-700 border-orange-200';
-      case 'IC / Board Component': return 'bg-rose-50 text-rose-700 border-rose-200';
-      default: return 'bg-slate-50 text-slate-700 border-slate-200';
+    if (comp?.includes('Display') || comp?.includes('Screen') || comp?.includes('OLED')) {
+      return 'bg-indigo-50 text-indigo-700 border-indigo-200';
     }
+    if (comp?.includes('Glass') || comp?.includes('Housing') || comp?.includes('Panel')) {
+      return 'bg-purple-50 text-purple-700 border-purple-200';
+    }
+    if (comp?.includes('Battery')) {
+      return 'bg-amber-50 text-amber-700 border-amber-200';
+    }
+    if (comp?.includes('Camera')) {
+      return 'bg-sky-50 text-sky-700 border-sky-200';
+    }
+    if (comp?.includes('Charging') || comp?.includes('Port')) {
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+    if (comp?.includes('Speaker') || comp?.includes('Audio')) {
+      return 'bg-cyan-50 text-cyan-700 border-cyan-200';
+    }
+    if (comp?.includes('Flex') || comp?.includes('Connector')) {
+      return 'bg-orange-50 text-orange-700 border-orange-200';
+    }
+    if (comp?.includes('IC') || comp?.includes('Board') || comp?.includes('Motherboard')) {
+      return 'bg-rose-50 text-rose-700 border-rose-200';
+    }
+    return 'bg-slate-50 text-slate-700 border-slate-200';
   };
 
   return (
     <div className="space-y-6 sm:space-y-8 pb-20 max-w-7xl mx-auto">
       {/* ========================================================================= */}
-      {/* 1. HEADER SECTION */}
+      {/* 1. HEADER SECTION & ROLE BADGE */}
       {/* ========================================================================= */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 sm:p-7 rounded-3xl border border-slate-200/70 shadow-xs">
-        <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2.5">
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100 shadow-2xs shrink-0">
               <FileWarning className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight text-slate-900 truncate">
-                Repair-Related Damage
-              </h1>
-              <p className="text-xs sm:text-sm font-medium text-slate-500 truncate">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight text-slate-900 truncate">
+                  {isElevated ? 'Repair-Related Damage Hub' : 'My Repair-Related Damage'}
+                </h1>
+                <Badge variant="outline" className={cn(
+                  "text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border",
+                  isSuperAdmin ? "bg-purple-50 text-purple-700 border-purple-200" :
+                  isAdmin ? "bg-indigo-50 text-indigo-700 border-indigo-200" :
+                  isManager ? "bg-amber-50 text-amber-700 border-amber-200" :
+                  "bg-slate-100 text-slate-700 border-slate-200"
+                )}>
+                  {userRole.replace(/_/g, ' ')}
+                </Badge>
+              </div>
+              <p className="text-xs sm:text-sm font-medium text-slate-500 truncate mt-0.5">
                 {isSuperAdmin || isAdmin 
-                  ? 'Central monitoring, audit trails, and staff component damage management' 
+                  ? 'Complete oversight, audit trails, and administrative damage record control' 
                   : isManager 
-                  ? 'Team component damage reporting and resolution tracking' 
-                  : 'Authorized personal repair damage incident history'}
+                  ? 'Log repair component damage and monitor team incident reports' 
+                  : 'Personal log of component damage reports associated with your repair jobs'}
               </p>
             </div>
           </div>
@@ -536,20 +592,18 @@ export default function RepairRelatedDamage() {
             }} 
           />
 
-          {canManage && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportExcel}
-              disabled={exporting || records.length === 0}
-              className="rounded-xl border-slate-200 font-bold text-xs h-10 px-3.5 gap-1.5 hover:bg-slate-50 cursor-pointer shadow-2xs"
-            >
-              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5 text-slate-600" />}
-              <span>Export</span>
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            disabled={exporting || records.length === 0}
+            className="rounded-xl border-slate-200 font-bold text-xs h-10 px-3.5 gap-1.5 hover:bg-slate-50 cursor-pointer shadow-2xs"
+          >
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5 text-slate-600" />}
+            <span>Export</span>
+          </Button>
 
-          {canManage && (
+          {canRecordDamage && (
             <Button
               onClick={() => setIsRecordModalOpen(true)}
               className="rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs sm:text-sm h-10 sm:h-11 px-4 sm:px-5 gap-2 shadow-md cursor-pointer flex-1 sm:flex-initial"
@@ -562,6 +616,21 @@ export default function RepairRelatedDamage() {
       </div>
 
       {/* ========================================================================= */}
+      {/* ROLE INFORMATIONAL BANNER FOR MANAGERS */}
+      {/* ========================================================================= */}
+      {isManager && (
+        <div className="p-4 bg-amber-50/70 border border-amber-200/80 rounded-2xl flex items-start gap-3 text-xs text-amber-900">
+          <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-bold">Manager Workspace Policy:</span>
+            <p className="text-amber-800 leading-relaxed font-medium">
+              You are authorized to log new repair damage incidents and inspect team records. In accordance with MTS strict audit guidelines, modifying or deleting existing records is reserved exclusively for Super Admin and Admin roles.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* 2. OVERVIEW METRIC CARDS */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
@@ -571,11 +640,15 @@ export default function RepairRelatedDamage() {
             <FileWarning className="h-6 w-6" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Total Damage Records</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
+              {isElevated ? 'Total Damage Records' : 'My Total Incidents'}
+            </p>
             <p className="text-2xl font-black text-slate-900 tracking-tight mt-0.5">
               {loadingOverview ? <Loader2 className="h-6 w-6 animate-spin text-slate-400" /> : (overviewStats?.totalRecords ?? 0)}
             </p>
-            <p className="text-[11px] font-medium text-slate-500 mt-0.5 truncate">Active logged incidents</p>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5 truncate">
+              {isElevated ? 'Active logged incidents' : 'Associated with your work'}
+            </p>
           </div>
         </Card>
 
@@ -585,7 +658,9 @@ export default function RepairRelatedDamage() {
             <Calendar className="h-6 w-6" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">This Month</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
+              {isElevated ? 'This Month' : 'My Month Incidents'}
+            </p>
             <p className="text-2xl font-black text-slate-900 tracking-tight mt-0.5">
               {loadingOverview ? <Loader2 className="h-6 w-6 animate-spin text-slate-400" /> : (overviewStats?.thisMonthRecords ?? 0)}
             </p>
@@ -601,11 +676,15 @@ export default function RepairRelatedDamage() {
             <Clock className="h-6 w-6" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Today's Incidents</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
+              {isElevated ? "Today's Incidents" : "My Today Incidents"}
+            </p>
             <p className="text-2xl font-black text-slate-900 tracking-tight mt-0.5">
               {loadingOverview ? <Loader2 className="h-6 w-6 animate-spin text-slate-400" /> : (overviewStats?.todayRecords ?? 0)}
             </p>
-            <p className="text-[11px] font-medium text-slate-500 mt-0.5 truncate">Authoritative Nepal date</p>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5 truncate">
+              Authoritative Nepal date
+            </p>
           </div>
         </Card>
 
@@ -615,17 +694,21 @@ export default function RepairRelatedDamage() {
             <DollarSign className="h-6 w-6" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Total Est. Cost</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
+              {isElevated ? 'Total Est. Cost' : 'My Total Est. Cost'}
+            </p>
             <p className="text-2xl font-black text-slate-900 tracking-tight mt-0.5 truncate">
               {loadingOverview ? <Loader2 className="h-6 w-6 animate-spin text-slate-400" /> : `NPR ${(overviewStats?.totalEstimatedCost || 0).toLocaleString()}`}
             </p>
-            <p className="text-[11px] font-medium text-slate-500 mt-0.5 truncate">Cumulative component cost</p>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5 truncate">
+              Cumulative component value
+            </p>
           </div>
         </Card>
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. COMPONENT BREAKDOWN MINI CHIPS */}
+      {/* 3. COMPONENT BREAKDOWN SUMMARY CHIPS */}
       {/* ========================================================================= */}
       {overviewStats?.componentBreakdown && Object.keys(overviewStats.componentBreakdown).length > 0 && (
         <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/70 shadow-xs space-y-3">
@@ -635,7 +718,7 @@ export default function RepairRelatedDamage() {
               Component Breakdown Summary
             </h3>
             <span className="text-[11px] font-semibold text-slate-400">
-              {(Object.values(overviewStats.componentBreakdown) as number[]).reduce((a, b) => a + b, 0)} damaged components total
+              {(Object.values(overviewStats.componentBreakdown) as number[]).reduce((a, b) => a + b, 0)} total incidents
             </span>
           </div>
 
@@ -706,7 +789,7 @@ export default function RepairRelatedDamage() {
           </div>
         </div>
 
-        {/* Custom Date / Month / Year Range Row if periodTab === 'CUSTOM' */}
+        {/* Custom Date / Month / Range Row if periodTab === 'CUSTOM' */}
         {periodTab === 'CUSTOM' && (
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/60 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 animate-in fade-in duration-200">
             <div className="space-y-1">
@@ -771,13 +854,13 @@ export default function RepairRelatedDamage() {
         )}
 
         {/* Filter Selectors Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className={cn("grid gap-3", isElevated ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" : "grid-cols-1 sm:grid-cols-3")}>
           {/* Search Box */}
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               type="text"
-              placeholder="Search staff, repair #, device, component..."
+              placeholder={isElevated ? "Search staff, repair #, device, component..." : "Search repair #, device, component..."}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="h-10 pl-9 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white text-xs font-medium"
@@ -793,8 +876,8 @@ export default function RepairRelatedDamage() {
             )}
           </div>
 
-          {/* Staff Filter (For Admin / Super Admin / Manager) */}
-          {canManage && (
+          {/* Staff Filter (Elevated Roles Only) */}
+          {isElevated && (
             <div>
               <Select value={selectedStaffFilter} onValueChange={setSelectedStaffFilter}>
                 <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50/70 text-xs font-bold">
@@ -805,7 +888,7 @@ export default function RepairRelatedDamage() {
                   {staffList.map(s => (
                     <SelectItem key={s.id} value={s.id} className="text-xs">
                       <span className="font-bold">{s.name}</span>
-                      <span className="text-[10px] text-slate-400 ml-1.5">({s.role})</span>
+                      <span className="text-[10px] text-slate-400 ml-1.5">({s.role?.replace(/_/g, ' ')})</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -902,7 +985,7 @@ export default function RepairRelatedDamage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* 5. RECORDS LIST (RESPONSIVE CARDS & DESKTOP TABLE) */}
+      {/* 5. RECORDS LIST (RESPONSIVE CARDS) */}
       {/* ========================================================================= */}
       {loadingRecords ? (
         <div className="bg-white rounded-3xl border border-slate-200/70 p-12 text-center flex flex-col items-center justify-center gap-3">
@@ -911,14 +994,18 @@ export default function RepairRelatedDamage() {
         </div>
       ) : records.length === 0 ? (
         <div className="bg-white rounded-3xl border border-slate-200/70 p-12 text-center flex flex-col items-center justify-center gap-3">
-          <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center border border-slate-200 shadow-2xs">
-            <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+          <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shadow-2xs">
+            <CheckCircle2 className="h-7 w-7" />
           </div>
-          <h3 className="text-base font-bold text-slate-900">No Repair-Related Damage Records</h3>
+          <h3 className="text-base font-bold text-slate-900">
+            {isElevated ? 'No Repair-Related Damage Records' : 'Zero Damage Incidents Recorded'}
+          </h3>
           <p className="text-xs text-slate-500 max-w-sm">
-            No component or device damage reports found matching your current filter criteria.
+            {isElevated 
+              ? 'No component or device damage reports found matching your current filter criteria.'
+              : 'You have a clean repair record with no logged damage incidents matching current filters.'}
           </p>
-          {canManage && (
+          {canRecordDamage && (
             <Button
               onClick={() => setIsRecordModalOpen(true)}
               className="rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs h-9 px-4 mt-2 gap-1.5 shadow-md cursor-pointer"
@@ -930,7 +1017,7 @@ export default function RepairRelatedDamage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Responsive Card Grid (All screens up to XL) */}
+          {/* Responsive Card Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4">
             {records.map((rec) => {
               const compBadgeClass = getComponentBadgeColor(rec.damagedComponent);
@@ -958,7 +1045,7 @@ export default function RepairRelatedDamage() {
 
                   {/* Middle Content */}
                   <div className="space-y-2.5 min-w-0">
-                    {/* Staff Person */}
+                    {/* Staff Person (Shown prominently for Elevated roles, or compact for personal) */}
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200/60 flex items-center justify-center text-slate-700 font-bold text-xs shrink-0">
                         {rec.staffName ? rec.staffName[0].toUpperCase() : 'S'}
@@ -1167,7 +1254,7 @@ export default function RepairRelatedDamage() {
                     <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs font-bold">
                       <SelectValue placeholder="Select Damaged Component" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-2xl shadow-xl">
+                    <SelectContent className="rounded-2xl shadow-xl max-h-56">
                       {STANDARD_COMPONENTS.map(c => (
                         <SelectItem key={c} value={c} className="text-xs font-bold">{c}</SelectItem>
                       ))}
@@ -1387,7 +1474,7 @@ export default function RepairRelatedDamage() {
                     <div>
                       <span className="text-[10px] text-slate-400 font-bold block">Estimated Cost</span>
                       <span className="font-bold text-emerald-700">
-                        {selectedRecord.estimatedCost !== null ? `NPR ${selectedRecord.estimatedCost.toLocaleString()}` : '—'}
+                        {selectedRecord.estimatedCost !== null && selectedRecord.estimatedCost !== undefined ? `NPR ${selectedRecord.estimatedCost.toLocaleString()}` : '—'}
                       </span>
                     </div>
                   </div>
@@ -1412,7 +1499,7 @@ export default function RepairRelatedDamage() {
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold block">Recorded By</span>
                     <span className="font-bold text-slate-800">
-                      {selectedRecord.recordedByName} ({selectedRecord.recordedByRole})
+                      {selectedRecord.recordedByName} ({selectedRecord.recordedByRole?.replace(/_/g, ' ')})
                     </span>
                   </div>
                 </div>
@@ -1427,14 +1514,14 @@ export default function RepairRelatedDamage() {
                 )}
 
                 {/* Audit Trail */}
-                {selectedRecord.auditLogs && selectedRecord.auditLogs.length > 0 && (
+                {selectedRecord.audits && selectedRecord.audits.length > 0 && (
                   <div className="space-y-2 pt-2 border-t border-slate-100">
                     <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                       <History className="h-3.5 w-3.5" />
                       Traceable Audit History
                     </h4>
                     <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                      {selectedRecord.auditLogs.map((log: any) => (
+                      {selectedRecord.audits.map((log: any) => (
                         <div key={log.id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 text-[11px] space-y-0.5">
                           <div className="flex items-center justify-between font-bold text-slate-800">
                             <span>{log.action}</span>
@@ -1443,7 +1530,7 @@ export default function RepairRelatedDamage() {
                             </span>
                           </div>
                           <p className="text-slate-500">
-                            By <b className="text-slate-700">{log.performedByName}</b> ({log.performedByRole}) • {log.reason || 'No remarks'}
+                            By <b className="text-slate-700">{log.performedByName}</b> ({log.performedByRole?.replace(/_/g, ' ')}) • {log.reason || 'No remarks'}
                           </p>
                         </div>
                       ))}
@@ -1485,171 +1572,175 @@ export default function RepairRelatedDamage() {
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* 8. EDIT DAMAGE RECORD MODAL (ADMIN / SUPER ADMIN) */}
+      {/* 8. EDIT DAMAGE RECORD MODAL (ADMIN / SUPER ADMIN ONLY) */}
       {/* ========================================================================= */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-xl rounded-3xl p-0 border border-slate-200 shadow-2xl overflow-hidden bg-white max-h-[90vh] flex flex-col">
-          <DialogHeader className="p-6 pb-4 bg-slate-900 text-white shrink-0">
-            <DialogTitle className="text-xl font-black text-white">Edit Repair-Related Damage Record</DialogTitle>
-            <DialogDescription className="font-medium text-slate-400 text-xs mt-0.5">
-              Modify record parameters with mandatory audit tracking
-            </DialogDescription>
-          </DialogHeader>
+      {canEditOrDelete && (
+        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+          <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-xl rounded-3xl p-0 border border-slate-200 shadow-2xl overflow-hidden bg-white max-h-[90vh] flex flex-col">
+            <DialogHeader className="p-6 pb-4 bg-slate-900 text-white shrink-0">
+              <DialogTitle className="text-xl font-black text-white">Edit Repair-Related Damage Record</DialogTitle>
+              <DialogDescription className="font-medium text-slate-400 text-xs mt-0.5">
+                Modify record parameters with mandatory audit tracking
+              </DialogDescription>
+            </DialogHeader>
 
-          <form onSubmit={handleUpdateDamage} className="flex flex-col flex-1 overflow-hidden">
-            <div className="p-6 space-y-4 overflow-y-auto flex-1">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Damaged Component</Label>
-                  <Select value={editFormData.damagedComponent} onValueChange={v => setEditFormData({ ...editFormData, damagedComponent: v })}>
-                    <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-bold">
-                      <SelectValue placeholder="Component" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      {STANDARD_COMPONENTS.map(c => (
-                        <SelectItem key={c} value={c} className="text-xs font-bold">{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            <form onSubmit={handleUpdateDamage} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700">Damaged Component</Label>
+                    <Select value={editFormData.damagedComponent} onValueChange={v => setEditFormData({ ...editFormData, damagedComponent: v })}>
+                      <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-bold">
+                        <SelectValue placeholder="Component" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl max-h-56">
+                        {STANDARD_COMPONENTS.map(c => (
+                          <SelectItem key={c} value={c} className="text-xs font-bold">{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700">Damage Classification</Label>
+                    <Select value={editFormData.damageType} onValueChange={v => setEditFormData({ ...editFormData, damageType: v })}>
+                      <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-bold">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        {DAMAGE_TYPES.map(t => (
+                          <SelectItem key={t.value} value={t.value} className="text-xs font-medium">{t.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Damage Classification</Label>
-                  <Select value={editFormData.damageType} onValueChange={v => setEditFormData({ ...editFormData, damageType: v })}>
-                    <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-bold">
-                      <SelectValue placeholder="Type" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      {DAMAGE_TYPES.map(t => (
-                        <SelectItem key={t.value} value={t.value} className="text-xs font-medium">{t.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-xs font-bold text-slate-700">Damage Description *</Label>
+                  <Textarea 
+                    rows={3}
+                    value={editFormData.damageDescription}
+                    onChange={e => setEditFormData({ ...editFormData, damageDescription: e.target.value })}
+                    className="rounded-xl border-slate-200 text-xs font-medium resize-none"
+                    required
+                  />
                 </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Damage Description *</Label>
-                <Textarea 
-                  rows={3}
-                  value={editFormData.damageDescription}
-                  onChange={e => setEditFormData({ ...editFormData, damageDescription: e.target.value })}
-                  className="rounded-xl border-slate-200 text-xs font-medium resize-none"
-                  required
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700">Date</Label>
+                    <Input 
+                      type="date"
+                      value={editFormData.damageDate}
+                      onChange={e => setEditFormData({ ...editFormData, damageDate: e.target.value })}
+                      className="h-10 rounded-xl border-slate-200 text-xs font-medium"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700">Time</Label>
+                    <Input 
+                      type="time"
+                      value={editFormData.damageTime}
+                      onChange={e => setEditFormData({ ...editFormData, damageTime: e.target.value })}
+                      className="h-10 rounded-xl border-slate-200 text-xs font-medium"
+                    />
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700">Est. Cost (NPR)</Label>
+                    <Input 
+                      type="number"
+                      value={editFormData.estimatedCost}
+                      onChange={e => setEditFormData({ ...editFormData, estimatedCost: e.target.value })}
+                      className="h-10 rounded-xl border-slate-200 text-xs font-medium"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700">Status</Label>
+                    <Select value={editFormData.status} onValueChange={v => setEditFormData({ ...editFormData, status: v })}>
+                      <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-bold">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="ACTIVE" className="text-xs font-bold">ACTIVE</SelectItem>
+                        <SelectItem value="RESOLVED" className="text-xs font-bold">RESOLVED</SelectItem>
+                        <SelectItem value="REPLACED" className="text-xs font-bold">REPLACED</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Date</Label>
+                  <Label className="text-xs font-bold text-slate-700">Audit Change Reason *</Label>
                   <Input 
-                    type="date"
-                    value={editFormData.damageDate}
-                    onChange={e => setEditFormData({ ...editFormData, damageDate: e.target.value })}
+                    placeholder="Reason for modifying this damage record (mandatory audit note)..."
+                    value={editFormData.auditReason}
+                    onChange={e => setEditFormData({ ...editFormData, auditReason: e.target.value })}
                     className="h-10 rounded-xl border-slate-200 text-xs font-medium"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Time</Label>
-                  <Input 
-                    type="time"
-                    value={editFormData.damageTime}
-                    onChange={e => setEditFormData({ ...editFormData, damageTime: e.target.value })}
-                    className="h-10 rounded-xl border-slate-200 text-xs font-medium"
-                  />
-                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Est. Cost (NPR)</Label>
-                  <Input 
-                    type="number"
-                    value={editFormData.estimatedCost}
-                    onChange={e => setEditFormData({ ...editFormData, estimatedCost: e.target.value })}
-                    className="h-10 rounded-xl border-slate-200 text-xs font-medium"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Status</Label>
-                  <Select value={editFormData.status} onValueChange={v => setEditFormData({ ...editFormData, status: v })}>
-                    <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-bold">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="ACTIVE" className="text-xs font-bold">ACTIVE</SelectItem>
-                      <SelectItem value="RESOLVED" className="text-xs font-bold">RESOLVED</SelectItem>
-                      <SelectItem value="REPLACED" className="text-xs font-bold">REPLACED</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="rounded-xl text-xs font-bold text-slate-500 cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="rounded-xl h-10 px-5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md cursor-pointer"
+                  disabled={submitting}
+                >
+                  {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Audit Change Reason</Label>
-                <Input 
-                  placeholder="Reason for modifying this damage record..."
-                  value={editFormData.auditReason}
-                  onChange={e => setEditFormData({ ...editFormData, auditReason: e.target.value })}
-                  className="h-10 rounded-xl border-slate-200 text-xs font-medium"
-                />
+      {/* ========================================================================= */}
+      {/* 9. DELETE / ARCHIVE CONFIRMATION DIALOG (ADMIN / SUPER ADMIN ONLY) */}
+      {/* ========================================================================= */}
+      {canEditOrDelete && (
+        <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+          <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
+            <AlertDialogHeader>
+              <div className="w-11 h-11 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shadow-2xs shrink-0">
+                <Trash2 className="h-5 w-5" />
               </div>
-            </div>
+              <AlertDialogTitle className="text-lg font-bold text-slate-900">
+                Archive Damage Record?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
+                This record (<span className="font-mono font-bold text-slate-800">{selectedRecord?.recordNumber}</span>) will be safely removed from active views and archived with an immutable audit log.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
 
-            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setIsEditModalOpen(false)}
-                className="rounded-xl text-xs font-bold text-slate-500 cursor-pointer"
-              >
+            <AlertDialogFooter className="flex items-center justify-between gap-2 pt-2">
+              <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-600 border-slate-200 cursor-pointer">
                 Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                className="rounded-xl h-10 px-5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md cursor-pointer"
+              </AlertDialogCancel>
+              <AlertDialogAction
                 disabled={submitting}
+                onClick={handleDeleteDamage}
+                className="rounded-xl text-xs font-bold h-10 px-5 bg-rose-600 hover:bg-rose-700 text-white shadow-md cursor-pointer"
               >
-                {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* ========================================================================= */}
-      {/* 9. DELETE / ARCHIVE CONFIRMATION DIALOG */}
-      {/* ========================================================================= */}
-      <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
-          <AlertDialogHeader>
-            <div className="w-11 h-11 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shadow-2xs shrink-0">
-              <Trash2 className="h-5 w-5" />
-            </div>
-            <AlertDialogTitle className="text-lg font-bold text-slate-900">
-              Archive Damage Record?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
-              This record (<span className="font-mono font-bold text-slate-800">{selectedRecord?.recordNumber}</span>) will be removed from active views and archived with an immutable audit log.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          <AlertDialogFooter className="flex items-center justify-between gap-2 pt-2">
-            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-600 border-slate-200 cursor-pointer">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={submitting}
-              onClick={handleDeleteDamage}
-              className="rounded-xl text-xs font-bold h-10 px-5 bg-rose-600 hover:bg-rose-700 text-white shadow-md cursor-pointer"
-            >
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
-              Confirm Archival
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+                Confirm Archival
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
