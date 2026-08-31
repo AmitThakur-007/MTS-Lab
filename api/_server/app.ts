@@ -32,6 +32,11 @@ export function createApp() {
   app.use('/api/user', usersRoutes);
   app.use('/api/security', securityRoutes);
   app.use('/api/repairs', repairsRoutes);
+  // Transfer requests intentionally share the /api/repairs namespace because
+  // the technician client submits POST /api/repairs/:repairId/transfer-request.
+  // The transfer router owns only transfer-specific paths, so there is one
+  // transfer implementation and no duplicate assignment mechanism.
+  app.use('/api/repairs', repairTransfersRoutes);
   app.use('/api/repair', repairsRoutes);
   app.use('/api/repair-transfers', repairTransfersRoutes);
   app.use('/api/repair-transfer', repairTransfersRoutes);
