@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   DatabaseBackup,
   FileClock,
-  RefreshCw,
   ShieldCheck,
   Trash2,
   Users,
@@ -146,17 +145,10 @@ export default function SuperAdminSecurityControl() {
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-3 pb-16 sm:px-5 lg:px-7">
       <header className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-4">
-          <Button variant="ghost" size="icon" className="mt-1 shrink-0 rounded-xl" onClick={() => navigate('/dashboard')} aria-label="Back to dashboard">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
+          <Button variant="ghost" size="icon" className="mt-1 shrink-0 rounded-xl" onClick={() => navigate('/dashboard')} aria-label="Back to dashboard"><ArrowLeft className="h-5 w-5" /></Button>
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">Security & System Control</h1>
-              <Badge className="bg-rose-50 text-rose-700 border-rose-200">SUPER ADMIN</Badge>
-            </div>
-            <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-slate-500">
-              Centralized control for staff access, immutable activity records, destructive operations and protected system backups.
-            </p>
+            <div className="flex flex-wrap items-center gap-2"><h1 className="truncate text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">Security & System Control</h1><Badge className="bg-rose-50 text-rose-700 border-rose-200">SUPER ADMIN</Badge></div>
+            <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-slate-500">Centralized control for staff access, immutable activity records, destructive operations and protected system backups.</p>
           </div>
         </div>
         <DashboardRefreshButton onRefresh={async () => { await loadLogs(); await loadBackups(); }} label="Refresh" />
@@ -178,40 +170,11 @@ export default function SuperAdminSecurityControl() {
           <TabsTrigger value="backups" className="rounded-xl px-3 py-2 text-xs font-bold"><DatabaseBackup className="mr-1.5 h-4 w-4" />Backup & Recovery</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="logs" className="min-w-0">
-          <Card className="min-w-0 overflow-hidden rounded-3xl border-slate-200 shadow-sm">
-            <CardHeader className="border-b border-slate-100 p-5 sm:p-7">
-              <CardTitle className="text-xl font-black">Activity & Security Logs</CardTitle>
-              <CardDescription>Auditable system activity without the former surveillance dashboard.</CardDescription>
-              <div className="pt-2"><Input value={logSearch} onChange={(event) => setLogSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadLogs(); }} placeholder="Search audit activity" className="max-w-xl" /></div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
-                  <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Time</th><th className="px-5 py-3">Action</th><th className="px-5 py-3">Resource</th><th className="px-5 py-3">User</th><th className="px-5 py-3">Status</th></tr></thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {logLoading ? <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-500">Loading security activity…</td></tr> : logs.length === 0 ? <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-500">No security activity found.</td></tr> : logs.map((log) => <tr key={log.id} className="hover:bg-slate-50/80"><td className="whitespace-nowrap px-5 py-3 text-slate-500">{log.createdAt ? format(new Date(log.createdAt), 'yyyy-MM-dd HH:mm') : '—'}</td><td className="px-5 py-3 font-bold text-slate-900">{log.action}</td><td className="px-5 py-3 text-slate-600">{log.resource || '—'}</td><td className="px-5 py-3 text-slate-600">{log.userName || 'System'} {log.userRole ? `(${log.userRole})` : ''}</td><td className="px-5 py-3"><Badge variant="outline">{log.status || 'SUCCESS'}</Badge></td></tr>)}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
+        <TabsContent value="logs" className="min-w-0"><Card className="min-w-0 overflow-hidden rounded-3xl border-slate-200 shadow-sm"><CardHeader className="border-b border-slate-100 p-5 sm:p-7"><CardTitle className="text-xl font-black">Activity & Security Logs</CardTitle><CardDescription>Auditable system activity without the former surveillance dashboard.</CardDescription><div className="pt-2"><Input value={logSearch} onChange={(event) => setLogSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadLogs(); }} placeholder="Search audit activity" className="max-w-xl" /></div></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Time</th><th className="px-5 py-3">Action</th><th className="px-5 py-3">Resource</th><th className="px-5 py-3">User</th><th className="px-5 py-3">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{logLoading ? <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-500">Loading security activity…</td></tr> : logs.length === 0 ? <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-500">No security activity found.</td></tr> : logs.map((log) => <tr key={log.id} className="hover:bg-slate-50/80"><td className="whitespace-nowrap px-5 py-3 text-slate-500">{log.createdAt ? format(new Date(log.createdAt), 'yyyy-MM-dd HH:mm') : '—'}</td><td className="px-5 py-3 font-bold text-slate-900">{log.action}</td><td className="px-5 py-3 text-slate-600">{log.resource || '—'}</td><td className="px-5 py-3 text-slate-600">{log.userName || 'System'} {log.userRole ? `(${log.userRole})` : ''}</td><td className="px-5 py-3"><Badge variant="outline">{log.status || 'SUCCESS'}</Badge></td></tr>)}</tbody></table></div></CardContent></Card></TabsContent>
         <TabsContent value="staff" className="min-w-0"><StaffManagement /></TabsContent>
         <TabsContent value="deletion" className="min-w-0"><PermanentDeletionHub /></TabsContent>
-        <TabsContent value="purge" className="min-w-0">
-          <Card className="rounded-3xl border-amber-200 bg-amber-50/40 shadow-sm"><CardHeader><CardTitle className="font-black">System Data Purge</CardTitle><CardDescription>Use the existing server-authorized permanent deletion workflow. Destructive actions remain protected by Super Admin authorization and audit logging.</CardDescription></CardHeader><CardContent><PermanentDeletionHub /></CardContent></Card>
-        </TabsContent>
-
-        <TabsContent value="backups" className="min-w-0">
-          <Card className="rounded-3xl border-slate-200 shadow-sm">
-            <CardHeader className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7"><div><CardTitle className="font-black">Backup & Recovery</CardTitle><CardDescription>Encrypted database snapshots stored in a private Supabase Storage bucket.</CardDescription></div><Button disabled={backupBusy} onClick={() => void createBackup()}><DatabaseBackup className="mr-2 h-4 w-4" />{backupBusy ? 'Working…' : 'Create Backup'}</Button></CardHeader>
-            <CardContent className="p-5 sm:p-7">
-              {backupLoading ? <div className="py-10 text-center text-slate-500">Loading backups…</div> : backups.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-500">No system backups have been created.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm"><thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">File</th><th className="px-4 py-3">Size</th><th className="px-4 py-3">Created</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{backups.map((backup) => <tr key={backup.id}><td className="px-4 py-3 font-semibold">{backup.fileName}<div className="max-w-[360px] truncate text-[10px] font-mono text-slate-400">SHA-256 {backup.checksum}</div></td><td className="px-4 py-3">{formatBytes(backup.sizeBytes)}</td><td className="px-4 py-3 whitespace-nowrap">{format(new Date(backup.createdAt), 'yyyy-MM-dd HH:mm')}</td><td className="px-4 py-3"><Badge variant="outline">{backup.status}</Badge></td><td className="px-4 py-3"><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => void downloadBackup(backup.id)}>Download</Button><Button size="sm" variant="outline" disabled={backupBusy} onClick={() => void restoreBackup(backup.id)}>Restore</Button><Button size="sm" variant="ghost" className="text-rose-600" onClick={() => void deleteBackup(backup.id)}>Delete</Button></div></td></tr>)}</tbody></table></div>}
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <TabsContent value="purge" className="min-w-0"><Card className="rounded-3xl border-amber-200 bg-amber-50/40 shadow-sm"><CardHeader><CardTitle className="font-black">System Data Purge</CardTitle><CardDescription>Use the existing server-authorized permanent deletion workflow. Destructive actions remain protected by Super Admin authorization and audit logging.</CardDescription></CardHeader><CardContent><PermanentDeletionHub /></CardContent></Card></TabsContent>
+        <TabsContent value="backups" className="min-w-0"><Card className="rounded-3xl border-slate-200 shadow-sm"><CardHeader className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7"><div><CardTitle className="font-black">Backup & Recovery</CardTitle><CardDescription>Encrypted database snapshots stored in a private Supabase Storage bucket.</CardDescription></div><Button disabled={backupBusy} onClick={() => void createBackup()}><DatabaseBackup className="mr-2 h-4 w-4" />{backupBusy ? 'Working…' : 'Create Backup'}</Button></CardHeader><CardContent className="p-5 sm:p-7">{backupLoading ? <div className="py-10 text-center text-slate-500">Loading backups…</div> : backups.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-500">No system backups have been created.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm"><thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">File</th><th className="px-4 py-3">Size</th><th className="px-4 py-3">Created</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{backups.map((backup) => <tr key={backup.id}><td className="px-4 py-3 font-semibold">{backup.fileName}<div className="max-w-[360px] truncate text-[10px] font-mono text-slate-400">SHA-256 {backup.checksum}</div></td><td className="px-4 py-3">{formatBytes(backup.sizeBytes)}</td><td className="px-4 py-3 whitespace-nowrap">{format(new Date(backup.createdAt), 'yyyy-MM-dd HH:mm')}</td><td className="px-4 py-3"><Badge variant="outline">{backup.status}</Badge></td><td className="px-4 py-3"><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => void downloadBackup(backup.id)}>Download</Button><Button size="sm" variant="outline" disabled={backupBusy} onClick={() => void restoreBackup(backup.id)}>Restore</Button><Button size="sm" variant="ghost" className="text-rose-600" onClick={() => void deleteBackup(backup.id)}>Delete</Button></div></td></tr>)}</tbody></table></div>}</CardContent></Card></TabsContent>
       </Tabs>
     </div>
   );
