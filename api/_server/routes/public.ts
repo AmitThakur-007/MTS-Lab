@@ -24,18 +24,50 @@ const handlePublicSlides = async (req: Request, res: Response) => {
 router.get('/slides', handlePublicSlides);
 router.get('/home-slides', handlePublicSlides);
 
-// 1. GET & POST /api/public/track (or /api/track) - Resilient Public Tracking
+// Helper functions for phone verification & IDOR prevention
+function normalizePhoneDigits(phone?: string | null): string {
+  if (!phone) return '';
+  return String(phone).replace(/\D/g, '');
+}
+
+function isPhoneMatching(providedPhoneDigits: string, recordPhone?: string | null): boolean {
+  if (!providedPhoneDigits || !recordPhone) return false;
+  const dbDigits = normalizePhoneDigits(recordPhone);
+  if (!dbDigits) return false;
+
+  // Exact digits match
+  if (providedPhoneDigits === dbDigits) return true;
+
+  // Last 10 digits match (Nepal standard 10-digit mobile, ignoring +977 or leading 0)
+  const p10 = providedPhoneDigits.length >= 10 ? providedPhoneDigits.slice(-10) : providedPhoneDigits;
+  const db10 = dbDigits.length >= 10 ? dbDigits.slice(-10) : dbDigits;
+  if (p10 === db10) return true;
+
+  // Last 7 digits match for landlines
+  if (providedPhoneDigits.length >= 7 && dbDigits.length >= 7) {
+    if (providedPhoneDigits.slice(-7) === dbDigits.slice(-7)) return true;
+  }
+
+  return false;
+}
+
+// 1. GET & POST /api/public/track (or /api/track) - Secure Resilient Public Tracking
 const handlePublicTrack = async (req: Request, res: Response) => {
+  // Prevent any browser or intermediary caching of tracking responses
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   try {
     const rawRepairNumber = req.body?.repairNumber || req.query?.repairNumber || req.body?.ticketNumber || req.query?.ticketNumber || '';
     const rawPhone = req.body?.phone || req.query?.phone || req.body?.customerPhone || req.query?.customerPhone || '';
 
     // Strip leading '#', trim whitespace, and clean digits
     const cleanRepairNumber = String(rawRepairNumber).trim().replace(/^#+/, '').trim();
-    const cleanPhone = String(rawPhone).trim().replace(/\D/g, '');
+    const cleanPhone = normalizePhoneDigits(String(rawPhone));
 
     if (!cleanRepairNumber && !cleanPhone) {
-      return res.status(400).json({ error: 'Please enter a Repair Job Number or Registered Phone Number.' });
+      return res.status(400).json({ error: 'Please enter your Repair Number or Registered Phone Number.' });
     }
 
     const selectFields = `
@@ -47,6 +79,9 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       deviceBrand,
       deviceModel,
       problemDescription,
+      deviceCondition,
+      conditionNotes,
+      accessoriesReceived,
       status,
       priority,
       expectedCompletionDate,
@@ -54,15 +89,22 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       advancePaid,
       totalPaid,
       paymentStatus,
+      receivingMethod,
       isCourierIn,
       isCourierOut,
       courierStatus,
       courierCompany,
+      courierTrackingNumber,
       returnCourierCompany,
       returnCourierTrackingNumber,
+      returnCourierDispatchDate,
+      courierOutDeliveredDate,
       hasBatteryWarranty,
       batteryWarrantyPeriod,
       batteryType,
+      batteryHealth,
+      batteryWarrantyExpiry,
+      remarks,
       createdAt,
       updatedAt,
       completedAt,
@@ -71,9 +113,56 @@ const handlePublicTrack = async (req: Request, res: Response) => {
 
     let repairRecord: any = null;
 
-    // 1. Find by repairNumber if supplied
-    if (cleanRepairNumber) {
-      const { data } = await supabaseAdmin
+    // Case 1: Customer provided BOTH Repair Number AND Phone Number
+    // PREVENT IDOR: Both must match the same repair/customer.
+    if (cleanRepairNumber && cleanPhone) {
+      const { data: candidates, error: cErr } = await supabaseAdmin
+        .from('Repair')
+        .select(selectFields)
+        .or(`repairNumber.eq.${cleanRepairNumber},repairNumber.ilike.%${cleanRepairNumber}%`)
+        .order('createdAt', { ascending: false })
+        .limit(5);
+
+      if (cErr) {
+        console.error('[PUBLIC TRACK CANDIDATE ERROR]', cErr);
+      }
+
+      if (candidates && candidates.length > 0) {
+        // Verify phone against candidate repair records
+        for (const cand of candidates) {
+          if (isPhoneMatching(cleanPhone, cand.customerPhone)) {
+            repairRecord = cand;
+            break;
+          }
+          // If direct phone didn't match, check linked Customer profile
+          if (cand.customerId) {
+            const { data: linkedCustomer } = await supabaseAdmin
+              .from('Customer')
+              .select('phone, alternativePhone')
+              .eq('id', cand.customerId)
+              .maybeSingle();
+
+            if (
+              linkedCustomer &&
+              (isPhoneMatching(cleanPhone, linkedCustomer.phone) || isPhoneMatching(cleanPhone, linkedCustomer.alternativePhone))
+            ) {
+              repairRecord = cand;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!repairRecord) {
+        // IDOR Prevention: If repair exists with wrong phone, or phone exists with wrong repair number, return 404
+        return res.status(404).json({
+          error: 'No repair records found matching the provided Repair Number and Phone Number.'
+        });
+      }
+    }
+    // Case 2: Customer provided ONLY Repair Number
+    else if (cleanRepairNumber) {
+      const { data: singleRepair } = await supabaseAdmin
         .from('Repair')
         .select(selectFields)
         .or(`repairNumber.eq.${cleanRepairNumber},repairNumber.ilike.%${cleanRepairNumber}%`)
@@ -81,38 +170,42 @@ const handlePublicTrack = async (req: Request, res: Response) => {
         .limit(1)
         .maybeSingle();
 
-      if (data) {
-        repairRecord = data;
+      if (singleRepair) {
+        repairRecord = singleRepair;
       }
     }
-
-    // 2. If not found by repair number, find by phone number (on Repair or linked Customer)
-    if (!repairRecord && cleanPhone) {
-      // Check direct phone on Repair table
-      const { data: directMatch } = await supabaseAdmin
+    // Case 3: Customer provided ONLY Phone Number
+    else if (cleanPhone) {
+      const { data: directMatches } = await supabaseAdmin
         .from('Repair')
         .select(selectFields)
-        .ilike('customerPhone', `%${cleanPhone}%`)
         .order('createdAt', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(20);
 
-      if (directMatch) {
-        repairRecord = directMatch;
-      } else {
+      if (directMatches && directMatches.length > 0) {
+        // Filter in-memory using robust phone normalizer
+        const matched = directMatches.filter((r) => isPhoneMatching(cleanPhone, r.customerPhone));
+        if (matched.length > 0) {
+          repairRecord = matched[0];
+        }
+      }
+
+      if (!repairRecord) {
         // Check linked Customer profile
-        const { data: customerData } = await supabaseAdmin
+        const { data: customers } = await supabaseAdmin
           .from('Customer')
-          .select('id')
-          .ilike('phone', `%${cleanPhone}%`)
-          .limit(1)
-          .maybeSingle();
+          .select('id, phone, alternativePhone')
+          .limit(50);
 
-        if (customerData) {
+        const matchedCustomer = customers?.find(
+          (c) => isPhoneMatching(cleanPhone, c.phone) || isPhoneMatching(cleanPhone, c.alternativePhone)
+        );
+
+        if (matchedCustomer) {
           const { data: customerRepair } = await supabaseAdmin
             .from('Repair')
             .select(selectFields)
-            .eq('customerId', customerData.id)
+            .eq('customerId', matchedCustomer.id)
             .order('createdAt', { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -128,7 +221,7 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
     }
 
-    // ROBUST BULLETPROOF FALLBACK: Query RepairLog, and if empty, synthesize a base log using the repair's status and creation date
+    // Query RepairLog to display public diagnostic trace
     const { data: explicitLogs } = await supabaseAdmin
       .from('RepairLog')
       .select('id, action, status, notes, message, createdAt')
@@ -142,7 +235,7 @@ const handlePublicTrack = async (req: Request, res: Response) => {
           id: `synth-${repairRecord.id}`,
           action: 'STATUS_UPDATED',
           status: repairRecord.status || 'RECEIVED',
-          notes: `Device checked in and status currently registered as ${repairRecord.status || 'RECEIVED'}.`,
+          notes: `Device registered and currently recorded as ${repairRecord.status || 'RECEIVED'}.`,
           message: `Device status: ${repairRecord.status || 'RECEIVED'}`,
           createdAt: repairRecord.createdAt || new Date().toISOString()
         }
@@ -156,15 +249,21 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       repairRecord.logs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
 
-    // Mask sensitive name and phone for privacy in public portal
-    const sanitizedName = repairRecord.customerName
-      ? `${repairRecord.customerName.charAt(0)}*** ${repairRecord.customerName.split(' ').slice(-1)[0] || ''}`.trim()
-      : 'Customer';
+    // Mask customer name and phone for public privacy
+    const rawName = repairRecord.customerName || '';
+    const sanitizedName = rawName
+      ? `${rawName.charAt(0)}*** ${rawName.split(' ').slice(-1)[0] || ''}`.trim()
+      : 'Valued Customer';
+
+    const pDigits = normalizePhoneDigits(repairRecord.customerPhone || cleanPhone);
+    const sanitizedPhone = pDigits && pDigits.length >= 6
+      ? `${pDigits.slice(0, 3)}****${pDigits.slice(-3)}`
+      : undefined;
 
     const sanitizedRecord = {
       ...repairRecord,
       customerName: sanitizedName,
-      customerPhone: cleanPhone ? `${cleanPhone.slice(0, 3)}****${cleanPhone.slice(-3)}` : undefined,
+      customerPhone: sanitizedPhone,
     };
 
     return res.json({
@@ -174,7 +273,7 @@ const handlePublicTrack = async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error('[PUBLIC TRACK EXCEPTION]', err);
-    return res.status(500).json({ error: 'Failed to retrieve tracking details.' });
+    return res.status(500).json({ error: 'Failed to retrieve tracking details. Please try again later.' });
   }
 };
 

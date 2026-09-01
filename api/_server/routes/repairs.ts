@@ -90,7 +90,9 @@ const ALLOWED_REPAIR_COLUMNS = new Set([
   'batteryWarrantyExpiry',
   'warrantyTerms',
   'technicianNotes',
-  'sparePartsUsed'
+  'sparePartsUsed',
+  'completedAt',
+  'deliveredAt'
 ]);
 
 async function generateRepairNumber(offset: number = 0): Promise<string> {
@@ -1105,6 +1107,16 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
       if (!isWarranty) {
         updateData.batteryWarrantyPeriod = null;
         updateData.batteryType = null;
+      }
+    }
+
+    if (updateData.status) {
+      const normalizedStatus = String(updateData.status).toUpperCase();
+      if (normalizedStatus === 'DELIVERED' && !updateData.deliveredAt) {
+        updateData.deliveredAt = new Date().toISOString();
+      }
+      if ((normalizedStatus === 'REPAIRED' || normalizedStatus === 'DELIVERED' || normalizedStatus === 'COMPLETED' || normalizedStatus === 'READY_FOR_PICKUP') && !updateData.completedAt) {
+        updateData.completedAt = new Date().toISOString();
       }
     }
 
