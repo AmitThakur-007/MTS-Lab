@@ -491,7 +491,7 @@ export default function Attendance() {
   // If user is Staff (Non-Management), render dedicated Personal View directly
   if (!isManagement) {
     return (
-      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <div className="w-full max-w-7xl mx-auto p-3 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 min-w-0">
         <AttendanceHeader
           role={role}
           serverTime={serverTime}
@@ -528,7 +528,7 @@ export default function Attendance() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="w-full max-w-7xl mx-auto p-3 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 min-w-0">
       {/* 1. Header with NPT Time & Quick Controls */}
       <AttendanceHeader
         role={role}
@@ -555,78 +555,80 @@ export default function Attendance() {
       <AttendanceStats stats={stats} isLoading={isLoading} />
 
       {/* 3. Navigation Tabs */}
-      <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/80 rounded-2xl border border-slate-200/80 w-fit overflow-x-auto">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setActiveTab('roster')}
-          className={cn(
-            'h-9 px-4 rounded-xl text-xs font-bold gap-2 transition-all',
-            activeTab === 'roster'
-              ? 'bg-white text-indigo-700 shadow-2xs font-black'
-              : 'text-slate-600 hover:text-slate-900'
-          )}
-        >
-          <Users className="w-4 h-4" />
-          <span>Today's Roster & Marking</span>
-          <Badge className="bg-indigo-100 text-indigo-800 text-[10px] font-mono font-bold px-1.5 py-0">
-            {roster.length}
-          </Badge>
-        </Button>
+      <div className="w-full overflow-x-auto p-1.5 bg-slate-100/80 rounded-2xl border border-slate-200/80 scrollbar-none">
+        <div className="flex items-center gap-1.5 min-w-max">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveTab('roster')}
+            className={cn(
+              'h-9 px-3.5 sm:px-4 rounded-xl text-xs font-bold gap-2 transition-all shrink-0 whitespace-nowrap',
+              activeTab === 'roster'
+                ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                : 'text-slate-600 hover:text-slate-900'
+            )}
+          >
+            <Users className="w-4 h-4 shrink-0" />
+            <span>Today's Roster & Marking</span>
+            <Badge className="bg-indigo-100 text-indigo-800 text-[10px] font-mono font-bold px-1.5 py-0 shrink-0">
+              {roster.length}
+            </Badge>
+          </Button>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setActiveTab('monthly');
-            fetchMonthlyReport(selectedMonth);
-          }}
-          className={cn(
-            'h-9 px-4 rounded-xl text-xs font-bold gap-2 transition-all',
-            activeTab === 'monthly'
-              ? 'bg-white text-indigo-700 shadow-2xs font-black'
-              : 'text-slate-600 hover:text-slate-900'
-          )}
-        >
-          <Calendar className="w-4 h-4" />
-          <span>Monthly Matrix & Analytics</span>
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setActiveTab('monthly');
+              fetchMonthlyReport(selectedMonth);
+            }}
+            className={cn(
+              'h-9 px-3.5 sm:px-4 rounded-xl text-xs font-bold gap-2 transition-all shrink-0 whitespace-nowrap',
+              activeTab === 'monthly'
+                ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                : 'text-slate-600 hover:text-slate-900'
+            )}
+          >
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span>Monthly Matrix & Analytics</span>
+          </Button>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setActiveTab('history');
-            fetchHistory();
-          }}
-          className={cn(
-            'h-9 px-4 rounded-xl text-xs font-bold gap-2 transition-all',
-            activeTab === 'history'
-              ? 'bg-white text-indigo-700 shadow-2xs font-black'
-              : 'text-slate-600 hover:text-slate-900'
-          )}
-        >
-          <History className="w-4 h-4" />
-          <span>Attendance Logs & Audit</span>
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setActiveTab('history');
+              fetchHistory();
+            }}
+            className={cn(
+              'h-9 px-3.5 sm:px-4 rounded-xl text-xs font-bold gap-2 transition-all shrink-0 whitespace-nowrap',
+              activeTab === 'history'
+                ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                : 'text-slate-600 hover:text-slate-900'
+            )}
+          >
+            <History className="w-4 h-4 shrink-0" />
+            <span>Attendance Logs & Audit</span>
+          </Button>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setActiveTab('personal');
-            fetchPersonalData();
-          }}
-          className={cn(
-            'h-9 px-4 rounded-xl text-xs font-bold gap-2 transition-all',
-            activeTab === 'personal'
-              ? 'bg-white text-indigo-700 shadow-2xs font-black'
-              : 'text-slate-600 hover:text-slate-900'
-          )}
-        >
-          <UserCheck className="w-4 h-4" />
-          <span>My Personal Attendance</span>
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setActiveTab('personal');
+              fetchPersonalData();
+            }}
+            className={cn(
+              'h-9 px-3.5 sm:px-4 rounded-xl text-xs font-bold gap-2 transition-all shrink-0 whitespace-nowrap',
+              activeTab === 'personal'
+                ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                : 'text-slate-600 hover:text-slate-900'
+            )}
+          >
+            <UserCheck className="w-4 h-4 shrink-0" />
+            <span>My Personal Attendance</span>
+          </Button>
+        </div>
       </div>
 
       {/* 4. Tab Views */}

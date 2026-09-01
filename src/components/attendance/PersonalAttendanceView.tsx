@@ -71,22 +71,22 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
   const todayCheckInTime = todayRecord?.checkInTime || todayRecord?.time;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full min-w-0">
       {/* Hero Check-In Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 shadow-xl border border-indigo-900/40">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div className="space-y-2 max-w-xl">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-500/30 flex items-center gap-1.5">
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-4 sm:p-6 md:p-8 shadow-xl border border-indigo-900/40 w-full min-w-0">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-5 sm:gap-6 min-w-0">
+          <div className="space-y-2 max-w-xl min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-500/30 flex items-center gap-1.5 shrink-0">
                 <Clock className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                MTS Lab Nepal Time (NPT): {serverTime}
+                <span>NPT: {serverTime}</span>
               </span>
               <span className="text-xs text-slate-400 font-mono font-bold">
                 {serverDate}
               </span>
             </div>
 
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-white truncate">
               Hello, {userName}
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
@@ -98,20 +98,20 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
           </div>
 
           {/* Action Box */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0 w-full sm:w-auto">
             {isCheckedInToday ? (
-              <div className="flex items-center gap-3.5 px-5 py-4 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30">
+              <div className="flex items-center gap-3 sm:gap-3.5 px-4 sm:px-5 py-3.5 sm:py-4 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl w-full sm:w-auto">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 shrink-0">
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
-                <div>
-                  <div className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
+                <div className="min-w-0">
+                  <div className="text-[10px] sm:text-xs font-bold text-emerald-300 uppercase tracking-wider truncate">
                     Today's Verified Presence
                   </div>
-                  <div className="text-base font-black text-white flex items-center gap-2">
+                  <div className="text-sm sm:text-base font-black text-white flex items-center gap-1.5 sm:gap-2 flex-wrap">
                     <span>{todayStatus}</span>
                     {todayCheckInTime && (
-                      <span className="text-xs font-mono font-normal text-emerald-200">
+                      <span className="text-[11px] sm:text-xs font-mono font-normal text-emerald-200">
                         at {todayCheckInTime}
                       </span>
                     )}
@@ -123,9 +123,9 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
                 size="lg"
                 onClick={onSelfCheckIn}
                 disabled={isCheckingIn}
-                className="h-14 px-7 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base rounded-2xl shadow-lg shadow-emerald-600/30 gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="h-12 sm:h-14 px-5 sm:px-7 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm sm:text-base rounded-2xl shadow-lg shadow-emerald-600/30 gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] w-full sm:w-auto justify-center"
               >
-                <CheckCircle2 className="w-5 h-5" />
+                <CheckCircle2 className="w-5 h-5 shrink-0" />
                 <span>{isCheckingIn ? 'Recording...' : 'Mark Self Check-In'}</span>
               </Button>
             )}

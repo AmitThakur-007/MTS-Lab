@@ -205,62 +205,66 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
       {!showAuditLogs ? (
         <>
           {/* Filter Toolbar */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3 bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs w-full min-w-0">
             {/* Search */}
-            <div className="relative sm:col-span-2 lg:col-span-2">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <div className="relative sm:col-span-2 lg:col-span-2 min-w-0">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 shrink-0" />
               <Input
                 placeholder="Search by staff name, email, notes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl"
+                className="pl-9 h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl w-full"
               />
             </div>
 
             {/* Staff Filter */}
-            <Select value={selectedUser} onValueChange={setSelectedUser}>
-              <SelectTrigger className="h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl">
-                <SelectValue placeholder="All Staff Members" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Staff Members</SelectItem>
-                {staffList.map((s) => (
-                  <SelectItem key={s.userId || s.id} value={s.userId || s.id}>
-                    {s.name} ({s.role})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="min-w-0">
+              <Select value={selectedUser} onValueChange={setSelectedUser}>
+                <SelectTrigger className="h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl w-full">
+                  <SelectValue placeholder="All Staff Members" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Staff Members</SelectItem>
+                  {staffList.map((s) => (
+                    <SelectItem key={s.userId || s.id} value={s.userId || s.id}>
+                      {s.name} ({s.role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Status Filter */}
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Statuses</SelectItem>
-                <SelectItem value="PRESENT">Present</SelectItem>
-                <SelectItem value="LATE">Late</SelectItem>
-                <SelectItem value="HALF_DAY">Half Day</SelectItem>
-                <SelectItem value="ABSENT">Absent</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="min-w-0">
+              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <SelectTrigger className="h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl w-full">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Statuses</SelectItem>
+                  <SelectItem value="PRESENT">Present</SelectItem>
+                  <SelectItem value="LATE">Late</SelectItem>
+                  <SelectItem value="HALF_DAY">Half Day</SelectItem>
+                  <SelectItem value="ABSENT">Absent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Date Range Clear / Reset */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 min-w-0 w-full">
               <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 placeholder="From Date"
-                className="h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl px-2"
+                className="h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl px-2 flex-1 min-w-0"
               />
               <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 placeholder="To Date"
-                className="h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl px-2"
+                className="h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl px-2 flex-1 min-w-0"
               />
               {(startDate || endDate || selectedUser !== 'ALL' || selectedStatus !== 'ALL' || searchQuery) && (
                 <Button
@@ -273,7 +277,7 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
                     setStartDate('');
                     setEndDate('');
                   }}
-                  className="h-9 px-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl"
+                  className="h-9 px-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl shrink-0"
                   title="Clear All Filters"
                 >
                   Clear
@@ -283,7 +287,7 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
           </div>
 
           {/* Records Table */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden w-full min-w-0">
             {isLoading ? (
               <div className="p-12 text-center text-slate-400 font-medium">
                 <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />

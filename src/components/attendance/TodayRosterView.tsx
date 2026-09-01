@@ -193,23 +193,23 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4 w-full min-w-0">
       {/* Search and Filters Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs w-full min-w-0">
+        <div className="relative flex-1 min-w-0">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 shrink-0" />
           <Input
             placeholder="Search staff by name, email, department, or role..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl"
+            className="pl-9 h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl w-full"
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto shrink-0">
           {/* Role Filter */}
           <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="h-9 w-36 text-xs bg-slate-50/50 border-slate-200 rounded-xl">
+            <SelectTrigger className="h-9 w-full sm:w-36 text-xs bg-slate-50/50 border-slate-200 rounded-xl">
               <SelectValue placeholder="All Roles" />
             </SelectTrigger>
             <SelectContent>
@@ -226,7 +226,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
 
           {/* Status Filter */}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9 w-36 text-xs bg-slate-50/50 border-slate-200 rounded-xl">
+            <SelectTrigger className="h-9 w-full sm:w-36 text-xs bg-slate-50/50 border-slate-200 rounded-xl">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>
@@ -243,9 +243,9 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
 
       {/* Manager Outside-Window Banner */}
       {isManager && !isWithinWindow && (
-        <div className="flex items-center gap-3 p-3.5 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-800 text-xs">
-          <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-          <div className="flex-1">
+        <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 p-3 sm:p-3.5 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-800 text-xs w-full min-w-0">
+          <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+          <div className="flex-1 min-w-0 leading-relaxed">
             <strong>Attendance Window Closed:</strong> Staff marking controls are enabled exclusively between{' '}
             <span className="font-bold underline">10:00 AM and 10:35 AM NPT</span> (Asia/Kathmandu). You can still view all roster data, history, and monthly reports.
           </div>
@@ -253,7 +253,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
       )}
 
       {/* Roster List / Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden w-full min-w-0">
         {isLoading ? (
           <div className="p-12 text-center text-slate-400 text-sm font-medium">
             <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -270,7 +270,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
         ) : (
           <>
             {/* Desktop & Tablet Table View (horizontal scrollable wrapper if viewport is constricted) */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto w-full min-w-0">
               <table className="w-full text-left border-collapse min-w-[940px]">
                 <thead>
                   <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 select-none">
@@ -338,7 +338,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
 
                         {/* Column 2: Department & Role */}
                         <td className="py-3.5 px-3 align-middle">
-                          <div className="flex flex-col items-start gap-1">
+                          <div className="flex flex-col items-start gap-1 min-w-0">
                             {getRoleBadge(staff.role)}
                             <span
                               className="text-xs font-semibold text-slate-500 truncate max-w-[130px]"
@@ -504,18 +504,18 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                 const notes = staff.notes || staff.attendance?.notes;
 
                 return (
-                  <div key={staff.userId || staff.id} className="p-4 space-y-3 bg-white">
+                  <div key={staff.userId || staff.id} className="p-3.5 sm:p-4 space-y-3 bg-white min-w-0">
                     {/* Header: Avatar, Name, Role, Options */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Avatar className="w-10 h-10 rounded-xl border border-slate-200 shadow-2xs shrink-0 bg-indigo-50">
+                    <div className="flex items-start justify-between gap-2 min-w-0">
+                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                        <Avatar className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-slate-200 shadow-2xs shrink-0 bg-indigo-50">
                           <AvatarImage src={staff.avatarUrl || staff.user?.avatarUrl} />
                           <AvatarFallback className="text-xs font-black text-indigo-700 bg-indigo-100 rounded-xl">
                             {initials}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-sm font-bold text-slate-900 truncate" title={staff.name}>
                               {staff.name}
                             </span>
@@ -537,7 +537,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                           variant="ghost"
                           size="sm"
                           onClick={() => onOpenEditModal(staff)}
-                          className="h-7 w-7 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                          className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
                           title="Edit Record"
                           aria-label="Edit record"
                         >
@@ -547,7 +547,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                           variant="ghost"
                           size="sm"
                           onClick={() => onOpenStaffHistory(staff.userId, staff.name)}
-                          className="h-7 w-7 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                          className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
                           title="View Calendar"
                           aria-label="View staff calendar"
                         >
@@ -558,7 +558,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                             variant="ghost"
                             size="sm"
                             onClick={() => onOpenPurgeModal(staff.userId, staff.name)}
-                            className="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
+                            className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
                             title="Delete Staff"
                             aria-label="Delete staff"
                           >
@@ -569,18 +569,18 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                     </div>
 
                     {/* Department & Current Status Bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200/60">
-                      <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200/60 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                         {getRoleBadge(staff.role)}
-                        <span className="text-[11px] font-medium text-slate-600">
+                        <span className="text-[11px] font-medium text-slate-600 truncate max-w-[130px]" title={staff.department || 'All Repair'}>
                           {staff.department || 'All Repair'}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {getStatusBadge(staff.status)}
                         {checkInTime && staff.status !== 'NOT_MARKED' && (
-                          <span className="text-[11px] font-mono font-bold text-slate-600">
+                          <span className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-600">
                             {checkInTime}
                           </span>
                         )}
@@ -588,20 +588,20 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                     </div>
 
                     {notes && (
-                      <div className="text-[11px] text-slate-500 bg-slate-100 px-2 py-1 rounded-lg italic">
+                      <div className="text-[11px] text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg italic break-words">
                         "{notes}"
                       </div>
                     )}
 
                     {/* Fast Attendance Actions Grid */}
-                    <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-0.5">
                       <Button
                         size="sm"
                         variant={staff.status === 'PRESENT' ? 'default' : 'outline'}
                         onClick={() => onQuickMark(staff.userId, 'PRESENT', staff.name)}
                         disabled={!canMark}
                         className={cn(
-                          'h-9 px-2 text-xs font-bold rounded-xl gap-1.5 transition-all select-none w-full justify-center',
+                          'h-9 px-1.5 sm:px-2 text-xs font-bold rounded-xl gap-1 sm:gap-1.5 transition-all select-none w-full justify-center',
                           staff.status === 'PRESENT'
                             ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs font-black'
                             : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
@@ -609,7 +609,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                         title={!canMark ? 'Attendance marking window closed' : 'Mark Present'}
                       >
                         <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                        <span>Present</span>
+                        <span className="truncate">Present</span>
                       </Button>
 
                       <Button
@@ -618,7 +618,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                         onClick={() => onQuickMark(staff.userId, 'LATE', staff.name)}
                         disabled={!canMark}
                         className={cn(
-                          'h-9 px-2 text-xs font-bold rounded-xl gap-1.5 transition-all select-none w-full justify-center',
+                          'h-9 px-1.5 sm:px-2 text-xs font-bold rounded-xl gap-1 sm:gap-1.5 transition-all select-none w-full justify-center',
                           staff.status === 'LATE'
                             ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs font-black'
                             : 'border-amber-200 text-amber-700 hover:bg-amber-50'
@@ -626,7 +626,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                         title={!canMark ? 'Attendance marking window closed' : 'Mark Late'}
                       >
                         <Clock className="w-3.5 h-3.5 shrink-0" />
-                        <span>Late</span>
+                        <span className="truncate">Late</span>
                       </Button>
 
                       <Button
@@ -635,7 +635,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                         onClick={() => onQuickMark(staff.userId, 'ABSENT', staff.name)}
                         disabled={!canMark}
                         className={cn(
-                          'h-9 px-2 text-xs font-bold rounded-xl gap-1.5 transition-all select-none w-full justify-center',
+                          'h-9 px-1.5 sm:px-2 text-xs font-bold rounded-xl gap-1 sm:gap-1.5 transition-all select-none w-full justify-center',
                           staff.status === 'ABSENT'
                             ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-2xs font-black'
                             : 'border-rose-200 text-rose-700 hover:bg-rose-50'
@@ -643,7 +643,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                         title={!canMark ? 'Attendance marking window closed' : 'Mark Absent'}
                       >
                         <UserX className="w-3.5 h-3.5 shrink-0" />
-                        <span>Absent</span>
+                        <span className="truncate">Absent</span>
                       </Button>
                     </div>
                   </div>

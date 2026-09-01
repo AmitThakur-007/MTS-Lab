@@ -126,49 +126,49 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0">
       {/* Month Navigator Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs w-full min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
             <Calendar className="w-5 h-5" />
           </div>
-          <div>
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <div className="min-w-0">
+            <div className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">
               Monthly Attendance Performance
             </div>
-            <div className="text-lg font-black text-slate-900 flex items-center gap-2">
+            <div className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2 truncate">
               {format(currentDateObj, 'MMMM yyyy')}
             </div>
           </div>
         </div>
 
         {/* Month Switching Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between sm:justify-end gap-1.5 sm:gap-2 shrink-0">
           <Button
             variant="outline"
             size="sm"
             onClick={handlePrevMonth}
-            className="h-9 px-3 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold gap-1"
+            className="h-9 px-2 sm:px-3 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold gap-1 flex-1 sm:flex-none justify-center"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span>Previous</span>
+            <span>Prev</span>
           </Button>
 
           <Button
             variant="outline"
             size="sm"
             onClick={() => onMonthChange(new Date().toISOString().slice(0, 7))}
-            className="h-9 px-3 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold"
+            className="h-9 px-2.5 sm:px-3 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold flex-1 sm:flex-none justify-center"
           >
-            Current Month
+            Current
           </Button>
 
           <Button
             variant="outline"
             size="sm"
             onClick={handleNextMonth}
-            className="h-9 px-3 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold gap-1"
+            className="h-9 px-2 sm:px-3 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold gap-1 flex-1 sm:flex-none justify-center"
           >
             <span>Next</span>
             <ChevronRight className="w-4 h-4" />
