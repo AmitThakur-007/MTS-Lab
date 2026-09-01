@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
   // blank the entire SPA at module initialization.
   const env = loadEnv(mode, process.cwd(), '');
   const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL || 'https://pirynpugkiurjobrqiqg.supabase.co';
-  const supabasePublicKey = env.VITE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_qdk-qGpTDF77ZDV_S2JTew_ClZAAls9';
+  const supabasePublicKey = env.VITE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w';
 
   return {
     plugins: [react(), tailwindcss()],

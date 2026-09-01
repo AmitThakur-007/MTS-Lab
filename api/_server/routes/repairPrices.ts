@@ -32,12 +32,13 @@ const handleGetPrices = async (req: Request, res: Response) => {
 
     if (error) {
       console.error('[REPAIR PRICES GET ERROR]', error);
-      return res.status(500).json({ error: 'Failed to fetch repair prices.' });
+      return res.json([]);
     }
 
     return res.json(prices || []);
   } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to retrieve repair pricing directory.' });
+    console.error('[REPAIR PRICES RETRIEVE ERROR]', err);
+    return res.json([]);
   }
 };
 

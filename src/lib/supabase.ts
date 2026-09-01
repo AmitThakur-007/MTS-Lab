@@ -8,7 +8,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
  * so a missing Vercel VITE_* variable cannot blank the entire SPA.
  */
 const DEFAULT_SUPABASE_URL = 'https://pirynpugkiurjobrqiqg.supabase.co';
-const DEFAULT_SUPABASE_PUBLIC_KEY = 'sb_publishable_qdk-qGpTDF77ZDV_S2JTew_ClZAAls9';
+const DEFAULT_SUPABASE_PUBLIC_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpcnlucHVna2l1cmpvYnJxaXFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5OTIzOTgsImV4cCI6MjEwMzU2ODM5OH0.ZlzqDH1EnjTr3qu-1htucpzPrpX0y4ZWlib2eQOpW3w';
 
 const SUPABASE_URL = String(
   import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL
