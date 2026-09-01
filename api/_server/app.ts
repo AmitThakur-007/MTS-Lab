@@ -14,6 +14,7 @@ import repairPricesRoutes from './routes/repairPrices';
 import slidesRoutes from './routes/slides';
 import productsRoutes from './routes/products';
 import notificationsRoutes from './routes/notifications';
+import dashboardRoutes from './routes/dashboard';
 import superAdminRoutes from './routes/superAdmin';
 import securityRoutes from './routes/security';
 import uploadRoutes from './routes/upload';
@@ -55,6 +56,7 @@ export function createApp() {
   app.use('/api/products', productsRoutes);
   app.use('/api/public/products', productsRoutes);
   app.use('/api/notifications', notificationsRoutes);
+  app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/admin', superAdminRoutes);
   app.use('/api/share', superAdminRoutes);
   app.use('/api/access-requests', securityRoutes);

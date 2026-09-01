@@ -272,10 +272,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 bg-white md:m-2.5 lg:m-4 md:rounded-[36px] lg:rounded-[44px] md:shadow-xl md:shadow-slate-200/40 border-l border-slate-200/40 overflow-hidden relative">
         <header className="h-20 sm:h-24 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex items-center justify-between px-4 sm:px-6 lg:px-8 xl:px-12 shrink-0 z-20 gap-3">
-          <div className="flex items-center flex-1 min-w-0 gap-3">
+          <div className="flex items-center flex-1 min-w-0 gap-2 sm:gap-3">
             <Button variant="ghost" size="icon" className="md:hidden rounded-xl h-10 w-10 text-slate-700 hover:bg-slate-100 shrink-0 cursor-pointer" onClick={() => setIsSidebarOpen(true)}>
               <Menu className="h-5 w-5" />
             </Button>
+            
+            {/* Mobile Header Brand */}
+            <NavLink to="/dashboard" className="md:hidden flex items-center font-black text-slate-900 tracking-tight text-base select-none">
+              <span>MTS</span>
+              <span className="text-slate-500 font-semibold text-sm ml-1">Lab</span>
+            </NavLink>
+
             <div className="max-w-xs sm:max-w-sm lg:max-w-md w-full relative hidden sm:block">
               <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input 
