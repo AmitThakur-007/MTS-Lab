@@ -346,11 +346,13 @@ export default function Inventory() {
 
   // 1. Unique Brands (Level 0)
   const brandList = useMemo(() => {
+    const safeCustomFolders = Array.isArray(customFolders) ? customFolders : [];
+    const safeActiveItems = Array.isArray(activeItems) ? activeItems : [];
     const brandsMap = new Map<string, { brand: string; modelCount: Set<string>; itemCount: number; totalUnits: number; hasLowStock: boolean }>();
 
     // Include custom folders
-    customFolders.forEach(f => {
-      if (f.brand) {
+    safeCustomFolders.forEach(f => {
+      if (f && f.brand) {
         const b = f.brand.trim();
         if (!brandsMap.has(b)) {
           brandsMap.set(b, { brand: b, modelCount: new Set(), itemCount: 0, totalUnits: 0, hasLowStock: false });
@@ -360,7 +362,8 @@ export default function Inventory() {
     });
 
     // Aggregate from items
-    activeItems.forEach(item => {
+    safeActiveItems.forEach(item => {
+      if (!item) return;
       const b = (item.brand || 'Other').trim();
       if (!brandsMap.has(b)) {
         brandsMap.set(b, { brand: b, modelCount: new Set(), itemCount: 0, totalUnits: 0, hasLowStock: false });
@@ -386,11 +389,13 @@ export default function Inventory() {
   // 2. Unique Models for selected Brand (Level 1)
   const modelList = useMemo(() => {
     if (!navPath.brand) return [];
+    const safeCustomFolders = Array.isArray(customFolders) ? customFolders : [];
+    const safeActiveItems = Array.isArray(activeItems) ? activeItems : [];
     const modelsMap = new Map<string, { model: string; categoryCount: Set<string>; itemCount: number; totalUnits: number; hasLowStock: boolean }>();
 
     // From custom folders
-    customFolders.forEach(f => {
-      if (f.brand.toLowerCase() === navPath.brand?.toLowerCase() && f.model) {
+    safeCustomFolders.forEach(f => {
+      if (f && f.brand && f.brand.toLowerCase() === navPath.brand?.toLowerCase() && f.model) {
         const m = f.model.trim();
         if (!modelsMap.has(m)) {
           modelsMap.set(m, { model: m, categoryCount: new Set(), itemCount: 0, totalUnits: 0, hasLowStock: false });
@@ -400,7 +405,8 @@ export default function Inventory() {
     });
 
     // From items
-    activeItems.forEach(item => {
+    safeActiveItems.forEach(item => {
+      if (!item) return;
       if ((item.brand || 'Other').toLowerCase() === navPath.brand?.toLowerCase()) {
         const m = (item.model || 'Universal / All').trim();
         if (!modelsMap.has(m)) {
@@ -428,11 +434,15 @@ export default function Inventory() {
   // 3. Unique Categories for selected Brand & Model (Level 2)
   const categoryList = useMemo(() => {
     if (!navPath.brand || !navPath.model) return [];
+    const safeCustomFolders = Array.isArray(customFolders) ? customFolders : [];
+    const safeActiveItems = Array.isArray(activeItems) ? activeItems : [];
     const catsMap = new Map<string, { category: string; itemCount: number; totalUnits: number; hasLowStock: boolean }>();
 
     // From custom folders
-    customFolders.forEach(f => {
+    safeCustomFolders.forEach(f => {
       if (
+        f &&
+        f.brand &&
         f.brand.toLowerCase() === navPath.brand?.toLowerCase() &&
         f.model?.toLowerCase() === navPath.model?.toLowerCase() &&
         f.category
@@ -445,7 +455,8 @@ export default function Inventory() {
     });
 
     // From items
-    activeItems.forEach(item => {
+    safeActiveItems.forEach(item => {
+      if (!item) return;
       if (
         (item.brand || 'Other').toLowerCase() === navPath.brand?.toLowerCase() &&
         (item.model || 'Universal / All').toLowerCase() === navPath.model?.toLowerCase()

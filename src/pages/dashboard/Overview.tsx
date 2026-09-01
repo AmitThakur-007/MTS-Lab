@@ -214,8 +214,8 @@ export default function Overview() {
                </Button>
             </div>
           </CardHeader>
-          <CardContent className="h-[280px] sm:h-[340px] lg:h-[380px] p-4 sm:p-6 pt-4">
-            <ResponsiveContainer width="100%" height="100%">
+          <CardContent className="h-[280px] sm:h-[340px] lg:h-[380px] p-4 sm:p-6 pt-4 min-w-0 w-full">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">

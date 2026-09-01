@@ -291,14 +291,30 @@ router.get('/monthly-report', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLE
       let lateCount = 0;
       let halfDayCount = 0;
       let pendingCount = 0;
+      let rejectedCount = 0;
 
       const dailyStatus: Record<string, string> = {};
+      const logs: Array<{
+        id: string;
+        date: string;
+        status: string;
+        checkInTime?: string;
+        notes?: string;
+      }> = [];
 
       for (let day = 1; day <= daysInMonth; day++) {
         const dayStr = `${targetMonth}-${String(day).padStart(2, '0')}`;
         const rec = userMap.get(dayStr);
         if (rec) {
           dailyStatus[dayStr] = rec.status;
+          logs.push({
+            id: rec.id,
+            date: rec.date,
+            status: rec.status,
+            checkInTime: rec.checkInTime || undefined,
+            notes: rec.notes || undefined,
+          });
+
           if (rec.status === 'PRESENT') presentCount++;
           else if (rec.status === 'ABSENT') absentCount++;
           else if (rec.status === 'LATE') {
@@ -309,13 +325,15 @@ router.get('/monthly-report', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLE
             presentCount++;
           } else if (rec.status === 'PENDING') {
             pendingCount++;
+          } else if (rec.status === 'REJECTED') {
+            rejectedCount++;
           }
         } else {
           dailyStatus[dayStr] = 'NOT_MARKED';
         }
       }
 
-      const totalMarked = presentCount + absentCount + pendingCount;
+      const totalMarked = presentCount + absentCount + pendingCount + rejectedCount;
       const rate = totalMarked > 0 ? Math.round((presentCount / totalMarked) * 100) : null;
 
       if (rate !== null) {
@@ -323,7 +341,7 @@ router.get('/monthly-report', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLE
         totalActiveStaffWithLogs++;
       }
 
-      let statusTag = 'UNTRACKED';
+      let statusTag: 'EXCELLENT' | 'GOOD' | 'AVERAGE' | 'NEEDS_ATTENTION' | 'NO_DATA' = 'NO_DATA';
       if (rate !== null) {
         if (rate >= 90) statusTag = 'EXCELLENT';
         else if (rate >= 75) statusTag = 'GOOD';
@@ -331,13 +349,29 @@ router.get('/monthly-report', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLE
         else statusTag = 'NEEDS_ATTENTION';
       }
 
+      const userObj = {
+        id: staff.id,
+        name: staff.name,
+        email: staff.email,
+        role: staff.role,
+        department: staff.department || 'Repair Lab',
+        profileImage: staff.profileImage || undefined,
+      };
+
       return {
+        user: userObj,
         id: staff.id,
         name: staff.name,
         email: staff.email,
         role: staff.role,
         department: staff.department || 'Repair Lab',
         profileImage: staff.profileImage || null,
+        presentDays: presentCount,
+        absentDays: absentCount,
+        lateDays: lateCount,
+        halfDays: halfDayCount,
+        pendingDays: pendingCount,
+        rejectedDays: rejectedCount,
         presentCount,
         absentCount,
         lateCount,
@@ -347,6 +381,7 @@ router.get('/monthly-report', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLE
         attendanceRate: rate,
         statusTag,
         dailyStatus,
+        logs,
       };
     });
 

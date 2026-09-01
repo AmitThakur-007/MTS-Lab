@@ -56,13 +56,15 @@ interface MonthlyMatrixViewProps {
 }
 
 export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
-  report,
+  report = [],
   isLoading,
   selectedMonth,
   onMonthChange,
   onOpenStaffDetail,
 }) => {
   const [selectedTagFilter, setSelectedTagFilter] = useState('ALL');
+
+  const safeReport = Array.isArray(report) ? report : [];
 
   // Parse Year and Month
   const [yearNum, monthNum] = useMemo(() => {
@@ -90,23 +92,23 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
 
   // Filtered by Tag
   const filteredReport = useMemo(() => {
-    if (selectedTagFilter === 'ALL') return report;
-    return report.filter((r) => r.statusTag === selectedTagFilter);
-  }, [report, selectedTagFilter]);
+    if (selectedTagFilter === 'ALL') return safeReport;
+    return safeReport.filter((r) => r.statusTag === selectedTagFilter);
+  }, [safeReport, selectedTagFilter]);
 
   // Executive Stats Calculation
   const averageRate = useMemo(() => {
-    const rated = report.filter((r) => r.attendanceRate !== null);
+    const rated = safeReport.filter((r) => r && r.attendanceRate !== null && r.attendanceRate !== undefined);
     if (rated.length === 0) return 100;
     const total = rated.reduce((acc, curr) => acc + (curr.attendanceRate || 0), 0);
     return Math.round(total / rated.length);
-  }, [report]);
+  }, [safeReport]);
 
   const topPerformer = useMemo(() => {
-    if (report.length === 0) return null;
-    const sorted = [...report].sort((a, b) => (b.attendanceRate || 0) - (a.attendanceRate || 0));
-    return sorted[0]?.attendanceRate !== null ? sorted[0] : null;
-  }, [report]);
+    if (safeReport.length === 0) return null;
+    const sorted = [...safeReport].sort((a, b) => (b.attendanceRate || 0) - (a.attendanceRate || 0));
+    return sorted[0]?.attendanceRate !== null && sorted[0]?.attendanceRate !== undefined ? sorted[0] : null;
+  }, [safeReport]);
 
   const getTagBadge = (tag: string) => {
     switch (tag) {
@@ -302,9 +304,34 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
                 </tr>
               ) : (
                 filteredReport.map((staffReport) => {
-                  const user = staffReport.user;
+                  const staffAny = staffReport as any;
+                  const user = staffReport?.user || {
+                    id: staffAny?.id || `staff-${Math.random()}`,
+                    name: staffAny?.name || 'Staff Member',
+                    email: staffAny?.email || '',
+                    role: staffAny?.role || 'STAFF',
+                    department: staffAny?.department || 'Repair Lab',
+                    profileImage: staffAny?.profileImage || undefined,
+                  };
+
                   const logMap = new Map();
-                  staffReport.logs.forEach((l) => logMap.set(l.date, l));
+                  const logs = Array.isArray(staffReport?.logs) ? staffReport.logs : [];
+                  logs.forEach((l) => {
+                    if (l && l.date) logMap.set(l.date, l);
+                  });
+
+                  if (logs.length === 0 && staffAny?.dailyStatus) {
+                    Object.entries(staffAny.dailyStatus).forEach(([date, status]) => {
+                      if (status && status !== 'NOT_MARKED') {
+                        logMap.set(date, { date, status: status as string });
+                      }
+                    });
+                  }
+
+                  const presentDays = staffReport?.presentDays ?? staffAny?.presentCount ?? 0;
+                  const absentDays = staffReport?.absentDays ?? staffAny?.absentCount ?? 0;
+                  const attendanceRate = staffReport?.attendanceRate ?? staffAny?.attendanceRate ?? null;
+                  const statusTag = staffReport?.statusTag ?? staffAny?.statusTag ?? 'NO_DATA';
 
                   return (
                     <tr
@@ -317,7 +344,7 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
                         <div className="flex items-center gap-2">
                           <Avatar className="w-7 h-7 rounded-lg shrink-0 bg-indigo-50 border border-slate-200">
                             <AvatarFallback className="text-[10px] font-black text-indigo-700">
-                              {user.name.slice(0, 2).toUpperCase()}
+                              {(user.name || 'ST').slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="min-w-0">
@@ -380,24 +407,24 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
 
                       {/* Summary Present */}
                       <td className="p-2.5 text-center font-bold text-emerald-700 bg-emerald-50/20">
-                        {staffReport.presentDays}
+                        {presentDays}
                       </td>
 
                       {/* Summary Absent */}
                       <td className="p-2.5 text-center font-bold text-rose-700 bg-rose-50/20">
-                        {staffReport.absentDays}
+                        {absentDays}
                       </td>
 
                       {/* Summary Rate */}
                       <td className="p-2.5 text-center font-black text-slate-900">
-                        {staffReport.attendanceRate !== null
-                          ? `${staffReport.attendanceRate}%`
+                        {attendanceRate !== null
+                          ? `${attendanceRate}%`
                           : '—'}
                       </td>
 
                       {/* Standing Tag */}
                       <td className="p-2.5 text-center">
-                        {getTagBadge(staffReport.statusTag)}
+                        {getTagBadge(statusTag)}
                       </td>
 
                       {/* Action Detail */}
@@ -405,7 +432,7 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                          className="h-7 w-7 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg cursor-pointer"
                           title="Open Detailed Staff Calendar"
                         >
                           <Eye className="w-3.5 h-3.5" />

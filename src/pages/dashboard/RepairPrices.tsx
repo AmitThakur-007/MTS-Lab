@@ -305,9 +305,11 @@ export default function RepairPrices() {
 
   // Compute all available brands across records + custom folders
   const allBrands = useMemo(() => {
+    const safeRecords = Array.isArray(records) ? records : [];
+    const safeCustomFolders = Array.isArray(customFolders) ? customFolders : [];
     const brandSet = new Set<string>();
-    records.forEach(r => { if (r.brand) brandSet.add(r.brand); });
-    customFolders.forEach(f => { if (f.brand) brandSet.add(f.brand); });
+    safeRecords.forEach(r => { if (r && r.brand) brandSet.add(r.brand); });
+    safeCustomFolders.forEach(f => { if (f && f.brand) brandSet.add(f.brand); });
     DEFAULT_POPULAR_BRANDS.forEach(b => brandSet.add(b));
     return Array.from(brandSet).sort();
   }, [records, customFolders]);
@@ -315,6 +317,8 @@ export default function RepairPrices() {
   // Compute folders at the CURRENT level
   const currentLevelFolders = useMemo(() => {
     if (globalSearch.trim()) return [];
+    const safeRecords = Array.isArray(records) ? records : [];
+    const safeCustomFolders = Array.isArray(customFolders) ? customFolders : [];
 
     if (currentLevelDepth === 0) {
       // LEVEL 0: Brands
@@ -326,7 +330,8 @@ export default function RepairPrices() {
       });
 
       // Accumulate counts from existing records
-      records.forEach(r => {
+      safeRecords.forEach(r => {
+        if (!r) return;
         const b = r.brand || 'Other';
         if (!brandMap.has(b)) {
           brandMap.set(b, { name: b, modelCount: new Set(), serviceCount: 0, activeCount: 0 });
@@ -338,8 +343,8 @@ export default function RepairPrices() {
       });
 
       // Accumulate from custom folders
-      customFolders.forEach(f => {
-        if (f.brand && brandMap.has(f.brand)) {
+      safeCustomFolders.forEach(f => {
+        if (f && f.brand && brandMap.has(f.brand)) {
           if (f.model) brandMap.get(f.brand)!.modelCount.add(f.model);
         }
       });
@@ -359,7 +364,7 @@ export default function RepairPrices() {
       const modelMap = new Map<string, { name: string; categoryCount: Set<string>; serviceCount: number; activeCount: number }>();
 
       // Populate from records matching this brand
-      records.filter(r => r.brand?.toLowerCase() === currentBrand.toLowerCase()).forEach(r => {
+      safeRecords.filter(r => r && r.brand?.toLowerCase() === currentBrand.toLowerCase()).forEach(r => {
         const m = r.model || 'General';
         if (!modelMap.has(m)) {
           modelMap.set(m, { name: m, categoryCount: new Set(), serviceCount: 0, activeCount: 0 });
@@ -371,7 +376,7 @@ export default function RepairPrices() {
       });
 
       // Populate from custom folders matching this brand
-      customFolders.filter(f => f.brand?.toLowerCase() === currentBrand.toLowerCase() && f.model).forEach(f => {
+      safeCustomFolders.filter(f => f && f.brand?.toLowerCase() === currentBrand.toLowerCase() && f.model).forEach(f => {
         const m = f.model!;
         if (!modelMap.has(m)) {
           modelMap.set(m, { name: m, categoryCount: new Set(), serviceCount: 0, activeCount: 0 });
@@ -395,7 +400,8 @@ export default function RepairPrices() {
       const categoryMap = new Map<string, { name: string; serviceCount: number; activeCount: number }>();
 
       // Populate from records matching brand + model
-      records.filter(r => 
+      safeRecords.filter(r => 
+        r &&
         r.brand?.toLowerCase() === currentBrand.toLowerCase() && 
         r.model?.toLowerCase() === currentModel.toLowerCase()
       ).forEach(r => {
@@ -409,7 +415,8 @@ export default function RepairPrices() {
       });
 
       // Populate from custom folders
-      customFolders.filter(f => 
+      safeCustomFolders.filter(f => 
+        f &&
         f.brand?.toLowerCase() === currentBrand.toLowerCase() && 
         f.model?.toLowerCase() === currentModel.toLowerCase() && 
         f.category
