@@ -30,6 +30,8 @@ export function createApp() {
   app.use('/api/auth', authRoutes);
   app.use('/api/users', usersRoutes);
   app.use('/api/user', usersRoutes);
+  app.use('/api/staff', usersRoutes);
+  app.use('/api/staffs', usersRoutes);
   app.use('/api/security', securityRoutes);
   app.use('/api/repairs', repairsRoutes);
   app.use('/api/repair', repairsRoutes);

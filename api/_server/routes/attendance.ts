@@ -139,6 +139,121 @@ router.get('/roster', authenticate, handleGetRoster);
 router.get('/today', authenticate, handleGetRoster);
 
 // ==========================================
+// 2.5 GET /api/attendance/pending-requests & /api/attendance/pending
+// Pending attendance logs and regularization requests
+// ==========================================
+const handleGetPendingRequests = async (req: AuthRequest, res: Response) => {
+  try {
+    const currentUser = req.user;
+    if (!currentUser) return res.status(401).json({ error: 'Unauthorized' });
+
+    const isManagement = ATTENDANCE_MANAGEMENT_ROLES.includes(currentUser.role);
+    const allRecords = await getAllAttendanceRecords();
+
+    // Filter records with PENDING status or PENDING requestStatus
+    let pendingList = allRecords.filter((r) => r.status === 'PENDING' || r.requestStatus === 'PENDING');
+
+    if (!isManagement) {
+      pendingList = pendingList.filter((r) => r.userId === currentUser.id);
+    }
+
+    const staffList = await getAuthorizedStaffList();
+    const staffMap = new Map(staffList.map((s) => [s.id, s]));
+
+    const enriched = pendingList.map((r) => {
+      const user = staffMap.get(r.userId);
+      return {
+        ...r,
+        userName: user?.name || r.markedByName || 'Staff Member',
+        userEmail: user?.email || null,
+        userRole: user?.role || null,
+        userDepartment: user?.department || 'Repair Lab',
+        userProfileImage: user?.profileImage || null,
+      };
+    });
+
+    return res.json(enriched);
+  } catch (err: any) {
+    console.error('[PENDING ATTENDANCE REQUESTS ERROR]', err);
+    return res.status(500).json({ error: 'Failed to fetch pending attendance requests.' });
+  }
+};
+
+router.get('/pending-requests', authenticate, handleGetPendingRequests);
+router.get('/pending', authenticate, handleGetPendingRequests);
+
+// POST /api/attendance/pending-requests/:id/approve
+router.post('/pending-requests/:id/approve', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status = 'PRESENT', notes } = req.body;
+    const existing = await getAttendanceRecordById(id);
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Attendance record not found.' });
+    }
+
+    const updated = await upsertAttendanceRecord(
+      {
+        userId: existing.userId,
+        date: existing.date,
+        status: status as any,
+        checkInTime: existing.checkInTime,
+        checkOutTime: existing.checkOutTime,
+        notes: notes || existing.notes || 'Approved by management',
+        requestStatus: 'ACCEPTED',
+      },
+      {
+        id: req.user?.id || 'SYSTEM',
+        name: req.user?.name || 'Administrator',
+        role: req.user?.role || 'ADMIN',
+      }
+    );
+
+    return res.json({ success: true, message: 'Attendance request approved.', record: updated });
+  } catch (err: any) {
+    console.error('[APPROVE ATTENDANCE ERROR]', err);
+    return res.status(500).json({ error: 'Failed to approve attendance request.' });
+  }
+});
+
+// POST /api/attendance/pending-requests/:id/reject
+router.post('/pending-requests/:id/reject', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason = 'Rejected by management' } = req.body;
+    const existing = await getAttendanceRecordById(id);
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Attendance record not found.' });
+    }
+
+    const updated = await upsertAttendanceRecord(
+      {
+        userId: existing.userId,
+        date: existing.date,
+        status: 'REJECTED' as any,
+        checkInTime: existing.checkInTime,
+        checkOutTime: existing.checkOutTime,
+        notes: existing.notes,
+        requestStatus: 'REJECTED',
+        rejectionReason: reason,
+      },
+      {
+        id: req.user?.id || 'SYSTEM',
+        name: req.user?.name || 'Administrator',
+        role: req.user?.role || 'ADMIN',
+      }
+    );
+
+    return res.json({ success: true, message: 'Attendance request rejected.', record: updated });
+  } catch (err: any) {
+    console.error('[REJECT ATTENDANCE ERROR]', err);
+    return res.status(500).json({ error: 'Failed to reject attendance request.' });
+  }
+});
+
+// ==========================================
 // 3. GET /api/attendance/monthly-report
 // Comprehensive Monthly Report & Matrix
 // ==========================================

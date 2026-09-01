@@ -450,7 +450,7 @@ router.get('/activity-timeline', async (req: AuthRequest, res: Response) => {
 });
 
 // 8. GET /api/security/access-requests (and mounted on /api/access-requests)
-router.get('/access-requests', async (req: AuthRequest, res: Response) => {
+const handleGetAccessRequests = async (req: AuthRequest, res: Response) => {
   try {
     const { status, search } = req.query;
 
@@ -490,10 +490,13 @@ router.get('/access-requests', async (req: AuthRequest, res: Response) => {
     console.error('[ACCESS REQUESTS ERROR]', err);
     return res.status(500).json({ error: 'Failed to fetch access requests.' });
   }
-});
+};
+
+router.get('/access-requests', handleGetAccessRequests);
+router.get('/', handleGetAccessRequests);
 
 // 9. POST /api/security/access-requests/:id/approve
-router.post('/access-requests/:id/approve', async (req: AuthRequest, res: Response) => {
+const handleApproveAccessRequest = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { assignedRole } = req.body;
@@ -621,10 +624,13 @@ router.post('/access-requests/:id/approve', async (req: AuthRequest, res: Respon
     console.error('[APPROVE ACCESS REQUEST ERROR]', err);
     return res.status(500).json({ error: 'Failed to approve access request.' });
   }
-});
+};
+
+router.post('/access-requests/:id/approve', handleApproveAccessRequest);
+router.post('/:id/approve', handleApproveAccessRequest);
 
 // 10. POST /api/security/access-requests/:id/reject
-router.post('/access-requests/:id/reject', async (req: AuthRequest, res: Response) => {
+const handleRejectAccessRequest = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -694,10 +700,13 @@ router.post('/access-requests/:id/reject', async (req: AuthRequest, res: Respons
     console.error('[REJECT ACCESS REQUEST ERROR]', err);
     return res.status(500).json({ error: 'Failed to reject access request.' });
   }
-});
+};
+
+router.post('/access-requests/:id/reject', handleRejectAccessRequest);
+router.post('/:id/reject', handleRejectAccessRequest);
 
 // 11. POST /api/security/access-requests/:id/reset-attempts
-router.post('/access-requests/:id/reset-attempts', async (req: AuthRequest, res: Response) => {
+const handleResetAttempts = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -751,10 +760,13 @@ router.post('/access-requests/:id/reset-attempts', async (req: AuthRequest, res:
     console.error('[RESET ATTEMPTS ERROR]', err);
     return res.status(500).json({ error: 'Failed to reset attempts.' });
   }
-});
+};
+
+router.post('/access-requests/:id/reset-attempts', handleResetAttempts);
+router.post('/:id/reset-attempts', handleResetAttempts);
 
 // 12. POST /api/security/access-requests/system-repair
-router.post('/access-requests/system-repair', async (req: AuthRequest, res: Response) => {
+const handleSystemRepair = async (req: AuthRequest, res: Response) => {
   try {
     let repairedCount = 0;
 
@@ -841,6 +853,9 @@ router.post('/access-requests/system-repair', async (req: AuthRequest, res: Resp
     console.error('[SECURITY REPAIR ERROR]', err);
     return res.status(500).json({ error: 'Failed to run security system repair.' });
   }
-});
+};
+
+router.post('/access-requests/system-repair', handleSystemRepair);
+router.post('/system-repair', handleSystemRepair);
 
 export default router;

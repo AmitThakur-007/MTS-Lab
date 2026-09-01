@@ -36,22 +36,46 @@ function generateTokens(user: any) {
 // 1. POST /api/auth/login
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { email: emailField, identity, password, deviceIdentifier, deviceName, deviceType, browser, os, ipAddress } = req.body;
-    const email = emailField || identity;
+    const { email: emailField, identity, password } = req.body;
+    const emailOrUsername = emailField || identity;
 
-    if (!email || !password) {
+    if (!emailOrUsername || !password) {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedIdentifier = String(emailOrUsername).toLowerCase().trim();
 
-    // Query authoritative User record from public.User
-    const { data: users, error: userErr } = await supabaseAdmin
+    // Extract device details safely from body, nested device object, or headers
+    const dev = (req.body && typeof req.body.device === 'object' && req.body.device) ? req.body.device : {};
+    const deviceIdentifier = req.body.deviceIdentifier || dev.deviceIdentifier || (req.headers['x-device-identifier'] as string) || null;
+    const deviceName = req.body.deviceName || dev.deviceName || null;
+    const deviceType = req.body.deviceType || dev.deviceType || 'DESKTOP';
+    const browser = req.body.browser || dev.browser || null;
+    const os = req.body.os || dev.os || null;
+    const ipAddress = req.body.ipAddress || dev.ipAddress || req.ip || (req.headers['x-forwarded-for'] as string) || null;
+
+    // Query authoritative User record from public.User by email or username
+    let query = supabaseAdmin
       .from('User')
       .select('*')
-      .eq('email', normalizedEmail)
+      .or(`email.ilike.${normalizedIdentifier},username.ilike.${normalizedIdentifier}`)
       .is('deletedAt', null)
       .limit(1);
+
+    let { data: users, error: userErr } = await query;
+
+    if ((!users || users.length === 0) && normalizedIdentifier.includes('@')) {
+      const { data: directUsers } = await supabaseAdmin
+        .from('User')
+        .select('*')
+        .eq('email', normalizedIdentifier)
+        .is('deletedAt', null)
+        .limit(1);
+      if (directUsers && directUsers.length > 0) {
+        users = directUsers;
+        userErr = null;
+      }
+    }
 
     if (userErr || !users || users.length === 0) {
       return res.status(401).json({ error: 'Invalid email or password.' });
@@ -102,10 +126,10 @@ router.post('/login', async (req: Request, res: Response) => {
     // Authenticate password
     let passwordMatches = false;
 
-    // A. Try Supabase Auth password validation first
+    // A. Try Supabase Auth password validation first (using authoritative user.email)
     try {
       const { data: authData, error: authError } = await supabasePublic.auth.signInWithPassword({
-        email: normalizedEmail,
+        email: user.email,
         password: password,
       });
 
@@ -125,7 +149,7 @@ router.post('/login', async (req: Request, res: Response) => {
       if (passwordMatches && !user.supabaseUid) {
         try {
           const { data: newAuthUser } = await supabaseAdmin.auth.admin.createUser({
-            email: normalizedEmail,
+            email: user.email,
             password: password,
             email_confirm: true,
           });

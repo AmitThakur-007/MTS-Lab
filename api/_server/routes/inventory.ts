@@ -983,7 +983,7 @@ router.post('/:id/adjust-stock', authenticate, authorize(INVENTORY_MANAGERS), as
           itemId: id,
           type: 'STOCK_ADJUSTMENT',
           quantity: Math.abs(diff),
-          previousStock,
+          previousStock: prevStock,
           newStock,
           reason,
           notes,
@@ -1001,7 +1001,7 @@ router.post('/:id/adjust-stock', authenticate, authorize(INVENTORY_MANAGERS), as
       action: 'INVENTORY_STOCK_ADJUSTMENT',
       resource: 'InventoryItem',
       resourceId: id,
-      details: { previousStock, newStock, diff, reason },
+      details: { previousStock: prevStock, newStock, diff, reason },
     });
 
     await broadcastServerChange('InventoryItem', 'UPDATE', id, updated);
@@ -1018,7 +1018,7 @@ router.delete('/:id', authenticate, authorize(INVENTORY_MANAGERS), async (req: A
     const { id } = req.params;
     const { permanent = false } = req.query;
 
-    if (permanent === 'true' || permanent === true) {
+    if (String(permanent) === 'true') {
       await supabaseAdmin.from('InventoryTransaction').delete().eq('itemId', id);
       const { error } = await supabaseAdmin.from('InventoryItem').delete().eq('id', id);
 

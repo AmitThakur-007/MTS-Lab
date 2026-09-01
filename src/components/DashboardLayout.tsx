@@ -76,11 +76,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const fetchPendingAccessCount = async () => {
     if (user?.role !== 'SUPER_ADMIN') return;
     try {
-      const data = await api.get('/access-requests');
-      if (Array.isArray(data)) {
-        const count = data.filter((r: any) => r.status === 'PENDING').length;
-        setPendingAccessCount(count);
-      }
+      const data: any = await api.get('/access-requests');
+      const list = Array.isArray(data) ? data : (data?.requests || []);
+      const count = list.filter((r: any) => r.status === 'PENDING').length;
+      setPendingAccessCount(count);
     } catch (err) {
       // silently ignore
     }
@@ -89,10 +88,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const fetchPendingAttendance = async () => {
     if (!user) return;
     try {
-      const data = await api.get('/attendance/pending-requests');
-      if (Array.isArray(data)) {
-        setPendingAttendanceCount(data.length);
-      }
+      const data: any = await api.get('/attendance/pending-requests');
+      const list = Array.isArray(data) ? data : (data?.pendingRequests || data?.requests || []);
+      setPendingAttendanceCount(list.length);
     } catch {
       // ignore
     }
