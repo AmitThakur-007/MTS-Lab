@@ -121,7 +121,7 @@ export default function SlideshowManagement() {
   }, []);
 
   // Multi-device real-time sync for slideshow updates
-  useRealtimeSync(['homeSlide'], () => {
+  useRealtimeSync(['homeSlide', 'slide', 'slides'], () => {
     fetchSlides();
   });
 
@@ -241,6 +241,7 @@ export default function SlideshowManagement() {
     try {
       setSubmitting(true);
       await api.post('/admin/slides', formData);
+      window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: { table: 'HomeSlide' } }));
       toast.success('Hero slide created successfully');
       setIsCreateOpen(false);
       fetchSlides();
@@ -266,6 +267,7 @@ export default function SlideshowManagement() {
     try {
       setSubmitting(true);
       await api.put(`/admin/slides/${selectedSlide.id}`, formData);
+      window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: { table: 'HomeSlide' } }));
       toast.success('Hero slide updated successfully');
       setIsEditOpen(false);
       fetchSlides();
@@ -279,6 +281,7 @@ export default function SlideshowManagement() {
   const handleToggleStatus = async (slide: HomeSlideItem) => {
     try {
       await api.patch(`/admin/slides/${slide.id}/toggle-status`, {});
+      window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: { table: 'HomeSlide' } }));
       toast.success(`Slide "${slide.title}" is now ${slide.status === 'ACTIVE' ? 'Inactive' : 'Active'}`);
       fetchSlides();
     } catch (err: any) {
@@ -291,6 +294,7 @@ export default function SlideshowManagement() {
     try {
       setSubmitting(true);
       await api.delete(`/admin/slides/${selectedSlide.id}`);
+      window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: { table: 'HomeSlide' } }));
       toast.success('Hero slide deleted successfully');
       setIsDeleteOpen(false);
       fetchSlides();
@@ -316,6 +320,7 @@ export default function SlideshowManagement() {
     try {
       await api.put(`/admin/slides/${slide.id}`, { displayOrder: targetOrder });
       await api.put(`/admin/slides/${targetSlide.id}`, { displayOrder: currentOrder });
+      window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: { table: 'HomeSlide' } }));
       toast.success('Slide order updated');
       fetchSlides();
     } catch (err) {

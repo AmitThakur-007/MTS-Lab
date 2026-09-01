@@ -2,8 +2,27 @@ import { Router, Request, Response } from 'express';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
+import { getSlides } from '../services/slidesStorage';
 
 const router = Router();
+
+// 0. Public Slides Endpoints (GET /api/public/slides, /api/public/home-slides)
+const handlePublicSlides = async (req: Request, res: Response) => {
+  try {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    const slides = await getSlides(true);
+    return res.json(slides || []);
+  } catch (err: any) {
+    console.error('[PUBLIC SLIDES EXCEPTION]', err);
+    return res.status(500).json({ error: 'Failed to retrieve public slides.' });
+  }
+};
+
+router.get('/slides', handlePublicSlides);
+router.get('/home-slides', handlePublicSlides);
 
 // 1. GET & POST /api/public/track (or /api/track) - Resilient Public Tracking
 const handlePublicTrack = async (req: Request, res: Response) => {
