@@ -520,8 +520,6 @@ export default function Attendance() {
           dailyLogs={myDailyLogs}
           selectedMonth={selectedMonth}
           onMonthChange={setSelectedMonth}
-          onSelfCheckIn={handleSelfCheckIn}
-          isCheckingIn={isCheckingIn}
         />
       </div>
     );
@@ -697,8 +695,6 @@ export default function Attendance() {
           dailyLogs={myDailyLogs}
           selectedMonth={selectedMonth}
           onMonthChange={setSelectedMonth}
-          onSelfCheckIn={handleSelfCheckIn}
-          isCheckingIn={isCheckingIn}
         />
       )}
 

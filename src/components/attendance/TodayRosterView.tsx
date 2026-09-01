@@ -247,7 +247,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
           <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
           <div className="flex-1 min-w-0 leading-relaxed">
             <strong>Attendance Window Closed:</strong> Staff marking controls are enabled exclusively between{' '}
-            <span className="font-bold underline">10:00 AM and 10:35 AM NPT</span> (Asia/Kathmandu). You can still view all roster data, history, and monthly reports.
+            <span className="font-bold underline">10:00 AM and 10:45 AM NPT</span> (Asia/Kathmandu). You can still view all roster data, history, and monthly reports.
           </div>
         </div>
       )}
@@ -395,7 +395,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs font-black'
                                   : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300'
                               )}
-                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:35 AM NPT)' : 'Mark as Present'}
+                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:45 AM NPT)' : 'Mark as Present'}
                             >
                               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                               <span>Present</span>
@@ -413,7 +413,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                                   ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs font-black'
                                   : 'border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-300'
                               )}
-                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:35 AM NPT)' : 'Mark as Late'}
+                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:45 AM NPT)' : 'Mark as Late'}
                             >
                               <Clock className="w-3.5 h-3.5 shrink-0" />
                               <span>Late</span>
@@ -431,7 +431,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                                   ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-2xs font-black'
                                   : 'border-rose-200 text-rose-700 hover:bg-rose-50 hover:border-rose-300'
                               )}
-                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:35 AM NPT)' : 'Mark as Absent'}
+                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:45 AM NPT)' : 'Mark as Absent'}
                             >
                               <UserX className="w-3.5 h-3.5 shrink-0" />
                               <span>Absent</span>

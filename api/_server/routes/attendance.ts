@@ -553,29 +553,28 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
     const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
     const isAdmin = currentUser.role === 'ADMIN';
     const isManager = currentUser.role === 'MANAGER';
-    const isSelf = targetUserId === currentUser.id;
 
     // RBAC & TIME WINDOW ENFORCEMENT
+    // 1. Super Admin and Admin: 24/7 full authority for any staff member
     if (isSuperAdmin || isAdmin) {
-      // Super Admin and Admin have 24/7 unlimited access to mark anyone's attendance
+      // Allowed anytime for any staff member
     } else if (isManager) {
-      // Manager marking other staff must be strictly within 10:00 AM - 10:35 AM NPT
-      if (!isSelf && !time.isWithinWindow) {
+      // 2. Manager: Strictly restricted to 10:00 AM - 10:45 AM Nepal Time (Asia/Kathmandu)
+      if (!time.isWithinWindow) {
         return res.status(403).json({
-          error: `Manager can only record staff attendance between 10:00 AM and 10:35 AM (Asia/Kathmandu time). Current NPT time: ${time.timeString}`,
+          error: `Manager can only record staff attendance between 10:00 AM and 10:45 AM Nepal Time (Asia/Kathmandu). Current NPT time: ${time.timeString}`,
           code: 'OUTSIDE_ATTENDANCE_WINDOW',
           serverTime: time.timeString,
-          window: '10:00 AM - 10:35 AM NPT',
+          window: '10:00 AM - 10:45 AM NPT',
         });
       }
     } else {
-      // Regular staff (Technician, Receptionist, etc.) can ONLY mark their own attendance
-      if (!isSelf) {
-        return res.status(403).json({
-          error: 'Access denied: Staff members can only record their own personal attendance.',
-          code: 'UNAUTHORIZED_TARGET_USER',
-        });
-      }
+      // 3. Receptionist, Technician, Head Technician, and other Staff:
+      // Strictly CANNOT take attendance for themselves or others.
+      return res.status(403).json({
+        error: 'Access denied: Staff members (Technicians, Receptionists, etc.) cannot record attendance. Attendance is recorded and verified authoritatively by Lab Management.',
+        code: 'UNAUTHORIZED_ROLE',
+      });
     }
 
     // Verify target user is in authorized staff list
@@ -598,9 +597,7 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
           ? 'DIRECT_SUPER_ADMIN'
           : isAdmin
           ? 'DIRECT_ADMIN'
-          : isManager
-          ? 'MANAGER_ATTENDANCE'
-          : 'STAFF_SELF_CHECKIN',
+          : 'MANAGER_ATTENDANCE',
         requestStatus: 'DIRECT',
       },
       {
@@ -643,7 +640,7 @@ router.post('/bulk-mark', authenticate, async (req: AuthRequest, res: Response) 
     // Time window restriction for Manager
     if (isManager && !time.isWithinWindow) {
       return res.status(403).json({
-        error: `Manager can only record staff attendance between 10:00 AM and 10:35 AM (Asia/Kathmandu time). Current NPT time: ${time.timeString}`,
+        error: `Manager can only record staff attendance between 10:00 AM and 10:45 AM (Asia/Kathmandu time). Current NPT time: ${time.timeString}`,
         code: 'OUTSIDE_ATTENDANCE_WINDOW',
       });
     }
@@ -822,7 +819,7 @@ router.patch('/:id', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async
     // Manager time window check if modifying others' attendance
     if (isManager && !time.isWithinWindow) {
       return res.status(403).json({
-        error: `Manager can only update attendance during 10:00 AM – 10:35 AM NPT. (Current NPT: ${time.timeString})`,
+        error: `Manager can only update attendance during 10:00 AM – 10:45 AM NPT. (Current NPT: ${time.timeString})`,
         code: 'OUTSIDE_ATTENDANCE_WINDOW',
       });
     }

@@ -244,8 +244,8 @@ export function getNepalBusinessTime() {
   const seconds = parseInt(secStr, 10);
 
   const totalMinutes = hours * 60 + minutes;
-  // Window: 10:00 AM (600 mins) to 10:35 AM (635 mins)
-  const isWithinWindow = totalMinutes >= 600 && totalMinutes <= 635;
+  // Window: 10:00 AM (600 mins) to 10:45 AM (645 mins)
+  const isWithinWindow = totalMinutes >= 600 && totalMinutes <= 645;
 
   const dateString = `${y}-${m}-${d}`;
   const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -255,7 +255,7 @@ export function getNepalBusinessTime() {
   let secondsUntilWindowOpens = 0;
 
   if (isWithinWindow) {
-    const endMinutes = 635 * 60 + 59; // 10:35:59
+    const endMinutes = 645 * 60 + 59; // 10:45:59
     const currentSeconds = totalMinutes * 60 + seconds;
     secondsRemainingInWindow = Math.max(0, endMinutes - currentSeconds);
   } else if (totalMinutes < 600) {
@@ -275,7 +275,7 @@ export function getNepalBusinessTime() {
     secondsRemainingInWindow,
     secondsUntilWindowOpens,
     windowStart: '10:00:00',
-    windowEnd: '10:35:00',
+    windowEnd: '10:45:00',
     timezone: 'Asia/Kathmandu',
   };
 }

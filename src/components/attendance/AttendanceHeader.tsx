@@ -87,12 +87,12 @@ export const AttendanceHeader: React.FC<AttendanceHeaderProps> = ({
                 {isWithinWindow ? (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Manager Window OPEN (10:00–10:35 AM NPT)</span>
+                    <span>Manager Window OPEN (10:00–10:45 AM NPT)</span>
                   </>
                 ) : (
                   <>
                     <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span>Manager Window CLOSED (10:00–10:35 AM NPT)</span>
+                    <span>Manager Window CLOSED (10:00–10:45 AM NPT)</span>
                   </>
                 )}
               </Badge>
@@ -111,7 +111,7 @@ export const AttendanceHeader: React.FC<AttendanceHeaderProps> = ({
             {isAdminOrSuperAdmin
               ? 'Complete authoritative attendance tracking, roster verification, and records management.'
               : isManager
-              ? 'Staff attendance marking (10:00 AM – 10:35 AM NPT window), roster oversight, and monthly logs.'
+              ? 'Staff attendance marking (10:00 AM – 10:45 AM NPT window), roster oversight, and monthly logs.'
               : 'View your verified attendance history, daily presence status, and monthly logs.'}
           </p>
         </div>
@@ -176,7 +176,7 @@ export const AttendanceHeader: React.FC<AttendanceHeaderProps> = ({
                 )}
                 title={
                   isManager && !isWithinWindow
-                    ? 'Bulk attendance is only available during 10:00 AM – 10:35 AM NPT'
+                    ? 'Bulk attendance is only available during 10:00 AM – 10:45 AM NPT'
                     : 'Mark all active staff as Present for today'
                 }
               >

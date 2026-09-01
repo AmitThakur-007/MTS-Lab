@@ -49,8 +49,6 @@ interface PersonalAttendanceViewProps {
   dailyLogs: PersonalDailyLog[];
   selectedMonth: string;
   onMonthChange: (month: string) => void;
-  onSelfCheckIn: () => void;
-  isCheckingIn: boolean;
 }
 
 export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
@@ -63,16 +61,16 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
   dailyLogs,
   selectedMonth,
   onMonthChange,
-  onSelfCheckIn,
-  isCheckingIn,
 }) => {
   const isCheckedInToday = todayRecord && (todayRecord.status === 'PRESENT' || todayRecord.status === 'LATE' || todayRecord.status === 'HALF_DAY');
+  const isAbsentToday = todayRecord && todayRecord.status === 'ABSENT';
   const todayStatus = todayRecord?.status || 'NOT_MARKED';
   const todayCheckInTime = todayRecord?.checkInTime || todayRecord?.time;
+  const markedBy = todayRecord?.markedByName;
 
   return (
     <div className="space-y-4 sm:space-y-6 w-full min-w-0">
-      {/* Hero Check-In Banner */}
+      {/* Hero Attendance Status Banner */}
       <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-4 sm:p-6 md:p-8 shadow-xl border border-indigo-900/40 w-full min-w-0">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-5 sm:gap-6 min-w-0">
           <div className="space-y-2 max-w-xl min-w-0">
@@ -90,14 +88,15 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
               Hello, {userName}
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
-              Your attendance status is verified daily against MTS Lab business hours.
               {isCheckedInToday
-                ? ` Your presence for today is confirmed.`
-                : ` Please click below to record your check-in.`}
+                ? `Your presence for today has been authoritatively verified by Lab Management.`
+                : isAbsentToday
+                ? `You have been recorded as Absent for today by Lab Management.`
+                : `Morning attendance is recorded and verified daily by Lab Management between 10:00 AM and 10:45 AM NPT.`}
             </p>
           </div>
 
-          {/* Action Box */}
+          {/* Verification Status Display */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0 w-full sm:w-auto">
             {isCheckedInToday ? (
               <div className="flex items-center gap-3 sm:gap-3.5 px-4 sm:px-5 py-3.5 sm:py-4 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl w-full sm:w-auto">
@@ -116,18 +115,44 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
                       </span>
                     )}
                   </div>
+                  {markedBy && (
+                    <div className="text-[10px] text-emerald-200/80">
+                      Verified by {markedBy}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : isAbsentToday ? (
+              <div className="flex items-center gap-3 sm:gap-3.5 px-4 sm:px-5 py-3.5 sm:py-4 bg-rose-500/15 border border-rose-500/30 rounded-2xl w-full sm:w-auto">
+                <div className="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center shadow-lg shadow-rose-500/30 shrink-0">
+                  <XCircle className="w-6 h-6" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] sm:text-xs font-bold text-rose-300 uppercase tracking-wider truncate">
+                    Today's Status
+                  </div>
+                  <div className="text-sm sm:text-base font-black text-white">
+                    ABSENT
+                  </div>
                 </div>
               </div>
             ) : (
-              <Button
-                size="lg"
-                onClick={onSelfCheckIn}
-                disabled={isCheckingIn}
-                className="h-12 sm:h-14 px-5 sm:px-7 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm sm:text-base rounded-2xl shadow-lg shadow-emerald-600/30 gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] w-full sm:w-auto justify-center"
-              >
-                <CheckCircle2 className="w-5 h-5 shrink-0" />
-                <span>{isCheckingIn ? 'Recording...' : 'Mark Self Check-In'}</span>
-              </Button>
+              <div className="flex items-center gap-3 sm:gap-3.5 px-4 sm:px-5 py-3.5 sm:py-4 bg-slate-800/80 border border-slate-700 rounded-2xl w-full sm:w-auto">
+                <div className="w-10 h-10 rounded-xl bg-slate-700 text-slate-300 flex items-center justify-center shadow-inner shrink-0">
+                  <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">
+                    Morning Attendance
+                  </div>
+                  <div className="text-xs sm:text-sm font-bold text-slate-200">
+                    Awaiting Lab Verification
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Window: 10:00–10:45 AM NPT
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
