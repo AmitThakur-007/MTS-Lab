@@ -200,7 +200,22 @@ async function request<T = any>(endpoint: string, options: any = {}): Promise<T>
 }
 
 export const api = {
-  get: <T = any>(endpoint: string) => request<T>(endpoint),
+  get: <T = any>(endpoint: string, options?: { params?: Record<string, any> }) => {
+    let url = endpoint;
+    if (options?.params) {
+      const searchParams = new URLSearchParams();
+      Object.entries(options.params).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== '') {
+          searchParams.append(key, String(val));
+        }
+      });
+      const qs = searchParams.toString();
+      if (qs) {
+        url += (url.includes('?') ? '&' : '?') + qs;
+      }
+    }
+    return request<T>(url);
+  },
   getBlob: async (endpoint: string, options: any = {}) => {
     const { token } = useAuthStore.getState();
     const headers = {
