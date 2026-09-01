@@ -10,20 +10,6 @@ import { sendEmail } from '../services/emailService';
 
 const router = Router();
 
-// Helper to safely extract client IP without relying on undefined req.socket
-function getSafeIp(req: Request, fallbackIp?: string): string | null {
-  if (fallbackIp) return fallbackIp;
-  try {
-    const forwarded = req.headers ? (req.headers['x-forwarded-for'] || req.headers['x-real-ip']) : null;
-    if (forwarded) {
-      return Array.isArray(forwarded) ? forwarded[0] : String(forwarded).split(',')[0].trim();
-    }
-    return req.socket?.remoteAddress || (req as any).connection?.remoteAddress || null;
-  } catch (_) {
-    return null;
-  }
-}
-
 // Helper to generate access & refresh tokens
 function generateTokens(user: any) {
   const token = jwt.sign(
@@ -50,9 +36,8 @@ function generateTokens(user: any) {
 // 1. POST /api/auth/login
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { email: emailField, identity, password, deviceIdentifier, deviceName, deviceType, browser, os, ipAddress } = req.body || {};
+    const { email: emailField, identity, password, deviceIdentifier, deviceName, deviceType, browser, os, ipAddress } = req.body;
     const email = emailField || identity;
-    const clientIp = getSafeIp(req, ipAddress);
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required.' });
@@ -101,7 +86,7 @@ router.post('/login', async (req: Request, res: Response) => {
           resource: 'ApprovedDevice',
           resourceId: existingDevice.id,
           status: 'FAILED',
-          ipAddress: clientIp,
+          ipAddress: ipAddress || req.ip || (req.headers['x-forwarded-for'] as string) || null,
           userAgent: req.headers['user-agent'] || null,
           deviceInfo: { deviceIdentifier, deviceName, browser, os },
           details: { reason: 'Login attempt from revoked/blocked device' },
@@ -164,7 +149,7 @@ router.post('/login', async (req: Request, res: Response) => {
         resource: 'User',
         resourceId: user.id,
         status: 'FAILED',
-        ipAddress: clientIp,
+        ipAddress: ipAddress || req.ip || (req.headers['x-forwarded-for'] as string) || null,
         userAgent: req.headers['user-agent'] || null,
         deviceInfo: { deviceIdentifier, deviceName, browser, os },
         details: { attemptNumber: attempts },
@@ -202,7 +187,7 @@ router.post('/login', async (req: Request, res: Response) => {
               deviceType: deviceType || 'DESKTOP',
               browser: browser || undefined,
               os: os || undefined,
-              ipAddress: clientIp,
+              ipAddress: ipAddress || req.ip || null,
               userAgent: req.headers['user-agent'] || null,
               lastUsedAt: nowIso,
               updatedAt: nowIso,
@@ -218,7 +203,7 @@ router.post('/login', async (req: Request, res: Response) => {
               deviceType: deviceType || 'DESKTOP',
               browser: browser || null,
               os: os || null,
-              ipAddress: clientIp,
+              ipAddress: ipAddress || req.ip || null,
               userAgent: req.headers['user-agent'] || null,
               status: 'APPROVED',
               approvedAt: nowIso,
@@ -239,7 +224,7 @@ router.post('/login', async (req: Request, res: Response) => {
         {
           id: uuidv4(),
           userId: user.id,
-          ipAddress: clientIp,
+          ipAddress: ipAddress || req.ip || null,
           userAgent: req.headers['user-agent'] || null,
           deviceIdentifier: deviceIdentifier || null,
           deviceName: deviceName || null,
@@ -313,7 +298,7 @@ router.post('/login', async (req: Request, res: Response) => {
       resource: 'User',
       resourceId: user.id,
       status: 'SUCCESS',
-      ipAddress: clientIp,
+      ipAddress: ipAddress || req.ip || (req.headers['x-forwarded-for'] as string) || null,
       userAgent: req.headers['user-agent'] || null,
       deviceInfo: { deviceIdentifier, deviceName, deviceType, browser, os },
       details: { email: user.email, role: user.role, method: 'PASSWORD' },
@@ -554,7 +539,7 @@ router.post('/logout', async (req: Request, res: Response) => {
             resource: 'User',
             resourceId: decoded.id,
             status: 'SUCCESS',
-            ipAddress: getSafeIp(req),
+            ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
             userAgent: req.headers['user-agent'] || null,
             details: { message: 'User logged out' },
           });

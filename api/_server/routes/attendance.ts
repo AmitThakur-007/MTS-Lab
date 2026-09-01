@@ -139,64 +139,6 @@ router.get('/roster', authenticate, handleGetRoster);
 router.get('/today', authenticate, handleGetRoster);
 
 // ==========================================
-// 2A. GET /api/attendance/pending-requests
-// Existing Attendance.requestStatus is the authoritative pending-request state.
-// Management sees requests it is authorized to review; regular staff only see
-// their own pending request. Empty results are always a successful 200 response.
-// ==========================================
-router.get('/pending-requests', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const currentUser = req.user;
-    if (!currentUser) return res.status(401).json({ error: 'Unauthorized' });
-
-    const isSuperAdminOrAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
-    const isManager = currentUser.role === 'MANAGER';
-
-    const pending = await getAllAttendanceRecords({ status: 'PENDING' });
-    const visible = pending.filter((record) => {
-      if (record.requestStatus !== 'PENDING' || record.isArchived) return false;
-
-      if (isSuperAdminOrAdmin) return true;
-
-      if (isManager) {
-        return !currentUser.branchId || !record.branchId || record.branchId === currentUser.branchId;
-      }
-
-      return record.userId === currentUser.id;
-    });
-
-    const staffList = await getAuthorizedStaffList();
-    const staffMap = new Map(staffList.map((staff) => [staff.id, staff]));
-
-    const response = visible.map((record) => {
-      const staff = staffMap.get(record.userId);
-      return {
-        ...record,
-        staff: staff
-          ? {
-              id: staff.id,
-              name: staff.name,
-              email: staff.email,
-              role: staff.role,
-              department: staff.department || 'Repair Lab',
-              branchId: staff.branchId || null,
-              profileImage: staff.profileImage || null,
-            }
-          : null,
-      };
-    });
-
-    return res.status(200).json(response);
-  } catch (err: any) {
-    console.error('[PENDING ATTENDANCE REQUESTS ERROR]', err);
-    return res.status(500).json({
-      success: false,
-      message: 'Unable to load pending attendance requests.',
-    });
-  }
-});
-
-// ==========================================
 // 3. GET /api/attendance/monthly-report
 // Comprehensive Monthly Report & Matrix
 // ==========================================

@@ -8,6 +8,12 @@ import { authorize, normalizeRole } from '../middleware/rbac';
 import { logAudit } from '../services/auditService';
 import { createExcelBuffer, parseExcelBuffer } from '../services/excelService';
 import { broadcastServerChange } from '../services/realtimeSync';
+import {
+  createRepairTransferRequest,
+  directTransferRepair,
+  getMyTransferRequests,
+  getTransferRequestById,
+} from '../services/repairTransferService';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -1512,6 +1518,67 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
     return res.json({ success: true, message: 'Repair deleted successfully.' });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to delete repair record.' });
+  }
+});
+
+// ----------------------------------------------------
+// 19. POST /:id/transfer-request — Technician Transfer Request
+// ----------------------------------------------------
+router.post('/:id/transfer-request', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { targetTechnicianId, reason } = req.body;
+
+    const result = await createRepairTransferRequest({
+      repairId: id,
+      senderId: req.user!.id,
+      senderName: req.user!.name,
+      senderRole: req.user!.role,
+      targetTechnicianId,
+      reason,
+    });
+
+    if (!result.success) {
+      return res.status(result.statusCode || 400).json({ error: result.error });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Transfer request submitted successfully.',
+      transferRequest: result.data,
+    });
+  } catch (err: any) {
+    console.error('[POST /repairs/:id/transfer-request ERROR]', err);
+    return res.status(500).json({ error: err.message || 'Failed to submit transfer request.' });
+  }
+});
+
+// ----------------------------------------------------
+// 20. POST /:id/transfer — Manager Direct Transfer / Reassignment
+// ----------------------------------------------------
+router.post('/:id/transfer', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LEAD_TECHNICIAN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { targetTechnicianId, reason, priority } = req.body;
+
+    const result = await directTransferRepair({
+      repairId: id,
+      actorId: req.user!.id,
+      actorName: req.user!.name,
+      actorRole: req.user!.role,
+      targetTechnicianId,
+      reason: reason || 'Direct management reassignment',
+      priority,
+    });
+
+    if (!result.success) {
+      return res.status(result.statusCode || 400).json({ error: result.error });
+    }
+
+    return res.json(result.data);
+  } catch (err: any) {
+    console.error('[POST /repairs/:id/transfer ERROR]', err);
+    return res.status(500).json({ error: err.message || 'Failed to transfer repair.' });
   }
 });
 
