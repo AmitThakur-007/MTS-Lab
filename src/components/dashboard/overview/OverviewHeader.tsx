@@ -87,10 +87,11 @@ export const OverviewHeader: React.FC<OverviewHeaderProps> = ({ data, loading, o
             size="sm"
             onClick={onRefresh}
             disabled={loading}
-            className="h-9 px-3 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="h-9 px-3 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+            title="Refresh overview metrics"
           >
             <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Sync</span>
+            <span>Refresh</span>
           </Button>
 
           {/* Role specific quick action shortcuts */}

@@ -577,9 +577,9 @@ export default function TechnicianDashboard() {
               <Wrench className="h-7 w-7 text-indigo-600 shrink-0" />
               <span>Technician Workspace</span>
             </h1>
-            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-bold text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shrink-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Live Sync
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shrink-0">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Active Bench
             </Badge>
           </div>
           <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed break-words">
