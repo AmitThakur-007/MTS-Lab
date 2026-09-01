@@ -143,6 +143,8 @@ class RealtimeService {
       aliases.push('homeslide', 'slide', 'slides');
     } else if (normalized.startsWith('accessrequest')) {
       aliases.push('accessrequest', 'accessrequests');
+    } else if (normalized.startsWith('notification')) {
+      aliases.push('notification', 'notifications');
     }
     return Array.from(new Set(aliases.map(a => this.normalizeEntity(a))));
   }

@@ -4,6 +4,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { logAudit } from '../services/auditService';
 import { broadcastServerChange } from '../services/realtimeSync';
+import { createNotification } from '../services/notificationStorage';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
@@ -614,6 +615,25 @@ const handleApproveAccessRequest = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Notify target user if user account exists
+    if (accessReq.userId) {
+      try {
+        await createNotification({
+          userId: accessReq.userId,
+          title: 'Access Request Approved',
+          message: `Your staff access request for role '${finalRole}' has been approved by ${req.user?.name || 'Administrator'}.`,
+          type: 'ACCESS_APPROVED',
+          priority: 'HIGH',
+          senderId: req.user?.id,
+          senderName: req.user?.name,
+          senderRole: req.user?.role,
+          link: '/dashboard',
+        });
+      } catch (notifErr) {
+        console.warn('[ACCESS APPROVE NOTIF WARN]', notifErr);
+      }
+    }
+
     await broadcastServerChange('AccessRequest', 'UPDATE', id, { id, status: 'APPROVED', role: finalRole });
 
     return res.json({
@@ -689,6 +709,24 @@ const handleRejectAccessRequest = async (req: AuthRequest, res: Response) => {
         deviceIdentifier: accessReq.deviceIdentifier,
       },
     });
+
+    // Notify user if exists
+    if (accessReq.userId) {
+      try {
+        await createNotification({
+          userId: accessReq.userId,
+          title: 'Access Request Rejected',
+          message: `Your access request was rejected. Reason: ${reason || 'Denied by administrator'}`,
+          type: 'ACCESS_REJECTED',
+          priority: 'NORMAL',
+          senderId: req.user?.id,
+          senderName: req.user?.name,
+          senderRole: req.user?.role,
+        });
+      } catch (notifErr) {
+        console.warn('[ACCESS REJECT NOTIF WARN]', notifErr);
+      }
+    }
 
     await broadcastServerChange('AccessRequest', 'UPDATE', id, { id, status: 'REJECTED' });
 

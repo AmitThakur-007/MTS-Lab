@@ -14,6 +14,7 @@ import {
   getAttendanceAuditLogs,
   AttendanceRecord,
 } from '../services/attendanceStorage';
+import { createNotification } from '../services/notificationStorage';
 
 const router = Router();
 
@@ -210,6 +211,23 @@ router.post('/pending-requests/:id/approve', authenticate, authorize(ATTENDANCE_
       }
     );
 
+    // Notify requesting staff member of approval
+    try {
+      await createNotification({
+        userId: existing.userId,
+        title: `Attendance Request Approved (${existing.date})`,
+        message: `Your attendance request for ${existing.date} has been approved as ${status} by ${req.user?.name || 'Management'}.`,
+        type: 'ATTENDANCE_APPROVED',
+        priority: 'NORMAL',
+        senderId: req.user?.id,
+        senderName: req.user?.name,
+        senderRole: req.user?.role,
+        link: '/dashboard/attendance',
+      });
+    } catch (notifErr) {
+      console.warn('[ATTENDANCE APPROVE NOTIF WARN]', notifErr);
+    }
+
     return res.json({ success: true, message: 'Attendance request approved.', record: updated });
   } catch (err: any) {
     console.error('[APPROVE ATTENDANCE ERROR]', err);
@@ -245,6 +263,23 @@ router.post('/pending-requests/:id/reject', authenticate, authorize(ATTENDANCE_M
         role: req.user?.role || 'ADMIN',
       }
     );
+
+    // Notify requesting staff member of rejection
+    try {
+      await createNotification({
+        userId: existing.userId,
+        title: `Attendance Request Rejected (${existing.date})`,
+        message: `Your attendance request for ${existing.date} was rejected by ${req.user?.name || 'Management'}. Reason: ${reason}`,
+        type: 'ATTENDANCE_REJECTED',
+        priority: 'NORMAL',
+        senderId: req.user?.id,
+        senderName: req.user?.name,
+        senderRole: req.user?.role,
+        link: '/dashboard/attendance',
+      });
+    } catch (notifErr) {
+      console.warn('[ATTENDANCE REJECT NOTIF WARN]', notifErr);
+    }
 
     return res.json({ success: true, message: 'Attendance request rejected.', record: updated });
   } catch (err: any) {

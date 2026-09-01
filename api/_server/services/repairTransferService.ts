@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { broadcastServerChange } from './realtimeSync';
+import { createNotification } from './notificationStorage';
 
 export interface RepairTransferRequestRecord {
   id: string;
@@ -257,25 +258,19 @@ export async function createRepairTransferRequest(params: {
   }
 
   // 7. Dispatch High Priority Notification to Target Technician
-  const notifId = uuidv4();
   try {
-    await supabaseAdmin.from('Notification').insert([
-      {
-        id: notifId,
-        userId: targetTech.id,
-        title: `Job Transfer Request: #${repair.repairNumber}`,
-        message: `${senderName} requested to transfer job #${repair.repairNumber} (${repair.deviceBrand || ''} ${repair.deviceModel || ''}) to you. Reason: ${reason.trim()}`,
-        type: 'TRANSFER_REQUEST',
-        repairId: repair.id,
-        repairNumber: repair.repairNumber,
-        senderId: senderId,
-        senderName: senderName,
-        priority: 'HIGH',
-        isRead: false,
-        createdAt: now,
-      },
-    ]);
-    await broadcastServerChange('Notification', 'CREATE', notifId);
+    await createNotification({
+      userId: targetTech.id,
+      title: `Job Transfer Request: #${repair.repairNumber}`,
+      message: `${senderName} requested to transfer job #${repair.repairNumber} (${repair.deviceBrand || ''} ${repair.deviceModel || ''}) to you. Reason: ${reason.trim()}`,
+      type: 'TRANSFER_REQUEST',
+      repairId: repair.id,
+      repairNumber: repair.repairNumber,
+      senderId: senderId,
+      senderName: senderName,
+      senderRole: senderRole,
+      priority: 'HIGH',
+    });
   } catch (notifErr) {
     console.warn('[TRANSFER NOTIF NON FATAL]', notifErr);
   }
@@ -393,25 +388,19 @@ export async function respondToTransferRequest(params: {
     }
 
     // 3. Notify Sender Technician that transfer was accepted
-    const notifId = uuidv4();
     try {
-      await supabaseAdmin.from('Notification').insert([
-        {
-          id: notifId,
-          userId: transfer.senderTechnicianId,
-          title: `Transfer Accepted: #${transfer.repairNumber}`,
-          message: `${responderName} has accepted job #${transfer.repairNumber}. It is now in their active queue.`,
-          type: 'TRANSFER_ACCEPTED',
-          repairId: transfer.repairId,
-          repairNumber: transfer.repairNumber,
-          senderId: responderId,
-          senderName: responderName,
-          priority: 'NORMAL',
-          isRead: false,
-          createdAt: now,
-        },
-      ]);
-      await broadcastServerChange('Notification', 'CREATE', notifId);
+      await createNotification({
+        userId: transfer.senderTechnicianId,
+        title: `Transfer Accepted: #${transfer.repairNumber}`,
+        message: `${responderName} has accepted job #${transfer.repairNumber}. It is now in their active queue.`,
+        type: 'TRANSFER_ACCEPTED',
+        repairId: transfer.repairId,
+        repairNumber: transfer.repairNumber,
+        senderId: responderId,
+        senderName: responderName,
+        senderRole: responderRole,
+        priority: 'NORMAL',
+      });
     } catch (notifErr) {
       console.warn('[ACCEPT NOTIF NON FATAL]', notifErr);
     }
@@ -470,25 +459,19 @@ export async function respondToTransferRequest(params: {
     }
 
     // Notify Sender Technician that transfer was declined
-    const notifId = uuidv4();
     try {
-      await supabaseAdmin.from('Notification').insert([
-        {
-          id: notifId,
-          userId: transfer.senderTechnicianId,
-          title: `Transfer Declined: #${transfer.repairNumber}`,
-          message: `${responderName} declined the transfer request for repair #${transfer.repairNumber}. The job remains in your active queue.`,
-          type: 'TRANSFER_REJECTED',
-          repairId: transfer.repairId,
-          repairNumber: transfer.repairNumber,
-          senderId: responderId,
-          senderName: responderName,
-          priority: 'NORMAL',
-          isRead: false,
-          createdAt: now,
-        },
-      ]);
-      await broadcastServerChange('Notification', 'CREATE', notifId);
+      await createNotification({
+        userId: transfer.senderTechnicianId,
+        title: `Transfer Declined: #${transfer.repairNumber}`,
+        message: `${responderName} declined the transfer request for repair #${transfer.repairNumber}. The job remains in your active queue.`,
+        type: 'TRANSFER_REJECTED',
+        repairId: transfer.repairId,
+        repairNumber: transfer.repairNumber,
+        senderId: responderId,
+        senderName: responderName,
+        senderRole: responderRole,
+        priority: 'NORMAL',
+      });
     } catch (notifErr) {
       console.warn('[REJECT NOTIF NON FATAL]', notifErr);
     }
@@ -663,25 +646,19 @@ export async function directTransferRepair(params: {
   }
 
   // 5. Send Notification to Target Technician
-  const notifId = uuidv4();
   try {
-    await supabaseAdmin.from('Notification').insert([
-      {
-        id: notifId,
-        userId: targetTech.id,
-        title: `Repair Assigned / Transferred: #${repair.repairNumber}`,
-        message: `${actorName} transferred repair #${repair.repairNumber} (${repair.deviceBrand || ''} ${repair.deviceModel || ''}) to your queue. Instructions: ${reason.trim()}`,
-        type: 'REPAIR_ASSIGNED',
-        repairId: repair.id,
-        repairNumber: repair.repairNumber,
-        senderId: actorId,
-        senderName: actorName,
-        priority: priority ? priority.toUpperCase() : 'HIGH',
-        isRead: false,
-        createdAt: now,
-      },
-    ]);
-    await broadcastServerChange('Notification', 'CREATE', notifId);
+    await createNotification({
+      userId: targetTech.id,
+      title: `Repair Assigned / Transferred: #${repair.repairNumber}`,
+      message: `${actorName} transferred repair #${repair.repairNumber} (${repair.deviceBrand || ''} ${repair.deviceModel || ''}) to your queue. Instructions: ${reason.trim()}`,
+      type: 'REPAIR_ASSIGNED',
+      repairId: repair.id,
+      repairNumber: repair.repairNumber,
+      senderId: actorId,
+      senderName: actorName,
+      senderRole: params.actorRole,
+      priority: priority ? (priority.toUpperCase() as any) : 'HIGH',
+    });
   } catch (notifErr) {
     console.warn('[DIRECT TRANSFER NOTIF NON FATAL]', notifErr);
   }

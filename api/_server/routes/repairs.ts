@@ -8,6 +8,7 @@ import { authorize, normalizeRole } from '../middleware/rbac';
 import { logAudit } from '../services/auditService';
 import { createExcelBuffer, parseExcelBuffer } from '../services/excelService';
 import { broadcastServerChange } from '../services/realtimeSync';
+import { createNotification } from '../services/notificationStorage';
 import {
   createRepairTransferRequest,
   directTransferRepair,
@@ -754,6 +755,29 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       details: { repairNumber: created.repairNumber, customerName: created.customerName },
     });
 
+    // Dispatch realtime notification to assigned technician or role
+    if (created.technicianId) {
+      try {
+        const isUrgent = created.priority === 'URGENT';
+        const isHigh = created.priority === 'HIGH';
+        const priorityEmoji = isUrgent ? '🔴' : isHigh ? '🟠' : '📋';
+        await createNotification({
+          userId: created.technicianId,
+          title: `${priorityEmoji} ${isUrgent ? 'Urgent Repair Assigned' : 'New Repair Assigned'}: #${created.repairNumber}`,
+          message: `${created.deviceBrand || ''} ${created.deviceModel || ''} (${created.customerName || 'Customer'}) assigned by ${req.user!.name}. Problem: ${created.problemDescription || 'Inspection required'}`,
+          type: isUrgent ? 'REPAIR_URGENT' : 'REPAIR_ASSIGNED',
+          priority: created.priority || 'NORMAL',
+          repairId: created.id,
+          repairNumber: created.repairNumber,
+          senderId: req.user!.id,
+          senderName: req.user!.name,
+          senderRole: req.user!.role,
+        });
+      } catch (notifErr) {
+        console.warn('[REPAIR INTAKE NOTIF WARN]', notifErr);
+      }
+    }
+
     await broadcastServerChange('Repair', 'CREATE', created.id, created);
 
     return res.status(201).json(created);
@@ -986,6 +1010,29 @@ const handleBatchRepairIntake = async (req: AuthRequest, res: Response) => {
         },
       ]);
       await broadcastServerChange('RepairLog', 'CREATE', logId);
+
+      if (created.technicianId) {
+        try {
+          const isUrgent = created.priority === 'URGENT';
+          const isHigh = created.priority === 'HIGH';
+          const priorityEmoji = isUrgent ? '🔴' : isHigh ? '🟠' : '📋';
+          await createNotification({
+            userId: created.technicianId,
+            title: `${priorityEmoji} ${isUrgent ? 'Urgent Repair Assigned' : 'New Repair Assigned'}: #${created.repairNumber}`,
+            message: `${created.deviceBrand || ''} ${created.deviceModel || ''} (${created.customerName || 'Customer'}) assigned by ${req.user!.name}. Problem: ${created.problemDescription || 'Inspection required'}`,
+            type: isUrgent ? 'REPAIR_URGENT' : 'REPAIR_ASSIGNED',
+            priority: created.priority || 'NORMAL',
+            repairId: created.id,
+            repairNumber: created.repairNumber,
+            senderId: req.user!.id,
+            senderName: req.user!.name,
+            senderRole: req.user!.role,
+          });
+        } catch (notifErr) {
+          console.warn('[BATCH REPAIR NOTIF WARN]', notifErr);
+        }
+      }
+
       await broadcastServerChange('Repair', 'CREATE', created.id, created);
 
       await logAudit({
@@ -1146,20 +1193,22 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
       return res.status(500).json({ error: 'Failed to update repair progress.' });
     }
 
+    // Dispatch notification to repair creator / manager
     try {
-      const notifId = uuidv4();
-      await supabaseAdmin.from('Notification').insert([
-        {
-          id: notifId,
-          title: `Repair Updated: #${updatedRepair.repairNumber || id.slice(0, 8)}`,
+      if (existingRepair.createdById && existingRepair.createdById !== req.user?.id) {
+        await createNotification({
+          userId: existingRepair.createdById,
+          title: `Repair Progress: #${updatedRepair.repairNumber || id.slice(0, 8)}`,
           message: `${req.user?.name || 'Technician'} updated repair status to ${status || existingRepair.status}. Note: ${technicianNotes || 'No notes added'}`,
-          type: 'REPAIR_UPDATE',
-          userId: existingRepair.createdById || null,
-          isRead: false,
-          createdAt: new Date().toISOString()
-        }
-      ]);
-      await broadcastServerChange('Notification', 'CREATE', notifId);
+          type: 'REPAIR_STATUS',
+          priority: 'NORMAL',
+          repairId: id,
+          repairNumber: updatedRepair.repairNumber,
+          senderId: req.user?.id,
+          senderName: req.user?.name,
+          senderRole: req.user?.role,
+        });
+      }
     } catch (notifErr) {
       console.warn('[NOTIFICATION DISPATCH WARN - NON FATAL]', notifErr);
     }
@@ -1250,24 +1299,19 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
     const notifTitle = `${emoji} ${resolvedPriority} Alert: Job #${updatedRepair.repairNumber}`;
     const notifMessage = String(message).trim() || `Priority alert from ${req.user!.name}`;
 
-    const notifId = uuidv4();
-    await supabaseAdmin.from('Notification').insert([
-      {
-        id: notifId,
-        title: notifTitle,
-        message: notifMessage,
-        type: resolvedPriority === 'URGENT' ? 'REPAIR_URGENT' : 'REPAIR_ALERT',
-        priority: resolvedPriority,
-        userId: updatedRepair.technicianId,
-        repairId: id,
-        repairNumber: updatedRepair.repairNumber,
-        senderId: req.user!.id,
-        senderName: req.user!.name,
-        isRead: false,
-        createdAt: new Date().toISOString()
-      }
-    ]);
-    await broadcastServerChange('Notification', 'CREATE', notifId);
+    await createNotification({
+      userId: updatedRepair.technicianId,
+      title: notifTitle,
+      message: notifMessage,
+      type: resolvedPriority === 'URGENT' ? 'REPAIR_URGENT' : 'REPAIR_ALERT',
+      priority: resolvedPriority as any,
+      repairId: id,
+      repairNumber: updatedRepair.repairNumber,
+      senderId: req.user!.id,
+      senderName: req.user!.name,
+      senderRole: req.user!.role,
+    });
+
     await broadcastServerChange('Repair', 'UPDATE', id, updatedRepair);
 
     return res.json({
@@ -1321,6 +1365,30 @@ router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MAN
       },
     ]);
     await broadcastServerChange('RepairLog', 'CREATE', logId);
+
+    // Dispatch realtime notification to newly assigned technician
+    if (technicianId) {
+      try {
+        const isUrgent = updated.priority === 'URGENT';
+        const isHigh = updated.priority === 'HIGH';
+        const priorityEmoji = isUrgent ? '🔴' : isHigh ? '🟠' : '📋';
+        await createNotification({
+          userId: technicianId,
+          title: `${priorityEmoji} ${isUrgent ? 'Urgent Repair Assigned' : 'Repair Assigned'}: #${updated.repairNumber}`,
+          message: `${updated.deviceBrand || ''} ${updated.deviceModel || ''} (${updated.customerName || 'Customer'}) assigned to you by ${req.user!.name}. Priority: ${updated.priority || 'NORMAL'}.`,
+          type: isUrgent ? 'REPAIR_URGENT' : 'REPAIR_ASSIGNED',
+          priority: updated.priority || 'NORMAL',
+          repairId: updated.id,
+          repairNumber: updated.repairNumber,
+          senderId: req.user!.id,
+          senderName: req.user!.name,
+          senderRole: req.user!.role,
+        });
+      } catch (notifErr) {
+        console.warn('[ASSIGN NOTIF WARN]', notifErr);
+      }
+    }
+
     await broadcastServerChange('Repair', 'UPDATE', id, updated);
 
     return res.json(updated);
@@ -1357,6 +1425,30 @@ router.post('/:id/notes', authenticate, async (req: AuthRequest, res: Response) 
 
     if (error) {
       return res.status(500).json({ error: 'Failed to save note.' });
+    }
+
+    // Notify assigned technician or managers if note is from another user
+    try {
+      const { data: repairRec } = await supabaseAdmin.from('Repair').select('repairNumber, technicianId, createdById').eq('id', id).single();
+      if (repairRec) {
+        const targetUser = repairRec.technicianId !== req.user!.id ? repairRec.technicianId : repairRec.createdById;
+        if (targetUser && targetUser !== req.user!.id) {
+          await createNotification({
+            userId: targetUser,
+            title: `New Note on Repair #${repairRec.repairNumber}`,
+            message: `${req.user!.name} (${req.user!.role}) added a note: "${note.slice(0, 100)}${note.length > 100 ? '...' : ''}"`,
+            type: 'REPAIR_NOTE',
+            priority: 'NORMAL',
+            repairId: id,
+            repairNumber: repairRec.repairNumber,
+            senderId: req.user!.id,
+            senderName: req.user!.name,
+            senderRole: req.user!.role,
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.warn('[REPAIR NOTE NOTIF WARN]', notifErr);
     }
 
     await broadcastServerChange('TechnicianNote', 'CREATE', noteId, created);

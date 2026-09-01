@@ -1,31 +1,34 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config/supabase';
+import { registerSSEClient } from '../services/realtimeSync';
 
 const router = Router();
 
 // GET /api/events
-// Server-Sent Events (SSE) endpoint for real-time notifications.
-// On Vercel Serverless, persistent SSE connections are not supported
-// (max 30s function duration). This endpoint sends a single 'connected'
-// event and then closes cleanly — the frontend's Supabase Realtime
-// WebSocket channel handles all live events instead.
+// Server-Sent Events (SSE) endpoint for real-time notifications & database synchronization.
 router.get('/', (req: Request, res: Response) => {
   const token = (req.query.token as string) || req.headers.authorization?.replace('Bearer ', '');
 
-  // Validate token (optional — even unauthenticated gets a limited stub)
-  let isAuthenticated = false;
+  let user: { id?: string; role?: string } | null = null;
   if (token) {
     try {
-      jwt.verify(token, config.jwtSecret);
-      isAuthenticated = true;
+      const decoded: any = jwt.verify(token, config.jwtSecret);
+      if (decoded && decoded.id) {
+        user = { id: decoded.id, role: decoded.role };
+      }
     } catch (_) {
-      // Supabase access token — also valid
-      isAuthenticated = true;
+      try {
+        const decoded: any = jwt.decode(token);
+        if (decoded) {
+          user = { id: decoded.id || decoded.sub, role: decoded.role || decoded.user_metadata?.role };
+        }
+      } catch (e) { }
     }
   }
 
-  // Set SSE headers
+  // Set standard SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Connection', 'keep-alive');
@@ -33,35 +36,29 @@ router.get('/', (req: Request, res: Response) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.flushHeaders();
 
-  // Send connected event immediately
-  res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected', transport: 'supabase-realtime', message: 'Real-time sync via Supabase WebSocket channel.' })}\n\n`);
+  const clientId = uuidv4();
+  const unregister = registerSSEClient(clientId, res, user);
 
-  // Send one ping
-  res.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+  // Send connected handshake
+  res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected', clientId, timestamp: Date.now() })}\n\n`);
 
-  // On Vercel serverless, the connection will naturally close after the function
-  // completes. The frontend detects the close and falls back to Supabase Realtime.
-  // We do NOT loop here — that would cause FUNCTION_INVOCATION_FAILED.
-  
-  // Handle client disconnect
-  req.on('close', () => {
-    res.end();
-  });
-
-  // Close after 20 seconds to stay within Vercel's 30s function limit
-  // The frontend will reconnect and re-use Supabase Realtime for live events
-  const closeTimer = setTimeout(() => {
+  // Keep-alive heartbeat interval
+  const pingInterval = setInterval(() => {
     try {
       res.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
-      res.end();
-    } catch (_) {
-      // already closed
+    } catch (err) {
+      clearInterval(pingInterval);
+      unregister();
     }
-  }, 20000);
+  }, 15000);
 
+  // Clean up on disconnect
   req.on('close', () => {
-    clearTimeout(closeTimer);
+    clearInterval(pingInterval);
+    unregister();
+    res.end();
   });
 });
 
 export default router;
+
