@@ -150,9 +150,14 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     // Fire-and-forget presence update (non-blocking for throughput)
     Promise.resolve(supabaseAdmin.from('User').update({ lastActiveAt: nowIso }).eq('id', dbUser.id)).catch(() => {});
     if (deviceIdentifier) {
+      const forwarded = req.headers ? (req.headers['x-forwarded-for'] || req.headers['x-real-ip']) : null;
+      const safeIp = forwarded
+        ? (Array.isArray(forwarded) ? forwarded[0] : String(forwarded).split(',')[0].trim())
+        : (req.socket?.remoteAddress || (req as any).connection?.remoteAddress || null);
+
       Promise.resolve(supabaseAdmin.from('ApprovedDevice').update({ 
         lastUsedAt: nowIso, 
-        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        ipAddress: safeIp,
         userAgent: req.headers['user-agent'] || null 
       }).eq('userId', dbUser.id).eq('deviceIdentifier', deviceIdentifier)).catch(() => {});
     }
