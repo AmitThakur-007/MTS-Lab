@@ -113,18 +113,30 @@ export default function Navbar() {
   return (
     <>
       <nav className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-6 sm:px-12",
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-4 sm:px-12",
         glassStyle
       )}>
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-black/20">
-              M
-            </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900 hidden sm:block">
-              MTS<span className="text-slate-400 font-medium">LAB</span>
+          {/* Brand Logo & Wordmark */}
+          <Link 
+            to="/" 
+            className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 rounded-lg py-1 transition-opacity hover:opacity-90 cursor-pointer"
+            aria-label="MTS Lab - Home"
+          >
+            {/* Mobile View (Smartphones < 640px): Professional, clean MTS Lab wordmark */}
+            <span className="sm:hidden text-lg font-bold tracking-tight text-slate-950 flex items-center select-none leading-none">
+              MTS<span className="text-slate-500 font-semibold ml-1">Lab</span>
             </span>
+
+            {/* Desktop & Tablet View (>= 640px): Preserved Brand Icon + MTSLAB */}
+            <div className="hidden sm:flex items-center gap-3">
+              <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-black/20 shrink-0">
+                M
+              </div>
+              <span className="text-xl font-bold tracking-tight text-slate-900">
+                MTS<span className="text-slate-400 font-medium">LAB</span>
+              </span>
+            </div>
           </Link>
 
           {/* Desktop Nav */}
