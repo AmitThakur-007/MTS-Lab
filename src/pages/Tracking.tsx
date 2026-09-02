@@ -18,8 +18,6 @@ import {
   Wrench,
   Truck,
   RotateCw,
-  Sparkles,
-  CreditCard,
   Calendar,
   AlertTriangle
 } from 'lucide-react';
@@ -182,7 +180,7 @@ const statusConfig: Record<
     textColor: 'text-emerald-700',
     icon: CheckCircle2,
     progress: 100,
-    desc: 'Device handed over to customer successfully with service warranty.',
+    desc: 'Device handed over to customer successfully.',
   },
   COMPLETED: {
     label: 'Delivered & Handed Over',
@@ -191,25 +189,25 @@ const statusConfig: Record<
     textColor: 'text-emerald-700',
     icon: CheckCircle2,
     progress: 100,
-    desc: 'Device handed over to customer successfully with service warranty.',
+    desc: 'Device handed over to customer successfully.',
   },
   RE_PROBLEM: {
-    label: 'Warranty Inspection',
+    label: 'Re-Check Inspection',
     color: 'bg-rose-600',
     bgSoft: 'bg-rose-50 text-rose-900 border-rose-300 ring-2 ring-rose-500/20',
     textColor: 'text-rose-600',
     icon: AlertCircle,
     progress: 40,
-    desc: 'Device received for priority post-delivery warranty inspection and diagnosis.',
+    desc: 'Device received for priority post-delivery diagnostic inspection.',
   },
   REPROBLEM: {
-    label: 'Warranty Inspection',
+    label: 'Re-Check Inspection',
     color: 'bg-rose-600',
     bgSoft: 'bg-rose-50 text-rose-900 border-rose-300 ring-2 ring-rose-500/20',
     textColor: 'text-rose-600',
     icon: AlertCircle,
     progress: 40,
-    desc: 'Device received for priority post-delivery warranty inspection and diagnosis.',
+    desc: 'Device received for priority post-delivery diagnostic inspection.',
   },
   CANNOT_REPAIR: {
     label: 'Cannot Repair',
@@ -398,6 +396,7 @@ export default function Tracking() {
 
   const currentStatusRaw = (activeRepair?.status || 'RECEIVED').toUpperCase();
   const currentStatus = statusConfig[currentStatusRaw] || statusConfig.RECEIVED;
+  const isRepaired = ['REPAIRED', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY'].includes(currentStatusRaw);
   const isDelivered = currentStatusRaw === 'DELIVERED' || currentStatusRaw === 'COMPLETED';
 
   const copyRepairNumber = (num: string) => {
@@ -537,13 +536,42 @@ export default function Tracking() {
                           </Badge>
                         </div>
                         <p className="text-xs sm:text-sm text-emerald-800 font-medium mt-1">
-                          This device was successfully delivered and handed over to the customer with warranty.
+                          This device was successfully delivered and handed over to the customer.
                         </p>
                         {(activeRepair.deliveredAt || activeRepair.updatedAt) && (
                           <div className="flex items-center gap-1.5 text-xs text-emerald-900 font-bold mt-2">
                             <Calendar className="w-3.5 h-3.5 text-emerald-700" />
                             <span>Delivered on: {formatNepalDateTime(activeRepair.deliveredAt || activeRepair.updatedAt)}</span>
                           </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Device Repaired — Ready for Pickup Banner */}
+                {isRepaired && !isDelivered && (
+                  <div className="bg-emerald-50/90 border-2 border-emerald-300 rounded-2xl p-5 sm:p-6 text-emerald-950 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3.5 sm:gap-4">
+                      <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-md shadow-emerald-600/20">
+                        <CheckCircle2 className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-base sm:text-lg font-black text-emerald-950 tracking-tight">
+                            Your Device Is Repaired
+                          </h3>
+                          <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] font-extrabold uppercase px-2 py-0.5">
+                            Ready for Pickup
+                          </Badge>
+                        </div>
+                        <p className="text-xs sm:text-sm text-emerald-900 font-semibold leading-relaxed">
+                          Your device has been successfully repaired and is ready for pickup. You can pick it up now.
+                        </p>
+                        {activeRepair.updatedAt && (
+                          <p className="text-[11px] text-emerald-800 font-medium pt-0.5">
+                            Verified completed: {formatNepalDateTime(activeRepair.updatedAt)}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -558,12 +586,6 @@ export default function Tracking() {
                         <span className={cn('px-2.5 py-0.5 rounded-full text-xs font-bold border', currentStatus.bgSoft)}>
                           {currentStatus.label}
                         </span>
-                        {activeRepair.hasBatteryWarranty && (
-                          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900 text-[11px] font-bold">
-                            <Sparkles className="w-3 h-3 mr-1 text-amber-600" />
-                            {activeRepair.batteryWarrantyPeriod ? `${activeRepair.batteryWarrantyPeriod.replace(/_/g, ' ')} Warranty` : 'Battery Warranty Active'}
-                          </Badge>
-                        )}
                       </div>
                       <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1.5">
                         {activeRepair.deviceBrand?.toUpperCase()} {activeRepair.deviceModel}
@@ -635,114 +657,78 @@ export default function Tracking() {
                   </CardContent>
                 </Card>
 
-                {/* Detailed Specifications & Overview Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                  {/* Device & Repair Details */}
-                  <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden">
-                    <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 flex items-center gap-2">
+                {/* Device & Service Information Card */}
+                <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden w-full">
+                  <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       <Smartphone className="w-4 h-4 text-slate-700" />
                       <h3 className="font-bold text-slate-900 text-sm">Device & Service Information</h3>
                     </div>
-                    <CardContent className="p-4 sm:p-5 space-y-3 text-xs sm:text-sm">
-                      <div className="flex justify-between py-1.5 border-b border-slate-100">
-                        <span className="text-slate-500 font-medium">Device:</span>
-                        <span className="font-bold text-slate-900 text-right">
+                    <span className="text-[11px] font-mono text-slate-500 font-bold">#{activeRepair.repairNumber}</span>
+                  </div>
+                  <CardContent className="p-4 sm:p-6 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 text-xs sm:text-sm">
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Device Model</span>
+                        <span className="font-bold text-slate-900 text-sm mt-1 block">
                           {activeRepair.deviceBrand} {activeRepair.deviceModel}
                         </span>
                       </div>
-                      <div className="flex justify-between py-1.5 border-b border-slate-100">
-                        <span className="text-slate-500 font-medium">Intake Method:</span>
-                        <span className="font-bold text-slate-900">
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Intake Method</span>
+                        <span className="font-bold text-slate-900 text-sm mt-1 block">
                           {isCourierDevice ? 'Courier Logistics Delivery' : 'Walk-in Counter Service'}
                         </span>
                       </div>
-                      {activeRepair.problemDescription && (
-                        <div className="py-1.5 border-b border-slate-100">
-                          <span className="text-slate-500 font-medium block mb-1">Reported Problem:</span>
-                          <span className="font-medium text-slate-800 bg-slate-50 p-2 rounded-lg block border border-slate-100">
-                            {activeRepair.problemDescription}
-                          </span>
-                        </div>
-                      )}
-                      {activeRepair.conditionNotes && (
-                        <div className="py-1.5 border-b border-slate-100">
-                          <span className="text-slate-500 font-medium block mb-1">Condition Notes:</span>
-                          <span className="font-medium text-slate-800">{activeRepair.conditionNotes}</span>
-                        </div>
-                      )}
-                      {activeRepair.accessoriesReceived && (
-                        <div className="py-1.5 border-b border-slate-100">
-                          <span className="text-slate-500 font-medium">Accessories:</span>
-                          <span className="font-medium text-slate-800 ml-2">{activeRepair.accessoriesReceived}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between py-1.5">
-                        <span className="text-slate-500 font-medium">Intake Date:</span>
-                        <span className="font-bold text-slate-900">{formatNepalDateOnly(activeRepair.createdAt) || 'Recorded'}</span>
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Intake Date</span>
+                        <span className="font-bold text-slate-900 text-sm mt-1 block">
+                          {formatNepalDateOnly(activeRepair.createdAt) || 'Recorded'}
+                        </span>
                       </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Warranty & Billing Summary */}
-                  <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden flex flex-col justify-between">
-                    <div>
-                      <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-slate-700" />
-                        <h3 className="font-bold text-slate-900 text-sm">Payment & Warranty Status</h3>
-                      </div>
-                      <CardContent className="p-4 sm:p-5 space-y-3 text-xs sm:text-sm">
-                        <div className="flex justify-between py-1.5 border-b border-slate-100">
-                          <span className="text-slate-500 font-medium">Estimated Amount:</span>
-                          <span className="font-mono font-bold text-slate-900">
-                            NPR {Number(activeRepair.estimatedCost || 0).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between py-1.5 border-b border-slate-100">
-                          <span className="text-slate-500 font-medium">Amount Paid:</span>
-                          <span className="font-mono font-bold text-emerald-700">
-                            NPR {Number(activeRepair.totalPaid || activeRepair.advancePaid || 0).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between py-1.5 border-b border-slate-100 items-center">
-                          <span className="text-slate-500 font-medium">Payment Status:</span>
-                          <Badge
-                            className={cn(
-                              'text-[10px] font-extrabold uppercase',
-                              activeRepair.paymentStatus === 'PAID'
-                                ? 'bg-emerald-600 text-white'
-                                : activeRepair.paymentStatus === 'PARTIAL'
-                                ? 'bg-amber-600 text-white'
-                                : 'bg-slate-200 text-slate-800'
-                            )}
-                          >
-                            {activeRepair.paymentStatus || 'UNPAID'}
-                          </Badge>
-                        </div>
-
-                        {/* Courier Info if return courier is active */}
-                        {activeRepair.returnCourierTrackingNumber && (
-                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1">
-                            <div className="flex items-center gap-1.5 text-blue-900 font-bold text-xs">
-                              <Truck className="w-3.5 h-3.5 text-blue-700" />
-                              <span>Return Courier Tracking</span>
-                            </div>
-                            <p className="text-[11px] text-blue-800">
-                              {activeRepair.returnCourierCompany || 'Courier'}:{' '}
-                              <strong className="font-mono">{activeRepair.returnCourierTrackingNumber}</strong>
-                            </p>
-                          </div>
-                        )}
-                      </CardContent>
                     </div>
 
-                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <p className="text-[11px] text-slate-600 font-medium">
-                        MTS Lab official technical warranty applies to all certified replacements.
-                      </p>
-                    </div>
-                  </Card>
-                </div>
+                    {activeRepair.problemDescription && (
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Reported Issue / Fault</span>
+                        <p className="font-medium text-slate-800 text-xs sm:text-sm leading-relaxed">
+                          {activeRepair.problemDescription}
+                        </p>
+                      </div>
+                    )}
+
+                    {activeRepair.conditionNotes && (
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Physical Condition Notes</span>
+                        <p className="font-medium text-slate-800 text-xs sm:text-sm leading-relaxed">
+                          {activeRepair.conditionNotes}
+                        </p>
+                      </div>
+                    )}
+
+                    {activeRepair.accessoriesReceived && (
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Accessories Received</span>
+                        <p className="font-medium text-slate-800 text-xs sm:text-sm">
+                          {activeRepair.accessoriesReceived}
+                        </p>
+                      </div>
+                    )}
+
+                    {activeRepair.returnCourierTrackingNumber && (
+                      <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl space-y-1">
+                        <div className="flex items-center gap-1.5 text-blue-900 font-bold text-xs">
+                          <Truck className="w-3.5 h-3.5 text-blue-700" />
+                          <span>Return Courier Tracking</span>
+                        </div>
+                        <p className="text-xs text-blue-800 font-medium">
+                          {activeRepair.returnCourierCompany || 'Courier'}:{' '}
+                          <strong className="font-mono font-bold text-blue-950">{activeRepair.returnCourierTrackingNumber}</strong>
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
                 {/* Diagnostic Activity Trace */}
                 <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden w-full">
