@@ -585,6 +585,8 @@ export default function RepairDetails() {
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {[
+                    'PENDING',
+                    'RECEIVED',
                     'DIAGNOSING',
                     'IN_PROCESS',
                     'WAITING_FOR_PARTS',

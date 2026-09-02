@@ -60,6 +60,7 @@ import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import UserOverviewCards from '@/components/dashboard/UserOverviewCards';
 
 const REPAIR_STATUS_FLOW = [
+  'PENDING',
   'RECEIVED',
   'DIAGNOSING',
   'IN_PROCESS',
@@ -74,6 +75,7 @@ const REPAIR_STATUS_FLOW = [
 ];
 
 const statusStyles: Record<string, { label: string; badge: string; bgSoft: string; border: string }> = {
+  PENDING: { label: 'Pending', badge: 'bg-slate-100 text-slate-700 border-slate-300', bgSoft: 'bg-slate-50', border: 'border-slate-200' },
   RECEIVED: { label: 'Received', badge: 'bg-amber-100 text-amber-900 border-amber-300', bgSoft: 'bg-amber-50', border: 'border-amber-200' },
   DIAGNOSING: { label: 'Diagnosing', badge: 'bg-blue-100 text-blue-900 border-blue-300', bgSoft: 'bg-blue-50', border: 'border-blue-200' },
   IN_PROCESS: { label: 'In Progress', badge: 'bg-indigo-100 text-indigo-900 border-indigo-300', bgSoft: 'bg-indigo-50', border: 'border-indigo-200' },
@@ -85,11 +87,10 @@ const statusStyles: Record<string, { label: string; badge: string; bgSoft: strin
   RE_PROBLEM: { label: 'Re-Problem (Warranty)', badge: 'bg-rose-100 text-rose-800 border-rose-300 font-bold', bgSoft: 'bg-rose-50', border: 'border-rose-300' },
   REPROBLEM: { label: 'Re-Problem (Warranty)', badge: 'bg-rose-100 text-rose-800 border-rose-300 font-bold', bgSoft: 'bg-rose-50', border: 'border-rose-300' },
   REPROBLEM_FIXED: { label: 'Warranty Fixed', badge: 'bg-teal-100 text-teal-800 border-teal-300', bgSoft: 'bg-teal-50', border: 'border-teal-200' },
-  CANNOT_REPAIR: { label: 'Cannot Repair', badge: 'bg-rose-100 text-rose-800 border-rose-300', bgSoft: 'bg-rose-50', border: 'border-rose-200' },
-  PENDING: { label: 'Pending', badge: 'bg-slate-100 text-slate-700 border-slate-300', bgSoft: 'bg-slate-50', border: 'border-slate-200' }
+  CANNOT_REPAIR: { label: 'Cannot Repair', badge: 'bg-rose-100 text-rose-800 border-rose-300', bgSoft: 'bg-rose-50', border: 'border-rose-200' }
 };
 
-type StatusFilterTab = 'ALL' | 'URGENT' | 'HIGH' | 'MEDIUM' | 'ACTIVE' | 'IN_PROCESS' | 'TESTING' | 'WAITING_FOR_PARTS' | 'REPAIRED' | 'RE_PROBLEM' | 'TRANSFERS';
+type StatusFilterTab = 'ALL' | 'URGENT' | 'HIGH' | 'MEDIUM' | 'ACTIVE' | 'PENDING' | 'IN_PROCESS' | 'TESTING' | 'WAITING_FOR_PARTS' | 'REPAIRED' | 'RE_PROBLEM' | 'TRANSFERS';
 
 /**
  * Robust case-insensitive priority handler for badges & metadata across dashboards.
@@ -480,6 +481,7 @@ export default function TechnicianDashboard() {
 
   const stats = useMemo(() => {
     const active = repairs.filter(r => !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
+    const pending = repairs.filter(r => r.status === 'PENDING');
     const inProgress = repairs.filter(r => r.status === 'IN_PROCESS' || r.status === 'DIAGNOSING');
     const testing = repairs.filter(r => r.status === 'TESTING');
     const repaired = repairs.filter(r => ['REPAIRED', 'READY_FOR_PICKUP'].includes(r.status));
@@ -487,6 +489,7 @@ export default function TechnicianDashboard() {
 
     return {
       activeCount: active.length,
+      pendingCount: pending.length,
       inProgressCount: inProgress.length,
       testingCount: testing.length,
       repairedCount: repaired.length,
@@ -509,6 +512,8 @@ export default function TechnicianDashboard() {
       list = list.filter(r => getPriorityMeta(r).tier === 'MEDIUM' && !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
     } else if (activeTab === 'ACTIVE') {
       list = list.filter(r => !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
+    } else if (activeTab === 'PENDING') {
+      list = list.filter(r => r.status === 'PENDING');
     } else if (activeTab === 'IN_PROCESS') {
       list = list.filter(r => r.status === 'IN_PROCESS' || r.status === 'DIAGNOSING');
     } else if (activeTab === 'WAITING_FOR_PARTS') {
@@ -756,6 +761,7 @@ export default function TechnicianDashboard() {
               { key: 'HIGH', label: '🟠 High', count: stats.highCount, color: 'high' },
               { key: 'MEDIUM', label: '🟡 Medium', count: stats.mediumCount, color: 'medium' },
               { key: 'ACTIVE', label: 'Active', count: stats.activeCount, color: 'normal' },
+              { key: 'PENDING', label: 'Pending', count: stats.pendingCount, color: 'normal' },
               { key: 'IN_PROCESS', label: 'In Progress', count: stats.inProgressCount, color: 'normal' },
               { key: 'TESTING', label: 'Testing QA', count: stats.testingCount, color: 'normal' },
             ].map(tab => {

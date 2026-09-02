@@ -74,6 +74,15 @@ const statusConfig: Record<
   string,
   { label: string; color: string; bgSoft: string; textColor: string; icon: any; progress: number; desc: string }
 > = {
+  PENDING: {
+    label: 'Pending Queue',
+    color: 'bg-slate-500',
+    bgSoft: 'bg-slate-50 text-slate-900 border-slate-200',
+    textColor: 'text-slate-600',
+    icon: Clock,
+    progress: 10,
+    desc: 'Your device is cataloged in the service queue awaiting technician workbench intake and diagnosis.',
+  },
   RECEIVED: {
     label: 'Device Received',
     color: 'bg-amber-500',

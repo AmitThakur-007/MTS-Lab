@@ -1161,7 +1161,16 @@ router.put('/:id', authenticate, handleRepairUpdate);
 router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { status, estimatedDeliveryDate, sparePartsUsed, technicianNotes } = req.body;
+    const {
+      status,
+      estimatedDeliveryDate,
+      expectedCompletionDate,
+      sparePartsUsed,
+      partsUsed,
+      technicianNotes,
+      note,
+      remarks
+    } = req.body;
 
     const { data: existingRepair, error: fetchErr } = await supabaseAdmin
       .from('Repair')
@@ -1178,9 +1187,12 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
     };
 
     if (status) updatePayload.status = status;
-    if (estimatedDeliveryDate) updatePayload.expectedCompletionDate = estimatedDeliveryDate;
-    if (sparePartsUsed !== undefined) updatePayload.partsUsed = sparePartsUsed;
-    if (technicianNotes !== undefined) updatePayload.remarks = technicianNotes;
+    const resolvedDueDate = expectedCompletionDate || estimatedDeliveryDate;
+    if (resolvedDueDate) updatePayload.expectedCompletionDate = resolvedDueDate;
+    const resolvedParts = partsUsed !== undefined ? partsUsed : sparePartsUsed;
+    if (resolvedParts !== undefined) updatePayload.partsUsed = resolvedParts;
+    const resolvedRemarks = technicianNotes !== undefined ? technicianNotes : (note !== undefined ? note : remarks);
+    if (resolvedRemarks !== undefined) updatePayload.remarks = resolvedRemarks;
 
     const { data: updatedRepair, error: updateErr } = await supabaseAdmin
       .from('Repair')
@@ -1194,13 +1206,32 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
       return res.status(500).json({ error: 'Failed to update repair progress.' });
     }
 
+    // Insert RepairLog entry for audit history
+    if (status && status !== existingRepair.status) {
+      const logId = uuidv4();
+      try {
+        await supabaseAdmin.from('RepairLog').insert([
+          {
+            id: logId,
+            repairId: id,
+            status: status,
+            message: resolvedRemarks ? `Status updated to ${status}. Note: ${resolvedRemarks}` : `Status updated to ${status} by ${req.user?.name || 'Technician'}`,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        await broadcastServerChange('RepairLog', 'CREATE', logId);
+      } catch (logErr) {
+        console.warn('[REPAIR LOG NON FATAL]', logErr);
+      }
+    }
+
     // Dispatch notification to repair creator / manager
     try {
       if (existingRepair.createdById && existingRepair.createdById !== req.user?.id) {
         await createNotification({
           userId: existingRepair.createdById,
           title: `Repair Progress: #${updatedRepair.repairNumber || id.slice(0, 8)}`,
-          message: `${req.user?.name || 'Technician'} updated repair status to ${status || existingRepair.status}. Note: ${technicianNotes || 'No notes added'}`,
+          message: `${req.user?.name || 'Technician'} updated repair status to ${status || existingRepair.status}. Note: ${resolvedRemarks || 'No notes added'}`,
           type: 'REPAIR_STATUS',
           priority: 'NORMAL',
           repairId: id,
@@ -1219,6 +1250,7 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
     return res.json({
       success: true,
       message: 'Repair progress updated successfully.',
+      ...updatedRepair,
       repair: updatedRepair
     });
   } catch (err: any) {
