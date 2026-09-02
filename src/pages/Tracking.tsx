@@ -406,6 +406,7 @@ export default function Tracking() {
 
   const currentStatusRaw = (activeRepair?.status || 'RECEIVED').toUpperCase();
   const currentStatus = statusConfig[currentStatusRaw] || statusConfig.RECEIVED;
+  const isPending = currentStatusRaw === 'PENDING';
   const isRepaired = ['REPAIRED', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY'].includes(currentStatusRaw);
   const isDelivered = currentStatusRaw === 'DELIVERED' || currentStatusRaw === 'COMPLETED';
 
@@ -557,6 +558,47 @@ export default function Tracking() {
                         Device #{idx + 1}: {dev.deviceBrand} {dev.deviceModel}
                       </button>
                     ))}
+                  </div>
+                )}
+
+                {/* Pending Status Banner */}
+                {isPending && (
+                  <div className="bg-amber-50/90 border-2 border-amber-300 rounded-2xl p-5 sm:p-6 text-amber-950 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3.5 sm:gap-4">
+                      <div className="w-11 h-11 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-md shadow-amber-500/20">
+                        <Clock className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-base sm:text-lg font-black text-amber-950 tracking-tight">
+                            Your device is currently in Pending status.
+                          </h3>
+                          <Badge className="bg-amber-500 hover:bg-amber-500 text-white text-[10px] font-extrabold uppercase px-2 py-0.5">
+                            Pending
+                          </Badge>
+                        </div>
+                        <p className="text-xs sm:text-sm text-amber-900 font-semibold leading-relaxed">
+                          For more information or assistance, please contact MTS Lab directly.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto pt-3 lg:pt-0 border-t lg:border-t-0 border-amber-200/80">
+                      <a
+                        href="tel:9869276668"
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-bold transition-colors shadow-xs shrink-0 flex-1 sm:flex-initial"
+                      >
+                        <Phone className="w-4 h-4" />
+                        <span>Call: 9869276668</span>
+                      </a>
+                      <a
+                        href="tel:015364307"
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-amber-100 text-amber-950 border border-amber-300 text-xs sm:text-sm font-bold transition-colors shadow-xs shrink-0 flex-1 sm:flex-initial"
+                      >
+                        <Phone className="w-4 h-4" />
+                        <span>Tel: 015364307</span>
+                      </a>
+                    </div>
                   </div>
                 )}
 
