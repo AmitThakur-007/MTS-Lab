@@ -35,28 +35,6 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useRealtimeSync } from '@/services/realtime';
 
-// Format timestamp safely into Nepal Standard Time (UTC+05:45)
-function formatNepalDateTime(dateStr?: string | null): string {
-  if (!dateStr) return '';
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return '';
-    return (
-      new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Asia/Kathmandu',
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      }).format(d) + ' NPT'
-    );
-  } catch {
-    return '';
-  }
-}
-
 function formatNepalDateOnly(dateStr?: string | null): string {
   if (!dateStr) return '';
   try {
@@ -84,7 +62,7 @@ const statusConfig: Record<
     textColor: 'text-slate-600',
     icon: Clock,
     progress: 10,
-    desc: 'Your device is cataloged in the service queue awaiting technician workbench intake and diagnosis.',
+    desc: 'Your device is cataloged in the service queue awaiting laboratory intake and diagnosis.',
   },
   RECEIVED: {
     label: 'Device Received',
@@ -288,19 +266,6 @@ export const REPAIR_TIMELINE_STAGES: TimelineStageDefinition[] = [
   },
 ];
 
-function sanitizeLogMessage(msg: string): string {
-  if (!msg || typeof msg !== 'string') return '';
-  let sanitized = msg;
-  sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi, 'Technician');
-  sanitized = sanitized.replace(
-    /\bby\s+([a-zA-Z0-9_.'\s-]+?)\s*\((?:SUPER_ADMIN|SUPER\s*ADMIN|ADMIN|MANAGER|RECEPTIONIST|TECHNICIAN|STAFF)\)/gi,
-    'by Technician'
-  );
-  sanitized = sanitized.replace(/\bby\s+(?:MTS\s+)?(?:super\s*admin|admin|manager|receptionist|staff|specialist)\b/gi, 'by Technician');
-  sanitized = sanitized.replace(/\bby\s+specialist\s+[^,.\n]+/gi, 'by Technician');
-  return sanitized.trim();
-}
-
 function getCustomerFriendlyLogDetails(action: string, status?: string, notes?: string) {
   const state = (status || action || '').toUpperCase();
 
@@ -308,12 +273,12 @@ function getCustomerFriendlyLogDetails(action: string, status?: string, notes?: 
     return { title: 'Device Received', desc: 'Device securely cataloged and checked into MTS Lab inventory.' };
   }
   if (state.includes('DIAGNOSING')) {
-    return { title: 'Diagnosis In Progress', desc: 'Certified micro-engineers are inspecting device hardware and circuitry.' };
+    return { title: 'Diagnosis In Progress', desc: 'Hardware inspection and diagnostic testing in progress.' };
   }
   if (state.includes('PROCESS') || state.includes('REPAIR') || state.includes('RESTORATION')) {
     return {
       title: 'Restoration In Progress',
-      desc: notes ? sanitizeLogMessage(notes) : 'Active hardware restoration and component replacement under way.',
+      desc: 'Active hardware restoration and component replacement under way.',
     };
   }
   if (state.includes('TEST') || state.includes('QA')) {
@@ -328,10 +293,16 @@ function getCustomerFriendlyLogDetails(action: string, status?: string, notes?: 
   if (state.includes('DELIVERED') || state.includes('COMPLETED')) {
     return { title: 'Delivered Successfully', desc: 'Device handed over to customer with service warranty.' };
   }
+  if (state.includes('RE_PROBLEM') || state.includes('REPROBLEM')) {
+    return { title: 'Re-Check Inspection', desc: 'Device received for priority diagnostic re-evaluation.' };
+  }
+  if (state.includes('CANCEL')) {
+    return { title: 'Service Cancelled', desc: 'Repair service ticket was closed or cancelled by customer request.' };
+  }
 
   return {
     title: 'Status Update',
-    desc: notes ? sanitizeLogMessage(notes) : 'Device status updated to reflect laboratory progress.',
+    desc: 'Device status updated to reflect laboratory progress.',
   };
 }
 
@@ -611,7 +582,7 @@ export default function Tracking() {
                         {(activeRepair.deliveredAt || activeRepair.updatedAt) && (
                           <div className="flex items-center gap-1.5 text-xs text-emerald-900 font-bold mt-2">
                             <Calendar className="w-3.5 h-3.5 text-emerald-700" />
-                            <span>Delivered on: {formatNepalDateTime(activeRepair.deliveredAt || activeRepair.updatedAt)}</span>
+                            <span>Delivered on: {formatNepalDateOnly(activeRepair.deliveredAt || activeRepair.updatedAt)}</span>
                           </div>
                         )}
                       </div>
@@ -640,7 +611,7 @@ export default function Tracking() {
                         </p>
                         {activeRepair.updatedAt && (
                           <p className="text-[11px] text-emerald-800 font-medium pt-0.5">
-                            Verified completed: {formatNepalDateTime(activeRepair.updatedAt)}
+                            Verified completed: {formatNepalDateOnly(activeRepair.updatedAt)}
                           </p>
                         )}
                       </div>
@@ -936,7 +907,6 @@ export default function Tracking() {
                             action: 'STATUS_UPDATED',
                             status: activeRepair?.status || 'RECEIVED',
                             notes: `Device registered in system with status: ${activeRepair?.status || 'RECEIVED'}.`,
-                            createdAt: activeRepair?.createdAt || new Date().toISOString(),
                           },
                         ];
                       }
@@ -961,13 +931,8 @@ export default function Tracking() {
                                 </div>
 
                                 <div className="ml-2 sm:ml-3 flex-1 bg-slate-50/80 hover:bg-slate-50 rounded-xl p-3.5 sm:p-4 border border-slate-200/70">
-                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+                                  <div className="mb-0.5">
                                     <span className="text-xs font-bold text-slate-900">{friendlyInfo.title}</span>
-                                    {log.createdAt && (
-                                      <span className="text-[10px] text-slate-400 font-mono">
-                                        {formatNepalDateTime(log.createdAt)}
-                                      </span>
-                                    )}
                                   </div>
                                   <p className="text-xs text-slate-600 font-medium leading-relaxed">
                                     {friendlyInfo.desc}
@@ -990,7 +955,7 @@ export default function Tracking() {
             <div>
               <h3 className="text-sm sm:text-base font-extrabold text-white">Need Assistance With Your Repair?</h3>
               <p className="text-xs text-slate-300 mt-0.5">
-                Reach out to our customer service desk for live technician updates and dispatch tracking.
+                Reach out to our customer service desk for live updates and dispatch tracking.
               </p>
             </div>
             <a

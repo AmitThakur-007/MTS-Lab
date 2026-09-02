@@ -216,36 +216,68 @@ const handlePublicTrack = async (req: Request, res: Response) => {
 
     const primaryRepair = allMatchingRepairs[0];
 
-    // Query RepairLog for primary repair to display diagnostic trace
+    // Query RepairLog for primary repair to display customer-facing diagnostic trace (without timestamps or staff identity)
     const { data: explicitLogs } = await supabaseAdmin
       .from('RepairLog')
-      .select('id, status, message, createdAt')
+      .select('id, status, message')
       .eq('repairId', primaryRepair.id)
       .order('createdAt', { ascending: false });
 
-    let combinedLogs = (explicitLogs || []).map((l: any) => ({
-      id: l.id,
-      action: 'STATUS_UPDATED',
-      status: l.status || primaryRepair.status || 'RECEIVED',
-      notes: l.message || `Status: ${l.status}`,
-      message: l.message || `Device status: ${l.status}`,
-      createdAt: l.createdAt
-    }));
+    const getCustomerLogDesc = (status?: string, message?: string) => {
+      const st = (status || primaryRepair.status || 'RECEIVED').toUpperCase();
+      if (st.includes('RECEIVED') || st.includes('CREATED')) {
+        return 'Device safely cataloged and checked into MTS Lab inventory.';
+      }
+      if (st.includes('DIAGNOSING')) {
+        return 'Hardware inspection and diagnostic testing in progress.';
+      }
+      if (st.includes('PROCESS') || st.includes('REPAIR') || st.includes('RESTORATION')) {
+        return 'Active hardware restoration and component replacement under way.';
+      }
+      if (st.includes('TEST') || st.includes('QA')) {
+        return 'Performing comprehensive quality inspection and calibration.';
+      }
+      if (st.includes('READY') || st.includes('PICKUP') || st.includes('DELIVERY')) {
+        return 'Device sanitized, packaged, and ready for collection.';
+      }
+      if (st.includes('COURIER') || st.includes('DISPATCH')) {
+        return 'Device safely packaged and dispatched via courier logistics.';
+      }
+      if (st.includes('DELIVERED') || st.includes('COMPLETED')) {
+        return 'Device handed over to customer with service warranty.';
+      }
+      if (st.includes('RE_PROBLEM') || st.includes('REPROBLEM')) {
+        return 'Device scheduled for priority diagnostic re-evaluation.';
+      }
+      if (st.includes('CANCEL')) {
+        return 'Repair service request closed.';
+      }
+      return 'Device status updated in laboratory queue.';
+    };
+
+    let combinedLogs = (explicitLogs || []).map((l: any) => {
+      const desc = getCustomerLogDesc(l.status, l.message);
+      return {
+        id: l.id,
+        action: 'STATUS_UPDATED',
+        status: l.status || primaryRepair.status || 'RECEIVED',
+        notes: desc,
+        message: desc,
+      };
+    });
 
     if (combinedLogs.length === 0) {
+      const desc = getCustomerLogDesc(primaryRepair.status);
       combinedLogs = [
         {
           id: `synth-${primaryRepair.id}`,
           action: 'STATUS_UPDATED',
           status: primaryRepair.status || 'RECEIVED',
-          notes: `Device registered and currently recorded as ${primaryRepair.status || 'RECEIVED'}.`,
-          message: `Device status: ${primaryRepair.status || 'RECEIVED'}`,
-          createdAt: primaryRepair.createdAt || new Date().toISOString()
+          notes: desc,
+          message: desc,
         }
       ];
     }
-
-    primaryRepair.logs = combinedLogs;
 
     // Mask customer name and phone for public privacy
     const rawName = primaryRepair.customerName || '';
@@ -258,17 +290,43 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       ? `${pDigits.slice(0, 3)}****${pDigits.slice(-3)}`
       : undefined;
 
-    const sanitizedPrimary = {
-      ...primaryRepair,
-      customerName: sanitizedName,
-      customerPhone: sanitizedPhone,
+    const sanitizePublicRepairObj = (rep: any) => {
+      const {
+        technicianId,
+        technician,
+        assignedTechnician,
+        assignedTechnicianId,
+        technicianName,
+        createdById,
+        receptionist,
+        receptionistId,
+        receptionistName,
+        manager,
+        managerId,
+        managerName,
+        admin,
+        adminId,
+        adminName,
+        user,
+        userId,
+        staff,
+        staffName,
+        ...safe
+      } = rep;
+
+      return {
+        ...safe,
+        customerName: sanitizedName,
+        customerPhone: sanitizedPhone,
+      };
     };
 
-    const sanitizedAll = allMatchingRepairs.map((rep) => ({
-      ...rep,
-      customerName: sanitizedName,
-      customerPhone: sanitizedPhone,
-    }));
+    const sanitizedPrimary = {
+      ...sanitizePublicRepairObj(primaryRepair),
+      logs: combinedLogs,
+    };
+
+    const sanitizedAll = allMatchingRepairs.map((rep) => sanitizePublicRepairObj(rep));
 
     return res.json({
       success: true,
