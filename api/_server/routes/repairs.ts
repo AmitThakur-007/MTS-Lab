@@ -701,6 +701,9 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       status: 'RECEIVED',
       priority,
       technicianId: technicianId || null,
+      assignedAt: technicianId ? new Date().toISOString() : null,
+      assignedById: technicianId ? req.user!.id : null,
+      assignedByName: technicianId ? (req.user!.name || 'Staff') : null,
       branchId: branchId || req.user!.branchId || null,
       expectedCompletionDate: expectedCompletionDate || null,
       remarks: remarks || null,
@@ -736,13 +739,25 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       await syncBatteryWarrantyFromRepair(created, req.user);
     }
 
+    let assignedTechName: string | null = null;
+    if (created.technicianId) {
+      try {
+        const { data: techUser } = await supabaseAdmin.from('User').select('name').eq('id', created.technicianId).single();
+        if (techUser?.name) assignedTechName = techUser.name;
+      } catch (tErr) {
+        console.warn('[TECH LOOKUP WARN]', tErr);
+      }
+    }
+
     const logId = uuidv4();
     await supabaseAdmin.from('RepairLog').insert([
       {
         id: logId,
         repairId: created.id,
         status: 'RECEIVED',
-        message: `Repair intake recorded by ${req.user!.name || 'Staff'}.`,
+        message: assignedTechName
+          ? `Repair intake recorded by ${req.user!.name || 'Staff'} (Assigned to: ${assignedTechName}).`
+          : `Repair intake recorded by ${req.user!.name || 'Staff'}.`,
         createdAt: new Date().toISOString(),
       },
     ]);
@@ -957,6 +972,9 @@ const handleBatchRepairIntake = async (req: AuthRequest, res: Response) => {
         status: dev.status || 'RECEIVED',
         priority: dev.priority || 'NORMAL',
         technicianId: dev.technicianId || null,
+        assignedAt: dev.technicianId ? new Date().toISOString() : null,
+        assignedById: dev.technicianId ? req.user!.id : null,
+        assignedByName: dev.technicianId ? (req.user!.name || 'Staff') : null,
         branchId: req.user!.branchId || null,
         expectedCompletionDate: dev.expectedCompletionDate || null,
         remarks: dev.remarks || null,
@@ -998,13 +1016,25 @@ const handleBatchRepairIntake = async (req: AuthRequest, res: Response) => {
         await syncBatteryWarrantyFromRepair(created, req.user);
       }
 
+      let assignedBatchTechName: string | null = null;
+      if (created.technicianId) {
+        try {
+          const { data: techUser } = await supabaseAdmin.from('User').select('name').eq('id', created.technicianId).single();
+          if (techUser?.name) assignedBatchTechName = techUser.name;
+        } catch (tErr) {
+          console.warn('[TECH BATCH LOOKUP WARN]', tErr);
+        }
+      }
+
       const logId = uuidv4();
       await supabaseAdmin.from('RepairLog').insert([
         {
           id: logId,
           repairId: created.id,
           status: 'RECEIVED',
-          message: `Multi-device intake recorded by ${req.user!.name || 'Staff'} (Device ${i + 1} of ${devices.length}).`,
+          message: assignedBatchTechName
+            ? `Multi-device intake recorded by ${req.user!.name || 'Staff'} (Device ${i + 1} of ${devices.length}, Assigned to: ${assignedBatchTechName}).`
+            : `Multi-device intake recorded by ${req.user!.name || 'Staff'} (Device ${i + 1} of ${devices.length}).`,
           createdAt: new Date().toISOString(),
         },
       ]);

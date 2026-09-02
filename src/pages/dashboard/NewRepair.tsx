@@ -215,7 +215,16 @@ export default function NewRepair() {
     const fetchData = async () => {
       try {
         const staff = await api.get('/staff');
-        setTechnicians(staff.filter((u: any) => u.role === 'TECHNICIAN' || u.role === 'LEAD_TECHNICIAN'));
+        const staffList = Array.isArray(staff) ? staff : (staff?.users || staff?.data || []);
+        const eligibleRoles = ['TECHNICIAN', 'LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT'];
+        const activeTechs = staffList.filter(
+          (u: any) =>
+            eligibleRoles.includes(u.role) &&
+            u.isActive !== false &&
+            u.accountStatus !== 'SUSPENDED' &&
+            !u.deletedAt
+        );
+        setTechnicians(activeTechs);
       } catch (err) {
         console.error('Failed to load technician staff list:', err);
       }
@@ -1615,16 +1624,24 @@ export default function NewRepair() {
                         <div className="space-y-1.5">
                           <Label className="text-xs font-bold text-slate-700">Assign Technician</Label>
                           <Select
-                            value={device.technicianId}
-                            onValueChange={(v) => handleDeviceChange(idx, 'technicianId', v)}
+                            value={device.technicianId || "unassigned"}
+                            onValueChange={(v) => handleDeviceChange(idx, 'technicianId', v === "unassigned" ? "" : v)}
                           >
-                            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium">
-                              <SelectValue placeholder="Auto-assign" />
+                            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium focus:ring-2 focus:ring-emerald-500/20">
+                              <SelectValue placeholder="Auto-assign / Unassigned" />
                             </SelectTrigger>
-                            <SelectContent className="rounded-xl">
+                            <SelectContent className="rounded-xl shadow-xl">
+                              <SelectItem value="unassigned" className="text-xs font-medium text-slate-500">
+                                ⚪ Auto-assign / Unassigned
+                              </SelectItem>
                               {technicians.map((t) => (
                                 <SelectItem key={t.id} value={t.id} className="text-xs font-medium">
-                                  {t.name}
+                                  <div className="flex items-center gap-2">
+                                    <span>{t.name}</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">
+                                      ({(t.role || 'TECHNICIAN').replace(/_/g, ' ')})
+                                    </span>
+                                  </div>
                                 </SelectItem>
                               ))}
                             </SelectContent>
