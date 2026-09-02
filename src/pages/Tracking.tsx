@@ -19,7 +19,10 @@ import {
   Truck,
   RotateCw,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  Inbox,
+  ClipboardCheck,
+  PackageCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -88,9 +91,9 @@ const statusConfig: Record<
     color: 'bg-amber-500',
     bgSoft: 'bg-amber-50 text-amber-900 border-amber-200',
     textColor: 'text-amber-600',
-    icon: Clock,
-    progress: 15,
-    desc: 'Your device has been safely cataloged and inspected into MTS Lab inventory.',
+    icon: Inbox,
+    progress: 16,
+    desc: 'Your device has been safely cataloged and checked into MTS Lab inventory.',
   },
   DIAGNOSING: {
     label: 'Diagnosis In Progress',
@@ -98,7 +101,7 @@ const statusConfig: Record<
     bgSoft: 'bg-blue-50 text-blue-900 border-blue-200',
     textColor: 'text-blue-600',
     icon: Search,
-    progress: 35,
+    progress: 33,
     desc: 'Certified micro-engineers are inspecting device hardware, IC circuits, and display assemblies.',
   },
   IN_PROCESS: {
@@ -107,7 +110,7 @@ const statusConfig: Record<
     bgSoft: 'bg-indigo-50 text-indigo-900 border-indigo-200',
     textColor: 'text-indigo-600',
     icon: Wrench,
-    progress: 55,
+    progress: 50,
     desc: 'Active hardware repair, precision micro-soldering, and OEM component replacement in progress.',
   },
   IN_PROGRESS: {
@@ -116,7 +119,7 @@ const statusConfig: Record<
     bgSoft: 'bg-indigo-50 text-indigo-900 border-indigo-200',
     textColor: 'text-indigo-600',
     icon: Wrench,
-    progress: 55,
+    progress: 50,
     desc: 'Active hardware repair, precision micro-soldering, and OEM component replacement in progress.',
   },
   WAITING_FOR_PARTS: {
@@ -125,16 +128,16 @@ const statusConfig: Record<
     bgSoft: 'bg-purple-50 text-purple-900 border-purple-200',
     textColor: 'text-purple-600',
     icon: Package,
-    progress: 65,
+    progress: 55,
     desc: 'Sourcing genuine Grade-A replacement components from logistics inventory.',
   },
   TESTING: {
-    label: 'Testing & QA Diagnostics',
+    label: 'QA Testing',
     color: 'bg-orange-500',
     bgSoft: 'bg-orange-50 text-orange-900 border-orange-200',
     textColor: 'text-orange-600',
-    icon: ShieldCheck,
-    progress: 80,
+    icon: ClipboardCheck,
+    progress: 70,
     desc: 'Performing comprehensive 36-point diagnostic inspection and display touch calibration.',
   },
   REPAIRED: {
@@ -143,7 +146,7 @@ const statusConfig: Record<
     bgSoft: 'bg-teal-50 text-teal-900 border-teal-200',
     textColor: 'text-teal-600',
     icon: CheckCircle2,
-    progress: 90,
+    progress: 88,
     desc: 'Technical repair completed successfully and passed quality verification standards.',
   },
   READY_FOR_PICKUP: {
@@ -152,7 +155,7 @@ const statusConfig: Record<
     bgSoft: 'bg-emerald-50 text-emerald-900 border-emerald-200',
     textColor: 'text-emerald-600',
     icon: MapPin,
-    progress: 92,
+    progress: 90,
     desc: 'Restoration verified. Your device is sanitized and packaged ready for counter pickup or return courier dispatch.',
   },
   READY_FOR_DELIVERY: {
@@ -161,7 +164,7 @@ const statusConfig: Record<
     bgSoft: 'bg-emerald-50 text-emerald-900 border-emerald-200',
     textColor: 'text-emerald-600',
     icon: MapPin,
-    progress: 92,
+    progress: 90,
     desc: 'Restoration verified. Your device is packaged ready for counter pickup or courier handover.',
   },
   COURIER_DISPATCHED: {
@@ -170,7 +173,7 @@ const statusConfig: Record<
     bgSoft: 'bg-blue-50 text-blue-900 border-blue-300 ring-2 ring-blue-500/20',
     textColor: 'text-blue-700',
     icon: Truck,
-    progress: 96,
+    progress: 95,
     desc: 'Repaired device has been safely packed and dispatched via courier logistics back to your destination.',
   },
   DISPATCHED_VIA_COURIER: {
@@ -179,7 +182,7 @@ const statusConfig: Record<
     bgSoft: 'bg-blue-50 text-blue-900 border-blue-300 ring-2 ring-blue-500/20',
     textColor: 'text-blue-700',
     icon: Truck,
-    progress: 96,
+    progress: 95,
     desc: 'Repaired device has been safely packed and dispatched via courier logistics back to your destination.',
   },
   DELIVERED: {
@@ -187,7 +190,7 @@ const statusConfig: Record<
     color: 'bg-emerald-700',
     bgSoft: 'bg-emerald-50 text-emerald-950 border-emerald-300',
     textColor: 'text-emerald-700',
-    icon: CheckCircle2,
+    icon: PackageCheck,
     progress: 100,
     desc: 'Device handed over to customer successfully.',
   },
@@ -196,7 +199,7 @@ const statusConfig: Record<
     color: 'bg-emerald-700',
     bgSoft: 'bg-emerald-50 text-emerald-950 border-emerald-300',
     textColor: 'text-emerald-700',
-    icon: CheckCircle2,
+    icon: PackageCheck,
     progress: 100,
     desc: 'Device handed over to customer successfully.',
   },
@@ -238,23 +241,51 @@ const statusConfig: Record<
   },
 };
 
-const WALK_IN_TIMELINE_STEPS = [
-  { key: 'RECEIVED', label: 'Received', icon: Clock },
-  { key: 'DIAGNOSING', label: 'Diagnosing', icon: Search },
-  { key: 'IN_PROCESS', label: 'Restoration', icon: Wrench },
-  { key: 'TESTING', label: 'QA Testing', icon: ShieldCheck },
-  { key: 'READY_FOR_PICKUP', label: 'Ready', icon: MapPin },
-  { key: 'DELIVERED', label: 'Delivered', icon: CheckCircle2 },
-];
+export interface TimelineStageDefinition {
+  key: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  shortDesc: string;
+}
 
-const COURIER_TIMELINE_STEPS = [
-  { key: 'RECEIVED', label: 'Lab Received', icon: Package },
-  { key: 'DIAGNOSING', label: 'Diagnosing', icon: Search },
-  { key: 'IN_PROCESS', label: 'Restoration', icon: Wrench },
-  { key: 'TESTING', label: 'QA Testing', icon: ShieldCheck },
-  { key: 'READY_FOR_PICKUP', label: 'Ready', icon: MapPin },
-  { key: 'COURIER_DISPATCHED', label: 'Dispatched', icon: Truck },
-  { key: 'DELIVERED', label: 'Delivered', icon: CheckCircle2 },
+// The official 6 customer-facing repair journey stages with professional icons
+export const REPAIR_TIMELINE_STAGES: TimelineStageDefinition[] = [
+  {
+    key: 'RECEIVED',
+    label: 'Received',
+    icon: Inbox,
+    shortDesc: 'Cataloged & checked in',
+  },
+  {
+    key: 'DIAGNOSING',
+    label: 'Diagnosing',
+    icon: Search,
+    shortDesc: 'Circuit inspection',
+  },
+  {
+    key: 'RESTORATION',
+    label: 'Restoration',
+    icon: Wrench,
+    shortDesc: 'Component repair',
+  },
+  {
+    key: 'QA_TESTING',
+    label: 'QA Testing',
+    icon: ClipboardCheck,
+    shortDesc: '36-point calibration',
+  },
+  {
+    key: 'REPAIRED',
+    label: 'Repaired',
+    icon: CheckCircle2,
+    shortDesc: 'Ready for collection',
+  },
+  {
+    key: 'DELIVERED',
+    label: 'Delivered',
+    icon: PackageCheck,
+    shortDesc: 'Service completed',
+  },
 ];
 
 function sanitizeLogMessage(msg: string): string {
@@ -401,7 +432,6 @@ export default function Tracking() {
     activeRepair?.receivingMethod === 'COURIER' ||
     activeRepair?.isCourierIn === true ||
     Boolean(activeRepair?.isReturnCourierDispatched);
-  const timelineSteps = isCourierDevice ? COURIER_TIMELINE_STEPS : WALK_IN_TIMELINE_STEPS;
 
   const currentStatusRaw = (activeRepair?.status || 'RECEIVED').toUpperCase();
   const currentStatus = statusConfig[currentStatusRaw] || statusConfig.RECEIVED;
@@ -416,30 +446,61 @@ export default function Tracking() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const getStepStatus = (stepKey: string, currentRepairStatus: string) => {
-    const rawStatus = (currentRepairStatus || 'RECEIVED').toUpperCase();
-    if (rawStatus === 'DELIVERED' || rawStatus === 'COMPLETED') {
+  // Safely map current backend status to the 6-stage customer timeline
+  const getStageStatus = (stageIdx: number): 'completed' | 'current' | 'upcoming' => {
+    if (isDelivered) {
       return 'completed';
     }
 
-    const sequence = isCourierDevice
-      ? ['RECEIVED', 'DIAGNOSING', 'IN_PROCESS', 'TESTING', 'READY_FOR_PICKUP', 'COURIER_DISPATCHED', 'DELIVERED']
-      : ['RECEIVED', 'DIAGNOSING', 'IN_PROCESS', 'TESTING', 'READY_FOR_PICKUP', 'DELIVERED'];
+    let activeStageIdx = 0;
 
-    // Map intermediate statuses
-    let mappedStatus = rawStatus;
-    if (rawStatus === 'IN_PROGRESS') mappedStatus = 'IN_PROCESS';
-    if (rawStatus === 'READY_FOR_DELIVERY') mappedStatus = 'READY_FOR_PICKUP';
-    if (rawStatus === 'DISPATCHED_VIA_COURIER') mappedStatus = 'COURIER_DISPATCHED';
+    if (
+      currentStatusRaw === 'REPAIRED' ||
+      currentStatusRaw === 'READY_FOR_PICKUP' ||
+      currentStatusRaw === 'READY_FOR_DELIVERY' ||
+      currentStatusRaw === 'COURIER_DISPATCHED' ||
+      currentStatusRaw === 'DISPATCHED_VIA_COURIER' ||
+      currentStatusRaw === 'REPROBLEM_FIXED'
+    ) {
+      activeStageIdx = 4; // Repaired
+    } else if (
+      currentStatusRaw === 'TESTING' ||
+      currentStatusRaw === 'QA_TESTING' ||
+      currentStatusRaw === 'QA'
+    ) {
+      activeStageIdx = 3; // QA Testing
+    } else if (
+      currentStatusRaw === 'IN_PROCESS' ||
+      currentStatusRaw === 'IN_PROGRESS' ||
+      currentStatusRaw === 'WAITING_FOR_PARTS' ||
+      currentStatusRaw === 'RESTORATION' ||
+      currentStatusRaw === 'RE_PROBLEM' ||
+      currentStatusRaw === 'REPROBLEM'
+    ) {
+      activeStageIdx = 2; // Restoration
+    } else if (currentStatusRaw === 'DIAGNOSING') {
+      activeStageIdx = 1; // Diagnosing
+    } else if (currentStatusRaw === 'RECEIVED' || currentStatusRaw === 'PENDING') {
+      activeStageIdx = 0; // Received
+    } else {
+      activeStageIdx = 0;
+    }
 
-    const currentIndex = sequence.indexOf(mappedStatus);
-    const stepIndex = sequence.indexOf(stepKey);
-
-    if (currentIndex === -1) return 'upcoming';
-    if (stepIndex < currentIndex) return 'completed';
-    if (stepIndex === currentIndex) return 'current';
+    if (stageIdx < activeStageIdx) return 'completed';
+    if (stageIdx === activeStageIdx) return 'current';
     return 'upcoming';
   };
+
+  // Calculate percentage for progress connector line
+  const activeStageIndex = (() => {
+    if (isDelivered) return 5;
+    for (let i = 0; i < REPAIR_TIMELINE_STAGES.length; i++) {
+      if (getStageStatus(i) === 'current') return i;
+    }
+    return 0;
+  })();
+
+  const progressPercentage = isDelivered ? 100 : (activeStageIndex / (REPAIR_TIMELINE_STAGES.length - 1)) * 100;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
@@ -621,43 +682,150 @@ export default function Tracking() {
                       {currentStatus.desc}
                     </div>
 
-                    {/* Interactive Visual Timeline */}
-                    <div className="overflow-x-auto pb-2 pt-2">
-                      <div
-                        className={cn(
-                          'flex items-center justify-between relative px-4',
-                          isCourierDevice ? 'min-w-[620px]' : 'min-w-[520px]'
-                        )}
-                      >
-                        <div className="absolute top-5 left-10 right-10 h-1 bg-slate-200 z-0" />
-                        {timelineSteps.map((step) => {
-                          const status = getStepStatus(step.key, activeRepair.status);
-                          const StepIcon = step.icon;
+                    {/* Desktop & Tablet Timeline (Horizontal) */}
+                    <div className="hidden sm:block pt-3 pb-2">
+                      <div className="relative px-2">
+                        {/* Background Track */}
+                        <div className="absolute top-5 left-8 right-8 h-1 bg-slate-200 z-0 rounded-full" />
+                        {/* Active Progress Fill */}
+                        <div
+                          className="absolute top-5 left-8 h-1 bg-emerald-600 z-0 rounded-full transition-all duration-500 ease-out"
+                          style={{
+                            width: `calc(${progressPercentage}% - ${progressPercentage === 100 ? '0px' : '32px'})`,
+                            maxWidth: 'calc(100% - 64px)'
+                          }}
+                        />
+
+                        {/* 6 Stage Nodes */}
+                        <div className="grid grid-cols-6 relative z-10">
+                          {REPAIR_TIMELINE_STAGES.map((stage, idx) => {
+                            const status = getStageStatus(idx);
+                            const StageIcon = stage.icon;
+                            const isCompleted = status === 'completed';
+                            const isCurrent = status === 'current';
+
+                            return (
+                              <div key={stage.key} className="flex flex-col items-center text-center px-1">
+                                <div
+                                  className={cn(
+                                    'w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-200',
+                                    isCompleted
+                                      ? 'bg-emerald-600 text-white shadow-xs'
+                                      : isCurrent
+                                      ? 'bg-slate-900 text-white ring-4 ring-slate-200 shadow-md scale-105'
+                                      : 'bg-white text-slate-400 border-2 border-slate-200'
+                                  )}
+                                >
+                                  {isCompleted ? (
+                                    <Check className="w-5 h-5 stroke-[2.5]" />
+                                  ) : (
+                                    <StageIcon className="w-4 h-4" />
+                                  )}
+                                </div>
+                                <div className="mt-2.5 space-y-0.5">
+                                  <p
+                                    className={cn(
+                                      'text-xs font-bold leading-tight',
+                                      isCurrent
+                                        ? 'text-slate-900 font-extrabold'
+                                        : isCompleted
+                                        ? 'text-emerald-700'
+                                        : 'text-slate-400'
+                                    )}
+                                  >
+                                    {stage.label}
+                                  </p>
+                                  <span
+                                    className={cn(
+                                      'text-[10px] block leading-tight font-medium',
+                                      isCurrent
+                                        ? 'text-slate-600 font-semibold'
+                                        : isCompleted
+                                        ? 'text-emerald-600/80'
+                                        : 'text-slate-400'
+                                    )}
+                                  >
+                                    {isCompleted ? 'Completed' : isCurrent ? 'Active' : 'Pending'}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mobile Timeline (Vertical Stepper for clean responsive view) */}
+                    <div className="block sm:hidden pt-2">
+                      <div className="relative pl-7 space-y-4 before:absolute before:left-[15px] before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+                        {REPAIR_TIMELINE_STAGES.map((stage, idx) => {
+                          const status = getStageStatus(idx);
+                          const StageIcon = stage.icon;
                           const isCompleted = status === 'completed';
                           const isCurrent = status === 'current';
 
                           return (
-                            <div key={step.key} className="flex flex-col items-center gap-2 relative z-10 w-20 text-center">
+                            <div key={stage.key} className="relative flex items-start">
+                              {/* Step Node Icon */}
                               <div
                                 className={cn(
-                                  'w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm border-2 transition-all',
+                                  'absolute -left-7 flex items-center justify-center w-8 h-8 rounded-full border-2 border-white shadow-xs transition-all',
                                   isCompleted
-                                    ? 'bg-emerald-600 text-white border-emerald-600'
+                                    ? 'bg-emerald-600 text-white'
                                     : isCurrent
-                                    ? 'bg-slate-900 text-white border-slate-900 ring-4 ring-slate-200'
-                                    : 'bg-white text-slate-400 border-slate-300'
+                                    ? 'bg-slate-900 text-white ring-2 ring-slate-200 scale-105'
+                                    : 'bg-slate-100 text-slate-400 border-slate-200'
                                 )}
                               >
-                                {isCompleted ? <Check className="w-4 h-4" /> : <StepIcon className="w-4 h-4" />}
+                                {isCompleted ? (
+                                  <Check className="w-4 h-4 stroke-[2.5]" />
+                                ) : (
+                                  <StageIcon className="w-3.5 h-3.5" />
+                                )}
                               </div>
-                              <p
+
+                              {/* Step Details */}
+                              <div
                                 className={cn(
-                                  'text-[11px] sm:text-xs font-bold leading-tight',
-                                  isCurrent ? 'text-slate-900' : isCompleted ? 'text-emerald-700' : 'text-slate-400'
+                                  'ml-3 flex-1 rounded-xl p-3 border transition-all',
+                                  isCurrent
+                                    ? 'bg-slate-50/90 border-slate-300 ring-1 ring-slate-200 shadow-2xs'
+                                    : isCompleted
+                                    ? 'bg-white border-slate-200/80'
+                                    : 'bg-white/60 border-slate-100 opacity-75'
                                 )}
                               >
-                                {step.label}
-                              </p>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span
+                                    className={cn(
+                                      'text-xs font-bold',
+                                      isCurrent
+                                        ? 'text-slate-900'
+                                        : isCompleted
+                                        ? 'text-emerald-800'
+                                        : 'text-slate-500'
+                                    )}
+                                  >
+                                    {stage.label}
+                                  </span>
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      'text-[9px] uppercase px-1.5 py-0 font-extrabold',
+                                      isCurrent
+                                        ? 'bg-slate-900 text-white border-slate-900'
+                                        : isCompleted
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        : 'bg-slate-50 text-slate-400 border-slate-200'
+                                    )}
+                                  >
+                                    {isCompleted ? 'Done' : isCurrent ? 'In Progress' : 'Pending'}
+                                  </Badge>
+                                </div>
+                                <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+                                  {stage.shortDesc}
+                                </p>
+                              </div>
                             </div>
                           );
                         })}
