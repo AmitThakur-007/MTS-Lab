@@ -63,6 +63,7 @@ export default async function handler(req: Request, res: Response) {
 
     const cleanRepairNumber = String(rawRepairNumber).trim().replace(/^#+/, '').trim();
     const cleanPhone = normalizePhoneDigits(String(rawPhone));
+    const phone10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
 
     if (!cleanRepairNumber && !cleanPhone) {
       return res.status(400).json({ error: 'Please enter your Repair Number or Registered Phone Number.' });
@@ -74,6 +75,8 @@ export default async function handler(req: Request, res: Response) {
       customerId,
       customerName,
       customerPhone,
+      customerEmail,
+      customerAddress,
       deviceBrand,
       deviceModel,
       problemDescription,
@@ -101,25 +104,24 @@ export default async function handler(req: Request, res: Response) {
       batteryWarrantyPeriod,
       batteryType,
       batteryHealth,
+      batterySerial,
       batteryWarrantyExpiry,
+      warrantyTerms,
       remarks,
       createdAt,
-      updatedAt,
-      completedAt,
-      deliveredAt
+      updatedAt
     `;
 
-    let repairRecord: any = null;
+    let allMatchingRepairs: any[] = [];
 
     // Case 1: Customer provided BOTH Repair Number AND Phone Number
-    // PREVENT IDOR: Both must match the same repair/customer.
     if (cleanRepairNumber && cleanPhone) {
       const { data: candidates, error: cErr } = await supabase
         .from('Repair')
         .select(selectFields)
         .or(`repairNumber.eq.${cleanRepairNumber},repairNumber.ilike.%${cleanRepairNumber}%`)
         .order('createdAt', { ascending: false })
-        .limit(5);
+        .limit(10);
 
       if (cErr) {
         console.error('[PUBLIC TRACK CANDIDATE ERROR]', cErr);
@@ -128,10 +130,8 @@ export default async function handler(req: Request, res: Response) {
       if (candidates && candidates.length > 0) {
         for (const cand of candidates) {
           if (isPhoneMatching(cleanPhone, cand.customerPhone)) {
-            repairRecord = cand;
-            break;
-          }
-          if (cand.customerId) {
+            allMatchingRepairs.push(cand);
+          } else if (cand.customerId) {
             const { data: linkedCustomer } = await supabase
               .from('Customer')
               .select('phone, alternativePhone')
@@ -142,17 +142,10 @@ export default async function handler(req: Request, res: Response) {
               linkedCustomer &&
               (isPhoneMatching(cleanPhone, linkedCustomer.phone) || isPhoneMatching(cleanPhone, linkedCustomer.alternativePhone))
             ) {
-              repairRecord = cand;
-              break;
+              allMatchingRepairs.push(cand);
             }
           }
         }
-      }
-
-      if (!repairRecord) {
-        return res.status(404).json({
-          error: 'No repair records found matching the provided Repair Number and Phone Number.'
-        });
       }
     }
     // Case 2: Customer provided ONLY Repair Number
@@ -166,7 +159,7 @@ export default async function handler(req: Request, res: Response) {
         .maybeSingle();
 
       if (singleRepair) {
-        repairRecord = singleRepair;
+        allMatchingRepairs.push(singleRepair);
       }
     }
     // Case 3: Customer provided ONLY Phone Number
@@ -174,93 +167,112 @@ export default async function handler(req: Request, res: Response) {
       const { data: directMatches } = await supabase
         .from('Repair')
         .select(selectFields)
+        .or(`customerPhone.eq.${cleanPhone},customerPhone.ilike.%${phone10}%`)
         .order('createdAt', { ascending: false })
         .limit(20);
 
       if (directMatches && directMatches.length > 0) {
-        const matched = directMatches.filter((r) => isPhoneMatching(cleanPhone, r.customerPhone));
-        if (matched.length > 0) {
-          repairRecord = matched[0];
+        for (const r of directMatches) {
+          if (isPhoneMatching(cleanPhone, r.customerPhone)) {
+            allMatchingRepairs.push(r);
+          }
         }
       }
 
-      if (!repairRecord) {
-        const { data: customers } = await supabase
-          .from('Customer')
-          .select('id, phone, alternativePhone')
-          .limit(50);
+      // Also search linked Customer accounts
+      const { data: cusList } = await supabase
+        .from('Customer')
+        .select('id, phone, alternativePhone')
+        .or(`phone.eq.${cleanPhone},phone.ilike.%${phone10}%,alternativePhone.ilike.%${phone10}%`)
+        .limit(10);
 
-        const matchedCustomer = customers?.find(
-          (c) => isPhoneMatching(cleanPhone, c.phone) || isPhoneMatching(cleanPhone, c.alternativePhone)
-        );
+      if (cusList && cusList.length > 0) {
+        for (const cus of cusList) {
+          if (isPhoneMatching(cleanPhone, cus.phone) || isPhoneMatching(cleanPhone, cus.alternativePhone)) {
+            const { data: customerRepairs } = await supabase
+              .from('Repair')
+              .select(selectFields)
+              .eq('customerId', cus.id)
+              .order('createdAt', { ascending: false })
+              .limit(10);
 
-        if (matchedCustomer) {
-          const { data: customerRepair } = await supabase
-            .from('Repair')
-            .select(selectFields)
-            .eq('customerId', matchedCustomer.id)
-            .order('createdAt', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (customerRepair) {
-            repairRecord = customerRepair;
+            if (customerRepairs) {
+              for (const cr of customerRepairs) {
+                if (!allMatchingRepairs.some((existing) => existing.id === cr.id)) {
+                  allMatchingRepairs.push(cr);
+                }
+              }
+            }
           }
         }
       }
     }
 
-    if (!repairRecord) {
+    if (!allMatchingRepairs || allMatchingRepairs.length === 0) {
       return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
     }
+
+    const primaryRepair = allMatchingRepairs[0];
 
     // Query RepairLog
     const { data: explicitLogs } = await supabase
       .from('RepairLog')
-      .select('id, action, status, notes, message, createdAt')
-      .eq('repairId', repairRecord.id)
+      .select('id, status, message, createdAt')
+      .eq('repairId', primaryRepair.id)
       .order('createdAt', { ascending: false });
 
-    let combinedLogs = explicitLogs || [];
+    let combinedLogs = (explicitLogs || []).map((l: any) => ({
+      id: l.id,
+      action: 'STATUS_UPDATED',
+      status: l.status || primaryRepair.status || 'RECEIVED',
+      notes: l.message || `Status: ${l.status}`,
+      message: l.message || `Device status: ${l.status}`,
+      createdAt: l.createdAt
+    }));
+
     if (combinedLogs.length === 0) {
       combinedLogs = [
         {
-          id: `synth-${repairRecord.id}`,
+          id: `synth-${primaryRepair.id}`,
           action: 'STATUS_UPDATED',
-          status: repairRecord.status || 'RECEIVED',
-          notes: `Device registered and currently recorded as ${repairRecord.status || 'RECEIVED'}.`,
-          message: `Device status: ${repairRecord.status || 'RECEIVED'}`,
-          createdAt: repairRecord.createdAt || new Date().toISOString()
+          status: primaryRepair.status || 'RECEIVED',
+          notes: `Device registered and currently recorded as ${primaryRepair.status || 'RECEIVED'}.`,
+          message: `Device status: ${primaryRepair.status || 'RECEIVED'}`,
+          createdAt: primaryRepair.createdAt || new Date().toISOString()
         }
       ];
     }
 
-    repairRecord.logs = combinedLogs;
+    primaryRepair.logs = combinedLogs;
 
-    if (repairRecord.logs && Array.isArray(repairRecord.logs)) {
-      repairRecord.logs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-
-    const rawName = repairRecord.customerName || '';
+    const rawName = primaryRepair.customerName || '';
     const sanitizedName = rawName
       ? `${rawName.charAt(0)}*** ${rawName.split(' ').slice(-1)[0] || ''}`.trim()
       : 'Valued Customer';
 
-    const pDigits = normalizePhoneDigits(repairRecord.customerPhone || cleanPhone);
+    const pDigits = normalizePhoneDigits(primaryRepair.customerPhone || cleanPhone);
     const sanitizedPhone = pDigits && pDigits.length >= 6
       ? `${pDigits.slice(0, 3)}****${pDigits.slice(-3)}`
       : undefined;
 
-    const sanitizedRecord = {
-      ...repairRecord,
+    const sanitizedPrimary = {
+      ...primaryRepair,
       customerName: sanitizedName,
       customerPhone: sanitizedPhone,
     };
 
+    const sanitizedAll = allMatchingRepairs.map((rep) => ({
+      ...rep,
+      customerName: sanitizedName,
+      customerPhone: sanitizedPhone,
+    }));
+
     return res.json({
       success: true,
-      repair: sanitizedRecord,
-      ...sanitizedRecord
+      repair: sanitizedPrimary,
+      repairs: sanitizedAll,
+      devices: sanitizedAll,
+      ...sanitizedPrimary
     });
   } catch (err: any) {
     console.error('[TRACK FUNCTION EXCEPTION]', err);

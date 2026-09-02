@@ -350,10 +350,8 @@ router.post('/incoming', authenticate, async (req: AuthRequest, res: Response) =
           {
             id: uuidv4(),
             repairId: existingRepairId,
-            message: `Inbound courier shipment received via ${courierCompany} (AWB #${courierTrackingNumber}).`,
-            action: 'COURIER_INBOUND_RECEIVED',
-            performedById: userId,
-            performedByName: userName,
+            status: updatedRepair.status || 'RECEIVED',
+            message: `Inbound courier shipment received via ${courierCompany} (AWB #${courierTrackingNumber}) by ${userName}.`,
             createdAt: now
           }
         ]);
@@ -467,10 +465,8 @@ router.post('/incoming', authenticate, async (req: AuthRequest, res: Response) =
         {
           id: uuidv4(),
           repairId: newRepairId,
-          message: `Device intake registered via courier (${courierCompany}, AWB #${courierTrackingNumber}).`,
-          action: 'COURIER_INBOUND_CREATED',
-          performedById: userId,
-          performedByName: userName,
+          status: 'RECEIVED',
+          message: `Device intake registered via courier (${courierCompany}, AWB #${courierTrackingNumber}) by ${userName}.`,
           createdAt: now
         }
       ]);
@@ -563,10 +559,8 @@ router.post('/outgoing', authenticate, async (req: AuthRequest, res: Response) =
         {
           id: uuidv4(),
           repairId,
-          message: `Device dispatched to customer via ${returnCourierCompany} (AWB #${returnCourierTrackingNumber}).`,
-          action: 'COURIER_OUTBOUND_DISPATCHED',
-          performedById: userId,
-          performedByName: userName,
+          status: 'DISPATCHED_VIA_COURIER',
+          message: `Device dispatched to customer via ${returnCourierCompany} (AWB #${returnCourierTrackingNumber}) by ${userName}.`,
           createdAt: now
         }
       ]);
@@ -627,10 +621,8 @@ router.patch('/:id/status', authenticate, async (req: AuthRequest, res: Response
         {
           id: uuidv4(),
           repairId: id,
-          message: `Logistics status updated to ${status}${notes ? `: ${notes}` : ''}`,
-          action: 'COURIER_STATUS_UPDATED',
-          performedById: req.user?.id || 'system',
-          performedByName: req.user?.name || 'Staff',
+          status: updated.status || 'IN_TRANSIT',
+          message: `Logistics status updated to ${status}${notes ? `: ${notes}` : ''} by ${req.user?.name || 'Staff'}.`,
           createdAt: now
         }
       ]);

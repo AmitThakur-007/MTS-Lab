@@ -127,8 +127,7 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
         receivingMethod,
         createdAt,
         updatedAt,
-        completedAt,
-        deliveredAt
+        courierOutDeliveredDate
       `)
       .order('createdAt', { ascending: false });
 
@@ -328,8 +327,9 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
       const s = (repair.status || 'PENDING').toUpperCase();
       const p = (repair.priority || 'NORMAL').toUpperCase();
       const createdNepalDate = toNepalDateString(repair.createdAt);
-      const completedNepalDate = toNepalDateString(repair.completedAt);
-      const deliveredNepalDate = toNepalDateString(repair.deliveredAt);
+      const isRepairedOrDelivered = ['REPAIRED', 'COMPLETED', 'DELIVERED', 'READY_FOR_PICKUP'].includes(s);
+      const completedNepalDate = toNepalDateString(isRepairedOrDelivered ? repair.updatedAt : null);
+      const deliveredNepalDate = toNepalDateString(repair.courierOutDeliveredDate || (s === 'DELIVERED' ? repair.updatedAt : null));
 
       // Financials
       const paid = Number(repair.totalPaid || repair.advancePaid || 0);
@@ -494,7 +494,7 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
     const myWaitingParts = myActiveRepairs.filter((r) => (r.status || '').toUpperCase() === 'WAITING_FOR_PARTS');
     const myCompletedToday = myRepairs.filter((r) => {
       const s = (r.status || '').toUpperCase();
-      const compDate = toNepalDateString(r.completedAt);
+      const compDate = toNepalDateString(r.updatedAt);
       return ['REPAIRED', 'COMPLETED', 'DELIVERED', 'READY_FOR_PICKUP'].includes(s) && compDate === todayStr;
     });
     const myUrgentRepairs = myActiveRepairs.filter((r) => (r.priority || '').toUpperCase() === 'URGENT');

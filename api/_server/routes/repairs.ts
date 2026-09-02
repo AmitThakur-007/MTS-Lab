@@ -44,17 +44,21 @@ const ALLOWED_REPAIR_COLUMNS = new Set([
   'branchId',
   'expectedCompletionDate',
   'remarks',
+  'partsUsed',
+  'repairImages',
+  'managerUpdatedAt',
+  'managerUpdatedBy',
   'receivingMethod',
   'isCourierIn',
   'courierCompany',
   'courierTrackingNumber',
   'courierDate',
   'courierReceivedDate',
+  'courierInPickupDate',
   'courierInStatus',
   'courierStatus',
   'courierInCharge',
   'courierInPaymentStatus',
-  'courierInNotes',
   'courierNotes',
   'senderName',
   'senderPhone',
@@ -79,6 +83,7 @@ const ALLOWED_REPAIR_COLUMNS = new Set([
   'returnCourierDispatchedAt',
   'returnCourierDispatchedById',
   'returnCourierDispatchedByName',
+  'courierArchived',
   'assignedAt',
   'assignedById',
   'assignedByName',
@@ -88,11 +93,7 @@ const ALLOWED_REPAIR_COLUMNS = new Set([
   'batteryHealth',
   'batterySerial',
   'batteryWarrantyExpiry',
-  'warrantyTerms',
-  'technicianNotes',
-  'sparePartsUsed',
-  'completedAt',
-  'deliveredAt'
+  'warrantyTerms'
 ]);
 
 async function generateRepairNumber(offset: number = 0): Promise<string> {
@@ -740,10 +741,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       {
         id: logId,
         repairId: created.id,
-        userId: req.user!.id,
-        action: 'CREATED',
         status: 'RECEIVED',
-        notes: `Repair intake recorded by ${req.user!.name}.`,
+        message: `Repair intake recorded by ${req.user!.name || 'Staff'}.`,
         createdAt: new Date().toISOString(),
       },
     ]);
@@ -1004,10 +1003,8 @@ const handleBatchRepairIntake = async (req: AuthRequest, res: Response) => {
         {
           id: logId,
           repairId: created.id,
-          userId: req.user!.id,
-          action: 'CREATED',
           status: 'RECEIVED',
-          notes: `Multi-device intake recorded by ${req.user!.name} (Device ${i + 1} of ${devices.length}).`,
+          message: `Multi-device intake recorded by ${req.user!.name || 'Staff'} (Device ${i + 1} of ${devices.length}).`,
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -1110,16 +1107,6 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    if (updateData.status) {
-      const normalizedStatus = String(updateData.status).toUpperCase();
-      if (normalizedStatus === 'DELIVERED' && !updateData.deliveredAt) {
-        updateData.deliveredAt = new Date().toISOString();
-      }
-      if ((normalizedStatus === 'REPAIRED' || normalizedStatus === 'DELIVERED' || normalizedStatus === 'COMPLETED' || normalizedStatus === 'READY_FOR_PICKUP') && !updateData.completedAt) {
-        updateData.completedAt = new Date().toISOString();
-      }
-    }
-
     updateData.updatedAt = new Date().toISOString();
 
     const { data: updated, error } = await supabaseAdmin
@@ -1140,18 +1127,20 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
 
     if (rawBody.status) {
       const logId = uuidv4();
-      await supabaseAdmin.from('RepairLog').insert([
-        {
-          id: logId,
-          repairId: id,
-          userId: req.user!.id,
-          action: 'STATUS_UPDATED',
-          status: rawBody.status,
-          notes: rawBody.remarks || `Status updated to ${rawBody.status} by ${req.user!.name}`,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      await broadcastServerChange('RepairLog', 'CREATE', logId);
+      try {
+        await supabaseAdmin.from('RepairLog').insert([
+          {
+            id: logId,
+            repairId: id,
+            status: rawBody.status,
+            message: rawBody.remarks || `Status updated to ${rawBody.status} by ${req.user!.name || 'Staff'}`,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        await broadcastServerChange('RepairLog', 'CREATE', logId);
+      } catch (logErr) {
+        console.warn('[REPAIR LOG NON FATAL]', logErr);
+      }
     }
 
     await broadcastServerChange('Repair', 'UPDATE', id, updated);
@@ -1189,9 +1178,9 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
     };
 
     if (status) updatePayload.status = status;
-    if (estimatedDeliveryDate) updatePayload.estimatedDeliveryDate = estimatedDeliveryDate;
-    if (sparePartsUsed !== undefined) updatePayload.sparePartsUsed = sparePartsUsed;
-    if (technicianNotes !== undefined) updatePayload.technicianNotes = technicianNotes;
+    if (estimatedDeliveryDate) updatePayload.expectedCompletionDate = estimatedDeliveryDate;
+    if (sparePartsUsed !== undefined) updatePayload.partsUsed = sparePartsUsed;
+    if (technicianNotes !== undefined) updatePayload.remarks = technicianNotes;
 
     const { data: updatedRepair, error: updateErr } = await supabaseAdmin
       .from('Repair')
@@ -1288,18 +1277,20 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
     }
 
     const logId = uuidv4();
-    await supabaseAdmin.from('RepairLog').insert([
-      {
-        id: logId,
-        repairId: id,
-        userId: req.user!.id,
-        action: 'PRIORITY_ALERT_DISPATCHED',
-        status: updatedRepair.status,
-        notes: `[Priority Alert] ${resolvedPriority} — ${String(message).trim()} (Dispatched by ${req.user!.name})`,
-        createdAt: new Date().toISOString()
-      }
-    ]);
-    await broadcastServerChange('RepairLog', 'CREATE', logId);
+    try {
+      await supabaseAdmin.from('RepairLog').insert([
+        {
+          id: logId,
+          repairId: id,
+          status: updatedRepair.status,
+          message: `[Priority Alert] ${resolvedPriority} — ${String(message).trim()} (Dispatched by ${req.user!.name || 'Staff'})`,
+          createdAt: new Date().toISOString()
+        }
+      ]);
+      await broadcastServerChange('RepairLog', 'CREATE', logId);
+    } catch (logErr) {
+      console.warn('[REPAIR LOG NON FATAL]', logErr);
+    }
 
     const priorityEmoji: Record<string, string> = {
       URGENT: '🔴',
@@ -1365,18 +1356,20 @@ router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MAN
     }
 
     const logId = uuidv4();
-    await supabaseAdmin.from('RepairLog').insert([
-      {
-        id: logId,
-        repairId: id,
-        userId: req.user!.id,
-        action: 'ASSIGNED',
-        status: updated.status,
-        notes: `Assigned to technician: ${tech?.name || 'Unassigned'} by ${req.user!.name}`,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-    await broadcastServerChange('RepairLog', 'CREATE', logId);
+    try {
+      await supabaseAdmin.from('RepairLog').insert([
+        {
+          id: logId,
+          repairId: id,
+          status: updated.status,
+          message: `Assigned to technician: ${tech?.name || 'Unassigned'} by ${req.user!.name || 'Staff'}`,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      await broadcastServerChange('RepairLog', 'CREATE', logId);
+    } catch (logErr) {
+      console.warn('[REPAIR LOG NON FATAL]', logErr);
+    }
 
     // Dispatch realtime notification to newly assigned technician
     if (technicianId) {
@@ -1551,10 +1544,8 @@ router.post('/:id/courier-dispatch', authenticate, async (req: AuthRequest, res:
         {
           id: logId,
           repairId: id,
-          action: 'COURIER_DISPATCH_UPDATED',
-          status: updatePayload.status,
-          notes: `Courier logistics updated: ${company || 'Courier'} (AWB #${tracking || 'N/A'}) by ${userName}`,
-          userId: userId,
+          status: updatePayload.status || updated.status,
+          message: `Courier logistics updated: ${company || 'Courier'} (AWB #${tracking || 'N/A'}) by ${userName || 'Staff'}`,
           createdAt: now
         }
       ]);
