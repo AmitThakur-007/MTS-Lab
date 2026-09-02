@@ -130,7 +130,7 @@ interface DeviceFormItem {
   status: string;
   remarks: string;
   hasBatteryWarranty: boolean;
-  batteryWarrantyPeriod: '6_MONTHS' | '1_YEAR';
+  batteryWarrantyPeriod: '6_MONTHS' | '1_YEAR' | '2_YEARS' | string;
   batteryType: string;
 }
 
@@ -216,13 +216,17 @@ export default function NewRepair() {
       try {
         const staff = await api.get('/staff');
         const staffList = Array.isArray(staff) ? staff : (staff?.users || staff?.data || []);
-        const eligibleRoles = ['TECHNICIAN', 'LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT'];
+        const eligibleRoles = ['TECHNICIAN', 'LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT', 'TECH'];
         const activeTechs = staffList.filter(
-          (u: any) =>
-            eligibleRoles.includes(u.role) &&
-            u.isActive !== false &&
-            u.accountStatus !== 'SUSPENDED' &&
-            !u.deletedAt
+          (u: any) => {
+            const roleNorm = String(u.role || '').toUpperCase().replace(/\s+/g, '_').trim();
+            return (
+              eligibleRoles.includes(roleNorm) &&
+              u.isActive !== false &&
+              u.accountStatus !== 'SUSPENDED' &&
+              !u.deletedAt
+            );
+          }
         );
         setTechnicians(activeTechs);
       } catch (err) {
@@ -502,7 +506,15 @@ export default function NewRepair() {
 
   const calculateWarrantyExpiryPreview = (period: string) => {
     const reg = new Date();
-    const exp = period === '1_YEAR' ? addYears(reg, 1) : addMonths(reg, 6);
+    const str = String(period || '').toUpperCase();
+    let exp: Date;
+    if (str.includes('24') || str.includes('2_YEAR') || str.includes('2 YEAR') || str.includes('2YEAR')) {
+      exp = addYears(reg, 2);
+    } else if (str.includes('12') || str.includes('1_YEAR') || str.includes('1 YEAR') || str.includes('1YEAR')) {
+      exp = addYears(reg, 1);
+    } else {
+      exp = addMonths(reg, 6);
+    }
     return format(exp, 'dd MMMM yyyy');
   };
 
@@ -1678,7 +1690,11 @@ export default function NewRepair() {
                                 <span>Battery Replacement Warranty</span>
                                 {device.hasBatteryWarranty && (
                                   <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px] font-extrabold px-2 py-0.5">
-                                    {device.batteryWarrantyPeriod === '1_YEAR' ? '1 Year Warranty' : '6 Months Warranty'}
+                                    {String(device.batteryWarrantyPeriod || '').includes('2') || String(device.batteryWarrantyPeriod || '').toUpperCase().includes('2_YEAR')
+                                      ? '2 Years Warranty'
+                                      : device.batteryWarrantyPeriod === '1_YEAR'
+                                      ? '1 Year Warranty'
+                                      : '6 Months Warranty'}
                                   </Badge>
                                 )}
                               </div>
@@ -1729,6 +1745,7 @@ export default function NewRepair() {
                                 <SelectContent className="rounded-xl">
                                   <SelectItem value="6_MONTHS" className="text-xs font-semibold">6 Months Warranty</SelectItem>
                                   <SelectItem value="1_YEAR" className="text-xs font-semibold">1 Year (12 Months) Warranty</SelectItem>
+                                  <SelectItem value="2_YEARS" className="text-xs font-semibold">2 Years (24 Months) Extended Warranty</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>

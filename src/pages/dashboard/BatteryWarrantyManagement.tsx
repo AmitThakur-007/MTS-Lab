@@ -104,6 +104,9 @@ export default function BatteryWarrantyManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [periodFilter, setPeriodFilter] = useState('ALL');
+  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'YESTERDAY' | 'CUSTOM'>('ALL');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Multi-Selection State for Super Admin Permanent Deletion
   const [selectedWarrantyIds, setSelectedWarrantyIds] = useState<string[]>([]);
@@ -136,7 +139,7 @@ export default function BatteryWarrantyManagement() {
   // Standalone Warranty Creation Form State
   const [allRepairs, setAllRepairs] = useState<any[]>([]);
   const [selectedRepairId, setSelectedRepairId] = useState('');
-  const [newWarrantyPeriod, setNewWarrantyPeriod] = useState<'6_MONTHS' | '1_YEAR'>('6_MONTHS');
+  const [newWarrantyPeriod, setNewWarrantyPeriod] = useState<'6_MONTHS' | '1_YEAR' | '2_YEARS'>('6_MONTHS');
   const [newBatteryType, setNewBatteryType] = useState('Original Replacement Battery');
   const [creatingWarranty, setCreatingWarranty] = useState(false);
 
@@ -147,6 +150,11 @@ export default function BatteryWarrantyManagement() {
       if (searchQuery.trim()) params.append('search', searchQuery.trim());
       if (statusFilter !== 'ALL') params.append('status', statusFilter);
       if (periodFilter !== 'ALL') params.append('period', periodFilter);
+      if (dateFilter !== 'ALL') params.append('dateFilter', dateFilter);
+      if (dateFilter === 'CUSTOM') {
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+      }
 
       const res: any = await api.get(`/battery-warranties?${params.toString()}`);
 
@@ -222,7 +230,7 @@ export default function BatteryWarrantyManagement() {
 
   useEffect(() => {
     fetchWarranties();
-  }, [statusFilter, periodFilter]);
+  }, [statusFilter, periodFilter, dateFilter, startDate, endDate]);
 
   // Real-time synchronization across devices (debounced for smooth, non-flickering updates)
   const realtimeEntities = useMemo(() => ['batteryWarranty', 'batteryWarrantyClaim', 'repair'], []);
@@ -258,6 +266,11 @@ export default function BatteryWarrantyManagement() {
       if (searchQuery.trim()) params.append('search', searchQuery.trim());
       if (statusFilter !== 'ALL') params.append('status', statusFilter);
       if (periodFilter !== 'ALL') params.append('period', periodFilter);
+      if (dateFilter !== 'ALL') params.append('dateFilter', dateFilter);
+      if (dateFilter === 'CUSTOM') {
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+      }
 
       const filename = `MTS_Lab_Battery_Warranties_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
       await api.download(`/battery-warranties/export?${params.toString()}`, filename);
@@ -727,17 +740,17 @@ export default function BatteryWarrantyManagement() {
       </div>
 
       {/* Metric Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
 
         {/* Total Warranties */}
         <Card className="rounded-2xl border-slate-200 shadow-xs bg-white hover:shadow-md transition-shadow">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shrink-0">
               <ShieldCheck className="w-5 h-5 text-slate-700" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Warranties</p>
-              <h3 className="text-2xl font-black text-slate-900">{summary.total}</h3>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Logs</p>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900">{summary.total}</h3>
             </div>
           </CardContent>
         </Card>
@@ -745,12 +758,27 @@ export default function BatteryWarrantyManagement() {
         {/* Active Warranties */}
         <Card className="rounded-2xl border-emerald-100 shadow-xs bg-emerald-50/40 hover:shadow-md transition-shadow">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
               <CheckCircle2 className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Active Coverage</p>
-              <h3 className="text-2xl font-black text-emerald-900">{summary.active}</h3>
+              <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Active Cover</p>
+              <h3 className="text-xl sm:text-2xl font-black text-emerald-900">{summary.active}</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 2-Year Extended Warranties */}
+        <Card className="rounded-2xl border-blue-100 shadow-xs bg-blue-50/40 hover:shadow-md transition-shadow">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <ShieldCheck className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">2-Year Plans</p>
+              <h3 className="text-xl sm:text-2xl font-black text-blue-900">
+                {warranties.filter(w => w.warrantyPeriod === '2_YEARS' || w.warrantyPeriod === '24 Months' || w.warrantyPeriod === '2 Years' || w.warrantyDurationMonths === 24).length}
+              </h3>
             </div>
           </CardContent>
         </Card>
@@ -758,12 +786,12 @@ export default function BatteryWarrantyManagement() {
         {/* Expiring Soon (<30 Days) */}
         <Card className="rounded-2xl border-amber-200 shadow-xs bg-amber-50/50 hover:shadow-md transition-shadow">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
               <Clock className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Expiring &lt;30 Days</p>
-              <h3 className="text-2xl font-black text-amber-950">{summary.expiringSoon}</h3>
+              <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Expiring &lt;30d</p>
+              <h3 className="text-xl sm:text-2xl font-black text-amber-950">{summary.expiringSoon}</h3>
             </div>
           </CardContent>
         </Card>
@@ -771,12 +799,12 @@ export default function BatteryWarrantyManagement() {
         {/* Expired */}
         <Card className="rounded-2xl border-slate-200 shadow-xs bg-slate-50 hover:shadow-md transition-shadow">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
               <AlertTriangle className="w-5 h-5 text-rose-600" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Expired</p>
-              <h3 className="text-2xl font-black text-slate-700">{summary.expired}</h3>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Expired</p>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-700">{summary.expired}</h3>
             </div>
           </CardContent>
         </Card>
@@ -784,21 +812,129 @@ export default function BatteryWarrantyManagement() {
         {/* Claims Processed */}
         <Card className="rounded-2xl border-purple-200 shadow-xs bg-purple-50/40 hover:shadow-md transition-shadow col-span-2 sm:col-span-1">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
               <History className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">Claims Filed</p>
-              <h3 className="text-2xl font-black text-purple-950">{summary.claims}</h3>
+              <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Claims Filed</p>
+              <h3 className="text-xl sm:text-2xl font-black text-purple-950">{summary.claims}</h3>
             </div>
           </CardContent>
         </Card>
 
       </div>
 
-      {/* Filters and Search Bar */}
+      {/* Filters, Date Range, and Search Bar */}
       <Card className="rounded-2xl border border-slate-200 shadow-xs bg-white overflow-hidden">
         <CardContent className="p-4 sm:p-5 space-y-4">
+          
+          {/* Quick Date Filter Buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                Date Range:
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant={dateFilter === 'ALL' ? 'default' : 'outline'}
+                onClick={() => {
+                  setDateFilter('ALL');
+                  setStartDate('');
+                  setEndDate('');
+                }}
+                className={cn(
+                  "h-8 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                  dateFilter === 'ALL'
+                    ? "bg-slate-900 text-white shadow-xs"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                )}
+              >
+                All Time
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={dateFilter === 'TODAY' ? 'default' : 'outline'}
+                onClick={() => setDateFilter('TODAY')}
+                className={cn(
+                  "h-8 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                  dateFilter === 'TODAY'
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                )}
+              >
+                Today
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={dateFilter === 'YESTERDAY' ? 'default' : 'outline'}
+                onClick={() => setDateFilter('YESTERDAY')}
+                className={cn(
+                  "h-8 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                  dateFilter === 'YESTERDAY'
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                )}
+              >
+                Yesterday
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={dateFilter === 'CUSTOM' ? 'default' : 'outline'}
+                onClick={() => setDateFilter('CUSTOM')}
+                className={cn(
+                  "h-8 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                  dateFilter === 'CUSTOM'
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                )}
+              >
+                Custom Range
+              </Button>
+            </div>
+
+            {/* Custom Date Pickers (Shown when CUSTOM is selected) */}
+            {dateFilter === 'CUSTOM' && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-[11px] font-bold text-slate-500">From:</Label>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="h-8 text-xs w-36 rounded-lg border-slate-200 bg-slate-50"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-[11px] font-bold text-slate-500">To:</Label>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="h-8 text-xs w-36 rounded-lg border-slate-200 bg-slate-50"
+                  />
+                </div>
+                {(startDate || endDate) && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setStartDate('');
+                      setEndDate('');
+                    }}
+                    className="h-8 px-2 text-xs text-slate-500 hover:text-slate-900"
+                  >
+                    Reset Dates
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
 
             {/* Search Box */}
@@ -824,15 +960,16 @@ export default function BatteryWarrantyManagement() {
 
               {/* Period Filter */}
               <div className="flex items-center gap-1.5">
-                <Label className="text-xs font-bold text-slate-500 shrink-0">Period:</Label>
+                <Label className="text-xs font-bold text-slate-500 shrink-0">Duration:</Label>
                 <Select value={periodFilter} onValueChange={setPeriodFilter}>
-                  <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-semibold w-36">
+                  <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-semibold w-38">
                     <SelectValue placeholder="All Periods" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
-                    <SelectItem value="ALL">All Periods</SelectItem>
-                    <SelectItem value="6_MONTHS">6 Months</SelectItem>
-                    <SelectItem value="1_YEAR">1 Year</SelectItem>
+                    <SelectItem value="ALL">All Durations</SelectItem>
+                    <SelectItem value="6_MONTHS">6 Months Plan</SelectItem>
+                    <SelectItem value="1_YEAR">1 Year Plan</SelectItem>
+                    <SelectItem value="2_YEARS">2 Years Plan</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -856,7 +993,7 @@ export default function BatteryWarrantyManagement() {
               </div>
 
               {/* Clear Filter Button */}
-              {(searchQuery || statusFilter !== 'ALL' || periodFilter !== 'ALL') && (
+              {(searchQuery || statusFilter !== 'ALL' || periodFilter !== 'ALL' || dateFilter !== 'ALL') && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -864,8 +1001,11 @@ export default function BatteryWarrantyManagement() {
                     setSearchQuery('');
                     setStatusFilter('ALL');
                     setPeriodFilter('ALL');
+                    setDateFilter('ALL');
+                    setStartDate('');
+                    setEndDate('');
                   }}
-                  className="h-10 px-3 rounded-xl text-slate-500 hover:text-slate-900 text-xs font-semibold"
+                  className="h-10 px-3 rounded-xl text-slate-500 hover:text-slate-900 text-xs font-semibold cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5 mr-1" />
                   Clear
@@ -1052,8 +1192,15 @@ export default function BatteryWarrantyManagement() {
                             <span className="font-bold text-slate-900 text-xs">{item.customerName}</span>
                             <div className="flex items-center gap-1 text-[11px] text-slate-500 font-mono">
                               <Phone className="w-2.5 h-2.5 text-slate-400" />
-                              <span>{item.customerPhone}</span>
+                              <a href={`tel:${item.customerPhone}`} className="hover:text-emerald-700 hover:underline">
+                                {item.customerPhone}
+                              </a>
                             </div>
+                            {item.customerAddress && (
+                              <span className="text-[10px] text-slate-400 truncate max-w-[150px]">
+                                {item.customerAddress}
+                              </span>
+                            )}
                           </div>
                         </td>
 
@@ -1064,8 +1211,13 @@ export default function BatteryWarrantyManagement() {
                               {(item.deviceBrand || '').toUpperCase()} {item.deviceModel}
                             </span>
                             {item.batteryType && (
-                              <span className="text-[10px] text-slate-400 truncate max-w-[140px]">
+                              <span className="text-[10px] text-slate-500 font-medium truncate max-w-[140px]">
                                 {item.batteryType}
+                              </span>
+                            )}
+                            {item.deviceImei && (
+                              <span className="text-[9px] font-mono text-slate-400">
+                                IMEI: {item.deviceImei}
                               </span>
                             )}
                           </div>
@@ -1074,12 +1226,20 @@ export default function BatteryWarrantyManagement() {
                         {/* Duration & Expiry */}
                         <td className="py-4 px-4">
                           <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <Badge variant="outline" className={cn(
                                 "text-[10px] font-bold px-1.5 py-0",
-                                item.warrantyPeriod === '1_YEAR' || item.warrantyPeriod === '12 Months' ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                item.warrantyPeriod === '2_YEARS' || item.warrantyPeriod === '24 Months' || item.warrantyPeriod === '2 Years' || item.warrantyDurationMonths === 24
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : item.warrantyPeriod === '1_YEAR' || item.warrantyPeriod === '12 Months' || item.warrantyPeriod === '1 Year' || item.warrantyDurationMonths === 12
+                                  ? "bg-purple-50 text-purple-700 border-purple-200"
+                                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
                               )}>
-                                {item.warrantyPeriod === '1_YEAR' || item.warrantyPeriod === '12 Months' ? '1 Year' : '6 Months'}
+                                {item.warrantyPeriod === '2_YEARS' || item.warrantyPeriod === '24 Months' || item.warrantyPeriod === '2 Years' || item.warrantyDurationMonths === 24
+                                  ? '2 Years'
+                                  : item.warrantyPeriod === '1_YEAR' || item.warrantyPeriod === '12 Months' || item.warrantyPeriod === '1 Year' || item.warrantyDurationMonths === 12
+                                  ? '1 Year'
+                                  : '6 Months'}
                               </Badge>
                               <span className="text-[11px] text-slate-600 font-medium">
                                 Exp: {format(exp, 'dd MMM yyyy')}
@@ -1582,6 +1742,7 @@ export default function BatteryWarrantyManagement() {
                 <SelectContent className="rounded-xl">
                   <SelectItem value="6_MONTHS">6 Months Warranty</SelectItem>
                   <SelectItem value="1_YEAR">1 Year (12 Months) Warranty</SelectItem>
+                  <SelectItem value="2_YEARS">2 Years (24 Months) Warranty</SelectItem>
                 </SelectContent>
               </Select>
             </div>

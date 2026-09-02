@@ -16,13 +16,29 @@ export interface BatteryWarrantyData {
   deviceModel: string;
   imeiNumber?: string | null;
   batteryType?: string | null;
-  warrantyPeriod: string; // '6_MONTHS' | '1_YEAR'
+  warrantyPeriod: string; // '6_MONTHS' | '1_YEAR' | '2_YEARS' | string
   registrationDate: string | Date;
   expiryDate: string | Date;
   status: string;
   claimCount?: number;
   lastClaimDate?: string | Date | null;
   terms?: string | null;
+}
+
+export function formatWarrantyDurationText(period?: string | null): string {
+  const str = String(period || '').toUpperCase();
+  if (str.includes('24') || str.includes('2_YEAR') || str.includes('2 YEAR') || str.includes('2YEAR')) return '2 Years (24 Months)';
+  if (str.includes('12') || str.includes('1_YEAR') || str.includes('1 YEAR') || str.includes('1YEAR')) return '1 Year (12 Months)';
+  if (str.includes('3')) return '3 Months';
+  return '6 Months';
+}
+
+export function formatWarrantyDurationShort(period?: string | null): string {
+  const str = String(period || '').toUpperCase();
+  if (str.includes('24') || str.includes('2_YEAR') || str.includes('2 YEAR') || str.includes('2YEAR')) return '2 Years';
+  if (str.includes('12') || str.includes('1_YEAR') || str.includes('1 YEAR') || str.includes('1YEAR')) return '1 Year';
+  if (str.includes('3')) return '3 Months';
+  return '6 Months';
 }
 
 /**
@@ -41,7 +57,7 @@ export function buildWarrantyCertificatePdf(warranty: BatteryWarrantyData): jsPD
 
   const regDateFormatted = format(new Date(warranty.registrationDate), 'dd MMMM yyyy');
   const expDateFormatted = format(new Date(warranty.expiryDate), 'dd MMMM yyyy');
-  const periodLabel = warranty.warrantyPeriod === '1_YEAR' ? '1 Year (12 Months)' : '6 Months';
+  const periodLabel = formatWarrantyDurationText(warranty.warrantyPeriod);
 
   // 1. Top Decorative Accent Bar
   doc.setFillColor(16, 185, 129); // Emerald 500
@@ -61,7 +77,7 @@ export function buildWarrantyCertificatePdf(warranty: BatteryWarrantyData): jsPD
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(148, 163, 184); // Slate 400
   doc.text('MTS Lab • Mobile Technology Station', 20, 29);
-  doc.text('New Road, Kathmandu, Nepal  •  Ph/Tel: 986927668, 015364307', 20, 35);
+  doc.text('New Road, Kathmandu, Nepal  •  Ph/Tel: 9869276668, 015364307', 20, 35);
 
   // 4. Header Right - Certificate Title & ID
   doc.setFont('helvetica', 'bold');
@@ -300,7 +316,7 @@ export function getWarrantyWhatsAppShareUrl(warranty: BatteryWarrantyData): stri
   }
 
   const expFormatted = format(new Date(warranty.expiryDate), 'dd MMMM yyyy');
-  const period = warranty.warrantyPeriod === '1_YEAR' ? '1 Year' : '6 Months';
+  const period = formatWarrantyDurationShort(warranty.warrantyPeriod);
 
   const message = `*MTS LAB — OFFICIAL BATTERY WARRANTY CERTIFICATE* 🛡️%0A%0A` +
     `Hello *${encodeURIComponent(warranty.customerName)}*,%0A%0A` +
@@ -313,7 +329,7 @@ export function getWarrantyWhatsAppShareUrl(warranty: BatteryWarrantyData): stri
     `✅ *Status:* ACTIVE%0A%0A` +
     `_Thank you for choosing MTS Lab for your smartphone restoration!_%0A` +
     `MTS Lab • Mobile Technology Station%0A` +
-    `📍 New Road, Kathmandu, Nepal • 📞 Ph/Tel: 986927668, 015364307`;
+    `📍 New Road, Kathmandu, Nepal • 📞 Ph/Tel: 9869276668, 015364307`;
 
   return `https://wa.me/${waPhone}?text=${message}`;
 }

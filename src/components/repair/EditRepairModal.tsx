@@ -120,18 +120,31 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
     if (!repair || !open) return;
 
     // Parse Battery Warranty State
-    if (repair.batteryWarranty) {
-      setHasBatteryWarranty(repair.batteryWarranty.status !== 'CANCELLED');
-      setBatteryWarrantyPeriod(repair.batteryWarranty.warrantyPeriod || '6_MONTHS');
-      setBatteryType(repair.batteryWarranty.batteryType || 'Original Replacement Battery');
+    const rawPeriod = repair.batteryWarrantyPeriod || repair.batteryWarranty?.warrantyPeriod || '';
+    const normPeriod = (rawPeriod.includes('24') || rawPeriod.toUpperCase().includes('2_YEAR') || rawPeriod.includes('2 Year'))
+      ? '2_YEARS'
+      : (rawPeriod.includes('12') || rawPeriod.toUpperCase().includes('1_YEAR') || rawPeriod.includes('1 Year'))
+      ? '1_YEAR'
+      : '6_MONTHS';
+
+    if (repair.hasBatteryWarranty === true || repair.hasBatteryWarranty === 'true' || repair.batteryWarranty) {
+      setHasBatteryWarranty(repair.batteryWarranty?.status !== 'CANCELLED');
+      setBatteryWarrantyPeriod(normPeriod);
+      setBatteryType(repair.batteryType || repair.batteryWarranty?.batteryType || 'Original Replacement Battery');
     } else if (repair.id) {
       api.get(`/battery-warranties?search=${repair.repairNumber}`)
         .then((res: any) => {
-          const list = Array.isArray(res) ? res : res?.warranties || [];
+          const list = Array.isArray(res) ? res : res?.warranties || res?.data || [];
           const match = list.find((w: any) => w.repairId === repair.id || w.repairNumber === repair.repairNumber);
           if (match && match.status !== 'CANCELLED') {
             setHasBatteryWarranty(true);
-            if (match.warrantyPeriod) setBatteryWarrantyPeriod(match.warrantyPeriod);
+            const mPeriod = String(match.warrantyPeriod || '');
+            const parsedMatchPeriod = (mPeriod.includes('24') || mPeriod.toUpperCase().includes('2_YEAR') || mPeriod.includes('2 Year'))
+              ? '2_YEARS'
+              : (mPeriod.includes('12') || mPeriod.toUpperCase().includes('1_YEAR') || mPeriod.includes('1 Year'))
+              ? '1_YEAR'
+              : '6_MONTHS';
+            setBatteryWarrantyPeriod(parsedMatchPeriod);
             if (match.batteryType) setBatteryType(match.batteryType);
           } else {
             setHasBatteryWarranty(false);
@@ -835,7 +848,8 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
                       <SelectItem value="6_MONTHS">6 Months Replacement Warranty</SelectItem>
-                      <SelectItem value="1_YEAR">1 Year Extended Warranty</SelectItem>
+                      <SelectItem value="1_YEAR">1 Year (12 Months) Extended Warranty</SelectItem>
+                      <SelectItem value="2_YEARS">2 Years (24 Months) Extended Warranty</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

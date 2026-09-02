@@ -148,6 +148,14 @@ async function generateWarrantyNumber(offset: number = 0): Promise<string> {
   return `BW-${currentYear}-${nextNum.toString().padStart(4, '0')}`;
 }
 
+function parseWarrantyDurationMonths(periodStr: any): number {
+  const str = String(periodStr || '').toUpperCase().trim();
+  if (str.includes('24') || str.includes('2_YEAR') || str.includes('2 YEAR') || str.includes('2YEAR') || str.includes('2_Y') || str === '2Y' || str === '2 YEARS') return 24;
+  if (str.includes('12') || str.includes('1_YEAR') || str.includes('1 YEAR') || str.includes('1YEAR') || str.includes('1_Y') || str === '1Y' || str === '1 YEAR') return 12;
+  if (str.includes('3')) return 3;
+  return 6;
+}
+
 async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
   try {
     if (!repairData || !repairData.id) return;
@@ -174,16 +182,25 @@ async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
 
     const { data: existing } = await supabaseAdmin
       .from('BatteryWarranty')
-      .select('id')
+      .select('id, registrationDate')
       .eq('repairId', repairData.id)
       .limit(1);
 
-    const rawPeriod = String(repairData.batteryWarrantyPeriod || '6_MONTHS');
-    const months = rawPeriod.includes('12') ? 12 : (rawPeriod.includes('3') ? 3 : 6);
+    const months = parseWarrantyDurationMonths(repairData.batteryWarrantyPeriod);
+    const periodLabel = months === 24 ? '2 Years' : (months === 12 ? '1 Year' : `${months} Months`);
 
-    const regDate = new Date(repairData.createdAt || Date.now());
+    const regDate = existing && existing[0]?.registrationDate
+      ? new Date(existing[0].registrationDate)
+      : new Date(repairData.createdAt || Date.now());
+
     const expDate = new Date(regDate);
-    expDate.setMonth(expDate.getMonth() + months);
+    if (months === 24) {
+      expDate.setFullYear(expDate.getFullYear() + 2);
+    } else if (months === 12) {
+      expDate.setFullYear(expDate.getFullYear() + 1);
+    } else {
+      expDate.setMonth(expDate.getMonth() + months);
+    }
 
     if (existing && existing.length > 0) {
       await supabaseAdmin
@@ -197,7 +214,7 @@ async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
           deviceModel: repairData.deviceModel,
           imeiNumber: repairData.imeiNumber ? String(repairData.imeiNumber).trim() : null,
           batteryType: repairData.batteryType || 'Original Replacement Battery',
-          warrantyPeriod: `${months} Months`,
+          warrantyPeriod: periodLabel,
           expiryDate: expDate.toISOString(),
           status: 'ACTIVE',
           updatedAt: new Date().toISOString(),
@@ -223,7 +240,7 @@ async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
           deviceModel: repairData.deviceModel,
           imeiNumber: repairData.imeiNumber ? String(repairData.imeiNumber).trim() : null,
           batteryType: repairData.batteryType || 'Original Replacement Battery',
-          warrantyPeriod: `${months} Months`,
+          warrantyPeriod: periodLabel,
           registrationDate: regDate.toISOString(),
           expiryDate: expDate.toISOString(),
           status: 'ACTIVE',
@@ -1393,7 +1410,7 @@ router.post('/:id/alert', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANA
 // ----------------------------------------------------
 // 14. POST /:id/assign — Assign Technician
 // ----------------------------------------------------
-router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LEAD_TECHNICIAN']), async (req: AuthRequest, res: Response) => {
+router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'LEAD_TECHNICIAN', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { technicianId } = req.body;
