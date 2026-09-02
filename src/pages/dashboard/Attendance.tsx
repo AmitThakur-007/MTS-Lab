@@ -179,9 +179,11 @@ export default function Attendance() {
   // 4. Fetch Attendance History & Audit Logs
   const fetchHistory = useCallback(async () => {
     try {
-      const records = await api.get<AttendanceHistoryRecord[]>('/attendance/history');
-      if (Array.isArray(records)) {
-        setHistoryRecords(records);
+      const res = await api.get<any>('/attendance/history');
+      if (res && Array.isArray(res.records)) {
+        setHistoryRecords(res.records);
+      } else if (Array.isArray(res)) {
+        setHistoryRecords(res);
       }
 
       if (isAdminOrSuperAdmin) {
@@ -402,17 +404,26 @@ export default function Attendance() {
   const handleBulkMarkAll = async () => {
     setIsBulkSubmitting(true);
     try {
-      const activeStaff = roster.filter((r) => r.status !== 'PRESENT');
-      for (const staff of activeStaff) {
-        await api.post('/attendance/mark', {
-          userId: staff.userId,
-          date: selectedDate,
-          status: 'PRESENT',
-          notes: 'Bulk confirmation by Management',
-        });
+      const activeStaff = roster
+        .filter((r) => r.status !== 'PRESENT')
+        .filter((r) => (isManager ? (r.userId || r.id) !== user?.id : true));
+
+      const userIds = activeStaff.map((s) => s.userId || s.id);
+
+      if (userIds.length === 0) {
+        toast.info('All eligible staff members are already marked as Present.');
+        setIsBulkModalOpen(false);
+        return;
       }
 
-      toast.success(`Successfully marked ${activeStaff.length} staff members as Present.`);
+      await api.post('/attendance/bulk-mark', {
+        date: selectedDate,
+        status: 'PRESENT',
+        userIds,
+        notes: `Bulk confirmation by ${user?.name || 'Management'}`,
+      });
+
+      toast.success(`Successfully marked ${userIds.length} staff member${userIds.length > 1 ? 's' : ''} as Present.`);
       setIsBulkModalOpen(false);
       await fetchRoster(selectedDate);
     } catch (err: any) {

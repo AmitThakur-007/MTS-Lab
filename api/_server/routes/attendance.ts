@@ -89,12 +89,15 @@ const handleGetRoster = async (req: AuthRequest, res: Response) => {
 
       return {
         id: user.id,
+        userId: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
         department: user.department || 'Repair Lab',
         phoneNumber: user.phoneNumber || null,
         profileImage: user.profileImage || null,
+        avatarUrl: user.profileImage || null,
+        date: targetDate,
         status: rec ? rec.status : 'NOT_MARKED',
         attendanceId: rec ? rec.id : null,
         checkInTime: rec ? rec.checkInTime : null,
@@ -104,6 +107,26 @@ const handleGetRoster = async (req: AuthRequest, res: Response) => {
         markedByRole: rec ? rec.markedByRole : null,
         markedAt: rec ? rec.markedAt : null,
         monthlyAttendanceRate: rate,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          department: user.department || 'Repair Lab',
+          avatarUrl: user.profileImage || null,
+        },
+        attendance: rec
+          ? {
+              id: rec.id,
+              status: rec.status,
+              checkInTime: rec.checkInTime || undefined,
+              checkOutTime: rec.checkOutTime || undefined,
+              markedByName: rec.markedByName || undefined,
+              markedByRole: rec.markedByRole || undefined,
+              markedAt: rec.markedAt || undefined,
+              notes: rec.notes || undefined,
+            }
+          : undefined,
       };
     });
 
@@ -474,9 +497,15 @@ router.get('/staff/:userId/monthly', authenticate, async (req: AuthRequest, res:
     let pendingCount = 0;
 
     const dailyLogs = [];
+    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${targetMonth}-${String(day).padStart(2, '0')}`;
       const rec = recordMap.get(dateStr);
+      const dateObj = new Date(year, month - 1, day);
+      const dayOfWeek = daysOfWeek[dateObj.getDay()];
+      const isToday = dateStr === time.dateString;
+      const isFuture = dateStr > time.dateString;
+
       if (rec) {
         if (rec.status === 'PRESENT') presentCount++;
         else if (rec.status === 'ABSENT') absentCount++;
@@ -490,16 +519,32 @@ router.get('/staff/:userId/monthly', authenticate, async (req: AuthRequest, res:
           pendingCount++;
         }
 
-        dailyLogs.push(rec);
+        dailyLogs.push({
+          date: dateStr,
+          dayOfWeek,
+          isToday,
+          isFuture,
+          status: rec.status,
+          record: {
+            id: rec.id,
+            formattedCheckInTime: rec.checkInTime || '—',
+            checkInTime: rec.checkInTime || null,
+            checkOutTime: rec.checkOutTime || null,
+            markedBy: rec.markedByName || 'System',
+            markedByName: rec.markedByName || 'System',
+            markedByRole: rec.markedByRole || 'ADMIN',
+            notes: rec.notes || undefined,
+            correctionReason: rec.correctionReason || undefined,
+          },
+        });
       } else {
         dailyLogs.push({
-          id: null,
-          userId,
           date: dateStr,
-          status: 'NOT_MARKED',
-          checkInTime: null,
-          checkOutTime: null,
-          notes: null,
+          dayOfWeek,
+          isToday,
+          isFuture,
+          status: isFuture ? 'FUTURE' : 'NOT_MARKED',
+          record: undefined,
         });
       }
     }
@@ -557,8 +602,16 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
     // RBAC & TIME WINDOW ENFORCEMENT
     // 1. Super Admin and Admin: 24/7 full authority for any staff member
     if (isSuperAdmin || isAdmin) {
-      // Allowed anytime for any staff member
+      // Allowed anytime for any staff member (including themselves or other staff)
     } else if (isManager) {
+      // 2. Manager: Cannot take their own attendance
+      if (targetUserId === currentUser.id) {
+        return res.status(403).json({
+          error: 'Managers cannot take their own attendance. Manager attendance must be verified and recorded by an Administrator or Super Administrator.',
+          code: 'MANAGER_SELF_ATTENDANCE_PROHIBITED',
+        });
+      }
+
       // 2. Manager: Strictly restricted to 10:00 AM - 10:45 AM Nepal Time (Asia/Kathmandu)
       if (!time.isWithinWindow) {
         return res.status(403).json({
@@ -651,7 +704,16 @@ router.post('/bulk-mark', authenticate, async (req: AuthRequest, res: Response) 
     }
 
     const targetDate = date || time.dateString;
-    const formattedItems = items.map((item) => ({
+    // Managers cannot bulk mark themselves; filter out manager's own userId if present
+    const validItems = isManager
+      ? items.filter((item) => item.userId !== currentUser.id)
+      : items;
+
+    if (validItems.length === 0) {
+      return res.status(400).json({ error: 'No eligible staff members to mark.' });
+    }
+
+    const formattedItems = validItems.map((item) => ({
       userId: item.userId,
       date: targetDate,
       status: item.status || 'PRESENT',
@@ -815,6 +877,14 @@ router.patch('/:id', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async
     const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
     const isAdmin = currentUser.role === 'ADMIN';
     const isManager = currentUser.role === 'MANAGER';
+
+    // Manager check: cannot update own attendance record
+    if (isManager && existing.userId === currentUser.id) {
+      return res.status(403).json({
+        error: 'Managers cannot modify their own attendance records. Only an Administrator or Super Administrator can update Manager attendance.',
+        code: 'MANAGER_SELF_UPDATE_PROHIBITED',
+      });
+    }
 
     // Manager time window check if modifying others' attendance
     if (isManager && !time.isWithinWindow) {

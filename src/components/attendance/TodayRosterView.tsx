@@ -298,9 +298,22 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                     const markedBy = staff.attendance?.markedByName;
                     const notes = staff.notes || staff.attendance?.notes;
 
+                    const staffId = staff.userId || staff.id;
+                    const isSelfManager = isManager && staffId === currentUserId;
+                    const canMarkThisStaff = isAdminOrSuperAdmin || (isManager && isWithinWindow && !isSelfManager);
+
+                    let markTooltip = '';
+                    if (isSelfManager) {
+                      markTooltip = 'Managers cannot record their own attendance. Admin/Super Admin must mark Manager attendance.';
+                    } else if (isManager && !isWithinWindow) {
+                      markTooltip = 'Attendance marking window is closed for Managers (10:00–10:45 AM NPT)';
+                    } else if (!isAdminOrSuperAdmin && !isManager) {
+                      markTooltip = 'Only Management can record attendance';
+                    }
+
                     return (
                       <tr
-                        key={staff.userId || staff.id}
+                        key={staffId}
                         className="hover:bg-slate-50/70 transition-colors group"
                       >
                         {/* Column 1: Staff Info */}
@@ -320,7 +333,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                                 >
                                   {staff.name}
                                 </span>
-                                {staff.userId === currentUserId && (
+                                {staffId === currentUserId && (
                                   <Badge className="bg-slate-900 text-white text-[9px] font-bold px-1.5 py-0 shrink-0">
                                     YOU
                                   </Badge>
@@ -387,15 +400,16 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                             <Button
                               size="sm"
                               variant={staff.status === 'PRESENT' ? 'default' : 'outline'}
-                              onClick={() => onQuickMark(staff.userId, 'PRESENT', staff.name)}
-                              disabled={!canMark}
+                              onClick={() => onQuickMark(staffId, 'PRESENT', staff.name)}
+                              disabled={!canMarkThisStaff}
                               className={cn(
                                 'h-8 px-2.5 text-xs font-bold rounded-lg gap-1.5 shrink-0 whitespace-nowrap transition-all select-none',
                                 staff.status === 'PRESENT'
                                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs font-black'
-                                  : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300'
+                                  : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300',
+                                !canMarkThisStaff && 'opacity-60 cursor-not-allowed'
                               )}
-                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:45 AM NPT)' : 'Mark as Present'}
+                              title={markTooltip || 'Mark as Present'}
                             >
                               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                               <span>Present</span>
@@ -405,15 +419,16 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                             <Button
                               size="sm"
                               variant={staff.status === 'LATE' ? 'default' : 'outline'}
-                              onClick={() => onQuickMark(staff.userId, 'LATE', staff.name)}
-                              disabled={!canMark}
+                              onClick={() => onQuickMark(staffId, 'LATE', staff.name)}
+                              disabled={!canMarkThisStaff}
                               className={cn(
                                 'h-8 px-2.5 text-xs font-bold rounded-lg gap-1.5 shrink-0 whitespace-nowrap transition-all select-none',
                                 staff.status === 'LATE'
                                   ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs font-black'
-                                  : 'border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-300'
+                                  : 'border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-300',
+                                !canMarkThisStaff && 'opacity-60 cursor-not-allowed'
                               )}
-                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:45 AM NPT)' : 'Mark as Late'}
+                              title={markTooltip || 'Mark as Late'}
                             >
                               <Clock className="w-3.5 h-3.5 shrink-0" />
                               <span>Late</span>
@@ -423,15 +438,16 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                             <Button
                               size="sm"
                               variant={staff.status === 'ABSENT' ? 'default' : 'outline'}
-                              onClick={() => onQuickMark(staff.userId, 'ABSENT', staff.name)}
-                              disabled={!canMark}
+                              onClick={() => onQuickMark(staffId, 'ABSENT', staff.name)}
+                              disabled={!canMarkThisStaff}
                               className={cn(
                                 'h-8 px-2.5 text-xs font-bold rounded-lg gap-1.5 shrink-0 whitespace-nowrap transition-all select-none',
                                 staff.status === 'ABSENT'
                                   ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-2xs font-black'
-                                  : 'border-rose-200 text-rose-700 hover:bg-rose-50 hover:border-rose-300'
+                                  : 'border-rose-200 text-rose-700 hover:bg-rose-50 hover:border-rose-300',
+                                !canMarkThisStaff && 'opacity-60 cursor-not-allowed'
                               )}
-                              title={!canMark ? 'Attendance marking window is closed for Managers (10:00–10:45 AM NPT)' : 'Mark as Absent'}
+                              title={markTooltip || 'Mark as Absent'}
                             >
                               <UserX className="w-3.5 h-3.5 shrink-0" />
                               <span>Absent</span>
@@ -446,8 +462,12 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                               variant="ghost"
                               size="sm"
                               onClick={() => onOpenEditModal(staff)}
-                              className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg shrink-0"
-                              title="Edit / Correct Record with Notes"
+                              disabled={isSelfManager}
+                              className={cn(
+                                "h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg shrink-0",
+                                isSelfManager && "opacity-40 cursor-not-allowed"
+                              )}
+                              title={isSelfManager ? "Managers cannot edit their own attendance records" : "Edit / Correct Record with Notes"}
                               aria-label="Edit record"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
@@ -456,7 +476,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => onOpenStaffHistory(staff.userId, staff.name)}
+                              onClick={() => onOpenStaffHistory(staffId, staff.name)}
                               className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg shrink-0"
                               title="View Staff Monthly Calendar & Logs"
                               aria-label="View staff calendar"
@@ -464,11 +484,11 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                               <Calendar className="w-3.5 h-3.5" />
                             </Button>
 
-                            {isSuperAdmin && staff.userId !== currentUserId && (
+                            {isSuperAdmin && staffId !== currentUserId && (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => onOpenPurgeModal(staff.userId, staff.name)}
+                                onClick={() => onOpenPurgeModal(staffId, staff.name)}
                                 className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg shrink-0"
                                 title="Permanent Staff Deletion (Super Admin Only)"
                                 aria-label="Delete staff"
@@ -503,8 +523,21 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                 const markedBy = staff.attendance?.markedByName;
                 const notes = staff.notes || staff.attendance?.notes;
 
+                const staffId = staff.userId || staff.id;
+                const isSelfManager = isManager && staffId === currentUserId;
+                const canMarkThisStaff = isAdminOrSuperAdmin || (isManager && isWithinWindow && !isSelfManager);
+
+                let markTooltip = '';
+                if (isSelfManager) {
+                  markTooltip = 'Managers cannot record their own attendance. Admin/Super Admin must mark Manager attendance.';
+                } else if (isManager && !isWithinWindow) {
+                  markTooltip = 'Attendance marking window is closed for Managers (10:00–10:45 AM NPT)';
+                } else if (!isAdminOrSuperAdmin && !isManager) {
+                  markTooltip = 'Only Management can record attendance';
+                }
+
                 return (
-                  <div key={staff.userId || staff.id} className="p-3.5 sm:p-4 space-y-3 bg-white min-w-0">
+                  <div key={staffId} className="p-3.5 sm:p-4 space-y-3 bg-white min-w-0">
                     {/* Header: Avatar, Name, Role, Options */}
                     <div className="flex items-start justify-between gap-2 min-w-0">
                       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
@@ -519,7 +552,7 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                             <span className="text-sm font-bold text-slate-900 truncate" title={staff.name}>
                               {staff.name}
                             </span>
-                            {staff.userId === currentUserId && (
+                            {staffId === currentUserId && (
                               <Badge className="bg-slate-900 text-white text-[9px] font-bold px-1.5 py-0 shrink-0">
                                 YOU
                               </Badge>
@@ -537,8 +570,12 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                           variant="ghost"
                           size="sm"
                           onClick={() => onOpenEditModal(staff)}
-                          className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                          title="Edit Record"
+                          disabled={isSelfManager}
+                          className={cn(
+                            "h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg",
+                            isSelfManager && "opacity-40 cursor-not-allowed"
+                          )}
+                          title={isSelfManager ? "Managers cannot edit their own attendance" : "Edit Record"}
                           aria-label="Edit record"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
@@ -546,18 +583,18 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => onOpenStaffHistory(staff.userId, staff.name)}
+                          onClick={() => onOpenStaffHistory(staffId, staff.name)}
                           className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
                           title="View Calendar"
                           aria-label="View staff calendar"
                         >
                           <Calendar className="w-3.5 h-3.5" />
                         </Button>
-                        {isSuperAdmin && staff.userId !== currentUserId && (
+                        {isSuperAdmin && staffId !== currentUserId && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => onOpenPurgeModal(staff.userId, staff.name)}
+                            onClick={() => onOpenPurgeModal(staffId, staff.name)}
                             className="h-8 w-8 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
                             title="Delete Staff"
                             aria-label="Delete staff"
@@ -598,15 +635,16 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                       <Button
                         size="sm"
                         variant={staff.status === 'PRESENT' ? 'default' : 'outline'}
-                        onClick={() => onQuickMark(staff.userId, 'PRESENT', staff.name)}
-                        disabled={!canMark}
+                        onClick={() => onQuickMark(staffId, 'PRESENT', staff.name)}
+                        disabled={!canMarkThisStaff}
                         className={cn(
                           'h-9 px-1.5 sm:px-2 text-xs font-bold rounded-xl gap-1 sm:gap-1.5 transition-all select-none w-full justify-center',
                           staff.status === 'PRESENT'
                             ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs font-black'
-                            : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                            : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50',
+                          !canMarkThisStaff && 'opacity-60 cursor-not-allowed'
                         )}
-                        title={!canMark ? 'Attendance marking window closed' : 'Mark Present'}
+                        title={markTooltip || 'Mark Present'}
                       >
                         <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                         <span className="truncate">Present</span>
@@ -615,15 +653,16 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                       <Button
                         size="sm"
                         variant={staff.status === 'LATE' ? 'default' : 'outline'}
-                        onClick={() => onQuickMark(staff.userId, 'LATE', staff.name)}
-                        disabled={!canMark}
+                        onClick={() => onQuickMark(staffId, 'LATE', staff.name)}
+                        disabled={!canMarkThisStaff}
                         className={cn(
                           'h-9 px-1.5 sm:px-2 text-xs font-bold rounded-xl gap-1 sm:gap-1.5 transition-all select-none w-full justify-center',
                           staff.status === 'LATE'
                             ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs font-black'
-                            : 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                            : 'border-amber-200 text-amber-700 hover:bg-amber-50',
+                          !canMarkThisStaff && 'opacity-60 cursor-not-allowed'
                         )}
-                        title={!canMark ? 'Attendance marking window closed' : 'Mark Late'}
+                        title={markTooltip || 'Mark Late'}
                       >
                         <Clock className="w-3.5 h-3.5 shrink-0" />
                         <span className="truncate">Late</span>
@@ -632,15 +671,16 @@ export const TodayRosterView: React.FC<TodayRosterViewProps> = ({
                       <Button
                         size="sm"
                         variant={staff.status === 'ABSENT' ? 'default' : 'outline'}
-                        onClick={() => onQuickMark(staff.userId, 'ABSENT', staff.name)}
-                        disabled={!canMark}
+                        onClick={() => onQuickMark(staffId, 'ABSENT', staff.name)}
+                        disabled={!canMarkThisStaff}
                         className={cn(
                           'h-9 px-1.5 sm:px-2 text-xs font-bold rounded-xl gap-1 sm:gap-1.5 transition-all select-none w-full justify-center',
                           staff.status === 'ABSENT'
                             ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-2xs font-black'
-                            : 'border-rose-200 text-rose-700 hover:bg-rose-50'
+                            : 'border-rose-200 text-rose-700 hover:bg-rose-50',
+                          !canMarkThisStaff && 'opacity-60 cursor-not-allowed'
                         )}
-                        title={!canMark ? 'Attendance marking window closed' : 'Mark Absent'}
+                        title={markTooltip || 'Mark Absent'}
                       >
                         <UserX className="w-3.5 h-3.5 shrink-0" />
                         <span className="truncate">Absent</span>
