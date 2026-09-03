@@ -167,8 +167,9 @@ export async function computeRepairDashboardStats(params: ComputeRepairStatsPara
 
   // Role-based filtering
   const role = normalizeRole(userRole);
-  if (role === 'TECHNICIAN' && !technicianId && userId) {
-    query = query.or(`technicianId.eq.${userId},priority.eq.URGENT,priority.eq.HIGH`);
+  if (role === 'TECHNICIAN') {
+    // Technicians strictly see only their own assigned repairs
+    query = query.eq('technicianId', String(userId));
   } else if (technicianId && technicianId !== 'ALL') {
     query = query.eq('technicianId', String(technicianId));
   }

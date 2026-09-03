@@ -293,8 +293,17 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       .select('*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, role, email)', { count: 'exact' });
 
     const role = normalizeRole(req.user!.role);
-    if (role === 'TECHNICIAN' && !technicianId) {
-      query = query.or(`technicianId.eq.${req.user!.id},priority.eq.URGENT,priority.eq.HIGH`);
+    const scope = String(req.query.scope || '').toLowerCase();
+    const includeCompleted = String(req.query.includeCompleted || '').toLowerCase() === 'true';
+
+    if (role === 'TECHNICIAN') {
+      // Technicians strictly see ONLY repairs assigned to them - prevent IDOR
+      query = query.eq('technicianId', req.user!.id);
+
+      // On active bench (default or scope=active without explicit status filter), exclude Repaired, Delivered, Cancelled
+      if (scope === 'active' || (!status && !includeCompleted)) {
+        query = query.not('status', 'in', '("REPAIRED","READY_FOR_PICKUP","READY","READY_FOR_DELIVERY","DELIVERED","COMPLETED","CANNOT_REPAIR","CANCELLED")');
+      }
     } else if (technicianId && technicianId !== 'ALL') {
       query = query.eq('technicianId', String(technicianId));
     }
@@ -1172,6 +1181,40 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const rawBody = req.body || {};
 
+    const role = normalizeRole(req.user!.role);
+
+    // Fetch existing repair first to verify permissions and assignments
+    const { data: existingRepair, error: preFetchErr } = await supabaseAdmin
+      .from('Repair')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (preFetchErr || !existingRepair) {
+      return res.status(404).json({ error: 'Repair ticket not found.' });
+    }
+
+    // Role-based authorization: Technicians can ONLY update repairs assigned to them
+    if (role === 'TECHNICIAN') {
+      if (existingRepair.technicianId !== req.user!.id) {
+        return res.status(403).json({ error: 'Access denied: You can only modify repairs assigned to you.' });
+      }
+
+      const FORBIDDEN_TECHNICIAN_STATUSES = [
+        'DELIVERED',
+        'READY_FOR_PICKUP',
+        'READY',
+        'READY_FOR_DELIVERY',
+        'RE_PROBLEM',
+        'REPROBLEM'
+      ];
+      if (rawBody.status && FORBIDDEN_TECHNICIAN_STATUSES.includes(String(rawBody.status).toUpperCase().trim())) {
+        return res.status(403).json({
+          error: `Access denied: Technicians cannot set status "${rawBody.status}". Only Managers, Admins, and Receptionists can mark repairs as Delivered, Ready for Pickup, or Re-Problem (Warranty).`
+        });
+      }
+    }
+
     const updateData: Record<string, any> = {};
     for (const key of Object.keys(rawBody)) {
       if (ALLOWED_REPAIR_COLUMNS.has(key)) {
@@ -1228,6 +1271,36 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Priority alert dispatch if priority was changed
+    const oldPriority = (existingRepair.priority || 'NORMAL').toUpperCase().trim();
+    const newPriority = rawBody.priority ? String(rawBody.priority).toUpperCase().trim() : undefined;
+    if (newPriority && newPriority !== oldPriority && updated.technicianId) {
+      if (['URGENT', 'HIGH', 'MEDIUM'].includes(newPriority)) {
+        const priorityEmoji: Record<string, string> = {
+          URGENT: '🔴',
+          HIGH: '🟠',
+          MEDIUM: '🟡'
+        };
+        const emoji = priorityEmoji[newPriority] || '🔔';
+        try {
+          await createNotification({
+            userId: updated.technicianId,
+            title: `${emoji} ${newPriority} Priority Assigned: Job #${updated.repairNumber}`,
+            message: `Priority was updated to ${newPriority} by ${req.user!.name || 'Staff'}.`,
+            type: newPriority === 'URGENT' ? 'REPAIR_URGENT' : 'REPAIR_ALERT',
+            priority: newPriority as any,
+            repairId: id,
+            repairNumber: updated.repairNumber,
+            senderId: req.user!.id,
+            senderName: req.user!.name,
+            senderRole: req.user!.role
+          });
+        } catch (pNotifErr) {
+          console.warn('[PRIORITY NOTIFICATION NON-FATAL]', pNotifErr);
+        }
+      }
+    }
+
     await broadcastServerChange('Repair', 'UPDATE', id, updated);
 
     return res.json(updated);
@@ -1265,6 +1338,29 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
 
     if (fetchErr || !existingRepair) {
       return res.status(404).json({ error: 'Repair job not found.' });
+    }
+
+    const role = normalizeRole(req.user!.role);
+    if (role === 'TECHNICIAN') {
+      // 1. Ownership check: Must be assigned to this technician
+      if (existingRepair.technicianId !== req.user!.id) {
+        return res.status(403).json({ error: 'Access denied: You can only update repairs assigned to you.' });
+      }
+
+      // 2. Status restrictions: Delivered, Ready for Pickup, Re-Problem (Warranty) cannot be set by technicians
+      const FORBIDDEN_TECHNICIAN_STATUSES = [
+        'DELIVERED',
+        'READY_FOR_PICKUP',
+        'READY',
+        'READY_FOR_DELIVERY',
+        'RE_PROBLEM',
+        'REPROBLEM'
+      ];
+      if (status && FORBIDDEN_TECHNICIAN_STATUSES.includes(String(status).toUpperCase().trim())) {
+        return res.status(403).json({
+          error: `Access denied: Technicians cannot set status "${status}". Only Managers, Admins, and Receptionists can mark repairs as Delivered, Ready for Pickup, or Re-Problem (Warranty).`
+        });
+      }
     }
 
     const updatePayload: any = {

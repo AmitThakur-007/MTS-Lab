@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Smartphone,
@@ -16,16 +16,23 @@ import {
   Bell,
   Check,
   X,
-  Send,
   Search,
   Flame,
   ShieldCheck,
   Zap,
   Package,
   Eye,
+  Calendar,
+  CalendarDays,
+  CalendarRange,
+  Activity,
+  Cpu,
+  AlertTriangle,
   RotateCcw,
   CheckCheck,
-  FileWarning
+  Filter,
+  Layers,
+  Truck
 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,28 +60,41 @@ import { useAuthStore } from '@/store/authStore';
 import { useRealtimeSync } from '@/services/realtime';
 import { syncRepairToSupabase as syncRepairToRtdb } from '@/lib/supabase';
 import { formatTimeAgo, formatShortTimeAgo } from '@/lib/timeUtils';
+import { getNepalCalendarInfo, toNepalDateString, DateFilterPreset } from '@/lib/nepalDate';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import UserOverviewCards from '@/components/dashboard/UserOverviewCards';
 
-const REPAIR_STATUS_FLOW = [
-  'PENDING',
-  'RECEIVED',
-  'DIAGNOSING',
-  'IN_PROCESS',
-  'WAITING_FOR_PARTS',
-  'TESTING',
-  'REPAIRED',
-  'READY_FOR_PICKUP',
-  'DELIVERED',
-  'RE_PROBLEM',
-  'REPROBLEM_FIXED',
-  'CANNOT_REPAIR'
+export type DatePreset = 'ALL' | 'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'CUSTOM';
+
+export type StatusFilterTab =
+  | 'ACTIVE'
+  | 'PENDING'
+  | 'IN_PROCESS'
+  | 'WAITING_FOR_PARTS'
+  | 'TESTING'
+  | 'PRIORITY'
+  | 'REPAIRED'
+  | 'TRANSFERS';
+
+/**
+ * Strictly authorized technician status flow.
+ * Note: Delivered, Ready for Pickup, and Re-Problem (Warranty) are reserved for Managers / Receptionists.
+ */
+export const TECHNICIAN_ALLOWED_STATUSES = [
+  { value: 'PENDING', label: 'Pending', desc: 'Awaiting diagnosis or bench inspection' },
+  { value: 'DIAGNOSING', label: 'Diagnosing', desc: 'Inspecting device & identifying faults' },
+  { value: 'IN_PROCESS', label: 'In Progress', desc: 'Active hardware or board level repair' },
+  { value: 'WAITING_FOR_PARTS', label: 'Waiting for Parts', desc: 'Awaiting replacement components' },
+  { value: 'TESTING', label: 'Testing QA', desc: 'Post-repair functional & hardware testing' },
+  { value: 'REPAIRED', label: 'Repaired', desc: 'Work complete; ready for handover to reception' },
+  { value: 'REPROBLEM_FIXED', label: 'Warranty Fixed', desc: 'Warranty rework completed' },
+  { value: 'CANNOT_REPAIR', label: 'Cannot Repair', desc: 'Unfixable or customer refused estimate' }
 ];
 
-const statusStyles: Record<string, { label: string; badge: string; bgSoft: string; border: string }> = {
+export const statusStyles: Record<string, { label: string; badge: string; bgSoft: string; border: string }> = {
   PENDING: { label: 'Pending', badge: 'bg-slate-100 text-slate-700 border-slate-300', bgSoft: 'bg-slate-50', border: 'border-slate-200' },
   RECEIVED: { label: 'Received', badge: 'bg-amber-100 text-amber-900 border-amber-300', bgSoft: 'bg-amber-50', border: 'border-amber-200' },
   DIAGNOSING: { label: 'Diagnosing', badge: 'bg-blue-100 text-blue-900 border-blue-300', bgSoft: 'bg-blue-50', border: 'border-blue-200' },
@@ -90,10 +110,9 @@ const statusStyles: Record<string, { label: string; badge: string; bgSoft: strin
   CANNOT_REPAIR: { label: 'Cannot Repair', badge: 'bg-rose-100 text-rose-800 border-rose-300', bgSoft: 'bg-rose-50', border: 'border-rose-200' }
 };
 
-type StatusFilterTab = 'ALL' | 'URGENT' | 'HIGH' | 'MEDIUM' | 'ACTIVE' | 'PENDING' | 'IN_PROCESS' | 'TESTING' | 'WAITING_FOR_PARTS' | 'REPAIRED' | 'RE_PROBLEM' | 'TRANSFERS';
-
 /**
- * Robust case-insensitive priority handler for badges & metadata across dashboards.
+ * Accessible priority styling with icons, badges, borders, and clear text labels
+ * to ensure readability across all lighting conditions and for color-vision limitations.
  */
 export function getPriorityMeta(repair: any) {
   const p = String(repair?.priority || 'NORMAL').toUpperCase().trim();
@@ -103,49 +122,49 @@ export function getPriorityMeta(repair: any) {
       return {
         tier: 'URGENT' as const,
         label: 'Urgent',
-        badgeClass: 'bg-rose-600 hover:bg-rose-700 text-white font-extrabold border-rose-700 shadow-sm shadow-rose-600/30 animate-pulse',
-        cardBorder: 'border-rose-400 ring-2 ring-rose-500/20 shadow-sm shadow-rose-500/10',
-        headerBg: 'bg-rose-50/60',
+        badgeClass: 'bg-rose-100 text-rose-800 border border-rose-400 font-extrabold shadow-xs',
+        cardBorder: 'border-rose-300 ring-2 ring-rose-500/20 shadow-sm',
+        headerBg: 'bg-rose-50/70',
         icon: Flame,
         iconColor: 'text-rose-600',
         tagColor: 'text-rose-700',
-        bannerBg: 'bg-gradient-to-r from-rose-500/15 via-red-500/10 to-amber-500/10 border-rose-400'
+        indicatorText: '🔴 Urgent'
       };
     case 'HIGH':
       return {
         tier: 'HIGH' as const,
         label: 'High',
-        badgeClass: 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black border-amber-600 shadow-xs',
-        cardBorder: 'border-amber-300 ring-2 ring-amber-400/20 shadow-sm',
-        headerBg: 'bg-amber-50/50',
+        badgeClass: 'bg-amber-100 text-amber-900 border border-amber-400 font-bold shadow-xs',
+        cardBorder: 'border-amber-300 ring-1 ring-amber-400/20 shadow-sm',
+        headerBg: 'bg-amber-50/60',
         icon: Zap,
         iconColor: 'text-amber-600',
-        tagColor: 'text-amber-700',
-        bannerBg: 'bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-yellow-500/10 border-amber-300'
+        tagColor: 'text-amber-800',
+        indicatorText: '🟠 High'
       };
     case 'MEDIUM':
       return {
         tier: 'MEDIUM' as const,
         label: 'Medium',
-        badgeClass: 'bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-bold border-yellow-500 shadow-xs',
-        cardBorder: 'border-yellow-200 shadow-xs',
-        headerBg: 'bg-yellow-50/40',
-        icon: Zap,
-        iconColor: 'text-yellow-600',
-        tagColor: 'text-yellow-700',
-        bannerBg: 'bg-yellow-50 border-yellow-200'
+        badgeClass: 'bg-sky-100 text-sky-800 border border-sky-300 font-semibold shadow-xs',
+        cardBorder: 'border-sky-200 shadow-xs',
+        headerBg: 'bg-sky-50/40',
+        icon: Clock,
+        iconColor: 'text-sky-600',
+        tagColor: 'text-sky-700',
+        indicatorText: '🟡 Medium'
       };
     default:
       return {
         tier: 'NORMAL' as const,
         label: 'Normal',
-        badgeClass: 'bg-slate-100 text-slate-700 border-slate-300 font-semibold',
+        badgeClass: 'bg-slate-100 text-slate-700 border border-slate-300 font-medium',
         cardBorder: 'border-slate-200/90 hover:border-indigo-300',
         headerBg: 'bg-transparent',
-        icon: Smartphone,
+        icon: ShieldCheck,
         iconColor: 'text-slate-500',
         tagColor: 'text-slate-600',
-        bannerBg: 'bg-slate-50 border-slate-200'
+        indicatorText: '⚪ Normal'
       };
   }
 }
@@ -153,9 +172,33 @@ export function getPriorityMeta(repair: any) {
 export default function TechnicianDashboard() {
   const { token, user } = useAuthStore();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Calendar info in Nepal Timezone
+  const nepalCalendar = useMemo(() => getNepalCalendarInfo(new Date()), []);
+
+  // Filter persistence via URL query params with localStorage fallback
+  const initialPreset = (searchParams.get('datePreset') as DatePreset) ||
+    (localStorage.getItem('mts_tech_date_preset') as DatePreset) ||
+    'ALL';
+  const initialStart = searchParams.get('startDate') || localStorage.getItem('mts_tech_start_date') || '';
+  const initialEnd = searchParams.get('endDate') || localStorage.getItem('mts_tech_end_date') || '';
+  const initialTab = (searchParams.get('tab') as StatusFilterTab) || 'ACTIVE';
+
+  // Date Filter State
+  const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
+  const [customStartDate, setCustomStartDate] = useState<string>(initialStart);
+  const [customEndDate, setCustomEndDate] = useState<string>(initialEnd);
+  const [isCustomExpanded, setIsCustomExpanded] = useState(initialPreset === 'CUSTOM');
+
+  // Status Tabs & Search
+  const [activeTab, setActiveTab] = useState<StatusFilterTab>(initialTab);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'dueDate' | 'priority'>('newest');
 
   // Core Data
   const [repairs, setRepairs] = useState<any[]>([]);
+  const [serverStats, setServerStats] = useState<any>({ total: 0, pending: 0, received: 0, inProgress: 0, repaired: 0, delivered: 0 });
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [transferRequests, setTransferRequests] = useState<{ incoming: any[]; outgoing: any[]; pendingIncomingCount: number }>({
     incoming: [],
@@ -166,7 +209,7 @@ export default function TechnicianDashboard() {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // Centralized Relative Time Ticker (updates all elapsed timestamps dynamically every 30s)
+  // Time Ticker for relative timestamps
   const [tickerTime, setTickerTime] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => {
@@ -175,18 +218,13 @@ export default function TechnicianDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Filters & Search
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<StatusFilterTab>('ALL');
-  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'dueDate' | 'priority'>('newest');
-
-  // Expanded Problem Descriptions State (per repair ID)
+  // Expanded Problem Descriptions State
   const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
   const toggleDescription = (repairId: string) => {
     setExpandedDescriptions(prev => ({ ...prev, [repairId]: !prev[repairId] }));
   };
 
-  // Modals & States
+  // Modals
   const [selectedRepair, setSelectedRepair] = useState<any>(null);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -213,10 +251,34 @@ export default function TechnicianDashboard() {
     reason: ''
   });
 
-  // Notes Form & Data
+  // Notes
   const [repairNotes, setRepairNotes] = useState<any[]>([]);
   const [newNoteContent, setNewNoteContent] = useState('');
   const [loadingNotes, setLoadingNotes] = useState(false);
+
+  // Sync state to URL and localStorage
+  const updateUrlParams = useCallback((preset: DatePreset, start?: string, end?: string, tab?: StatusFilterTab) => {
+    const nextParams = new URLSearchParams();
+    nextParams.set('datePreset', preset);
+    localStorage.setItem('mts_tech_date_preset', preset);
+
+    if (preset === 'CUSTOM' && start && end) {
+      nextParams.set('startDate', start);
+      nextParams.set('endDate', end);
+      localStorage.setItem('mts_tech_start_date', start);
+      localStorage.setItem('mts_tech_end_date', end);
+    } else {
+      localStorage.removeItem('mts_tech_start_date');
+      localStorage.removeItem('mts_tech_end_date');
+    }
+
+    const effectiveTab = tab || activeTab;
+    if (effectiveTab && effectiveTab !== 'ACTIVE') {
+      nextParams.set('tab', effectiveTab);
+    }
+
+    setSearchParams(nextParams, { replace: true });
+  }, [activeTab, setSearchParams]);
 
   // ============================================================================
   // DATA FETCHING
@@ -224,15 +286,45 @@ export default function TechnicianDashboard() {
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const [repairsData, staffData, transfersData, notifsData] = await Promise.allSettled([
-        api.get('/repairs'),
+      // Build server-side query params for technician repairs
+      const params: Record<string, string> = {
+        preset: datePreset
+      };
+
+      if (datePreset === 'CUSTOM') {
+        if (customStartDate) params.startDate = customStartDate;
+        if (customEndDate) params.endDate = customEndDate;
+      }
+
+      // If activeTab is REPAIRED, fetch completed repairs for this technician
+      if (activeTab === 'REPAIRED') {
+        params.status = 'REPAIRED';
+        params.includeCompleted = 'true';
+      } else {
+        // Otherwise, fetch active bench repairs (excludes Repaired, Delivered, Cancelled)
+        params.scope = 'active';
+      }
+
+      const [repairsData, staffData, transfersData, notifsData, statsData] = await Promise.allSettled([
+        api.get('/repairs', { params }),
         api.get('/staff'),
         api.get('/repair-transfers/my-requests'),
-        api.get('/notifications')
+        api.get('/notifications'),
+        api.get('/repairs/stats', {
+          params: {
+            preset: datePreset,
+            startDate: customStartDate || undefined,
+            endDate: customEndDate || undefined
+          }
+        })
       ]);
 
       if (repairsData.status === 'fulfilled') {
         setRepairs(Array.isArray(repairsData.value) ? repairsData.value : []);
+      }
+
+      if (statsData.status === 'fulfilled' && statsData.value) {
+        setServerStats(statsData.value.metrics || statsData.value || {});
       }
 
       if (staffData.status === 'fulfilled') {
@@ -260,25 +352,34 @@ export default function TechnicianDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [datePreset, customStartDate, customEndDate, activeTab, user?.id]);
 
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData, token]);
 
-  // Real-time synchronization for instant cross-device updates without manual refresh
+  // ============================================================================
+  // REAL-TIME SYNCHRONIZATION (TECHNICIAN-SPECIFIC PRIORITY ALERTS)
+  // ============================================================================
+
   useRealtimeSync(
     ['repair', 'technicianNote', 'repairLog', 'notification', 'repairTransfer', 'user', 'sync'],
     (event) => {
-      const isForMe = !event?.data?.technicianId || event?.data?.technicianId === user?.id || event?.data?.userId === user?.id;
+      // Determine if event is specifically for this logged-in technician
+      const eventTechId = event?.data?.technicianId || event?.data?.metadata?.technicianId;
+      const eventUserId = event?.data?.userId;
 
-      if (isForMe) {
+      const isDirectlyForMe = (eventTechId && eventTechId === user?.id) || (eventUserId && eventUserId === user?.id);
+
+      // ONLY show real-time priority alerts to the specifically assigned technician
+      if (isDirectlyForMe) {
         const eventPriority = String(event?.data?.priority || event?.data?.metadata?.priority || '').toUpperCase();
         const jobNum = event?.data?.repairNumber || event?.data?.metadata?.repairNumber || 'Ticket';
         const deviceName = `${event?.data?.deviceBrand || ''} ${event?.data?.deviceModel || ''}`.trim() || 'Device';
 
         if (event?.data?.type === 'REPAIR_URGENT' || eventPriority === 'URGENT') {
-          toast.error(`🚨 Urgent Priority Alert: Job #${jobNum} (${deviceName})`, {
+          toast.error(`🚨 Urgent Priority Assigned: #${jobNum} (${deviceName})`, {
+            description: 'Immediate action required for this job.',
             duration: 9000,
             action: {
               label: "View Job",
@@ -290,7 +391,7 @@ export default function TechnicianDashboard() {
             }
           });
         } else if (eventPriority === 'HIGH' || eventPriority === 'MEDIUM') {
-          toast.warning(`⚠️ ${eventPriority} Priority Alert: Job #${jobNum} (${deviceName})`, {
+          toast.warning(`⚠️ ${eventPriority} Priority Assigned: #${jobNum} (${deviceName})`, {
             duration: 7000,
             action: {
               label: "View Job",
@@ -304,8 +405,12 @@ export default function TechnicianDashboard() {
         }
       }
 
-      fetchDashboardData();
-      if (selectedRepair && isNotesModalOpen) {
+      // Re-fetch data if relevant to refresh workbench
+      if (isDirectlyForMe || event.entity === 'repairTransfer' || event.entity === 'repair') {
+        fetchDashboardData();
+      }
+
+      if (selectedRepair && isNotesModalOpen && event.entity === 'technicianNote') {
         fetchNotesForRepair(selectedRepair.id);
       }
     }
@@ -324,13 +429,65 @@ export default function TechnicianDashboard() {
   };
 
   // ============================================================================
+  // DATE FILTER HANDLERS
+  // ============================================================================
+
+  const handleSelectPreset = (preset: DatePreset) => {
+    setDatePreset(preset);
+    if (preset === 'CUSTOM') {
+      setIsCustomExpanded(true);
+      if (!customStartDate || !customEndDate) {
+        setCustomStartDate(nepalCalendar.todayNpt);
+        setCustomEndDate(nepalCalendar.todayNpt);
+      }
+      updateUrlParams('CUSTOM', customStartDate || nepalCalendar.todayNpt, customEndDate || nepalCalendar.todayNpt);
+    } else {
+      setIsCustomExpanded(false);
+      updateUrlParams(preset);
+    }
+  };
+
+  const handleApplyCustomDates = () => {
+    if (!customStartDate || !customEndDate) {
+      toast.error('Date Selection Incomplete', { description: 'Please choose both a start date and an end date.' });
+      return;
+    }
+    if (customStartDate > customEndDate) {
+      toast.error('Invalid Date Range', { description: 'Start date cannot be after end date.' });
+      return;
+    }
+    setDatePreset('CUSTOM');
+    updateUrlParams('CUSTOM', customStartDate, customEndDate);
+    toast.success('Filter Applied', { description: `Filtering repairs from ${customStartDate} to ${customEndDate}.` });
+  };
+
+  const handleClearDateFilter = () => {
+    setDatePreset('ALL');
+    setCustomStartDate('');
+    setCustomEndDate('');
+    setIsCustomExpanded(false);
+    updateUrlParams('ALL');
+    toast.info('Filter Reset', { description: 'Showing all currently assigned work.' });
+  };
+
+  const handleSelectTab = (tab: StatusFilterTab) => {
+    setActiveTab(tab);
+    updateUrlParams(datePreset, customStartDate, customEndDate, tab);
+  };
+
+  // ============================================================================
   // MODAL ACTIONS
   // ============================================================================
 
   const handleOpenUpdateModal = (repair: any) => {
     setSelectedRepair(repair);
+    // Ensure default status is one of the authorized technician options
+    const defaultStatus = TECHNICIAN_ALLOWED_STATUSES.some(s => s.value === repair.status)
+      ? repair.status
+      : 'IN_PROCESS';
+
     setUpdateForm({
-      status: repair.status || 'IN_PROCESS',
+      status: defaultStatus,
       note: '',
       partsUsed: repair.partsUsed || '',
       expectedCompletionDate: repair.expectedCompletionDate ? new Date(repair.expectedCompletionDate).toISOString().split('T')[0] : ''
@@ -364,11 +521,22 @@ export default function TechnicianDashboard() {
     try {
       const updated = await api.patch(`/repairs/${selectedRepair.id}/technician-update`, updateForm);
       await syncRepairToRtdb(updated);
-      toast.success(`Job #${selectedRepair.repairNumber} progress saved successfully`);
+
+      if (updateForm.status === 'REPAIRED') {
+        toast.success(`Job #${selectedRepair.repairNumber} Repaired`, {
+          description: 'Moved from active bench to Completed handover for Reception / Management.'
+        });
+      } else {
+        toast.success(`Job #${selectedRepair.repairNumber} Progress Saved`, {
+          description: `Status updated to ${statusStyles[updateForm.status]?.label || updateForm.status}.`
+        });
+      }
+
       setIsUpdateModalOpen(false);
-      fetchDashboardData();
+      setSelectedRepair(null);
+      await fetchDashboardData();
     } catch (err: any) {
-      toast.error(err.message || "Failed to update repair status");
+      toast.error(err?.response?.data?.error || err?.message || "Failed to update repair status");
     } finally {
       setSubmittingUpdate(false);
     }
@@ -381,7 +549,7 @@ export default function TechnicianDashboard() {
       return;
     }
     if (!transferForm.reason || transferForm.reason.trim().length < 3) {
-      toast.error("Please provide a reason for the transfer.");
+      toast.error("Please provide a clear reason for the transfer.");
       return;
     }
 
@@ -395,7 +563,7 @@ export default function TechnicianDashboard() {
       setIsTransferModalOpen(false);
       fetchDashboardData();
     } catch (err: any) {
-      toast.error(err.message || "Failed to submit transfer request.");
+      toast.error(err?.response?.data?.error || err?.message || "Failed to submit transfer request.");
     } finally {
       setSubmittingTransfer(false);
     }
@@ -410,11 +578,11 @@ export default function TechnicianDashboard() {
         isInternal: true
       });
       setNewNoteContent('');
-      toast.success("Note logged to repair thread.");
+      toast.success("Note logged to repair record.");
       fetchNotesForRepair(selectedRepair.id);
       fetchDashboardData();
     } catch (err: any) {
-      toast.error(err.message || "Failed to add communication note.");
+      toast.error(err?.response?.data?.error || err?.message || "Failed to add communication note.");
     } finally {
       setSubmittingNote(false);
     }
@@ -424,10 +592,10 @@ export default function TechnicianDashboard() {
     setRespondingTransferId(transferId);
     try {
       await api.post(`/repair-transfers/${transferId}/respond`, { action });
-      toast.success(action === 'ACCEPT' ? "Transfer accepted successfully." : "Transfer request declined.");
+      toast.success(action === 'ACCEPT' ? "Transfer accepted into your queue." : "Transfer request declined.");
       fetchDashboardData();
     } catch (err: any) {
-      toast.error(err.message || "Failed to respond to transfer request.");
+      toast.error(err?.response?.data?.error || err?.message || "Failed to respond to transfer request.");
     } finally {
       setRespondingTransferId(null);
     }
@@ -455,7 +623,7 @@ export default function TechnicianDashboard() {
   };
 
   // ============================================================================
-  // FILTERING & STATS
+  // STATS & FILTERING
   // ============================================================================
 
   const urgentRepairs = useMemo(() => {
@@ -479,38 +647,38 @@ export default function TechnicianDashboard() {
     });
   }, [repairs]);
 
+  // Comprehensive active stats calculated from real database records
   const stats = useMemo(() => {
     const active = repairs.filter(r => !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
     const pending = repairs.filter(r => r.status === 'PENDING');
     const inProgress = repairs.filter(r => r.status === 'IN_PROCESS' || r.status === 'DIAGNOSING');
+    const waitingParts = repairs.filter(r => r.status === 'WAITING_FOR_PARTS');
     const testing = repairs.filter(r => r.status === 'TESTING');
     const repaired = repairs.filter(r => ['REPAIRED', 'READY_FOR_PICKUP'].includes(r.status));
-    const reProblem = repairs.filter(r => r.status === 'RE_PROBLEM' || r.status === 'REPROBLEM');
+
+    // Priority total includes Urgent, High, Medium
+    const priorityTotal = urgentRepairs.length + highRepairs.length + mediumRepairs.length;
 
     return {
       activeCount: active.length,
       pendingCount: pending.length,
       inProgressCount: inProgress.length,
+      waitingPartsCount: waitingParts.length,
       testingCount: testing.length,
-      repairedCount: repaired.length,
-      reProblemCount: reProblem.length,
+      repairedCount: serverStats?.repaired !== undefined ? Number(serverStats.repaired) : repaired.length,
       urgentCount: urgentRepairs.length,
       highCount: highRepairs.length,
       mediumCount: mediumRepairs.length,
+      priorityTotal,
       pendingTransfersCount: transferRequests.pendingIncomingCount
     };
-  }, [repairs, urgentRepairs, highRepairs, mediumRepairs, transferRequests]);
+  }, [repairs, urgentRepairs, highRepairs, mediumRepairs, serverStats, transferRequests]);
 
   const filteredRepairs = useMemo(() => {
     let list = [...repairs];
 
-    if (activeTab === 'URGENT') {
-      list = list.filter(r => getPriorityMeta(r).tier === 'URGENT' && !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
-    } else if (activeTab === 'HIGH') {
-      list = list.filter(r => getPriorityMeta(r).tier === 'HIGH' && !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
-    } else if (activeTab === 'MEDIUM') {
-      list = list.filter(r => getPriorityMeta(r).tier === 'MEDIUM' && !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
-    } else if (activeTab === 'ACTIVE') {
+    // Status / Priority Tab Filter
+    if (activeTab === 'ACTIVE') {
       list = list.filter(r => !['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED', 'CANNOT_REPAIR', 'CANCELLED'].includes(r.status));
     } else if (activeTab === 'PENDING') {
       list = list.filter(r => r.status === 'PENDING');
@@ -520,12 +688,13 @@ export default function TechnicianDashboard() {
       list = list.filter(r => r.status === 'WAITING_FOR_PARTS');
     } else if (activeTab === 'TESTING') {
       list = list.filter(r => r.status === 'TESTING');
+    } else if (activeTab === 'PRIORITY') {
+      list = list.filter(r => ['URGENT', 'HIGH', 'MEDIUM'].includes(getPriorityMeta(r).tier));
     } else if (activeTab === 'REPAIRED') {
       list = list.filter(r => ['REPAIRED', 'READY_FOR_PICKUP'].includes(r.status));
-    } else if (activeTab === 'RE_PROBLEM') {
-      list = list.filter(r => r.status === 'RE_PROBLEM' || r.status === 'REPROBLEM');
     }
 
+    // Search query filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(r =>
@@ -534,10 +703,12 @@ export default function TechnicianDashboard() {
         (r.customerPhone && r.customerPhone.toLowerCase().includes(q)) ||
         (r.deviceBrand && r.deviceBrand.toLowerCase().includes(q)) ||
         (r.deviceModel && r.deviceModel.toLowerCase().includes(q)) ||
+        (r.imeiNumber && r.imeiNumber.toLowerCase().includes(q)) ||
         (r.problemDescription && r.problemDescription.toLowerCase().includes(q))
       );
     }
 
+    // Sort order
     if (sortBy === 'newest') {
       list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } else if (sortBy === 'oldest') {
@@ -574,22 +745,27 @@ export default function TechnicianDashboard() {
   return (
     <div className="space-y-6 pb-24 max-w-7xl mx-auto px-2 sm:px-4">
 
-      {/* Header */}
+      {/* 1. Header with Nepal Time and Quick Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-5 sm:p-7 md:p-8 rounded-[28px] sm:rounded-3xl border border-slate-200/80 shadow-sm">
-        <div className="space-y-1 max-w-2xl min-w-0">
+        <div className="space-y-1.5 max-w-2xl min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
               <Wrench className="h-7 w-7 text-indigo-600 shrink-0" />
               <span>Technician Workspace</span>
             </h1>
             <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shrink-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               Active Bench
             </Badge>
           </div>
           <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed break-words">
-            Welcome back, <span className="font-bold text-slate-800">{user?.name}</span>. You have <span className="font-bold text-indigo-600">{stats.activeCount} active repairs</span> assigned.
+            Welcome, <span className="font-bold text-slate-800">{user?.name}</span>. Viewing assigned technical queue.
           </p>
+          <div className="flex items-center gap-2 text-[11px] text-slate-500 pt-0.5">
+            <Calendar className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+            <span className="font-semibold text-slate-700">Nepal Standard Time (NPT, UTC+5:45):</span>
+            <span className="font-bold text-indigo-700">{nepalCalendar.formattedTodayNpt}</span>
+          </div>
         </div>
 
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-2.5 w-full lg:w-auto justify-start sm:justify-end shrink-0">
@@ -620,7 +796,108 @@ export default function TechnicianDashboard() {
         </div>
       </div>
 
-      {/* Urgent Alert Banner */}
+      {/* 2. Date Filtering Bar (Nepal Time Conventions) */}
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
+              <Filter className="h-4 w-4" />
+            </div>
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">Date Range Filter</span>
+              <span className="text-xs font-extrabold text-slate-800">
+                {datePreset === 'ALL' && 'Assigned Work (All Active Queue)'}
+                {datePreset === 'TODAY' && `Today (${nepalCalendar.todayNpt})`}
+                {datePreset === 'YESTERDAY' && `Yesterday (${nepalCalendar.yesterdayNpt})`}
+                {datePreset === 'THIS_WEEK' && `This Week (${nepalCalendar.weekStartNpt} to ${nepalCalendar.weekEndNpt})`}
+                {datePreset === 'CUSTOM' && (customStartDate && customEndDate ? `${customStartDate} to ${customEndDate}` : 'Custom Date Range')}
+              </span>
+            </div>
+          </div>
+
+          {/* Preset Buttons */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full no-scrollbar">
+            {[
+              { key: 'ALL' as DatePreset, label: 'Assigned Work', icon: Wrench },
+              { key: 'TODAY' as DatePreset, label: 'Today', icon: Calendar },
+              { key: 'YESTERDAY' as DatePreset, label: 'Yesterday', icon: History },
+              { key: 'THIS_WEEK' as DatePreset, label: 'This Week', icon: CalendarDays },
+              { key: 'CUSTOM' as DatePreset, label: 'Custom Date', icon: CalendarRange }
+            ].map(preset => {
+              const isSelected = datePreset === preset.key;
+              return (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => handleSelectPreset(preset.key)}
+                  className={cn(
+                    "px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer",
+                    isSelected
+                      ? "bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-600/30"
+                      : "bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/80"
+                  )}
+                >
+                  <preset.icon className="h-3.5 w-3.5" />
+                  <span>{preset.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Custom Date Picker Inputs Drawer */}
+        {isCustomExpanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+          >
+            <div className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="flex-1 space-y-1">
+                <Label className="text-[11px] font-bold text-slate-500">From Date (YYYY-MM-DD)</Label>
+                <Input
+                  type="date"
+                  value={customStartDate}
+                  onChange={e => setCustomStartDate(e.target.value)}
+                  className="h-9 rounded-xl border-slate-200 text-xs font-semibold bg-slate-50 focus:bg-white"
+                />
+              </div>
+              <div className="flex-1 space-y-1">
+                <Label className="text-[11px] font-bold text-slate-500">To Date (YYYY-MM-DD)</Label>
+                <Input
+                  type="date"
+                  value={customEndDate}
+                  onChange={e => setCustomEndDate(e.target.value)}
+                  className="h-9 rounded-xl border-slate-200 text-xs font-semibold bg-slate-50 focus:bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 sm:pt-4">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleApplyCustomDates}
+                className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-9 px-4 cursor-pointer"
+              >
+                Apply Filter
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleClearDateFilter}
+                className="rounded-xl border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs h-9 px-3 cursor-pointer"
+              >
+                Clear
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </div>
+
+      {/* 3. Urgent Priority Banner */}
       {urgentRepairs.length > 0 && (
         <div className="bg-gradient-to-r from-rose-500/15 via-red-500/10 to-amber-500/10 border-2 border-rose-500/40 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -646,16 +923,16 @@ export default function TechnicianDashboard() {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setActiveTab('URGENT')}
-              className="rounded-xl border-rose-300 text-rose-700 bg-white hover:bg-rose-50 font-bold text-xs h-9 shadow-xs"
+              onClick={() => handleSelectTab('PRIORITY')}
+              className="rounded-xl border-rose-300 text-rose-700 bg-white hover:bg-rose-50 font-bold text-xs h-9 shadow-xs cursor-pointer"
             >
-              Filter Urgent
+              Filter Priority Jobs
             </Button>
           </div>
         </div>
       )}
 
-      {/* Transfer Requests */}
+      {/* 4. Incoming Transfer Requests */}
       {transferRequests.incoming.filter(t => t.status === 'PENDING').length > 0 && (
         <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border-2 border-amber-400/40 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -718,75 +995,158 @@ export default function TechnicianDashboard() {
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {[
-          { label: 'Active Jobs', value: stats.activeCount, icon: Wrench, color: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-100', tab: 'ACTIVE' },
-          { label: 'Urgent', value: stats.urgentCount, icon: Flame, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-200', tab: 'URGENT' },
-          { label: 'High Priority', value: stats.highCount, icon: Zap, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200', tab: 'HIGH' },
-          { label: 'Medium Priority', value: stats.mediumCount, icon: Zap, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200', tab: 'MEDIUM' },
-          { label: 'In Progress', value: stats.inProgressCount, icon: Smartphone, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100', tab: 'IN_PROCESS' },
-          { label: 'Testing QA', value: stats.testingCount, icon: ShieldCheck, color: 'text-orange-600', bg: 'bg-orange-50 border-orange-100', tab: 'TESTING' },
-        ].map((item, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => setActiveTab(item.tab as StatusFilterTab)}
-            className={cn(
-              "p-3.5 sm:p-4 rounded-2xl border text-left transition-all hover:scale-[1.02] flex flex-col justify-between gap-2 shadow-sm cursor-pointer",
-              item.bg,
-              activeTab === item.tab && "ring-2 ring-indigo-500 shadow-md"
-            )}
-          >
-            <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center bg-white shadow-xs", item.color)}>
-              <item.icon className="h-4 w-4" />
+      {/* 5. Active-Job Overview & Metrics (5 Core Cards) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        {/* Assigned Jobs */}
+        <button
+          type="button"
+          onClick={() => handleSelectTab('ACTIVE')}
+          className={cn(
+            "p-4 rounded-2xl border text-left transition-all hover:scale-[1.02] flex flex-col justify-between gap-3 shadow-sm cursor-pointer bg-indigo-50/50 border-indigo-200/80",
+            activeTab === 'ACTIVE' && "ring-2 ring-indigo-600 shadow-md bg-indigo-50"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+              <Wrench className="h-4 w-4" />
             </div>
-            <div>
-              <div className="text-2xl font-black text-slate-900">{item.value}</div>
-              <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 truncate">{item.label}</div>
+            <Badge variant="outline" className="text-[10px] font-bold bg-white text-indigo-700 border-indigo-200">
+              Active Queue
+            </Badge>
+          </div>
+          <div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900">{stats.activeCount}</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Assigned Jobs</div>
+          </div>
+        </button>
+
+        {/* Active / In Progress */}
+        <button
+          type="button"
+          onClick={() => handleSelectTab('IN_PROCESS')}
+          className={cn(
+            "p-4 rounded-2xl border text-left transition-all hover:scale-[1.02] flex flex-col justify-between gap-3 shadow-sm cursor-pointer bg-blue-50/50 border-blue-200/80",
+            activeTab === 'IN_PROCESS' && "ring-2 ring-blue-600 shadow-md bg-blue-50"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+              <Cpu className="h-4 w-4" />
             </div>
-          </button>
-        ))}
+            <Badge variant="outline" className="text-[10px] font-bold bg-white text-blue-700 border-blue-200">
+              Bench Work
+            </Badge>
+          </div>
+          <div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900">{stats.inProgressCount + stats.testingCount}</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Active Jobs</div>
+          </div>
+        </button>
+
+        {/* Pending */}
+        <button
+          type="button"
+          onClick={() => handleSelectTab('PENDING')}
+          className={cn(
+            "p-4 rounded-2xl border text-left transition-all hover:scale-[1.02] flex flex-col justify-between gap-3 shadow-sm cursor-pointer bg-slate-50 border-slate-200",
+            activeTab === 'PENDING' && "ring-2 ring-slate-800 shadow-md bg-slate-100/70"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-slate-700 text-white flex items-center justify-center shadow-xs">
+              <Clock className="h-4 w-4" />
+            </div>
+            <Badge variant="outline" className="text-[10px] font-bold bg-white text-slate-700 border-slate-200">
+              Unstarted
+            </Badge>
+          </div>
+          <div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900">{stats.pendingCount}</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Pending</div>
+          </div>
+        </button>
+
+        {/* Priority Jobs */}
+        <button
+          type="button"
+          onClick={() => handleSelectTab('PRIORITY')}
+          className={cn(
+            "p-4 rounded-2xl border text-left transition-all hover:scale-[1.02] flex flex-col justify-between gap-3 shadow-sm cursor-pointer bg-rose-50/50 border-rose-200/80",
+            activeTab === 'PRIORITY' && "ring-2 ring-rose-600 shadow-md bg-rose-50"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs">
+              <Flame className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-extrabold text-rose-700 bg-white px-2 py-0.5 rounded-full border border-rose-200">
+              {stats.urgentCount} Urgent
+            </span>
+          </div>
+          <div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900">{stats.priorityTotal}</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Priority Queue</div>
+          </div>
+        </button>
+
+        {/* Completed / Repaired */}
+        <button
+          type="button"
+          onClick={() => handleSelectTab('REPAIRED')}
+          className={cn(
+            "p-4 rounded-2xl border text-left transition-all hover:scale-[1.02] flex flex-col justify-between gap-3 shadow-sm cursor-pointer bg-teal-50/50 border-teal-200/80 col-span-2 sm:col-span-1",
+            activeTab === 'REPAIRED' && "ring-2 ring-teal-600 shadow-md bg-teal-50"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-xs">
+              <CheckCircle2 className="h-4 w-4" />
+            </div>
+            <Badge variant="outline" className="text-[10px] font-bold bg-white text-teal-700 border-teal-200">
+              Done
+            </Badge>
+          </div>
+          <div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900">{stats.repairedCount}</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Completed / Repaired</div>
+          </div>
+        </button>
       </div>
 
+      {/* Technician Attendance & Damage Overview */}
       <UserOverviewCards />
 
-      {/* Filters & Search Toolbar */}
+      {/* 6. Filter Tabs & Search Toolbar */}
       <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full no-scrollbar">
             {[
-              { key: 'ALL', label: 'All Jobs', count: repairs.length, color: 'normal' },
-              { key: 'URGENT', label: '🔴 Urgent', count: stats.urgentCount, color: 'urgent' },
-              { key: 'HIGH', label: '🟠 High', count: stats.highCount, color: 'high' },
-              { key: 'MEDIUM', label: '🟡 Medium', count: stats.mediumCount, color: 'medium' },
-              { key: 'ACTIVE', label: 'Active', count: stats.activeCount, color: 'normal' },
-              { key: 'PENDING', label: 'Pending', count: stats.pendingCount, color: 'normal' },
-              { key: 'IN_PROCESS', label: 'In Progress', count: stats.inProgressCount, color: 'normal' },
-              { key: 'TESTING', label: 'Testing QA', count: stats.testingCount, color: 'normal' },
+              { key: 'ACTIVE' as StatusFilterTab, label: 'Active Bench', count: stats.activeCount },
+              { key: 'PENDING' as StatusFilterTab, label: 'Pending', count: stats.pendingCount },
+              { key: 'IN_PROCESS' as StatusFilterTab, label: 'In Progress', count: stats.inProgressCount },
+              { key: 'WAITING_FOR_PARTS' as StatusFilterTab, label: 'Waiting for Parts', count: stats.waitingPartsCount },
+              { key: 'TESTING' as StatusFilterTab, label: 'Testing QA', count: stats.testingCount },
+              { key: 'PRIORITY' as StatusFilterTab, label: 'Priority Queue', count: stats.priorityTotal },
+              { key: 'REPAIRED' as StatusFilterTab, label: 'Completed / Repaired', count: stats.repairedCount }
             ].map(tab => {
               const isSelected = activeTab === tab.key;
-              let styleClass = "bg-slate-50 hover:bg-slate-100 text-slate-600";
-
-              if (isSelected) {
-                if (tab.color === 'urgent') styleClass = "bg-rose-600 text-white shadow-sm";
-                else if (tab.color === 'high') styleClass = "bg-amber-500 text-slate-950 font-black shadow-sm";
-                else if (tab.color === 'medium') styleClass = "bg-yellow-500 text-slate-950 font-black shadow-sm";
-                else styleClass = "bg-slate-900 text-white shadow-sm";
-              }
-
               return (
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setActiveTab(tab.key as StatusFilterTab)}
+                  onClick={() => handleSelectTab(tab.key)}
                   className={cn(
                     "px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer",
-                    styleClass
+                    isSelected
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "bg-slate-50 hover:bg-slate-100 text-slate-600"
                   )}
                 >
                   <span>{tab.label}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold bg-white/20">
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold",
+                    isSelected ? "bg-white/20 text-white" : "bg-slate-200/70 text-slate-700"
+                  )}>
                     {tab.count}
                   </span>
                 </button>
@@ -813,7 +1173,7 @@ export default function TechnicianDashboard() {
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Search by Repair #, Customer Name, Phone, Device Model..."
+            placeholder="Search by Repair #, Customer Name, Phone, Model, IMEI..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="pl-10 h-11 rounded-2xl border-slate-200 bg-slate-50/70 text-xs sm:text-sm font-medium focus:bg-white transition-all"
@@ -821,13 +1181,18 @@ export default function TechnicianDashboard() {
         </div>
       </div>
 
-      {/* Repairs List */}
+      {/* 7. Repairs List / Cards */}
       {filteredRepairs.length === 0 ? (
         <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-slate-300 space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center mx-auto">
             <Package className="h-6 w-6" />
           </div>
           <h3 className="font-bold text-slate-800 text-base">No repairs matching this criteria</h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            {activeTab === 'REPAIRED'
+              ? 'No completed repairs found for the currently selected date filter.'
+              : 'All caught up! There are no active repair jobs waiting in this view.'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
@@ -869,6 +1234,12 @@ export default function TechnicianDashboard() {
                             <PriorityIcon className="h-3 w-3" />
                             <span>{priorityMeta.label}</span>
                           </Badge>
+                          {repair.isCourierIn && (
+                            <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-800 border-amber-300 flex items-center gap-1 font-bold">
+                              <Truck className="h-2.5 w-2.5" />
+                              Courier In
+                            </Badge>
+                          )}
                         </div>
 
                         <Badge className={cn("text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border shrink-0", statusInfo.badge)}>
@@ -886,9 +1257,10 @@ export default function TechnicianDashboard() {
                           </h3>
                         </div>
 
+                        {/* Customer Problem Description */}
                         <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/70 space-y-1 mt-2">
                           <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
-                            Customer Device Problem:
+                            Customer Fault / Issue:
                           </span>
                           <p className={cn(
                             "text-xs text-slate-700 font-medium leading-relaxed break-words",
@@ -943,14 +1315,17 @@ export default function TechnicianDashboard() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-                        <Button
-                          size="sm"
-                          onClick={() => handleOpenUpdateModal(repair)}
-                          className="flex-1 min-w-[120px] rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-9 shadow-sm cursor-pointer"
-                        >
-                          <Wrench className="h-3.5 w-3.5 mr-1.5" />
-                          Update Progress
-                        </Button>
+                        {/* Only show Update Progress if repair is not already delivered or closed */}
+                        {repair.status !== 'DELIVERED' && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleOpenUpdateModal(repair)}
+                            className="flex-1 min-w-[120px] rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-9 shadow-sm cursor-pointer"
+                          >
+                            <Wrench className="h-3.5 w-3.5 mr-1.5" />
+                            Update Progress
+                          </Button>
+                        )}
 
                         <Button
                           size="sm"
@@ -962,21 +1337,24 @@ export default function TechnicianDashboard() {
                           Notes
                         </Button>
 
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleOpenTransferModal(repair)}
-                          className="rounded-xl border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-200 font-bold text-xs h-9 px-3 cursor-pointer shrink-0"
-                        >
-                          <ArrowRightLeft className="h-3.5 w-3.5 mr-1 text-amber-600" />
-                          Transfer
-                        </Button>
+                        {repair.status !== 'REPAIRED' && repair.status !== 'DELIVERED' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenTransferModal(repair)}
+                            className="rounded-xl border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-200 font-bold text-xs h-9 px-3 cursor-pointer shrink-0"
+                          >
+                            <ArrowRightLeft className="h-3.5 w-3.5 mr-1 text-amber-600" />
+                            Transfer
+                          </Button>
+                        )}
 
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
                           className="rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 h-9 px-2.5 cursor-pointer shrink-0"
+                          title="View Full Repair Details"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -990,13 +1368,16 @@ export default function TechnicianDashboard() {
         </div>
       )}
 
-      {/* Update Modal */}
+      {/* 8. Update Progress Modal (With Restricted Statuses & Repaired Handover Note) */}
       <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
         <DialogContent className="max-w-md w-full max-h-[90vh] overflow-y-auto rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
           <DialogHeader>
             <DialogTitle className="text-xl font-extrabold text-slate-900">
               Update Repair #{selectedRepair?.repairNumber}
             </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Log technical progress, parts used, and updated repair status.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
@@ -1007,14 +1388,30 @@ export default function TechnicianDashboard() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl">
-                  {REPAIR_STATUS_FLOW.map(s => (
-                    <SelectItem key={s} value={s} className="text-xs font-bold py-2">
-                      {statusStyles[s]?.label || s}
+                  {TECHNICIAN_ALLOWED_STATUSES.map(s => (
+                    <SelectItem key={s.value} value={s.value} className="text-xs font-bold py-2">
+                      <div className="flex flex-col">
+                        <span>{s.label}</span>
+                        <span className="text-[10px] text-slate-400 font-normal">{s.desc}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Explanatory callout when Repaired is selected */}
+            {updateForm.status === 'REPAIRED' && (
+              <div className="bg-teal-50 border border-teal-200 rounded-2xl p-3.5 text-xs text-teal-900 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-teal-800">
+                  <CheckCircle2 className="h-4 w-4 text-teal-600 shrink-0" />
+                  <span>Technical Work Complete</span>
+                </div>
+                <p className="text-[11px] text-teal-700 leading-relaxed">
+                  Marking as <strong>Repaired</strong> completes the bench repair. This job will move to your Completed list and hand over to Reception / Management for delivery.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">Estimated Delivery Date</Label>
@@ -1029,7 +1426,7 @@ export default function TechnicianDashboard() {
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">Spare Parts Used</Label>
               <Input
-                placeholder="e.g. OLED Panel"
+                placeholder="e.g. OLED Display Panel, Battery 4000mAh"
                 value={updateForm.partsUsed}
                 onChange={e => setUpdateForm(prev => ({ ...prev, partsUsed: e.target.value }))}
                 className="h-11 rounded-2xl border-slate-200 text-xs font-medium"
@@ -1039,7 +1436,7 @@ export default function TechnicianDashboard() {
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">Technical Work Log Note</Label>
               <Textarea
-                placeholder="Diagnostic notes..."
+                placeholder="Notes on component replacements, soldering, testing results..."
                 value={updateForm.note}
                 onChange={e => setUpdateForm(prev => ({ ...prev, note: e.target.value }))}
                 className="min-h-[90px] rounded-2xl border-slate-200 text-xs font-medium p-3"
@@ -1048,19 +1445,28 @@ export default function TechnicianDashboard() {
           </div>
 
           <DialogFooter className="flex flex-row items-center gap-2 pt-3 border-t border-slate-100">
-            <Button variant="outline" onClick={() => setIsUpdateModalOpen(false)} className="flex-1 rounded-2xl h-11 text-xs font-bold">Cancel</Button>
-            <Button disabled={submittingUpdate} onClick={submitStatusUpdate} className="flex-1 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white h-11 text-xs font-bold">
+            <Button variant="outline" onClick={() => setIsUpdateModalOpen(false)} className="flex-1 rounded-2xl h-11 text-xs font-bold">
+              Cancel
+            </Button>
+            <Button
+              disabled={submittingUpdate}
+              onClick={submitStatusUpdate}
+              className="flex-1 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white h-11 text-xs font-bold cursor-pointer"
+            >
               {submittingUpdate ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Progress"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Transfer Modal */}
+      {/* 9. Transfer Modal */}
       <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
         <DialogContent className="max-w-md w-full rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
           <DialogHeader>
             <DialogTitle className="text-xl font-extrabold text-slate-900">Transfer Repair Case</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Request handover of job #{selectedRepair?.repairNumber} to another technician.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
@@ -1083,7 +1489,7 @@ export default function TechnicianDashboard() {
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">Reason for Transfer</Label>
               <Textarea
-                placeholder="Reason..."
+                placeholder="Reason for transferring (e.g., specialized micro-soldering required)..."
                 value={transferForm.reason}
                 onChange={e => setTransferForm(prev => ({ ...prev, reason: e.target.value }))}
                 className="min-h-[100px] rounded-2xl border-slate-200 text-xs font-medium p-3"
@@ -1092,19 +1498,27 @@ export default function TechnicianDashboard() {
           </div>
 
           <DialogFooter className="flex flex-row items-center gap-2 pt-3 border-t border-slate-100">
-            <Button variant="outline" onClick={() => setIsTransferModalOpen(false)} className="flex-1 rounded-2xl h-11 text-xs font-bold">Cancel</Button>
-            <Button disabled={submittingTransfer} onClick={submitTransferRequest} className="flex-1 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black h-11 text-xs">
+            <Button variant="outline" onClick={() => setIsTransferModalOpen(false)} className="flex-1 rounded-2xl h-11 text-xs font-bold">
+              Cancel
+            </Button>
+            <Button
+              disabled={submittingTransfer}
+              onClick={submitTransferRequest}
+              className="flex-1 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black h-11 text-xs cursor-pointer"
+            >
               {submittingTransfer ? <Loader2 className="h-4 w-4 animate-spin" /> : "Dispatch Transfer"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Notes Modal */}
+      {/* 10. Notes Modal */}
       <Dialog open={isNotesModalOpen} onOpenChange={setIsNotesModalOpen}>
         <DialogContent className="max-w-lg w-full max-h-[90vh] flex flex-col rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
           <DialogHeader>
-            <DialogTitle className="text-xl font-extrabold text-slate-900">Diagnostic Notes</DialogTitle>
+            <DialogTitle className="text-xl font-extrabold text-slate-900">
+              Diagnostic Notes — #{selectedRepair?.repairNumber}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto max-h-[300px] space-y-2.5 pr-1">
@@ -1127,19 +1541,23 @@ export default function TechnicianDashboard() {
 
           <div className="space-y-2 pt-2 border-t border-slate-100">
             <Textarea
-              placeholder="Type note..."
+              placeholder="Type internal diagnostic or repair note..."
               value={newNoteContent}
               onChange={e => setNewNoteContent(e.target.value)}
               className="min-h-[80px] rounded-2xl border-slate-200 text-xs font-medium p-3"
             />
-            <Button disabled={submittingNote || !newNoteContent.trim()} onClick={submitNote} className="w-full rounded-2xl bg-indigo-600 text-white h-11 text-xs font-bold">
+            <Button
+              disabled={submittingNote || !newNoteContent.trim()}
+              onClick={submitNote}
+              className="w-full rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white h-11 text-xs font-bold cursor-pointer"
+            >
               {submittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : "Post Note"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Notification Center */}
+      {/* 11. Notification Center Modal */}
       <Dialog open={isNotificationCenterOpen} onOpenChange={setIsNotificationCenterOpen}>
         <DialogContent className="max-w-lg w-full max-h-[85vh] flex flex-col rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
           <DialogHeader>
@@ -1191,7 +1609,9 @@ export default function TechnicianDashboard() {
           </div>
 
           <DialogFooter className="pt-2 border-t border-slate-100">
-            <Button variant="outline" onClick={() => setIsNotificationCenterOpen(false)} className="w-full rounded-2xl h-10 text-xs font-bold">Close</Button>
+            <Button variant="outline" onClick={() => setIsNotificationCenterOpen(false)} className="w-full rounded-2xl h-10 text-xs font-bold">
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
