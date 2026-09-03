@@ -93,6 +93,23 @@ import {
 import { generateRepairReport } from '@/services/reportService';
 import { formatNPR, formatRepairCost, formatNepalPhone } from '@/lib/format';
 import { useRealtimeSync } from '@/services/realtime';
+import {
+  isPendingStatus,
+  isReceivedStatus,
+  isInProgressStatus,
+  isRepairedOrReadyStatus,
+  isDeliveredStatus,
+  isReProblemStatus,
+  isCancelledStatus,
+  calculateRepairMetrics,
+  RepairDashboardMetrics
+} from '@/lib/repairStatus';
+import {
+  matchesDatePreset,
+  getNepalCalendarInfo,
+  DateFilterPreset,
+  toNepalDateString
+} from '@/lib/nepalDate';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import ServiceSlipModal from '@/components/repair/ServiceSlipModal';
 import EditRepairModal from '@/components/repair/EditRepairModal';
@@ -114,7 +131,6 @@ const statusConfig: Record<string, { label: string; badgeClass: string; bgSoft: 
   CANCELLED: { label: 'Cancelled', badgeClass: 'bg-slate-100 text-slate-600 border-slate-200', bgSoft: 'bg-slate-50', textClass: 'text-slate-600' }
 };
 
-type DateFilterPreset = 'ALL' | 'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'THIS_MONTH' | 'CUSTOM';
 type StatusTabKey = 'ALL' | 'PENDING' | 'RECEIVED' | 'IN_PROGRESS' | 'REPAIRED' | 'DELIVERED' | 'RE_PROBLEM' | 'MORE';
 
 export default function Repairs() {
@@ -217,6 +233,13 @@ export default function Repairs() {
       if (search.trim()) params.append('search', search.trim());
       if (activeStatusTab !== 'ALL') params.append('status', activeStatusTab);
       if (selectedTechnicianFilter !== 'ALL') params.append('technicianId', selectedTechnicianFilter);
+      if (dateFilterPreset !== 'ALL') {
+        params.append('preset', dateFilterPreset);
+        if (dateFilterPreset === 'CUSTOM') {
+          if (customStartDate) params.append('startDate', customStartDate);
+          if (customEndDate) params.append('endDate', customEndDate);
+        }
+      }
 
       const filename = `MTS_Lab_Repairs_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
       await api.download(`/repairs/export?${params.toString()}`, filename);
@@ -346,84 +369,50 @@ export default function Repairs() {
     }
   );
 
-  // Summary Metrics calculated directly from real database records
-  const metrics = useMemo(() => {
-    const total = repairs.length;
-    const pending = repairs.filter(r => r.status === 'PENDING').length;
-    const received = repairs.filter(r => r.status === 'RECEIVED').length;
-    const inProgress = repairs.filter(r =>
-      ['IN_PROCESS', 'DIAGNOSING', 'WAITING_FOR_PARTS', 'TESTING'].includes(r.status)
-    ).length;
-    const repaired = repairs.filter(r =>
-      ['REPAIRED', 'READY_FOR_PICKUP', 'DELIVERED'].includes(r.status)
-    ).length;
-    const totalPaidSum = repairs.reduce((acc, r) => acc + (Number(r.totalPaid) || Number(r.advancePaid) || 0), 0);
-    const estimatedTotalSum = repairs.reduce((acc, r) => acc + (Number(r.estimatedCost) || Number(r.totalCost) || 0), 0);
+  // Authoritative Nepal Standard Time (Asia/Kathmandu) calendar bounds
+  const nepalCalInfo = useMemo(() => getNepalCalendarInfo(), []);
 
-    return { total, pending, received, inProgress, repaired, totalPaidSum, estimatedTotalSum };
-  }, [repairs]);
+  // Validation for custom date range
+  const customRangeError = useMemo(() => {
+    if (dateFilterPreset !== 'CUSTOM') return null;
+    if (customStartDate && customEndDate && customStartDate > customEndDate) {
+      return `Start date (${customStartDate}) cannot be after end date (${customEndDate}). Please adjust your date range.`;
+    }
+    return null;
+  }, [dateFilterPreset, customStartDate, customEndDate]);
 
-  // Date filtering logic
+  // Date filtering logic strictly calculated using Nepal Standard Time (Asia/Kathmandu)
   const dateFilteredRepairs = useMemo(() => {
+    if (customRangeError) return [];
     if (dateFilterPreset === 'ALL') return repairs;
+    return repairs.filter(r => matchesDatePreset(r.createdAt, dateFilterPreset, customStartDate, customEndDate, nepalCalInfo));
+  }, [repairs, dateFilterPreset, customStartDate, customEndDate, nepalCalInfo, customRangeError]);
 
-    const now = new Date();
-    return repairs.filter(r => {
-      if (!r.createdAt) return false;
-      const created = new Date(r.createdAt);
-      if (isNaN(created.getTime())) return false;
-
-      switch (dateFilterPreset) {
-        case 'TODAY':
-          return isToday(created);
-        case 'YESTERDAY':
-          return isYesterday(created);
-        case 'THIS_WEEK':
-          return isThisWeek(created, { weekStartsOn: 0 });
-        case 'THIS_MONTH':
-          return isThisMonth(created);
-        case 'CUSTOM':
-          if (!customStartDate && !customEndDate) return true;
-          const start = customStartDate ? startOfDay(parseISO(customStartDate)) : null;
-          const end = customEndDate ? endOfDay(parseISO(customEndDate)) : null;
-          if (start && end) {
-            return created >= start && created <= end;
-          } else if (start) {
-            return created >= start;
-          } else if (end) {
-            return created <= end;
-          }
-          return true;
-        default:
-          return true;
-      }
-    });
-  }, [repairs, dateFilterPreset, customStartDate, customEndDate]);
+  // Summary Metrics strictly derived from the currently active date filter
+  const metrics = useMemo(() => {
+    return calculateRepairMetrics(dateFilteredRepairs);
+  }, [dateFilteredRepairs]);
 
   // Status Tab filtering logic
   const statusFilteredRepairs = useMemo(() => {
     if (activeStatusTab === 'ALL') return dateFilteredRepairs;
     if (activeStatusTab === 'PENDING') {
-      return dateFilteredRepairs.filter(r => r.status === 'PENDING');
+      return dateFilteredRepairs.filter(r => isPendingStatus(r.status));
     }
     if (activeStatusTab === 'RECEIVED') {
-      return dateFilteredRepairs.filter(r => r.status === 'RECEIVED');
+      return dateFilteredRepairs.filter(r => isReceivedStatus(r.status));
     }
     if (activeStatusTab === 'IN_PROGRESS') {
-      return dateFilteredRepairs.filter(r =>
-        ['IN_PROCESS', 'DIAGNOSING', 'WAITING_FOR_PARTS', 'TESTING'].includes(r.status)
-      );
+      return dateFilteredRepairs.filter(r => isInProgressStatus(r.status));
     }
     if (activeStatusTab === 'REPAIRED') {
-      return dateFilteredRepairs.filter(r =>
-        ['REPAIRED', 'READY_FOR_PICKUP'].includes(r.status)
-      );
+      return dateFilteredRepairs.filter(r => isRepairedOrReadyStatus(r.status));
     }
     if (activeStatusTab === 'DELIVERED') {
-      return dateFilteredRepairs.filter(r => r.status === 'DELIVERED');
+      return dateFilteredRepairs.filter(r => isDeliveredStatus(r.status));
     }
     if (activeStatusTab === 'RE_PROBLEM') {
-      return dateFilteredRepairs.filter(r => r.status === 'RE_PROBLEM' || r.status === 'REPROBLEM');
+      return dateFilteredRepairs.filter(r => isReProblemStatus(r.status));
     }
     return dateFilteredRepairs;
   }, [dateFilteredRepairs, activeStatusTab]);
@@ -904,13 +893,13 @@ export default function Repairs() {
         {/* Status Tabs Navigation */}
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
           {[
-            { key: 'ALL', label: 'All Jobs', count: dateFilteredRepairs.length },
-            { key: 'PENDING', label: 'Pending', count: dateFilteredRepairs.filter(r => r.status === 'PENDING').length },
-            { key: 'RECEIVED', label: 'Received', count: dateFilteredRepairs.filter(r => r.status === 'RECEIVED').length },
-            { key: 'IN_PROGRESS', label: 'In Progress', count: dateFilteredRepairs.filter(r => ['IN_PROCESS', 'DIAGNOSING', 'WAITING_FOR_PARTS', 'TESTING'].includes(r.status)).length },
-            { key: 'REPAIRED', label: 'Repaired', count: dateFilteredRepairs.filter(r => ['REPAIRED', 'READY_FOR_PICKUP'].includes(r.status)).length },
-            { key: 'DELIVERED', label: 'Delivered', count: dateFilteredRepairs.filter(r => r.status === 'DELIVERED').length },
-            { key: 'RE_PROBLEM', label: 'Re-Problem', count: dateFilteredRepairs.filter(r => r.status === 'RE_PROBLEM' || r.status === 'REPROBLEM').length },
+            { key: 'ALL', label: 'All Jobs', count: metrics.total },
+            { key: 'PENDING', label: 'Pending', count: metrics.pending },
+            { key: 'RECEIVED', label: 'Received', count: metrics.received },
+            { key: 'IN_PROGRESS', label: 'In Progress', count: metrics.inProgress },
+            { key: 'REPAIRED', label: 'Repaired', count: metrics.repaired },
+            { key: 'DELIVERED', label: 'Delivered', count: metrics.delivered },
+            { key: 'RE_PROBLEM', label: 'Re-Problem', count: metrics.reProblem },
           ].map((tab) => {
             const isActive = activeStatusTab === tab.key;
             return (
@@ -956,7 +945,10 @@ export default function Repairs() {
 
           {/* Date Filter Presets */}
           <div className="md:col-span-5 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Date:</span>
+            <div className="flex items-center gap-1 mr-1">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date:</span>
+              <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded" title="All filters calibrated to Nepal Standard Time (UTC+5:45)">NPT</span>
+            </div>
             {[
               { key: 'ALL', label: 'All' },
               { key: 'TODAY', label: 'Today' },
@@ -1015,37 +1007,46 @@ export default function Repairs() {
 
         {/* Custom Date Range Picker (shown when CUSTOM preset selected) */}
         {dateFilterPreset === 'CUSTOM' && (
-          <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100">
-            <div className="flex items-center gap-2">
-              <Label className="text-xs font-semibold text-slate-600">From:</Label>
-              <Input
-                type="date"
-                value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-                className="h-9 w-40 rounded-xl border-slate-200 text-xs"
-              />
+          <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-xs font-semibold text-slate-600">From:</Label>
+                <Input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="h-9 w-40 rounded-xl border-slate-200 text-xs"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs font-semibold text-slate-600">To:</Label>
+                <Input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="h-9 w-40 rounded-xl border-slate-200 text-xs"
+                />
+              </div>
+              {(customStartDate || customEndDate) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCustomStartDate('');
+                    setCustomEndDate('');
+                  }}
+                  className="h-9 text-xs text-slate-500 hover:text-slate-900 rounded-xl"
+                >
+                  Clear Range
+                </Button>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-xs font-semibold text-slate-600">To:</Label>
-              <Input
-                type="date"
-                value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
-                className="h-9 w-40 rounded-xl border-slate-200 text-xs"
-              />
-            </div>
-            {(customStartDate || customEndDate) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setCustomStartDate('');
-                  setCustomEndDate('');
-                }}
-                className="h-9 text-xs text-slate-500 hover:text-slate-900 rounded-xl"
-              >
-                Clear Range
-              </Button>
+
+            {customRangeError && (
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                <span>{customRangeError}</span>
+              </div>
             )}
           </div>
         )}
@@ -1062,17 +1063,43 @@ export default function Repairs() {
           <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Smartphone className="h-8 w-8 text-slate-400" />
           </div>
-          <h3 className="text-lg font-bold text-slate-800">No repair records found</h3>
+          <h3 className="text-lg font-bold text-slate-800">
+            {customRangeError
+              ? "Invalid Date Range"
+              : dateFilteredRepairs.length === 0 && dateFilterPreset !== 'ALL'
+                ? `No repairs found for ${dateFilterPreset.replace('_', ' ')}`
+                : "No repair records found"}
+          </h3>
           <p className="text-slate-500 text-sm max-w-sm mx-auto mt-1">
-            Try adjusting your search criteria, date filter, or status tab.
+            {customRangeError
+              ? "The selected start date is after the end date. Please adjust your dates."
+              : dateFilteredRepairs.length === 0 && dateFilterPreset !== 'ALL'
+                ? `There are 0 repair tickets recorded for the selected date window in Nepal time (UTC+5:45).`
+                : "Try adjusting your search criteria, date filter, or status tab."}
           </p>
-          {canCreate && (
-            <Link to="/dashboard/repairs/new" className="inline-block mt-4">
-              <Button size="sm" className="rounded-xl bg-slate-900 text-white font-semibold">
-                <Plus className="h-4 w-4 mr-1" /> Register New Repair
+          <div className="flex items-center justify-center gap-2 mt-4">
+            {dateFilterPreset !== 'ALL' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDateFilterPreset('ALL');
+                  setCustomStartDate('');
+                  setCustomEndDate('');
+                }}
+                className="rounded-xl border-slate-300 text-slate-700 text-xs font-medium"
+              >
+                Show All Repairs
               </Button>
-            </Link>
-          )}
+            )}
+            {canCreate && (
+              <Link to="/dashboard/repairs/new">
+                <Button size="sm" className="rounded-xl bg-slate-900 text-white font-semibold">
+                  <Plus className="h-4 w-4 mr-1" /> Register New Repair
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-4">

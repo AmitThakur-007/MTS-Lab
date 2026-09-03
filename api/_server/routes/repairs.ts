@@ -15,6 +15,11 @@ import {
   getMyTransferRequests,
   getTransferRequestById,
 } from '../services/repairTransferService';
+import {
+  computeRepairDashboardStats,
+  getNptIsoBoundsForPreset,
+  DateFilterPreset
+} from '../services/repairStatsService';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -274,12 +279,13 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       isCourierOut,
       startDate,
       endDate,
-      limit = '100',
+      preset,
+      limit = '2000',
       page = '1',
     } = req.query;
 
     const pageNum = parseInt(page as string, 10) || 1;
-    const limitNum = parseInt(limit as string, 10) || 100;
+    const limitNum = Math.min(parseInt(limit as string, 10) || 2000, 5000);
     const offset = (pageNum - 1) * limitNum;
 
     let query = supabaseAdmin
@@ -321,12 +327,22 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       query = query.eq('isCourierOut', isCourierOut === 'true');
     }
 
-    if (startDate) {
-      query = query.gte('createdAt', String(startDate));
+    // Date filtering: check preset or explicit startDate/endDate
+    let effectiveStart = startDate ? String(startDate) : undefined;
+    let effectiveEnd = endDate ? String(endDate) : undefined;
+
+    if (preset && preset !== 'ALL' && (!effectiveStart || !effectiveEnd)) {
+      const bounds = getNptIsoBoundsForPreset(preset as DateFilterPreset, effectiveStart, effectiveEnd);
+      if (bounds.startIso) effectiveStart = bounds.startIso;
+      if (bounds.endIso) effectiveEnd = bounds.endIso;
     }
 
-    if (endDate) {
-      query = query.lte('createdAt', String(endDate));
+    if (effectiveStart) {
+      query = query.gte('createdAt', effectiveStart);
+    }
+
+    if (effectiveEnd) {
+      query = query.lte('createdAt', effectiveEnd);
     }
 
     if (search) {
@@ -346,6 +362,28 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     return res.json(repairs || []);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to load repair records.' });
+  }
+});
+
+// ----------------------------------------------------
+// 1.5 GET /stats — Aggregated Repair Statistics by Date Filter (Nepal Timezone)
+// ----------------------------------------------------
+router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { preset = 'ALL', startDate, endDate, technicianId, branchId } = req.query;
+    const stats = await computeRepairDashboardStats({
+      preset: preset as DateFilterPreset,
+      startDate: startDate ? String(startDate) : undefined,
+      endDate: endDate ? String(endDate) : undefined,
+      technicianId: technicianId ? String(technicianId) : undefined,
+      branchId: branchId ? String(branchId) : undefined,
+      userRole: req.user?.role,
+      userId: req.user?.id
+    });
+    return res.json(stats);
+  } catch (err: any) {
+    console.error('[REPAIRS STATS ERROR]', err);
+    return res.status(500).json({ error: 'Failed to compute repair statistics.' });
   }
 });
 
