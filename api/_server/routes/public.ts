@@ -216,68 +216,128 @@ const handlePublicTrack = async (req: Request, res: Response) => {
 
     const primaryRepair = allMatchingRepairs[0];
 
-    // Query RepairLog for primary repair to display customer-facing diagnostic trace (without timestamps or staff identity)
-    const { data: explicitLogs } = await supabaseAdmin
+    // Query RepairLog for all matching repairs to display customer-facing diagnostic trace (without timestamps or staff identity)
+    const allRepairIds = allMatchingRepairs.map((r) => r.id);
+    const { data: allExplicitLogs } = await supabaseAdmin
       .from('RepairLog')
-      .select('id, status, message')
-      .eq('repairId', primaryRepair.id)
+      .select('id, repairId, status, message, createdAt')
+      .in('repairId', allRepairIds)
       .order('createdAt', { ascending: false });
 
-    const getCustomerLogDesc = (status?: string, message?: string) => {
-      const st = (status || primaryRepair.status || 'RECEIVED').toUpperCase();
-      if (st.includes('RECEIVED') || st.includes('CREATED')) {
-        return 'Device safely cataloged and checked into MTS Lab inventory.';
+    const getCustomerLogDesc = (logStatus?: string, currentOverallStatus?: string) => {
+      const st = (logStatus || currentOverallStatus || 'RECEIVED').toUpperCase().trim();
+      const currentSt = (currentOverallStatus || 'RECEIVED').toUpperCase().trim();
+
+      const isDeliveredOverall = currentSt === 'DELIVERED' || currentSt === 'COMPLETED';
+      const isRepairedOrBeyond =
+        isDeliveredOverall ||
+        currentSt === 'REPAIRED' ||
+        currentSt === 'READY_FOR_PICKUP' ||
+        currentSt === 'READY_FOR_DELIVERY' ||
+        currentSt === 'COURIER_DISPATCHED' ||
+        currentSt === 'DISPATCHED_VIA_COURIER' ||
+        currentSt === 'REPROBLEM_FIXED' ||
+        currentSt === 'WARRANTY_FIXED';
+
+      // 1. REPAIRED stage
+      if (st === 'REPAIRED' || st.includes('WARRANTY_FIXED') || st.includes('REPROBLEM_FIXED')) {
+        return 'The technical repair was successfully completed and the device passed the required quality verification.';
       }
-      if (st.includes('DIAGNOSING')) {
-        return 'Hardware inspection and diagnostic testing in progress.';
+
+      // 2. READY FOR PICKUP / DELIVERY
+      if (st.includes('READY') || st.includes('PICKUP')) {
+        return 'The repaired device is sanitized, packaged, and ready for customer pickup.';
       }
-      if (st.includes('PROCESS') || st.includes('REPAIR') || st.includes('RESTORATION')) {
-        return 'Active hardware restoration and component replacement under way.';
-      }
-      if (st.includes('TEST') || st.includes('QA')) {
-        return 'Performing comprehensive quality inspection and calibration.';
-      }
-      if (st.includes('READY') || st.includes('PICKUP') || st.includes('DELIVERY')) {
-        return 'Device sanitized, packaged, and ready for collection.';
-      }
+
+      // 3. COURIER LOGISTICS
       if (st.includes('COURIER') || st.includes('DISPATCH')) {
-        return 'Device safely packaged and dispatched via courier logistics.';
+        return 'The repaired device was safely packed and dispatched via courier logistics.';
       }
+
+      // 4. DELIVERED
       if (st.includes('DELIVERED') || st.includes('COMPLETED')) {
-        return 'Device handed over to customer with service warranty.';
+        return 'The device was handed over to the customer when the actual status reaches Delivered.';
       }
+
+      // 5. TESTING / QA
+      if (st.includes('TEST') || st.includes('QA')) {
+        if (isRepairedOrBeyond) {
+          return 'The repaired device underwent quality verification/testing.';
+        }
+        return 'The repaired device is undergoing comprehensive quality verification and calibration.';
+      }
+
+      // 6. RESTORATION / IN_PROCESS / WAITING_FOR_PARTS
+      if (
+        st.includes('PROCESS') ||
+        st.includes('RESTORATION') ||
+        st.includes('WAITING_FOR_PARTS') ||
+        st === 'REPAIRING'
+      ) {
+        if (isRepairedOrBeyond) {
+          return 'The required repair/restoration work was carried out.';
+        }
+        return 'The required repair/restoration work is currently being carried out by certified engineers.';
+      }
+
+      // 7. DIAGNOSING
+      if (st.includes('DIAGNOSING')) {
+        return 'The device was inspected/diagnosed to identify the reported issue.';
+      }
+
+      // 8. RECEIVED / INTAKE
+      if (st.includes('RECEIVED') || st.includes('CREATED')) {
+        return 'The device was received by MTS Lab for repair.';
+      }
+
+      // 9. PENDING
+      if (st.includes('PENDING')) {
+        return 'Your device is cataloged in the service queue awaiting laboratory intake and diagnosis.';
+      }
+
+      // 10. RE-PROBLEM
       if (st.includes('RE_PROBLEM') || st.includes('REPROBLEM')) {
-        return 'Device scheduled for priority diagnostic re-evaluation.';
+        return 'Device received for priority diagnostic re-evaluation.';
       }
+
+      // 11. CANCELLED / CANNOT REPAIR
       if (st.includes('CANCEL')) {
         return 'Repair service request closed.';
       }
-      return 'Device status updated in laboratory queue.';
+      if (st.includes('CANNOT')) {
+        return 'Catastrophic hardware damage exceeds viable safe restoration standards.';
+      }
+
+      return 'Device status updated to reflect laboratory progress.';
     };
 
-    let combinedLogs = (explicitLogs || []).map((l: any) => {
-      const desc = getCustomerLogDesc(l.status, l.message);
-      return {
-        id: l.id,
-        action: 'STATUS_UPDATED',
-        status: l.status || primaryRepair.status || 'RECEIVED',
-        notes: desc,
-        message: desc,
-      };
-    });
-
-    if (combinedLogs.length === 0) {
-      const desc = getCustomerLogDesc(primaryRepair.status);
-      combinedLogs = [
-        {
-          id: `synth-${primaryRepair.id}`,
+    const buildLogsForRepair = (rep: any) => {
+      const repLogs = (allExplicitLogs || []).filter((l: any) => l.repairId === rep.id);
+      let list = repLogs.map((l: any) => {
+        const desc = getCustomerLogDesc(l.status, rep.status);
+        return {
+          id: l.id,
           action: 'STATUS_UPDATED',
-          status: primaryRepair.status || 'RECEIVED',
+          status: l.status || rep.status || 'RECEIVED',
           notes: desc,
           message: desc,
-        }
-      ];
-    }
+        };
+      });
+
+      if (list.length === 0) {
+        const desc = getCustomerLogDesc(rep.status, rep.status);
+        list = [
+          {
+            id: `synth-${rep.id}`,
+            action: 'STATUS_UPDATED',
+            status: rep.status || 'RECEIVED',
+            notes: desc,
+            message: desc,
+          },
+        ];
+      }
+      return list;
+    };
 
     // Mask customer name and phone for public privacy
     const rawName = primaryRepair.customerName || '';
@@ -318,14 +378,11 @@ const handlePublicTrack = async (req: Request, res: Response) => {
         ...safe,
         customerName: sanitizedName,
         customerPhone: sanitizedPhone,
+        logs: buildLogsForRepair(rep),
       };
     };
 
-    const sanitizedPrimary = {
-      ...sanitizePublicRepairObj(primaryRepair),
-      logs: combinedLogs,
-    };
-
+    const sanitizedPrimary = sanitizePublicRepairObj(primaryRepair);
     const sanitizedAll = allMatchingRepairs.map((rep) => sanitizePublicRepairObj(rep));
 
     return res.json({

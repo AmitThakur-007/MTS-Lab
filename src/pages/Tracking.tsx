@@ -266,43 +266,164 @@ export const REPAIR_TIMELINE_STAGES: TimelineStageDefinition[] = [
   },
 ];
 
-function getCustomerFriendlyLogDetails(action: string, status?: string, notes?: string) {
-  const state = (status || action || '').toUpperCase();
+function getCustomerFriendlyLogDetails(
+  action: string,
+  status?: string,
+  notes?: string,
+  currentRepairStatus?: string
+) {
+  const state = (status || action || '').toUpperCase().trim();
+  const overall = (currentRepairStatus || '').toUpperCase().trim();
 
-  if (state.includes('RECEIVED') || state.includes('CREATED') || state === 'CREATED') {
-    return { title: 'Device Received', desc: 'Device securely cataloged and checked into MTS Lab inventory.' };
-  }
-  if (state.includes('DIAGNOSING')) {
-    return { title: 'Diagnosis In Progress', desc: 'Hardware inspection and diagnostic testing in progress.' };
-  }
-  if (state.includes('PROCESS') || state.includes('REPAIR') || state.includes('RESTORATION')) {
+  const isDeliveredOverall = overall === 'DELIVERED' || overall === 'COMPLETED';
+  const isRepairedOrBeyond =
+    isDeliveredOverall ||
+    overall === 'REPAIRED' ||
+    overall === 'READY_FOR_PICKUP' ||
+    overall === 'READY_FOR_DELIVERY' ||
+    overall === 'READY' ||
+    overall === 'COURIER_DISPATCHED' ||
+    overall === 'DISPATCHED_VIA_COURIER' ||
+    overall === 'REPROBLEM_FIXED' ||
+    overall === 'WARRANTY_FIXED';
+
+  const isTestingOrBeyond =
+    isRepairedOrBeyond ||
+    overall === 'TESTING' ||
+    overall === 'QA_TESTING' ||
+    overall === 'QA';
+
+  const isRestorationOrBeyond =
+    isTestingOrBeyond ||
+    overall === 'IN_PROCESS' ||
+    overall === 'IN_PROGRESS' ||
+    overall === 'WAITING_FOR_PARTS' ||
+    overall === 'RESTORATION' ||
+    overall === 'REPAIRING' ||
+    overall === 'RE_PROBLEM' ||
+    overall === 'REPROBLEM';
+
+  // 1. REPAIRED stage
+  if (state === 'REPAIRED' || state.includes('WARRANTY_FIXED') || state.includes('REPROBLEM_FIXED')) {
     return {
-      title: 'Restoration In Progress',
-      desc: 'Active hardware restoration and component replacement under way.',
+      title: 'Repaired',
+      desc: 'The technical repair was successfully completed and the device passed the required quality verification.',
+      statusText: 'Completed',
     };
   }
-  if (state.includes('TEST') || state.includes('QA')) {
-    return { title: 'QA & Stress Testing', desc: 'Performing rigorous 36-point benchmark and touch validation.' };
-  }
+
+  // 2. READY FOR PICKUP / DELIVERY
   if (state.includes('READY') || state.includes('PICKUP')) {
-    return { title: 'Ready for Collection', desc: 'Device sanitized and packaged ready for pickup or dispatch.' };
+    return {
+      title: 'Ready for Collection',
+      desc: 'The repaired device is sanitized, packaged, and ready for customer pickup.',
+      statusText: 'Completed',
+    };
   }
+
+  // 3. COURIER LOGISTICS
   if (state.includes('COURIER') || state.includes('DISPATCH')) {
-    return { title: 'Courier Dispatched', desc: 'Device packed securely and handed to courier logistics.' };
+    return {
+      title: 'Courier Dispatched',
+      desc: 'The repaired device was safely packed and dispatched via courier logistics.',
+      statusText: 'Completed',
+    };
   }
+
+  // 4. DELIVERED
   if (state.includes('DELIVERED') || state.includes('COMPLETED')) {
-    return { title: 'Delivered Successfully', desc: 'Device handed over to customer with service warranty.' };
+    return {
+      title: 'Delivered',
+      desc: 'The device was handed over to the customer when the actual status reaches Delivered.',
+      statusText: 'Completed',
+    };
   }
+
+  // 5. TESTING / QA
+  if (state.includes('TEST') || state.includes('QA')) {
+    return {
+      title: 'QA Testing',
+      desc: isRepairedOrBeyond
+        ? 'The repaired device underwent quality verification/testing.'
+        : 'The repaired device is undergoing comprehensive quality verification and calibration.',
+      statusText: isRepairedOrBeyond ? 'Completed' : 'Active',
+    };
+  }
+
+  // 6. RESTORATION / IN_PROCESS / WAITING_FOR_PARTS
+  if (
+    state.includes('PROCESS') ||
+    state.includes('RESTORATION') ||
+    state.includes('WAITING_FOR_PARTS') ||
+    state === 'REPAIRING'
+  ) {
+    return {
+      title: 'Restoration',
+      desc: isRepairedOrBeyond
+        ? 'The required repair/restoration work was carried out.'
+        : 'Active hardware restoration and component replacement under way.',
+      statusText: isRepairedOrBeyond ? 'Completed' : 'Active',
+    };
+  }
+
+  // 7. DIAGNOSING
+  if (state.includes('DIAGNOSING')) {
+    return {
+      title: 'Diagnosing',
+      desc: 'The device was inspected/diagnosed to identify the reported issue.',
+      statusText: isRestorationOrBeyond || isRepairedOrBeyond ? 'Completed' : 'Active',
+    };
+  }
+
+  // 8. RECEIVED / INTAKE
+  if (state.includes('RECEIVED') || state.includes('CREATED')) {
+    return {
+      title: 'Received',
+      desc: 'The device was received by MTS Lab for repair.',
+      statusText: 'Completed',
+    };
+  }
+
+  // 9. PENDING
+  if (state.includes('PENDING')) {
+    return {
+      title: 'Pending Queue',
+      desc: 'Your device is cataloged in the service queue awaiting laboratory intake and diagnosis.',
+      statusText: 'Pending',
+    };
+  }
+
+  // 10. RE_PROBLEM
   if (state.includes('RE_PROBLEM') || state.includes('REPROBLEM')) {
-    return { title: 'Re-Check Inspection', desc: 'Device received for priority diagnostic re-evaluation.' };
+    return {
+      title: 'Re-Check Inspection',
+      desc: 'Device received for priority diagnostic re-evaluation.',
+      statusText: 'Active',
+    };
   }
+
+  // 11. CANCELLED
   if (state.includes('CANCEL')) {
-    return { title: 'Service Cancelled', desc: 'Repair service ticket was closed or cancelled by customer request.' };
+    return {
+      title: 'Service Cancelled',
+      desc: 'Repair service ticket was closed or cancelled by customer request.',
+      statusText: 'Closed',
+    };
+  }
+
+  // 12. CANNOT REPAIR
+  if (state.includes('CANNOT')) {
+    return {
+      title: 'Cannot Repair',
+      desc: 'Hardware damage exceeds viable safe restoration standards.',
+      statusText: 'Closed',
+    };
   }
 
   return {
-    title: 'Status Update',
+    title: 'Laboratory Update',
     desc: 'Device status updated to reflect laboratory progress.',
+    statusText: isRepairedOrBeyond ? 'Completed' : 'Active',
   };
 }
 
@@ -407,7 +528,16 @@ export default function Tracking() {
   const currentStatusRaw = (activeRepair?.status || 'RECEIVED').toUpperCase();
   const currentStatus = statusConfig[currentStatusRaw] || statusConfig.RECEIVED;
   const isPending = currentStatusRaw === 'PENDING';
-  const isRepaired = ['REPAIRED', 'READY_FOR_PICKUP', 'READY_FOR_DELIVERY'].includes(currentStatusRaw);
+  const isRepaired = [
+    'REPAIRED',
+    'READY_FOR_PICKUP',
+    'READY_FOR_DELIVERY',
+    'READY',
+    'COURIER_DISPATCHED',
+    'DISPATCHED_VIA_COURIER',
+    'REPROBLEM_FIXED',
+    'WARRANTY_FIXED',
+  ].includes(currentStatusRaw);
   const isDelivered = currentStatusRaw === 'DELIVERED' || currentStatusRaw === 'COMPLETED';
 
   const copyRepairNumber = (num: string) => {
@@ -424,18 +554,14 @@ export default function Tracking() {
       return 'completed';
     }
 
+    if (isRepaired) {
+      if (stageIdx <= 4) return 'completed';
+      return 'upcoming';
+    }
+
     let activeStageIdx = 0;
 
     if (
-      currentStatusRaw === 'REPAIRED' ||
-      currentStatusRaw === 'READY_FOR_PICKUP' ||
-      currentStatusRaw === 'READY_FOR_DELIVERY' ||
-      currentStatusRaw === 'COURIER_DISPATCHED' ||
-      currentStatusRaw === 'DISPATCHED_VIA_COURIER' ||
-      currentStatusRaw === 'REPROBLEM_FIXED'
-    ) {
-      activeStageIdx = 4; // Repaired
-    } else if (
       currentStatusRaw === 'TESTING' ||
       currentStatusRaw === 'QA_TESTING' ||
       currentStatusRaw === 'QA'
@@ -446,6 +572,7 @@ export default function Tracking() {
       currentStatusRaw === 'IN_PROGRESS' ||
       currentStatusRaw === 'WAITING_FOR_PARTS' ||
       currentStatusRaw === 'RESTORATION' ||
+      currentStatusRaw === 'REPAIRING' ||
       currentStatusRaw === 'RE_PROBLEM' ||
       currentStatusRaw === 'REPROBLEM'
     ) {
@@ -464,15 +591,32 @@ export default function Tracking() {
   };
 
   // Calculate percentage for progress connector line
-  const activeStageIndex = (() => {
-    if (isDelivered) return 5;
-    for (let i = 0; i < REPAIR_TIMELINE_STAGES.length; i++) {
-      if (getStageStatus(i) === 'current') return i;
+  const progressPercentage = (() => {
+    if (isDelivered) return 100;
+    if (isRepaired) return 80;
+    if (
+      currentStatusRaw === 'TESTING' ||
+      currentStatusRaw === 'QA_TESTING' ||
+      currentStatusRaw === 'QA'
+    ) {
+      return 60;
+    }
+    if (
+      currentStatusRaw === 'IN_PROCESS' ||
+      currentStatusRaw === 'IN_PROGRESS' ||
+      currentStatusRaw === 'WAITING_FOR_PARTS' ||
+      currentStatusRaw === 'RESTORATION' ||
+      currentStatusRaw === 'REPAIRING' ||
+      currentStatusRaw === 'RE_PROBLEM' ||
+      currentStatusRaw === 'REPROBLEM'
+    ) {
+      return 40;
+    }
+    if (currentStatusRaw === 'DIAGNOSING') {
+      return 20;
     }
     return 0;
   })();
-
-  const progressPercentage = isDelivered ? 100 : (activeStageIndex / (REPAIR_TIMELINE_STAGES.length - 1)) * 100;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
@@ -832,7 +976,7 @@ export default function Tracking() {
                                         : 'bg-slate-50 text-slate-400 border-slate-200'
                                     )}
                                   >
-                                    {isCompleted ? 'Done' : isCurrent ? 'In Progress' : 'Pending'}
+                                    {isCompleted ? 'Completed' : isCurrent ? 'Active' : 'Pending'}
                                   </Badge>
                                 </div>
                                 <p className="text-[11px] text-slate-600 font-medium mt-0.5">
@@ -942,6 +1086,16 @@ export default function Tracking() {
                     {(() => {
                       let repairLogs = activeRepair?.logs || trackingData?.logs || activeRepair?.repairLogs || [];
 
+                      // Deduplicate consecutive identical status updates to prevent repetitive clutter
+                      if (Array.isArray(repairLogs) && repairLogs.length > 1) {
+                        repairLogs = repairLogs.filter((log: any, index: number, arr: any[]) => {
+                          if (index === 0) return true;
+                          const prevStatus = (arr[index - 1].status || '').toUpperCase().trim();
+                          const currStatus = (log.status || '').toUpperCase().trim();
+                          return prevStatus !== currStatus;
+                        });
+                      }
+
                       if (!Array.isArray(repairLogs) || repairLogs.length === 0) {
                         repairLogs = [
                           {
@@ -956,25 +1110,56 @@ export default function Tracking() {
                       return (
                         <div className="relative pl-5 sm:pl-6 space-y-4 before:absolute before:left-[9px] sm:before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
                           {repairLogs.map((log: any, idx: number) => {
-                            const friendlyInfo = getCustomerFriendlyLogDetails(log.action, log.status, log.notes || log.message);
+                            const friendlyInfo = getCustomerFriendlyLogDetails(
+                              log.action,
+                              log.status,
+                              log.notes || log.message,
+                              currentStatusRaw
+                            );
                             const isLatest = idx === 0;
 
                             return (
                               <div key={log.id || idx} className="relative flex items-start group">
                                 <div
                                   className={cn(
-                                    'absolute -left-[23px] sm:-left-[27px] flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 border-white shadow-2xs',
-                                    isLatest
+                                    'absolute -left-[23px] sm:-left-[27px] flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 border-white shadow-2xs transition-all',
+                                    friendlyInfo.statusText === 'Completed'
+                                      ? 'bg-emerald-600 text-white'
+                                      : isLatest && friendlyInfo.statusText === 'Active'
                                       ? 'bg-slate-900 text-white ring-2 ring-slate-200'
-                                      : 'bg-slate-200 text-slate-600'
+                                      : 'bg-slate-200 text-slate-500'
                                   )}
                                 >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                                  {friendlyInfo.statusText === 'Completed' ? (
+                                    <Check className="w-3 h-3 stroke-[2.5]" />
+                                  ) : (
+                                    <span
+                                      className={cn(
+                                        'w-1.5 h-1.5 rounded-full bg-current',
+                                        isLatest && friendlyInfo.statusText === 'Active' ? 'animate-pulse' : ''
+                                      )}
+                                    />
+                                  )}
                                 </div>
 
-                                <div className="ml-2 sm:ml-3 flex-1 bg-slate-50/80 hover:bg-slate-50 rounded-xl p-3.5 sm:p-4 border border-slate-200/70">
-                                  <div className="mb-0.5">
+                                <div className="ml-2 sm:ml-3 flex-1 bg-slate-50/80 hover:bg-slate-50 rounded-xl p-3.5 sm:p-4 border border-slate-200/70 transition-colors">
+                                  <div className="flex items-center justify-between gap-2 mb-1">
                                     <span className="text-xs font-bold text-slate-900">{friendlyInfo.title}</span>
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        'text-[10px] uppercase px-2 py-0.5 font-extrabold',
+                                        friendlyInfo.statusText === 'Completed'
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                          : friendlyInfo.statusText === 'Active'
+                                          ? 'bg-slate-900 text-white border-slate-900'
+                                          : friendlyInfo.statusText === 'Closed'
+                                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                          : 'bg-slate-50 text-slate-500 border-slate-200'
+                                      )}
+                                    >
+                                      {friendlyInfo.statusText}
+                                    </Badge>
                                   </div>
                                   <p className="text-xs text-slate-600 font-medium leading-relaxed">
                                     {friendlyInfo.desc}
