@@ -311,32 +311,181 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       return 'Device status updated to reflect laboratory progress.';
     };
 
+    const extractPublicNote = (msg?: string): string | null => {
+      if (!msg) return null;
+      const match = msg.match(/Note:\s*([^.\n]+)/i) || msg.match(/Note:\s*(.+)$/i);
+      if (match && match[1]) {
+        const note = match[1].trim();
+        // Discard if it only contained staff name
+        if (note && !note.toLowerCase().startsWith('by ')) return note;
+      }
+      return null;
+    };
+
     const buildLogsForRepair = (rep: any) => {
       const repLogs = (allExplicitLogs || []).filter((l: any) => l.repairId === rep.id);
-      let list = repLogs.map((l: any) => {
-        const desc = getCustomerLogDesc(l.status, rep.status);
-        return {
-          id: l.id,
-          action: 'STATUS_UPDATED',
-          status: l.status || rep.status || 'RECEIVED',
-          notes: desc,
-          message: desc,
-        };
+      const currentSt = (rep.status || 'RECEIVED').toUpperCase().trim();
+
+      // Find any custom technician notes attached to explicit logs
+      const notesByStatus: Record<string, string> = {};
+      repLogs.forEach((l: any) => {
+        const key = (l.status || '').toUpperCase().trim();
+        const note = extractPublicNote(l.message);
+        if (note && !notesByStatus[key]) {
+          notesByStatus[key] = note;
+        }
       });
 
-      if (list.length === 0) {
-        const desc = getCustomerLogDesc(rep.status, rep.status);
-        list = [
-          {
-            id: `synth-${rep.id}`,
-            action: 'STATUS_UPDATED',
-            status: rep.status || 'RECEIVED',
-            notes: desc,
-            message: desc,
-          },
-        ];
+      const isDelivered = currentSt === 'DELIVERED' || currentSt === 'COMPLETED';
+      const isRepaired = [
+        'REPAIRED',
+        'READY_FOR_PICKUP',
+        'READY_FOR_DELIVERY',
+        'READY',
+        'COURIER_DISPATCHED',
+        'DISPATCHED_VIA_COURIER',
+        'REPROBLEM_FIXED',
+        'WARRANTY_FIXED',
+      ].includes(currentSt);
+
+      const isTesting = ['TESTING', 'QA_TESTING', 'QA'].includes(currentSt);
+      const isRestoration = [
+        'IN_PROCESS',
+        'IN_PROGRESS',
+        'WAITING_FOR_PARTS',
+        'RESTORATION',
+        'REPAIRING',
+        'RE_PROBLEM',
+        'REPROBLEM',
+      ].includes(currentSt);
+      const isDiagnosing = currentSt === 'DIAGNOSING';
+      const isCancelled = currentSt.includes('CANCEL');
+      const isCannotRepair = currentSt.includes('CANNOT');
+
+      // Build ordered trace stages in reverse-chronological order (latest first)
+      const trace: any[] = [];
+
+      // 1. Delivered Stage
+      if (isDelivered) {
+        trace.push({
+          id: `trace-${rep.id}-delivered`,
+          action: 'STATUS_UPDATED',
+          status: 'DELIVERED',
+          title: 'Delivered',
+          notes: 'The device was safely delivered and handed over to the customer.',
+          message: 'The device was safely delivered and handed over to the customer.',
+          statusText: 'Completed',
+        });
       }
-      return list;
+
+      // 2. Repaired Stage
+      if (isDelivered || isRepaired) {
+        const customNote = notesByStatus['REPAIRED'] || notesByStatus['READY_FOR_PICKUP'] || '';
+        const desc = customNote
+          ? `The technical repair was successfully completed and quality verification passed. (${customNote})`
+          : 'The technical repair was successfully completed and the device passed the required quality verification.';
+        trace.push({
+          id: `trace-${rep.id}-repaired`,
+          action: 'STATUS_UPDATED',
+          status: 'REPAIRED',
+          title: 'Repaired',
+          notes: desc,
+          message: desc,
+          statusText: 'Completed',
+        });
+      }
+
+      // 3. QA Testing Stage
+      if (isDelivered || isRepaired || isTesting) {
+        const isPast = isDelivered || isRepaired;
+        trace.push({
+          id: `trace-${rep.id}-qa`,
+          action: 'STATUS_UPDATED',
+          status: 'QA_TESTING',
+          title: 'QA Testing',
+          notes: isPast
+            ? 'The repaired device completed comprehensive quality verification, electrical diagnostic check, and functionality testing.'
+            : 'The repaired device is undergoing comprehensive quality verification, electrical diagnostic check, and calibration.',
+          message: isPast
+            ? 'The repaired device completed comprehensive quality verification, electrical diagnostic check, and functionality testing.'
+            : 'The repaired device is undergoing comprehensive quality verification, electrical diagnostic check, and calibration.',
+          statusText: isPast ? 'Completed' : 'Active',
+        });
+      }
+
+      // 4. Restoration Stage
+      if (isDelivered || isRepaired || isTesting || isRestoration) {
+        const isPast = isDelivered || isRepaired || isTesting;
+        const customNote = notesByStatus['IN_PROCESS'] || notesByStatus['RESTORATION'] || '';
+        const desc = isPast
+          ? customNote
+            ? `Component restoration and precision servicing successfully executed. (${customNote})`
+            : 'Component restoration and precision servicing successfully executed by certified hardware engineers.'
+          : 'Active hardware restoration and component servicing is currently in progress.';
+        trace.push({
+          id: `trace-${rep.id}-restoration`,
+          action: 'STATUS_UPDATED',
+          status: 'RESTORATION',
+          title: 'Restoration',
+          notes: desc,
+          message: desc,
+          statusText: isPast ? 'Completed' : 'Active',
+        });
+      }
+
+      // 5. Diagnosing Stage
+      if (isDelivered || isRepaired || isTesting || isRestoration || isDiagnosing) {
+        const isPast = isDelivered || isRepaired || isTesting || isRestoration;
+        trace.push({
+          id: `trace-${rep.id}-diagnosing`,
+          action: 'STATUS_UPDATED',
+          status: 'DIAGNOSING',
+          title: 'Diagnosing',
+          notes: isPast
+            ? 'Circuit and schematic diagnostic assessment completed to identify fault causes.'
+            : 'Hardware diagnostic assessment and multi-point circuit inspection under way.',
+          message: isPast
+            ? 'Circuit and schematic diagnostic assessment completed to identify fault causes.'
+            : 'Hardware diagnostic assessment and multi-point circuit inspection under way.',
+          statusText: isPast ? 'Completed' : 'Active',
+        });
+      }
+
+      // 6. Received / Cataloged Stage (Always completed once intake occurs)
+      trace.push({
+        id: `trace-${rep.id}-received`,
+        action: 'STATUS_UPDATED',
+        status: 'RECEIVED',
+        title: 'Received',
+        notes: 'Device received, securely cataloged in MTS Lab laboratory queue, and assigned initial tracking.',
+        message: 'Device received, securely cataloged in MTS Lab laboratory queue, and assigned initial tracking.',
+        statusText: 'Completed',
+      });
+
+      // Special terminal statuses
+      if (isCancelled) {
+        trace.unshift({
+          id: `trace-${rep.id}-cancelled`,
+          action: 'STATUS_UPDATED',
+          status: 'CANCELLED',
+          title: 'Service Cancelled',
+          notes: 'Repair service ticket was closed or cancelled by customer request.',
+          message: 'Repair service ticket was closed or cancelled by customer request.',
+          statusText: 'Closed',
+        });
+      } else if (isCannotRepair) {
+        trace.unshift({
+          id: `trace-${rep.id}-cannot-repair`,
+          action: 'STATUS_UPDATED',
+          status: 'CANNOT_REPAIR',
+          title: 'Cannot Repair',
+          notes: 'Hardware damage exceeds safe restoration limits or replacement parts are permanently unavailable.',
+          message: 'Hardware damage exceeds safe restoration limits or replacement parts are permanently unavailable.',
+          statusText: 'Closed',
+        });
+      }
+
+      return trace;
     };
 
     // Mask customer name and phone for public privacy

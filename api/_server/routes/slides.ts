@@ -5,7 +5,7 @@ import path from 'path';
 import { config } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
-import { uploadToCloudinary, uploadBase64ToCloudinary } from '../services/cloudinaryService';
+import { uploadToCloudinary, uploadBase64ToCloudinary, isCloudinaryConfigured } from '../services/cloudinaryService';
 import {
   getSlides,
   createSlide,
@@ -49,16 +49,15 @@ router.post('/upload-image', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), 
   try {
     // 1. Multipart Form File Upload
     if (req.file) {
-      if (config.cloudinaryCloudName && config.cloudinaryApiKey && config.cloudinaryApiSecret) {
-        try {
-          const result = await uploadToCloudinary(req.file.buffer, 'mts_slides');
-          return res.json({ success: true, url: result.secure_url, publicId: result.public_id });
-        } catch (cloudErr) {
-          console.warn('[CLOUDINARY FALLBACK] Cloudinary upload failed, falling back to local asset:', cloudErr);
-        }
+      if (isCloudinaryConfigured()) {
+        const result = await uploadToCloudinary(req.file.buffer, {
+          folder: 'mts_lab/slides',
+          resourceType: 'image',
+        });
+        return res.json({ success: true, url: result.secure_url, publicId: result.public_id });
       }
 
-      // Local asset storage fallback
+      // Local asset storage fallback only when Cloudinary is completely absent
       const uploadDir = path.join(process.cwd(), 'public', 'assets', 'images');
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
@@ -78,16 +77,15 @@ router.post('/upload-image', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), 
     if (req.body?.base64Image || req.body?.image) {
       const base64Data = req.body.base64Image || req.body.image;
 
-      if (config.cloudinaryCloudName && config.cloudinaryApiKey && config.cloudinaryApiSecret) {
-        try {
-          const result = await uploadBase64ToCloudinary(base64Data, 'mts_slides');
-          return res.json({ success: true, url: result.secure_url, publicId: result.public_id });
-        } catch (cloudErr) {
-          console.warn('[CLOUDINARY BASE64 FALLBACK] Cloudinary base64 failed, falling back to local asset:', cloudErr);
-        }
+      if (isCloudinaryConfigured()) {
+        const result = await uploadBase64ToCloudinary(base64Data, {
+          folder: 'mts_lab/slides',
+          resourceType: 'image',
+        });
+        return res.json({ success: true, url: result.secure_url, publicId: result.public_id });
       }
 
-      // Parse and save base64 locally
+      // Parse and save base64 locally fallback
       const uploadDir = path.join(process.cwd(), 'public', 'assets', 'images');
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });

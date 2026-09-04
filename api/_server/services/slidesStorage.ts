@@ -3,6 +3,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { broadcastServerChange } from './realtimeSync';
+import { deleteFromCloudinary } from './cloudinaryService';
 
 export interface HomeSlideRecord {
   id: string;
@@ -214,6 +215,15 @@ export async function updateSlide(id: string, updates: Partial<HomeSlideRecord>,
     throw new Error('Slide not found');
   }
 
+  // If image URL is being updated and old one was a Cloudinary asset, clean up old asset
+  if (updates.imageUrl && existing.imageUrl && updates.imageUrl !== existing.imageUrl && existing.imageUrl.includes('cloudinary.com')) {
+    try {
+      await deleteFromCloudinary(existing.imageUrl);
+    } catch (cleanErr) {
+      console.warn('[CLOUDINARY OLD SLIDE ASSET CLEANUP WARN]', cleanErr);
+    }
+  }
+
   const now = new Date().toISOString();
   const updated: HomeSlideRecord = {
     ...existing,
@@ -285,6 +295,15 @@ export async function reorderSlides(items: { id: string; displayOrder: number }[
  */
 export async function deleteSlide(id: string): Promise<void> {
   await initializeSlidesStorage();
+
+  const existing = slidesCache.get(id);
+  if (existing && existing.imageUrl && existing.imageUrl.includes('cloudinary.com')) {
+    try {
+      await deleteFromCloudinary(existing.imageUrl);
+    } catch (cleanErr) {
+      console.warn('[CLOUDINARY DELETE SLIDE ASSET CLEANUP WARN]', cleanErr);
+    }
+  }
 
   slidesCache.delete(id);
   saveLocalFile(Array.from(slidesCache.values()));

@@ -45,13 +45,45 @@ export const supabasePublic: SupabaseClient = createClient(
   }
 );
 
+// Helper to extract Cloudinary credentials from CLOUDINARY_URL or individual variables
+function getCloudinaryCredentials() {
+  let cloudName = (process.env.CLOUDINARY_CLOUD_NAME || '').trim();
+  let apiKey = (process.env.CLOUDINARY_API_KEY || '').trim();
+  let apiSecret = (process.env.CLOUDINARY_API_SECRET || '').trim();
+  const cldUrl = (process.env.CLOUDINARY_URL || '').trim();
+
+  if ((!cloudName || !apiKey || !apiSecret) && cldUrl) {
+    try {
+      // Format: cloudinary://api_key:api_secret@cloud_name
+      const cleaned = cldUrl.replace(/^cloudinary:\/\//, '');
+      const [credentials, cName] = cleaned.split('@');
+      if (cName && !cloudName) {
+        cloudName = cName.split('/')[0].trim();
+      }
+      if (credentials) {
+        const [k, s] = credentials.split(':');
+        if (k && !apiKey) apiKey = k.trim();
+        if (s && !apiSecret) apiSecret = s.trim();
+      }
+    } catch (e) {
+      console.warn('[CLOUDINARY CONFIG PARSE ERROR]', e);
+    }
+  }
+
+  return { cloudName, apiKey, apiSecret, cldUrl };
+}
+
+const cldCreds = getCloudinaryCredentials();
+
 export const config = {
   supabaseUrl: SUPABASE_URL,
   supabaseAnonKey: SUPABASE_ANON_KEY,
   jwtSecret: process.env.JWT_SECRET || 'mts-lab-super-secret-key-2026',
   refreshSecret: process.env.REFRESH_SECRET || 'mts-lab-refresh-secret-key-2026',
   appUrl: process.env.APP_URL || 'http://localhost:3000',
-  cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
-  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
-  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',
+  cloudinaryCloudName: cldCreds.cloudName,
+  cloudinaryApiKey: cldCreds.apiKey,
+  cloudinaryApiSecret: cldCreds.apiSecret,
+  cloudinaryUrl: cldCreds.cldUrl,
+  getCloudinaryCredentials,
 };

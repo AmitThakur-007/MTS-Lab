@@ -590,6 +590,18 @@ export default function Tracking() {
     return 'upcoming';
   };
 
+  const getStageSubtext = (stageIdx: number, status: 'completed' | 'current' | 'upcoming'): string => {
+    if (status === 'completed') return 'Completed';
+    if (status === 'current') return 'Active';
+    if (stageIdx === 5) {
+      if (currentStatusRaw === 'READY_FOR_PICKUP') return 'Ready for Pickup';
+      if (currentStatusRaw === 'READY_FOR_DELIVERY') return 'Ready for Delivery';
+      if (currentStatusRaw === 'COURIER_DISPATCHED' || currentStatusRaw === 'DISPATCHED_VIA_COURIER') return 'In Transit';
+      if (isRepaired) return 'Waiting for Delivery';
+    }
+    return 'Pending';
+  };
+
   // Calculate percentage for progress connector line
   const progressPercentage = (() => {
     if (isDelivered) return 100;
@@ -902,7 +914,7 @@ export default function Tracking() {
                                         : 'text-slate-400'
                                     )}
                                   >
-                                    {isCompleted ? 'Completed' : isCurrent ? 'Active' : 'Pending'}
+                                    {getStageSubtext(idx, status)}
                                   </span>
                                 </div>
                               </div>
@@ -976,7 +988,7 @@ export default function Tracking() {
                                         : 'bg-slate-50 text-slate-400 border-slate-200'
                                     )}
                                   >
-                                    {isCompleted ? 'Completed' : isCurrent ? 'Active' : 'Pending'}
+                                    {getStageSubtext(idx, status)}
                                   </Badge>
                                 </div>
                                 <p className="text-[11px] text-slate-600 font-medium mt-0.5">
@@ -1116,6 +1128,9 @@ export default function Tracking() {
                               log.notes || log.message,
                               currentStatusRaw
                             );
+                            const itemTitle = log.title || friendlyInfo.title;
+                            const itemDesc = log.notes || log.message || friendlyInfo.desc;
+                            const itemStatusText = log.statusText || friendlyInfo.statusText;
                             const isLatest = idx === 0;
 
                             return (
@@ -1123,20 +1138,20 @@ export default function Tracking() {
                                 <div
                                   className={cn(
                                     'absolute -left-[23px] sm:-left-[27px] flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 border-white shadow-2xs transition-all',
-                                    friendlyInfo.statusText === 'Completed'
+                                    itemStatusText === 'Completed'
                                       ? 'bg-emerald-600 text-white'
-                                      : isLatest && friendlyInfo.statusText === 'Active'
+                                      : isLatest && itemStatusText === 'Active'
                                       ? 'bg-slate-900 text-white ring-2 ring-slate-200'
                                       : 'bg-slate-200 text-slate-500'
                                   )}
                                 >
-                                  {friendlyInfo.statusText === 'Completed' ? (
+                                  {itemStatusText === 'Completed' ? (
                                     <Check className="w-3 h-3 stroke-[2.5]" />
                                   ) : (
                                     <span
                                       className={cn(
                                         'w-1.5 h-1.5 rounded-full bg-current',
-                                        isLatest && friendlyInfo.statusText === 'Active' ? 'animate-pulse' : ''
+                                        isLatest && itemStatusText === 'Active' ? 'animate-pulse' : ''
                                       )}
                                     />
                                   )}
@@ -1144,25 +1159,25 @@ export default function Tracking() {
 
                                 <div className="ml-2 sm:ml-3 flex-1 bg-slate-50/80 hover:bg-slate-50 rounded-xl p-3.5 sm:p-4 border border-slate-200/70 transition-colors">
                                   <div className="flex items-center justify-between gap-2 mb-1">
-                                    <span className="text-xs font-bold text-slate-900">{friendlyInfo.title}</span>
+                                    <span className="text-xs font-bold text-slate-900">{itemTitle}</span>
                                     <Badge
                                       variant="outline"
                                       className={cn(
                                         'text-[10px] uppercase px-2 py-0.5 font-extrabold',
-                                        friendlyInfo.statusText === 'Completed'
+                                        itemStatusText === 'Completed'
                                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                          : friendlyInfo.statusText === 'Active'
+                                          : itemStatusText === 'Active'
                                           ? 'bg-slate-900 text-white border-slate-900'
-                                          : friendlyInfo.statusText === 'Closed'
+                                          : itemStatusText === 'Closed'
                                           ? 'bg-rose-50 text-rose-700 border-rose-200'
                                           : 'bg-slate-50 text-slate-500 border-slate-200'
                                       )}
                                     >
-                                      {friendlyInfo.statusText}
+                                      {itemStatusText}
                                     </Badge>
                                   </div>
                                   <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                                    {friendlyInfo.desc}
+                                    {itemDesc}
                                   </p>
                                 </div>
                               </div>
