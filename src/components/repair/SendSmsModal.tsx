@@ -113,7 +113,7 @@ export default function SendSmsModal({
     try {
       await navigator.clipboard.writeText(message);
       setCopiedMessage(true);
-      toast.success('SMS message copied to clipboard.');
+      toast.success('Message copied.');
       setTimeout(() => setCopiedMessage(false), 2500);
     } catch (_) {
       toast.error('Could not copy to clipboard. Please copy manually.');
@@ -125,7 +125,7 @@ export default function SendSmsModal({
       const phoneToCopy = internationalPhone || normalizedPhoneDigits || customerPhoneRaw;
       await navigator.clipboard.writeText(phoneToCopy);
       setCopiedPhone(true);
-      toast.success(`Phone number ${phoneToCopy} copied.`);
+      toast.success('Phone number copied.');
       setTimeout(() => setCopiedPhone(false), 2500);
     } catch (_) {
       toast.error('Could not copy phone number.');
@@ -273,10 +273,10 @@ export default function SendSmsModal({
             </div>
             <div>
               <DialogTitle className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                Notify Customer via SMS
+                Send SMS to Customer
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Official Google Messages for Web workflow paired with MTS Lab Android phone.
+                Manual customer notification via Google Messages for Web (paired with Android phone).
               </DialogDescription>
             </div>
           </div>
@@ -290,7 +290,7 @@ export default function SendSmsModal({
         ) : (
           <div className="space-y-4">
             
-            {/* Customer & Device Meta Pill Card */}
+            {/* Customer & Device Meta Card */}
             <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 space-y-2.5">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
                 <div>
@@ -299,12 +299,12 @@ export default function SendSmsModal({
                 </div>
 
                 <div>
-                  <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block">Repair Ticket</span>
+                  <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block">Repair Number</span>
                   <span className="font-mono font-bold text-slate-900 truncate block">{repairNumber}</span>
                 </div>
 
                 <div className="col-span-2 sm:col-span-1">
-                  <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block">Device Model</span>
+                  <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block">Device</span>
                   <span className="font-bold text-slate-900 truncate block">{deviceModel}</span>
                 </div>
               </div>
@@ -332,15 +332,19 @@ export default function SendSmsModal({
               </div>
             </div>
 
-            {/* Invalid Phone Warning Banner */}
+            {/* Phone Validation Warning Banner */}
             {!isValidPhone && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1">
                 <div className="font-bold flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>Invalid customer phone number.</span>
+                  <span>
+                    {!customerPhoneRaw || !customerPhoneRaw.trim()
+                      ? 'Customer phone number is missing. Please update the customer information before sending SMS.'
+                      : 'Invalid customer phone number. Please update the customer information before sending SMS.'}
+                  </span>
                 </div>
                 <p className="text-[11px] leading-relaxed">
-                  Nepal mobile numbers must be 10 digits starting with 98, 97, or 96. Please edit customer info on the ticket before sending SMS.
+                  Nepal mobile numbers must be 10 digits starting with 98, 97, or 96.
                 </p>
               </div>
             )}
@@ -363,7 +367,7 @@ export default function SendSmsModal({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="sms-message" className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <span>SMS Message Template</span>
+                  <span>Message</span>
                   <span title="Privacy verified"><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /></span>
                 </Label>
 
@@ -379,7 +383,7 @@ export default function SendSmsModal({
                     className="h-6 px-2 text-[10px] text-slate-600 hover:text-slate-900"
                   >
                     {copiedMessage ? <Check className="w-3 h-3 text-emerald-600 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
-                    {copiedMessage ? 'Copied' : 'Copy'}
+                    {copiedMessage ? 'Copied' : 'Copy Message'}
                   </Button>
                 </div>
               </div>
@@ -393,27 +397,35 @@ export default function SendSmsModal({
                 placeholder="Enter SMS message..."
               />
               <p className="text-[10px] text-slate-400">
-                Staff names, technician names, and internal database keys are intentionally omitted for customer privacy.
+                Staff names, technician names, and internal database keys are strictly excluded for customer privacy.
               </p>
             </div>
 
-            {/* Google Messages for Web Instructions Card */}
+            {/* Google Messages Setup Help Section */}
             <div className="p-3.5 bg-sky-50/80 border border-sky-200/80 rounded-2xl space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs font-black text-sky-950">
                   <Smartphone className="w-4 h-4 text-sky-600" />
-                  <span>Google Messages for Web Workflow</span>
+                  <span>Google Messages Setup</span>
                 </div>
                 <span className="text-[10px] font-bold text-sky-700 bg-sky-100/80 border border-sky-300 px-2 py-0.5 rounded-full">
-                  Android Paired
+                  Manual Workflow
                 </span>
               </div>
-              <ol className="text-[11px] text-sky-800/90 space-y-1 list-decimal list-inside leading-relaxed">
-                <li>Click <strong>Open Google Messages</strong> below to open the paired web interface.</li>
-                <li>The customer message has been automatically copied to your clipboard.</li>
-                <li>Start a conversation with <strong>{isValidPhone ? `+977 ${normalizedPhoneDigits}` : customerPhoneRaw}</strong> and send.</li>
-                <li>Click <strong>Confirm SMS Sent</strong> below to log the record in MTS Lab.</li>
+              <ol className="text-[11px] text-sky-900 space-y-1 list-decimal list-inside leading-relaxed">
+                <li>Open Google Messages on the Android phone.</li>
+                <li>Pair the phone with Google Messages for Web.</li>
+                <li>Open Google Messages for Web on the computer.</li>
+                <li>Select the customer.</li>
+                <li>Review the prepared message.</li>
+                <li>Send the SMS manually.</li>
               </ol>
+              <div className="pt-1 border-t border-sky-200/60 text-[10px] text-sky-700 leading-normal flex items-start gap-1">
+                <Info className="w-3 h-3 text-sky-600 shrink-0 mt-0.5" />
+                <span>
+                  Google Messages for Web is best used from a supported desktop/tablet browser. Please open Google Messages manually to send this message.
+                </span>
+              </div>
             </div>
 
             {/* SMS Send History (if any) */}

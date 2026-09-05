@@ -589,12 +589,6 @@ export default function Repairs() {
       setRepairs(prev => prev.map(r => r.id === statusModalRepair.id ? { ...r, ...updated } : r));
       const targetRepair = { ...statusModalRepair, ...updated, status: newStatusValue };
       setStatusModalRepair(null);
-
-      // Prompt/open SMS modal if changed to Repaired/Ready
-      if (canSendSms && isRepairedOrReadyStatus(newStatusValue)) {
-        setSmsModalRepair(targetRepair);
-        setIsSmsModalOpen(true);
-      }
     } catch (err: any) {
       toast.error(err.message || 'Failed to update repair status');
     } finally {
@@ -1647,6 +1641,8 @@ export default function Repairs() {
                           setIsSmsModalOpen(true);
                         }}
                         className="h-8 rounded-xl border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold px-2.5 gap-1 cursor-pointer"
+                        title="Send SMS to Customer"
+                        aria-label="Send SMS to Customer"
                       >
                         <MessageSquare className="h-3.5 w-3.5 text-teal-600" />
                         <span>SMS</span>

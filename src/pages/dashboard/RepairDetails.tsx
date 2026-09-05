@@ -394,7 +394,8 @@ export default function RepairDetails() {
               variant="outline"
               onClick={() => setIsSmsModalOpen(true)}
               className="rounded-2xl border-teal-300 bg-teal-50/80 hover:bg-teal-100 text-teal-800 font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5 transition-all"
-              title="Notify customer via Google Messages for Web"
+              title="Send SMS to Customer"
+              aria-label="Send SMS to Customer"
             >
               <MessageSquare className="h-4 w-4 text-teal-600" />
               <span>Send SMS</span>
@@ -878,6 +879,8 @@ export default function RepairDetails() {
                       size="sm"
                       onClick={() => setIsSmsModalOpen(true)}
                       className="w-full rounded-xl border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs h-8 px-2.5 flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                      title="Send SMS to Customer"
+                      aria-label="Send SMS to Customer"
                     >
                       <MessageSquare className="h-3.5 w-3.5 text-teal-600" />
                       <span>Send Customer SMS</span>

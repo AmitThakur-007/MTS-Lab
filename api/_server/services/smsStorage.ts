@@ -111,7 +111,7 @@ export function validateAndNormalizeNepalPhone(rawPhone: string | null | undefin
       normalized: '',
       international: '',
       displayFormatted: '',
-      error: 'Missing customer phone number. Please update customer record before sending SMS.'
+      error: 'Customer phone number is missing. Please update the customer information before sending SMS.'
     };
   }
 
@@ -140,7 +140,7 @@ export function validateAndNormalizeNepalPhone(rawPhone: string | null | undefin
       normalized: cleaned,
       international: '',
       displayFormatted: rawPhone.trim(),
-      error: 'Invalid customer phone number. Nepal mobile numbers must be 10 digits starting with 98, 97, or 96.'
+      error: 'Invalid customer phone number. Please update the customer information before sending SMS.'
     };
   }
 
