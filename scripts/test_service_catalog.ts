@@ -1,9 +1,9 @@
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { supabaseAdmin, config } from '../api/_server/config/supabase';
 import { getCategoryInfo } from '../src/pages/Services';
 
 const BASE_URL = 'http://localhost:3000/api';
-const JWT_SECRET = process.env.JWT_SECRET || 'mts-lab-super-secret-key';
+const JWT_SECRET = config.jwtSecret;
 
 async function runTests() {
   console.log('=== STARTING MTS LAB SERVICE CATALOG & E-COMMERCE REDESIGN VERIFICATION ===\n');
@@ -19,8 +19,6 @@ async function runTests() {
       testsFailed++;
     }
   }
-
-  const prisma = new PrismaClient();
 
   try {
     // 1. Verify Public Repair Prices API
@@ -94,16 +92,16 @@ async function runTests() {
     console.log('\n--- 4. Testing Admin Repair Price Management Endpoints ---');
     
     // Super Admin Token
-    let superAdmin = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN', deletedAt: null } });
+    const { data: superAdmin } = await supabaseAdmin
+      .from('User')
+      .select('id, role, email, name')
+      .eq('role', 'SUPER_ADMIN')
+      .is('deletedAt', null)
+      .limit(1)
+      .single();
+
     if (!superAdmin) {
-      superAdmin = await prisma.user.create({
-        data: {
-          email: 'admin_catalog_test@mtslab.com',
-          name: 'Catalog Test Admin',
-          role: 'SUPER_ADMIN',
-          password: 'testpassword123'
-        }
-      });
+      throw new Error('Super admin user not found in Supabase User table');
     }
 
     const token = jwt.sign(
@@ -126,6 +124,7 @@ async function runTests() {
       problem: 'Cracked Actua OLED Display',
       serviceName: 'Original OLED Screen Replacement',
       price: 24000,
+      originalPrice: 28000,
       priceType: 'FIXED',
       status: 'ACTIVE',
       estimatedTime: '1-2 Hours',
@@ -168,7 +167,6 @@ async function runTests() {
     console.error('UNHANDLED TEST EXCEPTION:', err);
     testsFailed++;
   } finally {
-    await prisma.$disconnect();
     console.log(`\n==============================================`);
     console.log(`CATALOG TEST RESULTS: ${testsPassed} Passed, ${testsFailed} Failed`);
     console.log(`==============================================\n`);

@@ -182,7 +182,7 @@ function getCategoryVisuals(categoryName: string) {
 
 export default function RepairPrices() {
   const { token, user } = useAuthStore();
-  const isAdmin = user && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN');
+  const isAdmin = user && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'RECEPTIONIST');
 
   // Main Data States
   const [records, setRecords] = useState<RepairPriceRecord[]>([]);
@@ -239,6 +239,11 @@ export default function RepairPrices() {
     serviceName: '',
     description: '',
     price: '',
+    originalPrice: '',
+    rating: '',
+    ratingCount: '',
+    deviceType: 'Smartphone' as 'Smartphone' | 'Tablet' | 'iPad',
+    icon: '',
     priceType: 'FIXED' as RepairPriceRecord['priceType'],
     status: 'ACTIVE' as RepairPriceRecord['status'],
     estimatedTime: '1-2 Hours',
@@ -683,14 +688,24 @@ export default function RepairPrices() {
   const openCreateServiceModal = () => {
     setEditingService(null);
     setServiceFormErrors({});
+    const initialBrand = currentBrand || 'Samsung';
+    const initialModel = currentModel || '';
+    const initialText = `${initialBrand} ${initialModel}`.toLowerCase();
+    const initialDeviceType = initialText.includes('ipad') ? 'iPad' : initialText.includes('tab') ? 'Tablet' : 'Smartphone';
+
     setServiceFormData({
-      brand: currentBrand || 'Samsung',
-      model: currentModel || '',
+      brand: initialBrand,
+      model: initialModel,
       variant: '',
       category: currentCategory || 'Display',
       serviceName: '',
       description: '',
       price: '',
+      originalPrice: '',
+      rating: '',
+      ratingCount: '',
+      deviceType: initialDeviceType,
+      icon: '',
       priceType: 'FIXED',
       status: 'ACTIVE',
       estimatedTime: '1-2 Hours',
@@ -711,6 +726,11 @@ export default function RepairPrices() {
       serviceName: item.serviceName || item.problem,
       description: item.description || item.notes || '',
       price: (item.price > 0 || (item.priceType !== 'ON_INSPECTION' && item.priceType !== 'CONTACT_FOR_PRICE')) ? item.price.toString() : '',
+      originalPrice: (item as any).originalPrice ? String((item as any).originalPrice) : '',
+      rating: (item as any).rating ? String((item as any).rating) : '',
+      ratingCount: (item as any).ratingCount ? String((item as any).ratingCount) : '',
+      deviceType: (item as any).deviceType || 'Smartphone',
+      icon: (item as any).icon || '',
       priceType: item.priceType || 'FIXED',
       status: item.status || 'ACTIVE',
       estimatedTime: item.estimatedTime || '1-2 Hours',
@@ -753,6 +773,10 @@ export default function RepairPrices() {
     try {
       setIsSubmittingService(true);
       const numericPrice = parseFloat(serviceFormData.price) || 0;
+      const originalPriceVal = serviceFormData.originalPrice.trim() ? parseFloat(serviceFormData.originalPrice) : null;
+      const ratingVal = serviceFormData.rating.trim() ? parseFloat(serviceFormData.rating) : null;
+      const ratingCountVal = serviceFormData.ratingCount.trim() ? parseInt(serviceFormData.ratingCount, 10) : null;
+
       const payload = {
         brand: serviceFormData.brand.trim(),
         model: serviceFormData.model.trim(),
@@ -763,6 +787,11 @@ export default function RepairPrices() {
         description: serviceFormData.description.trim() || null,
         notes: serviceFormData.description.trim() || null,
         price: numericPrice,
+        originalPrice: originalPriceVal,
+        rating: ratingVal,
+        ratingCount: ratingCountVal,
+        deviceType: serviceFormData.deviceType,
+        icon: serviceFormData.icon.trim() || null,
         priceType: serviceFormData.priceType,
         status: serviceFormData.status,
         estimatedTime: serviceFormData.estimatedTime?.trim() || null
@@ -1041,7 +1070,7 @@ export default function RepairPrices() {
         <div className="space-y-2">
           <h2 className="text-2xl font-black text-slate-900">Access Restricted (403 Forbidden)</h2>
           <p className="text-slate-600 text-sm font-medium leading-relaxed max-w-md mx-auto">
-            Only <strong>SUPER_ADMIN</strong> and <strong>ADMIN</strong> roles are authorized to manage device repair services, descriptions, and prices.
+            Only <strong>SUPER_ADMIN</strong>, <strong>ADMIN</strong>, and <strong>RECEPTIONIST</strong> roles are authorized to manage device repair services, descriptions, and prices.
           </p>
         </div>
         <div className="pt-2">
@@ -1819,8 +1848,8 @@ export default function RepairPrices() {
 
             </div>
 
-            {/* ROW 3: PRICE | PRICE TYPE */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* ROW 3: PRICE | PRICE TYPE | ORIGINAL PRICE */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700">Price (NPR)</label>
@@ -1850,6 +1879,60 @@ export default function RepairPrices() {
                 </select>
               </div>
 
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Original Price (Optional Strikethrough)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={serviceFormData.originalPrice}
+                  onChange={(e) => setServiceFormData({ ...serviceFormData, originalPrice: e.target.value })}
+                  placeholder="e.g. 8500 (shows ~~8500~~)"
+                  className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                />
+              </div>
+
+            </div>
+
+            {/* ROW 3.5: DEVICE TYPE & RATINGS */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Hardware Device Form</label>
+                <select
+                  value={serviceFormData.deviceType}
+                  onChange={(e) => setServiceFormData({ ...serviceFormData, deviceType: e.target.value as any })}
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold focus:outline-none"
+                >
+                  <option value="Smartphone">Smartphone</option>
+                  <option value="Tablet">Tablet</option>
+                  <option value="iPad">iPad</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Customer Rating (Optional)</label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  max="5"
+                  value={serviceFormData.rating}
+                  onChange={(e) => setServiceFormData({ ...serviceFormData, rating: e.target.value })}
+                  placeholder="e.g. 4.9"
+                  className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Review Count (Optional)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={serviceFormData.ratingCount}
+                  onChange={(e) => setServiceFormData({ ...serviceFormData, ratingCount: e.target.value })}
+                  placeholder="e.g. 24"
+                  className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                />
+              </div>
             </div>
 
             {/* ROW 4: REPAIR DESCRIPTION */}

@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { 
   Search, 
   Smartphone, 
+  Tablet,
   Wrench, 
   Clock, 
   ShieldCheck, 
@@ -73,6 +74,11 @@ export interface RepairPriceItem {
   status: 'ACTIVE' | 'INACTIVE';
   notes?: string | null;
   estimatedTime?: string | null;
+  originalPrice?: number | null;
+  rating?: number | null;
+  ratingCount?: number | null;
+  deviceType?: string | null;
+  icon?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -479,7 +485,12 @@ export default function Services() {
   const [activeQuery, setActiveQuery] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('All Brands');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedDeviceType, setSelectedDeviceType] = useState<'all' | 'smartphone' | 'tablet' | 'ipad'>('all');
   const [sortBy, setSortBy] = useState<'recommended' | 'priceLow' | 'priceHigh' | 'deviceAsc'>('recommended');
+
+  // Autocomplete suggestions state
+  const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -491,6 +502,7 @@ export default function Services() {
 
   // Element refs for keyboard focus and smooth positioning
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const catalogSectionRef = useRef<HTMLElement>(null);
 
   const isAdmin = user && ['ADMIN', 'SUPER_ADMIN'].includes(user.role);
@@ -601,6 +613,7 @@ export default function Services() {
     setActiveQuery('');
     setSelectedBrand('All Brands');
     setSelectedCategory('all');
+    setSelectedDeviceType('all');
     setSortBy('recommended');
     setCurrentPage(1);
     setSearchParams({}, { replace: true });
@@ -608,6 +621,65 @@ export default function Services() {
       searchInputRef.current.focus();
     }
   };
+
+  // Autocomplete Suggestions computation
+  const autoSuggestions = useMemo(() => {
+    const query = searchInput.trim().toLowerCase();
+    if (!query || query.length < 2) return [];
+
+    const results: { type: 'model' | 'service' | 'category'; title: string; subtitle: string; query: string }[] = [];
+    const seen = new Set<string>();
+
+    for (const item of prices) {
+      const fullDevice = `${item.brand} ${item.model}`;
+      const serviceName = item.serviceName || item.problem;
+      const category = item.category;
+
+      if (fullDevice.toLowerCase().includes(query) && !seen.has(`model-${fullDevice.toLowerCase()}`)) {
+        seen.add(`model-${fullDevice.toLowerCase()}`);
+        results.push({
+          type: 'model',
+          title: fullDevice,
+          subtitle: `${item.brand} Hardware Series`,
+          query: fullDevice
+        });
+      }
+
+      if (serviceName.toLowerCase().includes(query) && !seen.has(`svc-${serviceName.toLowerCase()}`)) {
+        seen.add(`svc-${serviceName.toLowerCase()}`);
+        results.push({
+          type: 'service',
+          title: serviceName,
+          subtitle: `${category} Service`,
+          query: serviceName
+        });
+      }
+
+      if (category.toLowerCase().includes(query) && !seen.has(`cat-${category.toLowerCase()}`)) {
+        seen.add(`cat-${category.toLowerCase()}`);
+        results.push({
+          type: 'category',
+          title: category,
+          subtitle: 'Browse Category',
+          query: category
+        });
+      }
+
+      if (results.length >= 6) break;
+    }
+    return results;
+  }, [searchInput, prices]);
+
+  // Click outside listener for suggestions popup
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSuggestionsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleCategoryClick = (catId: string) => {
     setCurrentPage(1);
@@ -666,6 +738,14 @@ export default function Services() {
   // Smart Search & Scoring Algorithm + Category & Brand Filtering
   const filteredAndRankedPrices = useMemo(() => {
     let list = prices;
+
+    // 0. Filter by Device Type (Smartphone, Tablet, iPad)
+    if (selectedDeviceType !== 'all') {
+      list = list.filter(item => {
+        const itemType = (item.deviceType || 'Smartphone').toLowerCase();
+        return itemType === selectedDeviceType;
+      });
+    }
 
     // 1. Filter by Brand
     if (selectedBrand !== 'All Brands') {
@@ -944,8 +1024,27 @@ export default function Services() {
     }
   };
 
+  // Rating Display Formatter
+  const renderRatingStars = (rating?: number | null, ratingCount?: number | null) => {
+    if (!rating || rating <= 0) return null;
+    return (
+      <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-amber-500 bg-amber-50/90 border border-amber-200/70 px-1.5 py-0.5 rounded-md">
+        <span>★</span>
+        <span className="text-slate-800 font-extrabold">{rating.toFixed(1)}</span>
+        {ratingCount !== undefined && ratingCount !== null && ratingCount > 0 && (
+          <span className="text-slate-400 font-medium">({ratingCount})</span>
+        )}
+      </div>
+    );
+  };
+
   // Price Display Formatter
   const renderPriceBadge = (item: RepairPriceItem) => {
+    const hasDiscount = item.originalPrice && item.originalPrice > item.price && item.price > 0;
+    const discountPercent = hasDiscount
+      ? Math.round(((item.originalPrice! - item.price) / item.originalPrice!) * 100)
+      : 0;
+
     if (item.priceType === 'ON_INSPECTION') {
       return (
         <div className="flex flex-col min-w-0">
@@ -972,9 +1071,21 @@ export default function Services() {
       return (
         <div className="flex flex-col min-w-0">
           <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400">From</span>
-          <span className="text-[11px] sm:text-sm md:text-base font-black text-slate-950 tracking-tight truncate">
-            NPR {item.price.toLocaleString()}
-          </span>
+          <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
+            <span className="text-[11px] sm:text-sm md:text-base font-black text-slate-950 tracking-tight truncate">
+              NPR {item.price.toLocaleString()}
+            </span>
+            {hasDiscount && (
+              <>
+                <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 line-through">
+                  NPR {item.originalPrice!.toLocaleString()}
+                </span>
+                <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1 py-0.2 rounded">
+                  -{discountPercent}%
+                </span>
+              </>
+            )}
+          </div>
         </div>
       );
     }
@@ -983,9 +1094,21 @@ export default function Services() {
     return (
       <div className="flex flex-col min-w-0">
         <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Price</span>
-        <span className="text-[11px] sm:text-sm md:text-base font-black text-slate-950 tracking-tight truncate">
-          NPR {item.price.toLocaleString()}
-        </span>
+        <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
+          <span className="text-[11px] sm:text-sm md:text-base font-black text-slate-950 tracking-tight truncate">
+            NPR {item.price.toLocaleString()}
+          </span>
+          {hasDiscount && (
+            <>
+              <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 line-through">
+                NPR {item.originalPrice!.toLocaleString()}
+              </span>
+              <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1 py-0.2 rounded">
+                -{discountPercent}%
+              </span>
+            </>
+          )}
+        </div>
       </div>
     );
   };
@@ -1021,59 +1144,127 @@ export default function Services() {
 
           {/* Large E-Commerce Style Search Bar */}
           <div className="pt-1.5">
-            <form 
-              id="service-search-form"
-              onSubmit={handleSearchSubmit}
-              className="relative flex items-center bg-white rounded-2xl sm:rounded-3xl border-2 border-slate-200 shadow-md shadow-slate-200/50 focus-within:border-slate-950 focus-within:ring-4 focus-within:ring-slate-950/5 transition-all p-1 sm:p-1.5"
-            >
-              <div className="relative flex-1 flex items-center min-h-[46px] sm:min-h-[50px] pl-3 pr-2">
-                <Search className="w-5 h-5 text-slate-400 shrink-0 ml-1" />
-                
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  id="repair-catalog-search-input"
-                  name="search"
-                  autoFocus
-                  autoComplete="off"
-                  placeholder="Search by device model, repair type, or problem (e.g. iPhone 13, Screen, Battery)..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      executeSearch(searchInput);
-                    }
-                  }}
-                  className="w-full h-full border-0 focus:outline-none text-xs sm:text-sm md:text-base font-semibold px-3 bg-transparent placeholder:text-slate-400 placeholder:font-normal text-slate-950"
-                  aria-label="Search repair catalog"
-                />
-
-                {searchInput && (
-                  <button
-                    type="button"
-                    id="search-clear-btn"
-                    onClick={handleClearSearch}
-                    className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-slate-500 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all cursor-pointer mr-1 shrink-0"
-                    title="Clear search"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Clear</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Search Submit Button */}
-              <button
-                type="submit"
-                id="search-action-btn"
-                className="h-10 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-slate-950 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer shrink-0"
-                aria-label="Search services"
+            <div ref={searchContainerRef} className="relative">
+              <form 
+                id="service-search-form"
+                onSubmit={handleSearchSubmit}
+                className="relative flex items-center bg-white rounded-2xl sm:rounded-3xl border-2 border-slate-200 shadow-md shadow-slate-200/50 focus-within:border-slate-950 focus-within:ring-4 focus-within:ring-slate-950/5 transition-all p-1 sm:p-1.5"
               >
-                <Search className="w-4 h-4 text-amber-400" />
-                <span>Search</span>
-              </button>
-            </form>
+                <div className="relative flex-1 flex items-center min-h-[46px] sm:min-h-[50px] pl-3 pr-2">
+                  <Search className="w-5 h-5 text-slate-400 shrink-0 ml-1" />
+                  
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    id="repair-catalog-search-input"
+                    name="search"
+                    autoFocus
+                    autoComplete="off"
+                    placeholder="Search by device model, repair type, or problem (e.g. iPhone 13, Screen, Battery)..."
+                    value={searchInput}
+                    onFocus={() => {
+                      if (searchInput.trim().length >= 2) setIsSuggestionsOpen(true);
+                    }}
+                    onChange={(e) => {
+                      setSearchInput(e.target.value);
+                      setIsSuggestionsOpen(true);
+                      setSelectedSuggestionIndex(-1);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if (autoSuggestions.length > 0) {
+                          setSelectedSuggestionIndex(prev => (prev < autoSuggestions.length - 1 ? prev + 1 : 0));
+                        }
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (autoSuggestions.length > 0) {
+                          setSelectedSuggestionIndex(prev => (prev > 0 ? prev - 1 : autoSuggestions.length - 1));
+                        }
+                      } else if (e.key === 'Enter') {
+                        if (isSuggestionsOpen && selectedSuggestionIndex >= 0 && autoSuggestions[selectedSuggestionIndex]) {
+                          e.preventDefault();
+                          executeSearch(autoSuggestions[selectedSuggestionIndex].query);
+                          setIsSuggestionsOpen(false);
+                        } else {
+                          e.preventDefault();
+                          executeSearch(searchInput);
+                          setIsSuggestionsOpen(false);
+                        }
+                      } else if (e.key === 'Escape') {
+                        setIsSuggestionsOpen(false);
+                      }
+                    }}
+                    className="w-full h-full border-0 focus:outline-none text-xs sm:text-sm md:text-base font-semibold px-3 bg-transparent placeholder:text-slate-400 placeholder:font-normal text-slate-950"
+                    aria-label="Search repair catalog"
+                  />
+
+                  {searchInput && (
+                    <button
+                      type="button"
+                      id="search-clear-btn"
+                      onClick={handleClearSearch}
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-slate-500 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all cursor-pointer mr-1 shrink-0"
+                      title="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Clear</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Search Submit Button */}
+                <button
+                  type="submit"
+                  id="search-action-btn"
+                  className="h-10 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-slate-950 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer shrink-0"
+                  aria-label="Search services"
+                >
+                  <Search className="w-4 h-4 text-amber-400" />
+                  <span>Search</span>
+                </button>
+              </form>
+
+              {/* Autocomplete Suggestions Dropdown */}
+              {isSuggestionsOpen && autoSuggestions.length > 0 && (
+                <div 
+                  id="search-autocomplete-dropdown"
+                  className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden z-50 divide-y divide-slate-100 text-left"
+                >
+                  <div className="px-3.5 py-2 bg-slate-50 flex items-center justify-between text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                    <span>Suggested Searches</span>
+                    <span className="text-[10px] font-medium text-slate-400">Click or press Enter to choose</span>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {autoSuggestions.map((item, idx) => (
+                      <div
+                        key={`${item.type}-${item.query}-${idx}`}
+                        onClick={() => {
+                          executeSearch(item.query);
+                          setIsSuggestionsOpen(false);
+                        }}
+                        className={`px-3.5 py-2.5 flex items-center justify-between gap-3 hover:bg-slate-50 cursor-pointer transition-colors ${
+                          selectedSuggestionIndex === idx ? 'bg-slate-100' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {item.type === 'model' && <Smartphone className="w-4 h-4 text-indigo-600 shrink-0" />}
+                          {item.type === 'service' && <Wrench className="w-4 h-4 text-amber-500 shrink-0" />}
+                          {item.type === 'category' && <Layers className="w-4 h-4 text-emerald-600 shrink-0" />}
+                          <div className="min-w-0">
+                            <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">{item.title}</p>
+                            <p className="text-[10px] sm:text-xs text-slate-500 truncate">{item.subtitle}</p>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-0.5 rounded shrink-0">
+                          {item.type}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Popular Search Suggestions Chips */}
             <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-2.5 text-xs">
@@ -1117,6 +1308,52 @@ export default function Services() {
         {/* 2. CATEGORY HORIZONTAL BROWSER & BRAND SELECTOR           */}
         {/* ========================================================= */}
         <section className="space-y-3.5 bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xs">
+          
+          {/* Hardware Platform Filter (Smartphones, Android Tablets, Apple iPads) */}
+          <div className="space-y-1.5 pb-2 border-b border-slate-100">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <Smartphone className="w-3.5 h-3.5 text-slate-400" />
+              <span>Hardware Device Form</span>
+            </span>
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+              {[
+                { id: 'all', label: 'All Devices', icon: Smartphone },
+                { id: 'smartphone', label: 'Smartphones', icon: Smartphone },
+                { id: 'tablet', label: 'Android Tablets', icon: Tablet },
+                { id: 'ipad', label: 'Apple iPads', icon: Tablet },
+              ].map((dev) => {
+                const isSelected = selectedDeviceType === dev.id;
+                const Icon = dev.icon;
+                return (
+                  <button
+                    key={dev.id}
+                    id={`device-type-${dev.id}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDeviceType(dev.id as any);
+                      setCurrentPage(1);
+                      const newParams = new URLSearchParams(searchParams);
+                      if (dev.id === 'all') {
+                        newParams.delete('deviceType');
+                      } else {
+                        newParams.set('deviceType', dev.id);
+                      }
+                      newParams.delete('page');
+                      setSearchParams(newParams, { replace: true });
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer border ${
+                      isSelected
+                        ? 'bg-slate-950 text-white border-slate-950 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100 hover:text-slate-950 active:scale-95'
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-400' : 'text-slate-400'}`} />
+                    <span>{dev.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           
           {/* Category Filter Navigation with Icons */}
           <div className="space-y-1.5">
@@ -1318,21 +1555,33 @@ export default function Services() {
           {/* 6. EMPTY STATE                                            */}
           {/* ========================================================= */}
           {!loading && !error && paginatedItems.length === 0 && (
-            <div className="p-8 sm:p-14 text-center bg-white rounded-3xl border border-slate-200 space-y-5 shadow-xs">
-              <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-400">
+            <div className="p-8 sm:p-12 text-center bg-white rounded-3xl border border-slate-200 space-y-6 shadow-xs max-w-2xl mx-auto">
+              <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto text-amber-600">
                 <Search className="w-7 h-7" />
               </div>
               
-              <div className="space-y-1.5 max-w-md mx-auto">
+              <div className="space-y-2">
                 <h3 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
-                  No matching services found
+                  {activeQuery ? `No repair services found for "${activeQuery}"` : 'No matching services found'}
                 </h3>
-                <p className="text-sm text-slate-600 font-medium leading-relaxed">
-                  We could not find an exact match for your search. Contact MTS Lab directly for immediate quotation on unlisted models.
+                <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed max-w-md mx-auto">
+                  We could not find an exact match in our online catalog. Contact MTS Lab directly for an immediate free quotation on unlisted models.
                 </p>
               </div>
 
-              <div className="space-y-3 pt-2 max-w-md mx-auto">
+              {/* Suggestions Box */}
+              <div className="text-left bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-2.5">
+                <span className="text-xs font-black text-slate-900 uppercase tracking-wider block">
+                  Search Tips & Suggestions:
+                </span>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
+                  <li>Check your spelling or try synonyms (e.g., <span className="font-semibold text-slate-800">"screen"</span> instead of <span className="font-semibold text-slate-800">"display"</span>, <span className="font-semibold text-slate-800">"battery"</span> instead of <span className="font-semibold text-slate-800">"charging"</span>).</li>
+                  <li>Search by specific device model (e.g., <span className="font-semibold text-slate-800">"iPhone 13"</span>, <span className="font-semibold text-slate-800">"S23 Ultra"</span>, <span className="font-semibold text-slate-800">"Pixel 7"</span>).</li>
+                  <li>Search by issue or component (e.g., <span className="font-semibold text-slate-800">"camera"</span>, <span className="font-semibold text-slate-800">"speaker"</span>, <span className="font-semibold text-slate-800">"water damage"</span>).</li>
+                </ul>
+              </div>
+
+              <div className="space-y-3 pt-2">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
                   <a
                     href={`tel:${MTS_PHONE}`}
@@ -1358,10 +1607,10 @@ export default function Services() {
                     variant="ghost"
                     size="sm"
                     onClick={handleResetAllFilters}
-                    className="text-xs font-bold text-slate-500 hover:text-slate-950"
+                    className="text-xs font-bold text-slate-500 hover:text-slate-950 cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-                    Reset Filters & View All
+                    Clear Search & Reset Filters
                   </Button>
                 </div>
               </div>
@@ -1381,6 +1630,7 @@ export default function Services() {
                   const CategoryIcon = catInfo.icon;
                   const fullDeviceName = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`;
                   const shortDescription = item.description || item.notes || (item.problem && item.problem !== item.serviceName ? `Addresses: ${item.problem}` : `Original-grade laboratory repair for ${fullDeviceName}.`);
+                  const isTablet = item.deviceType === 'Tablet' || item.deviceType === 'iPad';
 
                   return (
                     <div
@@ -1396,16 +1646,23 @@ export default function Services() {
                             <CategoryIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${catInfo.iconClass}`} />
                           </div>
 
-                          {/* Brand Pill */}
-                          <span className="text-[9px] sm:text-xs font-black uppercase text-slate-600 bg-slate-100/90 border border-slate-200/70 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg tracking-wider shrink-0 truncate max-w-[65px] sm:max-w-none">
-                            {item.brand}
-                          </span>
+                          {/* Brand Pill & Device Indicator */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {renderRatingStars(item.rating, item.ratingCount)}
+                            <span className="text-[9px] sm:text-xs font-black uppercase text-slate-600 bg-slate-100/90 border border-slate-200/70 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg tracking-wider truncate max-w-[65px] sm:max-w-none">
+                              {item.brand}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Service Title & Device Model */}
                         <div className="space-y-0.5 sm:space-y-1">
                           <div className="flex items-center gap-1 text-[10px] sm:text-xs font-bold text-slate-500">
-                            <Smartphone className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
+                            {isTablet ? (
+                              <Tablet className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-500 shrink-0" />
+                            ) : (
+                              <Smartphone className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
+                            )}
                             <span className="truncate">{fullDeviceName}</span>
                           </div>
                           
@@ -1579,6 +1836,15 @@ export default function Services() {
                             {catInfo.name}
                           </span>
                         </div>
+                        {selectedService.rating && selectedService.rating > 0 && (
+                          <div className="flex items-center gap-1 text-xs font-bold text-amber-300 bg-white/15 border border-white/20 px-2 py-0.5 rounded-lg">
+                            <span>★</span>
+                            <span>{selectedService.rating.toFixed(1)}</span>
+                            {selectedService.ratingCount ? (
+                              <span className="text-white/60 text-[10px]">({selectedService.ratingCount})</span>
+                            ) : null}
+                          </div>
+                        )}
                       </div>
 
                       {/* Large Category Icon Box & Service Title */}
@@ -1600,8 +1866,12 @@ export default function Services() {
                       {/* Compatible Hardware Device */}
                       <div className="p-3.5 rounded-2xl bg-white/10 border border-white/15 space-y-1">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
-                          Target Hardware Model
+                          {selectedService.deviceType === 'Tablet' || selectedService.deviceType === 'iPad' ? (
+                            <Tablet className="w-3.5 h-3.5 text-indigo-400" />
+                          ) : (
+                            <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+                          )}
+                          Target Hardware Model ({selectedService.deviceType || 'Smartphone'})
                         </span>
                         <p className="text-sm font-black text-white">
                           {fullDeviceName}
@@ -1622,14 +1892,27 @@ export default function Services() {
                           )}
                         </div>
 
-                        <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                          {selectedService.price > 0 
-                            ? `NPR ${selectedService.price.toLocaleString()}`
-                            : selectedService.priceType === 'ON_INSPECTION'
-                              ? 'Price on Inspection'
-                              : 'Contact for Price'
-                          }
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                            {selectedService.price > 0 
+                              ? `NPR ${selectedService.price.toLocaleString()}`
+                              : selectedService.priceType === 'ON_INSPECTION'
+                                ? 'Price on Inspection'
+                                : 'Contact for Price'
+                            }
+                          </div>
+                          {selectedService.originalPrice && selectedService.originalPrice > selectedService.price && selectedService.price > 0 && (
+                            <div className="text-sm text-slate-400 line-through font-semibold">
+                              NPR {selectedService.originalPrice.toLocaleString()}
+                            </div>
+                          )}
                         </div>
+
+                        {selectedService.originalPrice && selectedService.originalPrice > selectedService.price && selectedService.price > 0 && (
+                          <div className="text-[11px] font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-400/30 px-2 py-0.5 rounded-md w-fit">
+                            Save NPR {(selectedService.originalPrice - selectedService.price).toLocaleString()} ({Math.round(((selectedService.originalPrice - selectedService.price) / selectedService.originalPrice) * 100)}% off)
+                          </div>
+                        )}
                       </div>
 
                     </div>

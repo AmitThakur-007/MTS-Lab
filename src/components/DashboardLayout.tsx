@@ -245,7 +245,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'New Repair', path: '/dashboard/repairs/new', icon: PlusCircle, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
     { name: 'Courier Hub', path: '/dashboard/courier', icon: Truck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
     { name: 'Battery Warranty Hub', path: '/dashboard/battery-warranty', icon: BatteryCharging, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
-    { name: 'Services & Repair Prices', path: '/dashboard/repair-prices', icon: Tag, roles: ['SUPER_ADMIN', 'ADMIN'] },
+    { name: 'Services & Repair Prices', path: '/dashboard/repair-prices', icon: Tag, roles: ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'] },
     { name: 'Slideshow CMS', path: '/dashboard/slides', icon: Layers, roles: ['SUPER_ADMIN', 'ADMIN'] },
     { name: 'Inventory Hub', path: '/dashboard/inventory', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER'] },
     { name: 'Attendance', path: '/dashboard/attendance', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST', 'ACCOUNTANT'] },
