@@ -20,6 +20,14 @@ import {
   getNptIsoBoundsForPreset,
   DateFilterPreset
 } from '../services/repairStatsService';
+import {
+  validateAndNormalizeNepalPhone,
+  generateRepairCompletedSmsMessage,
+  recordSmsNotification,
+  getSmsNotificationsForRepair,
+  updateSmsNotification,
+  hasRecentSmsNotification,
+} from '../services/smsStorage';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -1887,6 +1895,267 @@ router.post('/:id/transfer', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'M
   } catch (err: any) {
     console.error('[POST /repairs/:id/transfer ERROR]', err);
     return res.status(500).json({ error: err.message || 'Failed to transfer repair.' });
+  }
+});
+
+// ====================================================
+// GOOGLE MESSAGES FOR WEB: REPAIR COMPLETED SMS
+// Roles allowed: SUPER_ADMIN, ADMIN, MANAGER, RECEPTIONIST
+// Unauthorized: TECHNICIAN, LEAD_TECHNICIAN, CUSTOMER
+// ====================================================
+
+const ALLOWED_SMS_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'];
+
+function isRepairedStatusEligible(status?: string | null): boolean {
+  if (!status) return false;
+  const s = status.toUpperCase().trim();
+  return ['REPAIRED', 'READY_FOR_PICKUP', 'READY', 'READY_FOR_DELIVERY'].includes(s);
+}
+
+// ----------------------------------------------------
+// 21. GET /:id/sms-status — Retrieve SMS Readiness & History for Repair
+// ----------------------------------------------------
+router.get('/:id/sms-status', authenticate, authorize(ALLOWED_SMS_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { data: repair, error } = await supabaseAdmin
+      .from('Repair')
+      .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, status')
+      .or(`id.eq.${id},repairNumber.eq.${id}`)
+      .single();
+
+    if (error || !repair) {
+      return res.status(404).json({ error: 'Repair ticket not found.' });
+    }
+
+    const eligible = isRepairedStatusEligible(repair.status);
+    const phoneValidation = validateAndNormalizeNepalPhone(repair.customerPhone);
+    const deviceModelFull = `${repair.deviceBrand ? `${repair.deviceBrand} ` : ''}${repair.deviceModel || ''}`.trim();
+    const defaultMessage = generateRepairCompletedSmsMessage({
+      customerName: repair.customerName,
+      deviceModel: deviceModelFull,
+      repairNumber: repair.repairNumber,
+    });
+
+    const history = getSmsNotificationsForRepair(repair.id);
+    const recentCheck = hasRecentSmsNotification(repair.id);
+
+    const googleMessagesUrl = 'https://messages.google.com/web/';
+    const smsProtocolUrl = phoneValidation.isValid
+      ? `sms:${phoneValidation.international}?body=${encodeURIComponent(defaultMessage)}`
+      : null;
+
+    return res.json({
+      eligible,
+      repairId: repair.id,
+      repairNumber: repair.repairNumber,
+      customerName: repair.customerName,
+      deviceModel: deviceModelFull,
+      customerPhoneRaw: repair.customerPhone,
+      phoneValidation,
+      defaultMessage,
+      history,
+      hasRecentSent: recentCheck.hasSent,
+      lastNotification: recentCheck.lastNotification,
+      googleMessagesUrl,
+      smsProtocolUrl,
+    });
+  } catch (err: any) {
+    console.error('[GET SMS STATUS ERROR]', err);
+    return res.status(500).json({ error: 'Failed to inspect SMS readiness.' });
+  }
+});
+
+// ----------------------------------------------------
+// 22. POST /:id/send-sms — Prepare / Initiate / Record Customer SMS
+// ----------------------------------------------------
+router.post('/:id/send-sms', authenticate, authorize(ALLOWED_SMS_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      customMessage,
+      channel = 'GOOGLE_MESSAGES_WEB',
+      action = 'INITIATED', // 'INITIATED' | 'SENT'
+      notes,
+    } = req.body || {};
+
+    const { data: repair, error } = await supabaseAdmin
+      .from('Repair')
+      .select('*')
+      .or(`id.eq.${id},repairNumber.eq.${id}`)
+      .single();
+
+    if (error || !repair) {
+      return res.status(404).json({ error: 'Repair ticket not found.' });
+    }
+
+    // Must be in REPAIRED or READY status
+    if (!isRepairedStatusEligible(repair.status)) {
+      return res.status(400).json({
+        error: `Customer completed SMS can only be sent for repairs with status REPAIRED or READY FOR PICKUP. Current status: ${repair.status}`
+      });
+    }
+
+    // Phone validation
+    const phoneValidation = validateAndNormalizeNepalPhone(repair.customerPhone);
+    if (!phoneValidation.isValid) {
+      return res.status(400).json({
+        error: phoneValidation.error || 'Invalid customer phone number. Please update the customer information before sending SMS.',
+        phoneValidation,
+      });
+    }
+
+    const deviceModelFull = `${repair.deviceBrand ? `${repair.deviceBrand} ` : ''}${repair.deviceModel || ''}`.trim();
+
+    // Use custom message if provided and non-empty, otherwise standard template
+    const finalMessage = customMessage && typeof customMessage === 'string' && customMessage.trim()
+      ? customMessage.trim()
+      : generateRepairCompletedSmsMessage({
+          customerName: repair.customerName,
+          deviceModel: deviceModelFull,
+          repairNumber: repair.repairNumber,
+        });
+
+    const isDirectSent = action === 'SENT';
+    const nowIso = new Date().toISOString();
+
+    const record = await recordSmsNotification({
+      repairId: repair.id,
+      repairNumber: repair.repairNumber,
+      customerId: repair.customerId || null,
+      customerName: repair.customerName,
+      customerPhoneRaw: repair.customerPhone,
+      customerPhoneNormalized: phoneValidation.normalized,
+      customerPhoneInternational: phoneValidation.international,
+      deviceModel: deviceModelFull,
+      deviceBrand: repair.deviceBrand || null,
+      messageType: 'REPAIR_COMPLETED_SMS',
+      messageContent: finalMessage,
+      status: isDirectSent ? 'SENT' : 'INITIATED',
+      channel: channel === 'SMS_PROTOCOL' ? 'SMS_PROTOCOL' : 'GOOGLE_MESSAGES_WEB',
+      senderStaffId: req.user!.id,
+      senderStaffName: req.user!.name || 'Staff',
+      senderStaffRole: req.user!.role,
+      notes: notes || null,
+      initiatedAt: nowIso,
+      sentAt: isDirectSent ? nowIso : null,
+      confirmedAt: isDirectSent ? nowIso : null,
+    });
+
+    // Record audit in RepairLog
+    const logId = uuidv4();
+    try {
+      await supabaseAdmin.from('RepairLog').insert([
+        {
+          id: logId,
+          repairId: repair.id,
+          status: repair.status,
+          message: isDirectSent
+            ? `Customer SMS confirmed sent to ${phoneValidation.displayFormatted} via ${record.channel === 'GOOGLE_MESSAGES_WEB' ? 'Google Messages for Web' : 'SMS'} by ${req.user!.name || 'Staff'} (${req.user!.role}).`
+            : `Customer SMS notification prepared for ${phoneValidation.displayFormatted} via Google Messages for Web by ${req.user!.name || 'Staff'} (${req.user!.role}).`,
+          createdAt: nowIso,
+        },
+      ]);
+      await broadcastServerChange('RepairLog', 'CREATE', logId);
+    } catch (logErr) {
+      console.warn('[REPAIR LOG SMS AUDIT WARN]', logErr);
+    }
+
+    await logAudit({
+      userId: req.user!.id,
+      action: 'SMS_NOTIFICATION_DISPATCHED',
+      resource: 'Repair',
+      resourceId: repair.id,
+      details: {
+        repairNumber: repair.repairNumber,
+        customerName: repair.customerName,
+        phone: phoneValidation.normalized,
+        status: record.status,
+        channel: record.channel,
+      },
+    });
+
+    const googleMessagesUrl = 'https://messages.google.com/web/';
+    const smsProtocolUrl = `sms:${phoneValidation.international}?body=${encodeURIComponent(finalMessage)}`;
+
+    return res.status(201).json({
+      success: true,
+      message: isDirectSent ? 'SMS sent successfully.' : 'SMS workflow prepared for Google Messages.',
+      record,
+      googleMessagesUrl,
+      smsProtocolUrl,
+    });
+  } catch (err: any) {
+    console.error('[SEND SMS ERROR]', err);
+    return res.status(500).json({ error: 'Failed to process SMS notification workflow.' });
+  }
+});
+
+// ----------------------------------------------------
+// 23. POST /:id/confirm-sms — Confirm Manual Send in Google Messages
+// ----------------------------------------------------
+router.post('/:id/confirm-sms', authenticate, authorize(ALLOWED_SMS_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { smsRecordId, notes } = req.body || {};
+
+    const { data: repair } = await supabaseAdmin
+      .from('Repair')
+      .select('id, repairNumber, customerName, customerPhone')
+      .or(`id.eq.${id},repairNumber.eq.${id}`)
+      .single();
+
+    if (!repair) {
+      return res.status(404).json({ error: 'Repair ticket not found.' });
+    }
+
+    const nowIso = new Date().toISOString();
+    let updatedRecord = null;
+
+    if (smsRecordId) {
+      updatedRecord = await updateSmsNotification(smsRecordId, {
+        status: 'SENT',
+        sentAt: nowIso,
+        confirmedAt: nowIso,
+        notes: notes || undefined,
+      });
+    }
+
+    const logId = uuidv4();
+    try {
+      await supabaseAdmin.from('RepairLog').insert([
+        {
+          id: logId,
+          repairId: repair.id,
+          status: 'REPAIRED',
+          message: `Customer SMS confirmed sent in Google Messages by ${req.user!.name || 'Staff'} (${req.user!.role}). Customer: ${repair.customerName}.`,
+          createdAt: nowIso,
+        },
+      ]);
+      await broadcastServerChange('RepairLog', 'CREATE', logId);
+    } catch (_) {}
+
+    return res.json({
+      success: true,
+      message: 'SMS send confirmed successfully.',
+      record: updatedRecord,
+    });
+  } catch (err: any) {
+    console.error('[CONFIRM SMS ERROR]', err);
+    return res.status(500).json({ error: 'Failed to confirm SMS send.' });
+  }
+});
+
+// ----------------------------------------------------
+// 24. GET /:id/sms-logs — Get SMS Log History
+// ----------------------------------------------------
+router.get('/:id/sms-logs', authenticate, authorize(ALLOWED_SMS_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const logs = getSmsNotificationsForRepair(id);
+    return res.json(logs);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to retrieve SMS logs.' });
   }
 });
 

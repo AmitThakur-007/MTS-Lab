@@ -50,6 +50,7 @@ import {
 import ServiceSlipModal from '@/components/repair/ServiceSlipModal';
 import EditRepairModal from '@/components/repair/EditRepairModal';
 import UpdateCourierModal from '@/components/repair/UpdateCourierModal';
+import SendSmsModal from '@/components/repair/SendSmsModal';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
@@ -74,6 +75,9 @@ export default function RepairDetails() {
 
   // Courier Update / Dispatch Modal
   const [isCourierDispatchDialogOpen, setIsCourierDispatchDialogOpen] = useState(false);
+
+  // Customer SMS Notification Modal
+  const [isSmsModalOpen, setIsSmsModalOpen] = useState(false);
 
   // Communication Notes
   const [notes, setNotes] = useState<any[]>([]);
@@ -236,6 +240,11 @@ export default function RepairDetails() {
     repair.courierTrackingNumber
   );
 
+  const isRepairedOrReady = ['REPAIRED', 'READY_FOR_PICKUP', 'READY', 'READY_FOR_DELIVERY'].includes(
+    String(repair?.status || '').toUpperCase().trim()
+  );
+  const canSendSms = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(user?.role || '');
+
   const PRIORITY_OPTIONS = [
     {
       value: 'NORMAL',
@@ -377,6 +386,18 @@ export default function RepairDetails() {
             >
               <Edit3 className="h-4 w-4 text-slate-700" />
               <span>Edit</span>
+            </Button>
+          )}
+
+          {canSendSms && isRepairedOrReady && (
+            <Button
+              variant="outline"
+              onClick={() => setIsSmsModalOpen(true)}
+              className="rounded-2xl border-teal-300 bg-teal-50/80 hover:bg-teal-100 text-teal-800 font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5 transition-all"
+              title="Notify customer via Google Messages for Web"
+            >
+              <MessageSquare className="h-4 w-4 text-teal-600" />
+              <span>Send SMS</span>
             </Button>
           )}
 
@@ -850,6 +871,19 @@ export default function RepairDetails() {
                   <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Phone Number</span>
                   <span className="font-mono font-bold text-slate-900 truncate">{repair.customerPhone}</span>
                 </div>
+                {canSendSms && isRepairedOrReady && (
+                  <div className="pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsSmsModalOpen(true)}
+                      className="w-full rounded-xl border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs h-8 px-2.5 flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5 text-teal-600" />
+                      <span>Send Customer SMS</span>
+                    </Button>
+                  </div>
+                )}
                 {repair.customerEmail && (
                   <div className="flex justify-between items-center gap-2">
                     <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Email</span>
@@ -1017,6 +1051,18 @@ export default function RepairDetails() {
           repair={repair}
           onSuccess={(updated) => {
             setRepair((prev: any) => ({ ...prev, ...updated }));
+            fetchData();
+          }}
+        />
+      )}
+
+      {/* Send Customer SMS Modal (Google Messages for Web) */}
+      {repair && (
+        <SendSmsModal
+          open={isSmsModalOpen}
+          onOpenChange={setIsSmsModalOpen}
+          repair={repair}
+          onSuccess={() => {
             fetchData();
           }}
         />

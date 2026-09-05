@@ -39,7 +39,8 @@ import {
   Upload,
   FileDown,
   FileCheck2,
-  RotateCcw
+  RotateCcw,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,6 +114,7 @@ import {
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import ServiceSlipModal from '@/components/repair/ServiceSlipModal';
 import EditRepairModal from '@/components/repair/EditRepairModal';
+import SendSmsModal from '@/components/repair/SendSmsModal';
 
 // Status badge styling
 const statusConfig: Record<string, { label: string; badgeClass: string; bgSoft: string; textClass: string }> = {
@@ -205,6 +207,11 @@ export default function Repairs() {
   const canEdit = isSuperAdmin || isAdmin || isManager || isReceptionist;
   const canCreate = isSuperAdmin || isAdmin || isManager || isReceptionist;
   const canManageExcel = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(user?.role || '');
+  const canSendSms = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(user?.role || '');
+
+  // Send Customer SMS Modal (Google Messages for Web)
+  const [smsModalRepair, setSmsModalRepair] = useState<any | null>(null);
+  const [isSmsModalOpen, setIsSmsModalOpen] = useState(false);
 
   // Excel Import / Export state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -580,7 +587,14 @@ export default function Repairs() {
       const updated = await api.patch(`/repairs/${statusModalRepair.id}`, payload);
       toast.success(`Status updated to ${newStatusValue.replace(/_/g, ' ')}`);
       setRepairs(prev => prev.map(r => r.id === statusModalRepair.id ? { ...r, ...updated } : r));
+      const targetRepair = { ...statusModalRepair, ...updated, status: newStatusValue };
       setStatusModalRepair(null);
+
+      // Prompt/open SMS modal if changed to Repaired/Ready
+      if (canSendSms && isRepairedOrReadyStatus(newStatusValue)) {
+        setSmsModalRepair(targetRepair);
+        setIsSmsModalOpen(true);
+      }
     } catch (err: any) {
       toast.error(err.message || 'Failed to update repair status');
     } finally {
@@ -1350,6 +1364,23 @@ export default function Repairs() {
                               <Eye className="h-3.5 w-3.5 mr-1" /> View
                             </Button>
 
+                            {/* Send Customer SMS button if Repaired */}
+                            {canSendSms && isRepairedOrReadyStatus(repair.status) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSmsModalRepair(repair);
+                                  setIsSmsModalOpen(true);
+                                }}
+                                className="h-8 px-2.5 rounded-xl border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs gap-1.5 shadow-2xs cursor-pointer"
+                                title="Send Customer SMS (Google Messages for Web)"
+                              >
+                                <MessageSquare className="h-3.5 w-3.5 text-teal-600" />
+                                <span className="hidden xl:inline">Send SMS</span>
+                              </Button>
+                            )}
+
                             <DropdownMenu>
                               <DropdownMenuTrigger render={
                                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-500 hover:bg-slate-100" />
@@ -1403,6 +1434,19 @@ export default function Repairs() {
                                 >
                                   <Printer className="h-3.5 w-3.5" /> Print Job Sheet
                                 </DropdownMenuItem>
+
+                                {/* Send SMS Option */}
+                                {canSendSms && isRepairedOrReadyStatus(repair.status) && (
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSmsModalRepair(repair);
+                                      setIsSmsModalOpen(true);
+                                    }}
+                                    className="h-9 px-3 rounded-xl font-bold text-xs cursor-pointer gap-2 text-teal-700 hover:bg-teal-50"
+                                  >
+                                    <MessageSquare className="h-3.5 w-3.5 text-teal-600" /> Send Customer SMS
+                                  </DropdownMenuItem>
+                                )}
 
                                 {/* Courier Dispatch Option */}
                                 {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && (
@@ -1522,6 +1566,17 @@ export default function Repairs() {
                         <DropdownMenuItem onClick={() => handleOpenStatusModal(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2">
                           <PackageCheck className="h-3.5 w-3.5" /> Update Status
                         </DropdownMenuItem>
+                        {canSendSms && isRepairedOrReadyStatus(repair.status) && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSmsModalRepair(repair);
+                              setIsSmsModalOpen(true);
+                            }}
+                            className="h-9 px-3 rounded-xl font-bold text-xs cursor-pointer gap-2 text-teal-700 hover:bg-teal-50"
+                          >
+                            <MessageSquare className="h-3.5 w-3.5 text-teal-600" /> Send Customer SMS
+                          </DropdownMenuItem>
+                        )}
                         {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && (
                           <DropdownMenuItem onClick={() => handleOpenCourierDispatch(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-blue-700 hover:bg-blue-50">
                             <Truck className="h-3.5 w-3.5 text-blue-600" /> Dispatch Courier
@@ -1582,6 +1637,21 @@ export default function Repairs() {
                         {formatRepairCost(repair.totalCost ?? repair.estimatedCost)}
                       </span>
                     </div>
+
+                    {canSendSms && isRepairedOrReadyStatus(repair.status) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSmsModalRepair(repair);
+                          setIsSmsModalOpen(true);
+                        }}
+                        className="h-8 rounded-xl border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold px-2.5 gap-1 cursor-pointer"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5 text-teal-600" />
+                        <span>SMS</span>
+                      </Button>
+                    )}
 
                     <Button
                       size="sm"
@@ -2338,6 +2408,20 @@ export default function Repairs() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* ========================================================================= */}
+      {/* MODAL 7: SEND CUSTOMER SMS MODAL (GOOGLE MESSAGES FOR WEB)                */}
+      {/* ========================================================================= */}
+      {smsModalRepair && (
+        <SendSmsModal
+          open={isSmsModalOpen}
+          onOpenChange={setIsSmsModalOpen}
+          repair={smsModalRepair}
+          onSuccess={() => {
+            fetchData(true);
+          }}
+        />
+      )}
     </div>
   );
 }
