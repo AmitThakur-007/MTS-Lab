@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { filterPubliclyTrackableRepairs } from './_server/services/trackingExpiration';
 
 const PRODUCTION_SUPABASE_URL = 'https://pirynpugkiurjobrqiqg.supabase.co';
 const PRODUCTION_SUPABASE_ANON_KEY =
@@ -212,14 +213,22 @@ export default async function handler(req: Request, res: Response) {
       return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
     }
 
-    const primaryRepair = allMatchingRepairs[0];
-
     const allRepairIds = allMatchingRepairs.map((r) => r.id);
     const { data: allExplicitLogs } = await supabase
       .from('RepairLog')
       .select('id, repairId, status, message, createdAt')
       .in('repairId', allRepairIds)
       .order('createdAt', { ascending: false });
+
+    // Enforce business rule: Once marked DELIVERED, trackable only until end of that delivery day (Asia/Kathmandu).
+    // Starting next calendar day, repair is expired from public tracking.
+    const trackableRepairs = filterPubliclyTrackableRepairs(allMatchingRepairs, allExplicitLogs || []);
+
+    if (!trackableRepairs || trackableRepairs.length === 0) {
+      return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
+    }
+
+    const primaryRepair = trackableRepairs[0];
 
     const getCustomerLogDesc = (logStatus?: string, currentOverallStatus?: string) => {
       const st = (logStatus || currentOverallStatus || 'RECEIVED').toUpperCase().trim();
@@ -357,7 +366,7 @@ export default async function handler(req: Request, res: Response) {
     };
 
     const sanitizedPrimary = sanitizePublicRepairObj(primaryRepair);
-    const sanitizedAll = allMatchingRepairs.map((rep) => sanitizePublicRepairObj(rep));
+    const sanitizedAll = trackableRepairs.map((rep) => sanitizePublicRepairObj(rep));
 
     return res.json({
       success: true,

@@ -3,6 +3,7 @@ import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { getSlides } from '../services/slidesStorage';
+import { filterPubliclyTrackableRepairs } from '../services/trackingExpiration';
 
 const router = Router();
 
@@ -214,15 +215,23 @@ const handlePublicTrack = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
     }
 
-    const primaryRepair = allMatchingRepairs[0];
-
-    // Query RepairLog for all matching repairs to display customer-facing diagnostic trace (without timestamps or staff identity)
+    // Query RepairLog for all matching repairs to determine authoritative delivery timestamps and diagnostic trace
     const allRepairIds = allMatchingRepairs.map((r) => r.id);
     const { data: allExplicitLogs } = await supabaseAdmin
       .from('RepairLog')
       .select('id, repairId, status, message, createdAt')
       .in('repairId', allRepairIds)
       .order('createdAt', { ascending: false });
+
+    // Enforce business rule: Once marked DELIVERED, trackable only until end of that delivery day (Asia/Kathmandu).
+    // Starting next calendar day, repair is expired from public tracking.
+    const trackableRepairs = filterPubliclyTrackableRepairs(allMatchingRepairs, allExplicitLogs || []);
+
+    if (!trackableRepairs || trackableRepairs.length === 0) {
+      return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
+    }
+
+    const primaryRepair = trackableRepairs[0];
 
     const getCustomerLogDesc = (logStatus?: string, currentOverallStatus?: string) => {
       const st = (logStatus || currentOverallStatus || 'RECEIVED').toUpperCase().trim();
@@ -532,7 +541,7 @@ const handlePublicTrack = async (req: Request, res: Response) => {
     };
 
     const sanitizedPrimary = sanitizePublicRepairObj(primaryRepair);
-    const sanitizedAll = allMatchingRepairs.map((rep) => sanitizePublicRepairObj(rep));
+    const sanitizedAll = trackableRepairs.map((rep) => sanitizePublicRepairObj(rep));
 
     return res.json({
       success: true,

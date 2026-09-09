@@ -1377,7 +1377,8 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
       await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody, id, repairNumber: updated.repairNumber }, req.user);
     }
 
-    if (rawBody.status) {
+    const newStatusStr = rawBody.status ? String(rawBody.status).toUpperCase().trim() : undefined;
+    if (newStatusStr && newStatusStr !== existingStatus) {
       const logId = uuidv4();
       try {
         await supabaseAdmin.from('RepairLog').insert([

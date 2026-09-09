@@ -604,6 +604,7 @@ router.patch('/:id/status', authenticate, async (req: AuthRequest, res: Response
       updatePayload.courierOutStatus = status;
       if (status === 'DELIVERED') {
         updatePayload.status = 'DELIVERED';
+        updatePayload.courierOutDeliveredDate = now;
       }
     }
 
