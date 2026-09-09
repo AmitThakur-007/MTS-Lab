@@ -1,359 +1,774 @@
-import { motion } from 'motion/react';
+import { useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   MapPin, 
   PhoneCall, 
+  Phone,
   Mail, 
   Clock, 
   ExternalLink, 
-  MessageSquare, 
   Compass, 
   HelpCircle, 
-  HeartHandshake,
-  ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  Check,
+  Send,
+  Loader2,
+  ArrowRight,
+  Smartphone,
+  Navigation,
+  MessageCircle,
+  History
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 export default function Contact() {
+  // Form State
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    subject: 'Screen & Glass Refurbishing',
+    message: ''
+  });
+
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  // Copy feedback states
+  const [copiedEmail, setCopiedEmail] = useState(false);
+  const [copiedPhone, setCopiedPhone] = useState(false);
+
+  // Live status in Nepal Time (UTC+5:45)
+  const isLabCurrentlyOpen = (() => {
+    try {
+      const now = new Date();
+      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const nepalTime = new Date(utc + (5.75 * 3600000));
+      const day = nepalTime.getDay(); // 0 = Sunday, 6 = Saturday
+      const hour = nepalTime.getHours();
+      const minute = nepalTime.getMinutes();
+      const timeInMinutes = hour * 60 + minute;
+
+      if (day >= 0 && day <= 5) {
+        // Sunday - Friday: 10:30 AM (630 mins) to 7:30 PM (1170 mins)
+        return timeInMinutes >= 630 && timeInMinutes <= 1170;
+      } else if (day === 6) {
+        // Saturday: 2:00 PM (840 mins) to 5:30 PM (1050 mins)
+        return timeInMinutes >= 840 && timeInMinutes <= 1050;
+      }
+      return false;
+    } catch {
+      return true;
+    }
+  })();
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (formErrors[name]) {
+      setFormErrors(prev => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
+    if (serverError) setServerError(null);
+  };
+
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.name.trim() || formData.name.trim().length < 2) {
+      errors.name = 'Please provide your name (at least 2 characters).';
+    }
+
+    const cleanPhone = formData.phone.trim().replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 7 || cleanPhone.length > 15) {
+      errors.phone = 'Please provide a valid contact number (e.g. 98XXXXXXXX or 01XXXXXXX).';
+    }
+
+    if (formData.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email.trim())) {
+        errors.email = 'Please provide a valid email format or leave this blank.';
+      }
+    }
+
+    if (!formData.message.trim() || formData.message.trim().length < 10) {
+      errors.message = 'Please provide a message with at least 10 characters describing your inquiry.';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    setIsSubmitting(true);
+    setServerError(null);
+
+    try {
+      const response = await fetch('/api/public/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+          email: formData.email.trim(),
+          subject: formData.subject,
+          message: formData.message.trim()
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to submit message. Please try again or call our hotline.');
+      }
+
+      setSubmitSuccess(true);
+      setFormData({
+        name: '',
+        phone: '',
+        email: '',
+        subject: 'Screen & Glass Refurbishing',
+        message: ''
+      });
+    } catch (err: any) {
+      setServerError(err?.message || 'An unexpected error occurred. Please call our hotline directly.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCopyEmail = useCallback(() => {
+    navigator.clipboard.writeText('support@mobiletechnologystation.com.np').then(() => {
+      setCopiedEmail(true);
+      setTimeout(() => setCopiedEmail(false), 2200);
+    }).catch(() => {
+      // Fallback
+      setCopiedEmail(true);
+      setTimeout(() => setCopiedEmail(false), 2200);
+    });
+  }, []);
+
+  const handleCopyPhone = useCallback(() => {
+    navigator.clipboard.writeText('+9779869276668').then(() => {
+      setCopiedPhone(true);
+      setTimeout(() => setCopiedPhone(false), 2200);
+    }).catch(() => {
+      setCopiedPhone(true);
+      setTimeout(() => setCopiedPhone(false), 2200);
+    });
+  }, []);
+
   return (
-    <div className="min-h-screen bg-slate-50/50 font-sans text-slate-850 leading-relaxed selection:bg-indigo-600 selection:text-white flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased overflow-x-hidden selection:bg-slate-900 selection:text-white">
       <Navbar />
 
-      {/* 1. Hero Section */}
-      <section className="relative pt-32 pb-20 md:pt-40 md:pb-28 bg-slate-900 border-b border-slate-800 overflow-hidden">
-        {/* Decorative background gradients */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute -top-1/2 -right-1/4 w-[75%] h-[150%] rounded-full bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.12),transparent_60%)] blur-3xl" />
-          <div className="absolute -bottom-1/2 -left-1/4 w-[75%] h-[150%] rounded-full bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.06),transparent_60%)] blur-3xl" />
-          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent" />
-        </div>
+      {/* Header & Introduction */}
+      <header className="pt-24 sm:pt-28 md:pt-32 pb-12 sm:pb-16 bg-slate-900 text-white border-b border-slate-800 relative">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl space-y-4">
+            {/* Breadcrumb / Category Status Tag */}
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-medium text-slate-300">
+              <span className={`h-2 w-2 rounded-full shrink-0 ${isLabCurrentlyOpen ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span>{isLabCurrentlyOpen ? 'Reception Desk Open' : 'Reception Closed (Opens 10:30 AM)'}</span>
+              <span className="text-slate-500 font-normal">|</span>
+              <span className="text-slate-400">Kathmandu Central Lab</span>
+            </div>
 
-        <div className="max-w-7xl mx-auto px-6 relative z-10 text-center space-y-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
-            className="space-y-4"
-          >
-            <Badge className="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/25 px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase inline-flex items-center gap-1.5 shadow-inner">
-              <ShieldCheck className="h-3.5 w-3.5 text-indigo-400" /> Nepal's Premium Repair Support
-            </Badge>
-
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white tracking-tight leading-none max-w-4xl mx-auto select-none">
-              Contact <span className="bg-gradient-to-r from-indigo-400 via-purple-300 to-indigo-300 bg-clip-text text-transparent">MTS Lab</span>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white">
+              Contact MTS Lab
             </h1>
 
-            <p className="text-slate-350 text-base sm:text-lg md:text-xl max-w-2xl mx-auto font-medium leading-relaxed">
-              We are here to help you with all smartphone repair inquiries and support.
+            <p className="text-slate-300 text-sm sm:text-base md:text-lg leading-relaxed max-w-2xl">
+              Connect directly with certified hardware diagnostics, screen refurbishment engineers, and reception staff at our New Road, Kathmandu facility.
             </p>
-          </motion.div>
+          </div>
         </div>
-      </section>
+      </header>
 
-      {/* Main Container */}
-      <div className="max-w-7xl mx-auto px-6 py-12 md:py-16 -mt-12 relative z-20 space-y-16">
+      {/* Main Content Area */}
+      <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-10 sm:space-y-12 flex-1">
         
-        {/* 2. Contact Information Cards Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 items-stretch">
-          
-          {/* Card 1: Geographic Location */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            whileHover={{ y: -5 }}
-            className="group"
-          >
-            <Card className="rounded-[32px] border border-slate-100 shadow-xl shadow-slate-100/50 bg-white h-full flex flex-col justify-between overflow-hidden">
-              <CardContent className="p-8 space-y-6 flex-grow">
-                <div className="h-14 w-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center border border-indigo-100/30 shadow-sm shrink-0 transition-colors group-hover:bg-indigo-600 group-hover:text-white">
-                  <MapPin className="h-6 w-6" />
-                </div>
-                <div className="space-y-3">
-                  <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Our Laboratory</h3>
-                  <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Headquarters Location</p>
-                  <p className="text-slate-600 font-semibold text-sm sm:text-base leading-relaxed">
-                    Pakosadak, Newroad, Kathmandu, Nepal
-                  </p>
-                  <p className="text-xs text-indigo-600 font-extrabold flex items-center gap-1.5 pt-2">
-                    <Compass className="h-4 w-4" /> Opposite people's plaza back gate
-                  </p>
-                </div>
-              </CardContent>
-              <div className="px-8 py-5 bg-slate-50/50 border-t border-slate-50/80 mt-auto flex items-center justify-between text-xs text-slate-400 font-bold">
-                <span>Central Zone (Kathmandu)</span>
-                <a 
-                  href="https://maps.app.goo.gl/baP5yg6qgcgBT7neA" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-indigo-600 font-extrabold hover:underline flex items-center gap-1"
-                >
-                  View Map <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-            </Card>
-          </motion.div>
-
-          {/* Card 2: Call and Connect Hotlines */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-            whileHover={{ y: -5 }}
-            className="group"
-          >
-            <Card className="rounded-[32px] border border-slate-100 shadow-xl shadow-slate-100/50 bg-white h-full flex flex-col justify-between overflow-hidden">
-              <CardContent className="p-8 space-y-6 flex-grow">
-                <div className="h-14 w-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center border border-emerald-100/30 shadow-sm shrink-0 transition-colors group-hover:bg-emerald-600 group-hover:text-white">
-                  <PhoneCall className="h-6 w-6" />
-                </div>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight font-sans">Support Hotlines</h3>
-                    <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Direct Mobile & Landline connections</p>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 gap-3 pt-1">
-                    <a 
-                      href="tel:9869276668" 
-                      className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 hover:border-indigo-100 hover:bg-slate-50/60 transition-all font-bold text-slate-800 text-sm group/btn"
-                    >
-                      <span className="flex items-center gap-2">
-                        <PhoneCall className="h-4 w-4 text-indigo-500" />
-                        9869276668 (Mobile)
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-slate-300 group-hover/btn:translate-x-1 transition-transform" />
-                    </a>
-                    
-                    <a 
-                      href="tel:015364307" 
-                      className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 hover:border-indigo-100 hover:bg-slate-50/60 transition-all font-bold text-slate-800 text-sm group/btn"
-                    >
-                      <span className="flex items-center gap-2">
-                        <PhoneCall className="h-4 w-4 text-indigo-500" />
-                        015364307 (Landline)
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-slate-300 group-hover/btn:translate-x-1 transition-transform" />
-                    </a>
-                  </div>
-                </div>
-              </CardContent>
-              <div className="px-8 py-5 bg-slate-50/50 border-t border-slate-50/80 mt-auto flex items-center justify-between text-xs text-slate-400 font-bold">
-                <span>Click numbers to call directly</span>
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              </div>
-            </Card>
-          </motion.div>
-
-          {/* Card 3: Mail & Business Hours */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            whileHover={{ y: -5 }}
-            className="group"
-          >
-            <Card className="rounded-[32px] border border-slate-100 shadow-xl shadow-slate-100/50 bg-white h-full flex flex-col justify-between overflow-hidden">
-              <CardContent className="p-8 space-y-6 flex-grow">
-                <div className="h-14 w-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center border border-amber-100/30 shadow-sm shrink-0 transition-colors group-hover:bg-amber-600 group-hover:text-white">
-                  <Clock className="h-6 w-6" />
-                </div>
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Hours & Email</h3>
-                    <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Corporate Availability</p>
-                  </div>
-                  
-                  <div className="space-y-3.5 text-sm font-bold text-slate-600 leading-relaxed">
-                    <div className="flex items-start gap-3">
-                      <Mail className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider font-extrabold">Inbox Support</p>
-                        <a 
-                          href="mailto:support@mobiletechnologystation.com.np" 
-                          className="text-slate-800 hover:text-indigo-650 transition-colors block break-all font-bold underline decoration-slate-200 underline-offset-4"
-                        >
-                          support@mobiletechnologystation.com.np
-                        </a>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                      <Clock className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider font-extrabold">Service Lab Hours</p>
-                        <p className="text-slate-800 font-bold">Sun - Fri: 10:30 AM - 7:30 PM</p>
-                        <p className="text-xs text-amber-600 font-medium">Saturday Recess & Staff Rest</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-              <div className="px-8 py-5 bg-slate-50/50 border-t border-slate-50/80 mt-auto flex items-center justify-between text-xs text-slate-400 font-bold">
-                <span>Response within 24 hours</span>
-                <ChevronRight className="h-4 w-4 text-slate-300" />
-              </div>
-            </Card>
-          </motion.div>
-
-        </div>
-
-        {/* 3. Our Location Section (Replaces broken map with pristine Location Card) */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="space-y-6 animate-in fade-in-50 duration-500"
-        >
-          <div className="space-y-1.5 text-center sm:text-left">
-            <Badge className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border-none px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest">
-              Physical Location
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Geographic Navigation</h2>
-            <p className="text-slate-500 font-medium text-xs sm:text-sm md:text-base leading-relaxed">
-              Find physical directions to our main headquarters and labs.
-            </p>
-          </div>
-
-          <div className="bg-white rounded-[32px] p-8 md:p-10 border border-slate-100 shadow-xl overflow-hidden relative grid grid-cols-1 md:grid-cols-12 gap-8 items-center bg-gradient-to-br from-white to-slate-50/50">
-            {/* Ambient pattern decoration inside the card */}
-            <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-indigo-50/30 blur-[80px] pointer-events-none -mr-20 -mt-20" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 rounded-full bg-emerald-50/25 blur-[60px] pointer-events-none -ml-16 -mb-16" />
-
-            {/* Left Column: Location Details */}
-            <div className="md:col-span-7 space-y-6 relative z-10">
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 bg-indigo-100/80 text-indigo-700 rounded-2xl flex items-center justify-center shrink-0 border border-indigo-200/40 shadow-sm">
-                  <MapPin className="h-6 w-6" />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600">Headquarters</span>
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Our Location</h3>
-                  <p className="text-slate-800 font-bold text-base sm:text-lg leading-snug">
-                    Pakosadak, Newroad, Kathmandu, Nepal
-                  </p>
-                </div>
-              </div>
-
-              <div className="pl-16 space-y-4">
-                <p className="text-slate-600 font-medium text-sm sm:text-base max-w-lg leading-relaxed">
-                  Visit MTS Lab for professional smartphone repair services and technical support.
-                </p>
-
-                <div className="flex flex-wrap gap-2.5 pt-1">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-600">
-                    <Compass className="h-3.5 w-3.5 text-indigo-500" /> Newroad Pako Zone
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-600">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> Authorized Lab center
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Dynamic Action Card */}
-            <div className="md:col-span-5 w-full relative z-10 flex flex-col items-stretch md:items-end justify-center">
-              <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-2xl shadow-slate-900/10 space-y-6 border border-slate-800 w-full md:max-w-xs transition-transform hover:scale-[1.02] duration-300">
-                <div className="space-y-2">
-                  <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">Route & Navigation Guide</h4>
-                  <p className="text-xs text-slate-300 font-medium leading-relaxed">
-                    Instantly load precise physical coordinate mapping and optimal traffic paths directly in Google Maps.
-                  </p>
-                </div>
-
-                <a 
-                  href="https://maps.app.goo.gl/baP5yg6qgcgBT7neA" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-5 h-13 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-extrabold text-sm shadow-xl shadow-indigo-600/25 transition-all w-full text-center"
-                >
-                  <span>Open in Google Maps</span>
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 4. Help & Call To Action Panel */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="bg-indigo-900 rounded-[32px] p-6 sm:p-10 md:p-12 text-white relative overflow-hidden shadow-2xl"
-        >
-          {/* Ambient visual overlay inside card */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.25),transparent_65%)] pointer-events-none" />
-          <div className="absolute -top-24 -left-20 w-80 h-80 rounded-full bg-indigo-600/35 blur-[120px] pointer-events-none" />
-
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        {/* 1. Essential Contact Channels Grid */}
+        <section aria-labelledby="contact-essentials-heading">
+          <h2 id="contact-essentials-heading" className="sr-only">Contact Information Channels</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
             
-            <div className="lg:col-span-8 space-y-4">
-              <span className="inline-flex items-center gap-1.5 px-3.5 py-1 bg-white/10 backdrop-blur-sm border border-white/15 rounded-full text-[10px] font-black uppercase tracking-widest text-indigo-200">
-                <HeartHandshake className="h-3.5 w-3.5 text-indigo-300" /> Professional Service Assurance
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight md:max-w-xl">
-                Ready to restore your device's raw potential?
+            {/* Card 1: Phone Hotlines */}
+            <div className="w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
+              <div className="space-y-3 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+                    <PhoneCall className="h-5 w-5 shrink-0" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyPhone}
+                    aria-label="Copy mobile number"
+                    className="text-xs text-slate-400 hover:text-slate-700 font-medium inline-flex items-center gap-1 py-1 px-2 rounded-md hover:bg-slate-100 transition-colors"
+                  >
+                    {copiedPhone ? <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
+                    <span>{copiedPhone ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-slate-900">Phone Hotlines</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Direct reception & technician desk</p>
+                </div>
+
+                <div className="space-y-2 pt-1 min-w-0">
+                  <a 
+                    href="tel:+9779869276668" 
+                    className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-100 bg-slate-50/70 hover:bg-emerald-50/50 hover:border-emerald-200 text-slate-900 transition-colors group min-w-0"
+                  >
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Mobile Hotline</span>
+                      <span className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block truncate">
+                        +977 9869276668
+                      </span>
+                    </div>
+                    <Phone className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 shrink-0" />
+                  </a>
+
+                  <a 
+                    href="tel:015364307" 
+                    className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-100 bg-slate-50/70 hover:bg-emerald-50/50 hover:border-emerald-200 text-slate-900 transition-colors group min-w-0"
+                  >
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Kathmandu Landline</span>
+                      <span className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block truncate">
+                        01-5364307
+                      </span>
+                    </div>
+                    <Phone className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 shrink-0" />
+                  </a>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+                Tap to call instantly during hours
+              </div>
+            </div>
+
+            {/* Card 2: Support Email */}
+            <div className="w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
+              <div className="space-y-3 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+                    <Mail className="h-5 w-5 shrink-0" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyEmail}
+                    aria-label="Copy support email address"
+                    className="text-xs text-slate-400 hover:text-slate-700 font-medium inline-flex items-center gap-1 py-1 px-2 rounded-md hover:bg-slate-100 transition-colors"
+                  >
+                    {copiedEmail ? <Check className="h-3.5 w-3.5 text-indigo-600 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
+                    <span>{copiedEmail ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-slate-900">Email Inquiries</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Written estimates & quotations</p>
+                </div>
+
+                <div className="pt-1 min-w-0">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Support Desk</span>
+                  <a 
+                    href="mailto:support@mobiletechnologystation.com.np"
+                    className="text-xs sm:text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline break-all block leading-snug"
+                  >
+                    support@mobiletechnologystation.com.np
+                  </a>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+                Response within 24 business hours
+              </div>
+            </div>
+
+            {/* Card 3: Location Address */}
+            <div className="w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
+              <div className="space-y-3 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="h-10 w-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
+                    <MapPin className="h-5 w-5 shrink-0" />
+                  </div>
+                  <a
+                    href="https://maps.app.goo.gl/baP5yg6qgcgBT7neA"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-rose-600 hover:text-rose-800 font-semibold inline-flex items-center gap-1 hover:underline"
+                  >
+                    <span>Maps</span>
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                </div>
+
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-slate-900">Physical Lab</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Central service & diagnostic facility</p>
+                </div>
+
+                <div className="pt-1 text-xs sm:text-sm text-slate-700 font-medium leading-relaxed min-w-0">
+                  <p className="font-semibold text-slate-900">Pakosadak, Newroad</p>
+                  <p className="text-slate-600">Kathmandu, Nepal</p>
+                  <p className="text-slate-500 text-xs mt-1.5 flex items-center gap-1">
+                    <Compass className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                    <span>Opposite People's Plaza back gate</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+                Walk-ins welcomed without prior booking
+              </div>
+            </div>
+
+            {/* Card 4: Operating Hours */}
+            <div className="w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
+              <div className="space-y-3 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="h-10 w-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+                    <Clock className="h-5 w-5 shrink-0" />
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                    Nepal Time
+                  </span>
+                </div>
+
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-slate-900">Operating Hours</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Laboratory schedule</p>
+                </div>
+
+                <div className="space-y-2 pt-1 text-xs min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-semibold text-slate-700">Sun – Fri:</span>
+                    <span className="text-slate-900 font-bold text-right">10:30 AM – 7:30 PM</span>
+                  </div>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-semibold text-slate-700">Saturday:</span>
+                    <span className="text-slate-900 font-bold text-right">2:00 PM – 5:30 PM</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 pt-0.5">
+                    Saturday: Emergency repair intake & scheduled deliveries
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+                Public holiday adjustments announced on Facebook
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        {/* 2. Interactive Area: Get in Touch Form + Support Information */}
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* Left Column: Contact Form (7 cols) */}
+          <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 p-6 sm:p-8 shadow-xs min-w-0">
+            <div className="space-y-2 mb-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+                Send an Inquiry
               </h2>
-              <p className="text-indigo-200 text-sm sm:text-base font-semibold max-w-2xl leading-relaxed">
-                Connect with our front receptionist at the service desk, check in with diagnostic technicians directly, or schedule custom bulk logic-board repairs today.
+              <p className="text-slate-500 text-xs sm:text-sm leading-relaxed">
+                Have a hardware issue, screen damage, or inquiry about repairs? Leave your message and our reception team will get in touch with you.
               </p>
             </div>
 
-            <div className="lg:col-span-4 flex flex-col sm:flex-row lg:flex-col gap-4 select-none">
-              <a 
-                href="tel:9869276668" 
-                className="flex items-center justify-center gap-2 h-14 bg-white hover:bg-slate-50 text-slate-900 rounded-2xl shadow-xl font-bold transition-all px-6 w-full text-center"
+            {submitSuccess ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-6 text-center space-y-4 animate-in fade-in-50">
+                <div className="h-12 w-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="h-6 w-6 shrink-0" />
+                </div>
+                <div className="space-y-1 max-w-md mx-auto">
+                  <h3 className="text-lg font-bold text-emerald-900">Inquiry Received Successfully</h3>
+                  <p className="text-xs sm:text-sm text-emerald-700 leading-relaxed">
+                    Thank you for reaching out to MTS Lab. Our reception desk has logged your inquiry and will reach you via phone or email during business hours.
+                  </p>
+                </div>
+                <div className="pt-2 flex flex-wrap justify-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setSubmitSuccess(false)}
+                    className="border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                  >
+                    Send Another Message
+                  </Button>
+                  <a
+                    href="tel:+9779869276668"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors shadow-xs"
+                  >
+                    <Phone className="h-4 w-4 shrink-0" />
+                    <span>Call Us Directly</span>
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} noValidate className="space-y-4 sm:space-y-5">
+                {serverError && (
+                  <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm flex items-start gap-2.5">
+                    <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                    <span className="min-w-0">{serverError}</span>
+                  </div>
+                )}
+
+                {/* Name & Phone in 2 cols on tablet/desktop */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  
+                  {/* Name */}
+                  <div className="space-y-1.5 min-w-0">
+                    <label htmlFor="contact-name" className="block text-xs font-semibold text-slate-700">
+                      Full Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      id="contact-name"
+                      name="name"
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      placeholder="e.g. Aashish Sharma"
+                      className={`w-full text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                        formErrors.name 
+                          ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
+                          : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'
+                      }`}
+                    />
+                    {formErrors.name && (
+                      <p className="text-xs text-rose-600 font-medium">{formErrors.name}</p>
+                    )}
+                  </div>
+
+                  {/* Phone */}
+                  <div className="space-y-1.5 min-w-0">
+                    <label htmlFor="contact-phone" className="block text-xs font-semibold text-slate-700">
+                      Phone Number <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      id="contact-phone"
+                      name="phone"
+                      type="tel"
+                      required
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      placeholder="e.g. 98XXXXXXXX"
+                      className={`w-full text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                        formErrors.phone 
+                          ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
+                          : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'
+                      }`}
+                    />
+                    {formErrors.phone && (
+                      <p className="text-xs text-rose-600 font-medium">{formErrors.phone}</p>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* Email & Inquiry Department in 2 cols */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  
+                  {/* Email */}
+                  <div className="space-y-1.5 min-w-0">
+                    <label htmlFor="contact-email" className="block text-xs font-semibold text-slate-700">
+                      Email Address <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      id="contact-email"
+                      name="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      placeholder="name@example.com"
+                      className={`w-full text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                        formErrors.email 
+                          ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
+                          : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'
+                      }`}
+                    />
+                    {formErrors.email && (
+                      <p className="text-xs text-rose-600 font-medium">{formErrors.email}</p>
+                    )}
+                  </div>
+
+                  {/* Subject Dropdown */}
+                  <div className="space-y-1.5 min-w-0">
+                    <label htmlFor="contact-subject" className="block text-xs font-semibold text-slate-700">
+                      Inquiry Category
+                    </label>
+                    <select
+                      id="contact-subject"
+                      name="subject"
+                      value={formData.subject}
+                      onChange={handleInputChange}
+                      className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900 transition-all cursor-pointer"
+                    >
+                      <option value="Screen & Glass Refurbishing">Screen & Glass Refurbishing</option>
+                      <option value="Motherboard & Micro-Soldering">Motherboard & Micro-Soldering</option>
+                      <option value="Battery Replacement & Warranty">Battery Replacement & Warranty</option>
+                      <option value="Courier / Outstation Drop-off">Courier / Outstation Drop-off</option>
+                      <option value="Wholesale / B2B Technical Support">Wholesale / B2B Technical Support</option>
+                      <option value="General Question">General Question</option>
+                    </select>
+                  </div>
+
+                </div>
+
+                {/* Message */}
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <label htmlFor="contact-message" className="block text-xs font-semibold text-slate-700">
+                      Inquiry Details <span className="text-rose-500">*</span>
+                    </label>
+                    <span className="text-[11px] text-slate-400">
+                      {formData.message.length}/2000
+                    </span>
+                  </div>
+                  <textarea
+                    id="contact-message"
+                    name="message"
+                    required
+                    rows={4}
+                    maxLength={2000}
+                    value={formData.message}
+                    onChange={handleInputChange}
+                    placeholder="Describe your device brand, model, and the issue you are experiencing (e.g. Samsung S23 display flickering after fall)..."
+                    className={`w-full text-sm p-3.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all resize-y min-h-[100px] ${
+                      formErrors.message 
+                        ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
+                        : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'
+                    }`}
+                  />
+                  {formErrors.message && (
+                    <p className="text-xs text-rose-600 font-medium">{formErrors.message}</p>
+                  )}
+                </div>
+
+                {/* Submit Action */}
+                <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <p className="text-[11px] text-slate-400 order-2 sm:order-1">
+                    Your contact information is kept strictly confidential.
+                  </p>
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="order-1 sm:order-2 w-full sm:w-auto h-11 px-6 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm transition-all shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 shrink-0" />
+                        <span>Send Message</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+              </form>
+            )}
+          </div>
+
+          {/* Right Column: Quick Guidance & Direct Actions (5 cols) */}
+          <div className="lg:col-span-5 space-y-5 min-w-0">
+            
+            {/* Quick Self-Service Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4 min-w-0">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <History className="h-4 w-4 text-indigo-600 shrink-0" />
+                <span>Looking for Your Repair Ticket?</span>
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                If your device is currently admitted at MTS Lab, you can track its live stage, diagnostic logs, and technical notes instantly using your repair number or phone.
+              </p>
+              <Link
+                to="/track"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs sm:text-sm transition-colors border border-indigo-200"
               >
-                <PhoneCall className="h-5 w-5 text-indigo-600 shrink-0" />
-                <span>Call Hotline Now</span>
-              </a>
-              
-              <a 
-                href="mailto:support@mobiletechnologystation.com.np" 
-                className="flex items-center justify-center gap-2 h-14 bg-slate-950/40 hover:bg-slate-950/60 border border-white/10 text-white rounded-2xl font-bold transition-all px-6 w-full text-center"
+                <span>Open Public Repair Tracker</span>
+                <ArrowRight className="h-4 w-4 shrink-0" />
+              </Link>
+            </div>
+
+            {/* Direct Messenger Support Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4 min-w-0">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <MessageCircle className="h-4 w-4 text-blue-600 shrink-0" />
+                <span>Instant Messaging</span>
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Prefer chatting on social channels? Send photos or short videos of your damaged screen directly to our official Facebook page for quick preliminary quotes.
+              </p>
+              <a
+                href="https://www.facebook.com/MTSmobilescreenrefurblab"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs sm:text-sm transition-colors border border-blue-200"
               >
-                <MessageSquare className="h-5 w-5 text-indigo-300 shrink-0" />
-                <span>Email Support Desk</span>
+                <span>Message on Facebook</span>
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
               </a>
+            </div>
+
+            {/* Logistics for Customers Outside Valley */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-3 min-w-0">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                <h4 className="text-sm font-bold text-slate-900">Courier Intake from All 7 Provinces</h4>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Clients outside the Kathmandu Valley can safely dispatch phones through reputable couriers (Sundar, Pathao, Nepal Post). Include your full name, phone number, and lock passcode inside the parcel.
+              </p>
+              <p className="text-[11px] text-slate-500 font-medium">
+                Parcel destination: MTS Lab Reception, Pakosadak, Newroad, Kathmandu.
+              </p>
             </div>
 
           </div>
-        </motion.div>
 
-        {/* 5. FAQs / Frequently Asked Queries teaser */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
-          <div className="p-6 sm:p-8 bg-white border border-slate-100 rounded-3xl shadow-sm space-y-4">
-            <div className="h-10 w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center border border-indigo-100/35">
-              <HelpCircle className="h-5 w-5" />
+        </section>
+
+        {/* 3. Location, Directions & Responsive Map Section */}
+        <section aria-labelledby="location-heading" className="w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-7 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5 min-w-0">
+            <div className="space-y-1 min-w-0">
+              <h2 id="location-heading" className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-rose-500 shrink-0" />
+                <span>Visit Our Central Laboratory</span>
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500">
+                Pakosadak, Newroad, Kathmandu, Nepal &bull; Opposite People's Plaza back gate
+              </p>
             </div>
-            <h3 className="text-lg font-black text-slate-900">Are walk-in diagnostics free at Pako?</h3>
-            <p className="text-xs sm:text-sm text-slate-500 font-bold leading-relaxed">
-              Yes, our certified specialists perform the initial clean micro-soldering and screen inspection assessments on-demand. Quotes are generated transparently prior to processing!
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <a
+                href="https://maps.app.goo.gl/baP5yg6qgcgBT7neA"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold transition-colors shadow-xs"
+              >
+                <Navigation className="h-3.5 w-3.5 shrink-0" />
+                <span>Open Google Maps</span>
+                <ExternalLink className="h-3 w-3 shrink-0" />
+              </a>
+              <a
+                href="tel:+9779869276668"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold transition-colors"
+              >
+                <Phone className="h-3.5 w-3.5 shrink-0" />
+                <span>Call Hotline</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Embedded Responsive Map */}
+          <div className="w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-100 relative min-w-0">
+            <div className="w-full h-72 sm:h-80 md:h-96 relative">
+              <iframe
+                title="MTS Lab Location Map - Pakosadak, Newroad, Kathmandu"
+                src="https://www.openstreetmap.org/export/embed.html?bbox=85.3080%2C27.7010%2C85.3160%2C27.7060&layer=mapnik&marker=27.7035%2C85.3118"
+                className="w-full h-full border-0"
+                loading="lazy"
+              />
+            </div>
+          </div>
+
+          {/* Practical Transit & Navigation Notes */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1 text-xs text-slate-600">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1 min-w-0">
+              <span className="font-bold text-slate-900 block">Walking Proximity</span>
+              <p className="text-slate-600">50 meters inside Pakosadak directly from the New Road gate entrance.</p>
+            </div>
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1 min-w-0">
+              <span className="font-bold text-slate-900 block">Vehicle Parking</span>
+              <p className="text-slate-600">Public two-wheeler & car parking available at Khulla Manch and New Road square.</p>
+            </div>
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1 min-w-0">
+              <span className="font-bold text-slate-900 block">Identifiable Landmark</span>
+              <p className="text-slate-600">Directly on the opposite side of People's Plaza rear exit in Pakosadak.</p>
+            </div>
+          </div>
+        </section>
+
+        {/* 4. Frequently Asked Questions */}
+        <section aria-labelledby="faq-heading" className="space-y-4">
+          <div className="space-y-1">
+            <h2 id="faq-heading" className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
+              Frequently Asked Questions
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500">
+              Common questions regarding our repair reception, parts quality, and turnaround timelines.
             </p>
           </div>
 
-          <div className="p-6 sm:p-8 bg-white border border-slate-100 rounded-3xl shadow-sm space-y-4">
-            <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center border border-emerald-100/35">
-              <ShieldCheck className="h-5 w-5" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+            <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs space-y-2 min-w-0">
+              <div className="flex items-center gap-2">
+                <HelpCircle className="h-4 w-4 text-indigo-600 shrink-0" />
+                <h3 className="text-sm font-bold text-slate-900">Are walk-in diagnostics free at Pakosadak?</h3>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Yes. Our technician team conducts an initial 15-minute diagnostic assessment free of charge. You will receive an exact quote and turnaround estimation prior to repair commencement.
+              </p>
             </div>
-            <h3 className="text-lg font-black text-slate-900">What quality inspection standards are followed for repairs?</h3>
-            <p className="text-xs sm:text-sm text-slate-500 font-bold leading-relaxed">
-              Every device undergoes our comprehensive 24-point diagnostic testing before handover, including display touch fidelity, battery discharge calibration, and IC-level thermal profiling.
-            </p>
-          </div>
-        </div>
 
-      </div>
+            <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs space-y-2 min-w-0">
+              <div className="flex items-center gap-2">
+                <HelpCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                <h3 className="text-sm font-bold text-slate-900">How long does screen refurbishment or glass repair take?</h3>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Most OLED/AMOLED outer glass replacements and polariser laminations are completed within 2 to 4 hours on the same business day using clean-room OCA machines.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs space-y-2 min-w-0">
+              <div className="flex items-center gap-2">
+                <HelpCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                <h3 className="text-sm font-bold text-slate-900">Can I send my device via courier from outside Kathmandu?</h3>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Absolutely. We handle phones dispatched via Sundar Courier, Pathao Parcel, and local cargo daily from Pokhara, Butwal, Biratnagar, and Chitwan. Tracking numbers are updated in your SMS log.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs space-y-2 min-w-0">
+              <div className="flex items-center gap-2">
+                <HelpCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                <h3 className="text-sm font-bold text-slate-900">What warranty is provided on replaced batteries and displays?</h3>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Batteries carry our verifiable 6-month or 1-year battery warranty card with serial registration. Restored original displays are verified through a 24-point hardware check before handover.
+              </p>
+            </div>
+          </div>
+        </section>
+
+      </main>
 
       <Footer />
     </div>

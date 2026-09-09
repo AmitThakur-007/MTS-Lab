@@ -4,6 +4,8 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { getSlides } from '../services/slidesStorage';
 import { filterPubliclyTrackableRepairs } from '../services/trackingExpiration';
+import { createNotification } from '../services/notificationStorage';
+import { sendEmail } from '../services/emailService';
 
 const router = Router();
 
@@ -560,6 +562,85 @@ router.get('/track', handlePublicTrack);
 router.post('/track', handlePublicTrack);
 router.get('/public/track', handlePublicTrack);
 router.post('/public/track', handlePublicTrack);
+
+// 1.5 Public Contact Inquiries (POST /api/contact, /api/public/contact)
+const handlePublicContact = async (req: Request, res: Response) => {
+  try {
+    const { name, phone, email, subject, message } = req.body || {};
+
+    if (!name || typeof name !== 'string' || name.trim().length < 2) {
+      return res.status(400).json({ error: 'Please enter your full name.' });
+    }
+
+    if (!phone || typeof phone !== 'string' || phone.trim().length < 7) {
+      return res.status(400).json({ error: 'Please enter a valid phone number (at least 7 digits).' });
+    }
+
+    if (!message || typeof message !== 'string' || message.trim().length < 10) {
+      return res.status(400).json({ error: 'Please enter a message of at least 10 characters describing your inquiry.' });
+    }
+
+    const cleanName = name.trim().slice(0, 100);
+    const cleanPhone = phone.trim().slice(0, 25);
+    const cleanEmail = typeof email === 'string' ? email.trim().slice(0, 100) : '';
+    const cleanSubject = typeof subject === 'string' && subject.trim().length > 0 ? subject.trim().slice(0, 150) : 'General Inquiry';
+    const cleanMessage = message.trim().slice(0, 3000);
+
+    // 1. Log staff notification for reception / management
+    try {
+      await createNotification({
+        title: `Web Inquiry: ${cleanSubject}`,
+        message: `From ${cleanName} (${cleanPhone}${cleanEmail ? `, ${cleanEmail}` : ''}): "${cleanMessage.slice(0, 150)}${cleanMessage.length > 150 ? '...' : ''}"`,
+        type: 'GENERAL',
+        priority: 'NORMAL',
+        targetRole: 'RECEPTIONIST',
+        metadata: {
+          customerName: cleanName,
+          customerPhone: cleanPhone,
+          customerEmail: cleanEmail,
+          subject: cleanSubject,
+          fullMessage: cleanMessage,
+          source: 'CONTACT_PAGE',
+          receivedAt: new Date().toISOString()
+        }
+      });
+    } catch (notifErr) {
+      console.warn('[CONTACT NOTIFICATION WARN]', notifErr);
+    }
+
+    // 2. Dispatch email notification to support desk
+    try {
+      await sendEmail({
+        to: 'support@mobiletechnologystation.com.np',
+        subject: `[MTS Lab Inquiry] ${cleanSubject} - ${cleanName}`,
+        text: `New contact inquiry received:\n\nName: ${cleanName}\nPhone: ${cleanPhone}\nEmail: ${cleanEmail || 'Not provided'}\nSubject: ${cleanSubject}\n\nMessage:\n${cleanMessage}\n`,
+        html: `
+          <h3>New Customer Inquiry via MTS Lab Website</h3>
+          <p><strong>Name:</strong> ${cleanName}</p>
+          <p><strong>Phone:</strong> <a href="tel:${cleanPhone}">${cleanPhone}</a></p>
+          <p><strong>Email:</strong> ${cleanEmail ? `<a href="mailto:${cleanEmail}">${cleanEmail}</a>` : 'Not provided'}</p>
+          <p><strong>Subject:</strong> ${cleanSubject}</p>
+          <hr/>
+          <p><strong>Message:</strong></p>
+          <p style="white-space: pre-wrap;">${cleanMessage}</p>
+        `
+      });
+    } catch (emailErr) {
+      console.warn('[CONTACT EMAIL WARN]', emailErr);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Thank you! Your message has been received. Our support reception team will contact you shortly.'
+    });
+  } catch (err: any) {
+    console.error('[PUBLIC CONTACT EXCEPTION]', err);
+    return res.status(500).json({ error: 'Failed to submit inquiry. Please call our hotline directly.' });
+  }
+};
+
+router.post('/contact', handlePublicContact);
+router.post('/public/contact', handlePublicContact);
 
 // 2. GET /api/manager/stats
 router.get('/manager/stats', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER']), async (req: AuthRequest, res: Response) => {
