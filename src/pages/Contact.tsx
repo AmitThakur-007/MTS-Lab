@@ -36,14 +36,43 @@ export default function Contact() {
     message: ''
   });
 
+  const [honeypot, setHoneypot] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submittedInquiry, setSubmittedInquiry] = useState<{
+    name: string;
+    phone: string;
+    email?: string;
+    subject?: string;
+    message: string;
+  } | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
   // Copy feedback states
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
+
+  // Generates official WhatsApp wa.me link with encoded inquiry
+  const getWhatsAppUrl = useCallback((data: { name: string; phone: string; email?: string; subject?: string; message: string }) => {
+    const lines = [
+      'Hello MTS Lab,',
+      '',
+      'I have a new inquiry.',
+      '',
+      `Name: ${data.name.trim() || 'Customer'}`,
+      `Phone: ${data.phone.trim() || 'Not specified'}`,
+      `Email: ${data.email?.trim() || 'Not provided'}`,
+      `Subject: ${data.subject?.trim() || 'General Inquiry'}`,
+      '',
+      'Message:',
+      data.message.trim() || 'I would like to make an inquiry regarding device repairs.',
+      '',
+      'Thank you.'
+    ];
+    const text = lines.join('\n');
+    return `https://wa.me/9779869276668?text=${encodeURIComponent(text)}`;
+  }, []);
 
   // Live status in Nepal Time (UTC+5:45)
   const isLabCurrentlyOpen = (() => {
@@ -111,30 +140,41 @@ export default function Contact() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!validateForm()) return;
 
     setIsSubmitting(true);
     setServerError(null);
 
+    const submissionPayload = {
+      name: formData.name.trim(),
+      phone: formData.phone.trim(),
+      email: formData.email.trim(),
+      subject: formData.subject,
+      message: formData.message.trim(),
+      website: honeypot
+    };
+
     try {
       const response = await fetch('/api/public/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name.trim(),
-          phone: formData.phone.trim(),
-          email: formData.email.trim(),
-          subject: formData.subject,
-          message: formData.message.trim()
-        })
+        body: JSON.stringify(submissionPayload)
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data?.error || 'Failed to submit message. Please try again or call our hotline.');
+        throw new Error(data?.error || "We couldn't submit your inquiry right now. Please try again or contact us directly.");
       }
 
+      setSubmittedInquiry({
+        name: submissionPayload.name,
+        phone: submissionPayload.phone,
+        email: submissionPayload.email,
+        subject: submissionPayload.subject,
+        message: submissionPayload.message
+      });
       setSubmitSuccess(true);
       setFormData({
         name: '',
@@ -143,8 +183,9 @@ export default function Contact() {
         subject: 'Screen & Glass Refurbishing',
         message: ''
       });
+      setHoneypot('');
     } catch (err: any) {
-      setServerError(err?.message || 'An unexpected error occurred. Please call our hotline directly.');
+      setServerError(err?.message || "We couldn't submit your inquiry right now. Please try again or contact us directly.");
     } finally {
       setIsSubmitting(false);
     }
@@ -394,41 +435,130 @@ export default function Contact() {
               </p>
             </div>
 
-            {submitSuccess ? (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-6 text-center space-y-4 animate-in fade-in-50">
-                <div className="h-12 w-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="h-6 w-6 shrink-0" />
+            {submitSuccess && submittedInquiry ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 sm:p-7 space-y-5 animate-in fade-in-50 min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3.5 text-left">
+                  <div className="h-11 w-11 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="h-6 w-6 shrink-0" />
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    <h3 className="text-base sm:text-lg font-bold text-emerald-950">
+                      Inquiry Submitted Successfully
+                    </h3>
+                    <p className="text-xs sm:text-sm text-emerald-800 leading-relaxed">
+                      Your inquiry has been submitted successfully. Our support team will get back to you at <span className="font-semibold">{submittedInquiry.phone}</span> or via email.
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-1 max-w-md mx-auto">
-                  <h3 className="text-lg font-bold text-emerald-900">Inquiry Received Successfully</h3>
-                  <p className="text-xs sm:text-sm text-emerald-700 leading-relaxed">
-                    Thank you for reaching out to MTS Lab. Our reception desk has logged your inquiry and will reach you via phone or email during business hours.
-                  </p>
+
+                {/* Submitted Inquiry Summary Box */}
+                <div className="bg-white/95 border border-emerald-200/80 rounded-xl p-4 text-xs sm:text-sm space-y-2.5 min-w-0 shadow-2xs">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Inquiry Summary
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700">
+                    <div>
+                      <span className="text-slate-500 font-medium">Customer: </span>
+                      <span className="font-semibold text-slate-900">{submittedInquiry.name}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium">Phone: </span>
+                      <span className="font-semibold text-slate-900">{submittedInquiry.phone}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium">Subject: </span>
+                      <span className="font-semibold text-slate-900">{submittedInquiry.subject || 'General Inquiry'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium">Email: </span>
+                      <span className="font-semibold text-slate-900">{submittedInquiry.email || 'Not provided'}</span>
+                    </div>
+                  </div>
+                  <div className="pt-1 text-[11px] text-slate-400 border-t border-slate-100">
+                    Dispatched to: <span className="font-medium text-slate-600">support@mobiletechnologystation.com.np</span>
+                  </div>
                 </div>
-                <div className="pt-2 flex flex-wrap justify-center gap-3">
+
+                {/* Send via WhatsApp Action Box */}
+                <div className="p-4 rounded-xl bg-white border border-emerald-200 space-y-3 shadow-2xs">
+                  <div className="space-y-0.5">
+                    <div className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                      <MessageCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>Send this inquiry via WhatsApp</span>
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-slate-500 leading-relaxed">
+                      Want an immediate response? Connect directly with our technician desk on WhatsApp (+977 9869276668) with your message pre-filled.
+                    </p>
+                  </div>
+                  <a
+                    href={getWhatsAppUrl(submittedInquiry)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Send this inquiry to MTS Lab via WhatsApp"
+                    className="inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-xs sm:text-sm transition-colors shadow-xs cursor-pointer"
+                  >
+                    <MessageCircle className="h-4 w-4 shrink-0" />
+                    <span>Send via WhatsApp (+977 9869276668)</span>
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                  </a>
+                </div>
+
+                {/* Secondary Actions */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setSubmitSuccess(false)}
-                    className="border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                    onClick={() => {
+                      setSubmitSuccess(false);
+                      setSubmittedInquiry(null);
+                    }}
+                    className="border-emerald-300 text-emerald-900 hover:bg-emerald-100 text-xs sm:text-sm h-10 px-4"
                   >
                     Send Another Message
                   </Button>
                   <a
                     href="tel:+9779869276668"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors shadow-xs"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-medium transition-colors"
                   >
-                    <Phone className="h-4 w-4 shrink-0" />
-                    <span>Call Us Directly</span>
+                    <Phone className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <span>Call Hotline Directly</span>
                   </a>
                 </div>
               </div>
             ) : (
               <form onSubmit={handleSubmit} noValidate className="space-y-4 sm:space-y-5">
+                {/* Honeypot field for bot protection */}
+                <div className="hidden" aria-hidden="true">
+                  <label htmlFor="website-trap">Leave this empty</label>
+                  <input
+                    id="website-trap"
+                    type="text"
+                    name="website"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={honeypot}
+                    onChange={e => setHoneypot(e.target.value)}
+                  />
+                </div>
+
                 {serverError && (
-                  <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm flex items-start gap-2.5">
-                    <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                    <span className="min-w-0">{serverError}</span>
+                  <div className="p-3.5 sm:p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm space-y-2.5">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                      <span className="min-w-0 font-medium leading-relaxed">{serverError}</span>
+                    </div>
+                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-rose-200/70">
+                      <span className="text-[11px] text-rose-700">Need immediate help? Reach us directly on WhatsApp:</span>
+                      <a
+                        href={getWhatsAppUrl(formData)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shrink-0 cursor-pointer"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5 shrink-0" />
+                        <span>Send on WhatsApp</span>
+                      </a>
+                    </div>
                   </div>
                 )}
 
@@ -565,27 +695,42 @@ export default function Contact() {
                 </div>
 
                 {/* Submit Action */}
-                <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <p className="text-[11px] text-slate-400 order-2 sm:order-1">
-                    Your contact information is kept strictly confidential.
+                <div className="pt-2 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <Button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full sm:flex-1 h-11 px-6 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm transition-all shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                          <span>Sending inquiry...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-4 w-4 shrink-0" />
+                          <span>Submit Inquiry</span>
+                        </>
+                      )}
+                    </Button>
+
+                    <a
+                      href={getWhatsAppUrl(formData)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Send inquiry directly via WhatsApp"
+                      className="w-full sm:w-auto h-11 px-4 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold text-xs sm:text-sm transition-colors inline-flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                    >
+                      <MessageCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>Send via WhatsApp</span>
+                      <ExternalLink className="h-3 w-3 opacity-70 shrink-0" />
+                    </a>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 text-center sm:text-left">
+                    Your inquiry will be sent to <span className="font-medium text-slate-600">support@mobiletechnologystation.com.np</span> and logged with our reception team.
                   </p>
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="order-1 sm:order-2 w-full sm:w-auto h-11 px-6 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm transition-all shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                        <span>Submitting...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-4 w-4 shrink-0" />
-                        <span>Send Message</span>
-                      </>
-                    )}
-                  </Button>
                 </div>
 
               </form>
@@ -752,7 +897,7 @@ export default function Contact() {
                 <h3 className="text-sm font-bold text-slate-900">Can I send my device via courier from outside Kathmandu?</h3>
               </div>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Absolutely. We handle phones dispatched via Sundar Courier, Pathao Parcel, and local cargo daily from Pokhara, Butwal, Biratnagar, and Chitwan. Tracking numbers are updated in your SMS log.
+                Absolutely. We accept phones sent by courier from outside Kathmandu through Nepal Can Move (NCM), Pathao Parcel, and local cargo services. We regularly receive devices from Pokhara, Butwal, Biratnagar, Chitwan, and other parts of Nepal.
               </p>
             </div>
 

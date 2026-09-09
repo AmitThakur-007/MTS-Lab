@@ -5,7 +5,10 @@ import { authorize } from '../middleware/rbac';
 import { getSlides } from '../services/slidesStorage';
 import { filterPubliclyTrackableRepairs } from '../services/trackingExpiration';
 import { createNotification } from '../services/notificationStorage';
-import { sendEmail } from '../services/emailService';
+import { sendEmail, sendEmailDetailed } from '../services/emailService';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -564,29 +567,147 @@ router.get('/public/track', handlePublicTrack);
 router.post('/public/track', handlePublicTrack);
 
 // 1.5 Public Contact Inquiries (POST /api/contact, /api/public/contact)
+interface InquiryRateRecord {
+  timestamps: number[];
+  lastHash?: string;
+  lastSubmitTime?: number;
+}
+const inquiryRateMap = new Map<string, InquiryRateRecord>();
+const INQUIRY_MAX_PER_WINDOW = 5;
+const INQUIRY_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const INQUIRY_DUPLICATE_WINDOW_MS = 60 * 1000; // 60 seconds
+
+function checkInquiryRateLimit(ip: string, phone: string, messageHash: string): { allowed: boolean; reason?: string; isDuplicate?: boolean } {
+  const now = Date.now();
+  const key = `${ip}_${phone}`;
+  const record = inquiryRateMap.get(key) || { timestamps: [] };
+
+  // Filter out timestamps older than window
+  record.timestamps = record.timestamps.filter(ts => now - ts < INQUIRY_WINDOW_MS);
+
+  // Check duplicate submission within 60 seconds
+  if (record.lastHash === messageHash && record.lastSubmitTime && (now - record.lastSubmitTime < INQUIRY_DUPLICATE_WINDOW_MS)) {
+    return { allowed: false, isDuplicate: true };
+  }
+
+  // Check frequency limit
+  if (record.timestamps.length >= INQUIRY_MAX_PER_WINDOW) {
+    return { 
+      allowed: false, 
+      reason: 'Too many inquiries submitted from your connection. Please contact our reception desk directly via phone (+977 9869276668) or WhatsApp.' 
+    };
+  }
+
+  // Allow and record
+  record.timestamps.push(now);
+  record.lastHash = messageHash;
+  record.lastSubmitTime = now;
+  inquiryRateMap.set(key, record);
+  return { allowed: true };
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+const INQUIRIES_FILE = path.join(process.cwd(), 'data', 'inquiries.json');
+
+function saveInquiryRecord(inquiry: any) {
+  try {
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    let list: any[] = [];
+    if (fs.existsSync(INQUIRIES_FILE)) {
+      try {
+        list = JSON.parse(fs.readFileSync(INQUIRIES_FILE, 'utf8'));
+      } catch {
+        list = [];
+      }
+    }
+    list.unshift(inquiry);
+    if (list.length > 300) list = list.slice(0, 300);
+    fs.writeFileSync(INQUIRIES_FILE, JSON.stringify(list, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[INQUIRY STORAGE WARN]', err);
+  }
+}
+
 const handlePublicContact = async (req: Request, res: Response) => {
   try {
-    const { name, phone, email, subject, message } = req.body || {};
+    const { name, phone, email, subject, message, botTrap, website, companyAddress } = req.body || {};
 
-    if (!name || typeof name !== 'string' || name.trim().length < 2) {
-      return res.status(400).json({ error: 'Please enter your full name.' });
+    // 1. Honeypot check for automated bots
+    if (botTrap || website || companyAddress) {
+      console.warn('[BOT DETECTED ON CONTACT FORM]');
+      return res.status(400).json({ error: 'Invalid submission parameter.' });
     }
 
-    if (!phone || typeof phone !== 'string' || phone.trim().length < 7) {
+    // 2. Strict Input Validation
+    if (!name || typeof name !== 'string' || name.trim().length < 2) {
+      return res.status(400).json({ error: 'Please enter your full name (minimum 2 characters).' });
+    }
+
+    if (!phone || typeof phone !== 'string') {
+      return res.status(400).json({ error: 'Please enter your contact phone number.' });
+    }
+
+    const cleanPhone = phone.trim().replace(/[^\d+-\s]/g, '').slice(0, 25);
+    const digitsOnly = cleanPhone.replace(/\D/g, '');
+    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
       return res.status(400).json({ error: 'Please enter a valid phone number (at least 7 digits).' });
     }
 
+    let cleanEmail = '';
+    if (email && typeof email === 'string' && email.trim().length > 0) {
+      cleanEmail = email.trim().slice(0, 100);
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        return res.status(400).json({ error: 'Please enter a valid email address format (or leave blank).' });
+      }
+    }
+
     if (!message || typeof message !== 'string' || message.trim().length < 10) {
-      return res.status(400).json({ error: 'Please enter a message of at least 10 characters describing your inquiry.' });
+      return res.status(400).json({ error: 'Please enter a message of at least 10 characters describing your device inquiry.' });
     }
 
     const cleanName = name.trim().slice(0, 100);
-    const cleanPhone = phone.trim().slice(0, 25);
-    const cleanEmail = typeof email === 'string' ? email.trim().slice(0, 100) : '';
     const cleanSubject = typeof subject === 'string' && subject.trim().length > 0 ? subject.trim().slice(0, 150) : 'General Inquiry';
     const cleanMessage = message.trim().slice(0, 3000);
 
-    // 1. Log staff notification for reception / management
+    // 3. Spam and Rate Limiting
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
+    const messageHash = crypto.createHash('md5').update(`${cleanPhone}_${cleanSubject}_${cleanMessage}`).digest('hex');
+    const rateCheck = checkInquiryRateLimit(clientIp, cleanPhone, messageHash);
+
+    if (!rateCheck.allowed) {
+      if (rateCheck.isDuplicate) {
+        return res.json({
+          success: true,
+          message: 'Your inquiry has already been received. Our support team will get back to you shortly.',
+          inquiry: {
+            name: cleanName,
+            phone: cleanPhone,
+            email: cleanEmail,
+            subject: cleanSubject,
+            message: cleanMessage,
+            submittedAt: new Date().toISOString()
+          }
+        });
+      }
+      return res.status(429).json({ error: rateCheck.reason || 'Too many submissions. Please wait before submitting again.' });
+    }
+
+    const inquiryId = `inq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const submissionTime = new Date().toISOString();
+
+    // 4. Log staff notification for reception / management
     try {
       await createNotification({
         title: `Web Inquiry: ${cleanSubject}`,
@@ -595,43 +716,121 @@ const handlePublicContact = async (req: Request, res: Response) => {
         priority: 'NORMAL',
         targetRole: 'RECEPTIONIST',
         metadata: {
+          inquiryId,
           customerName: cleanName,
           customerPhone: cleanPhone,
           customerEmail: cleanEmail,
           subject: cleanSubject,
           fullMessage: cleanMessage,
           source: 'CONTACT_PAGE',
-          receivedAt: new Date().toISOString()
+          receivedAt: submissionTime
         }
       });
     } catch (notifErr) {
       console.warn('[CONTACT NOTIFICATION WARN]', notifErr);
     }
 
-    // 2. Dispatch email notification to support desk
-    try {
-      await sendEmail({
-        to: 'support@mobiletechnologystation.com.np',
-        subject: `[MTS Lab Inquiry] ${cleanSubject} - ${cleanName}`,
-        text: `New contact inquiry received:\n\nName: ${cleanName}\nPhone: ${cleanPhone}\nEmail: ${cleanEmail || 'Not provided'}\nSubject: ${cleanSubject}\n\nMessage:\n${cleanMessage}\n`,
-        html: `
-          <h3>New Customer Inquiry via MTS Lab Website</h3>
-          <p><strong>Name:</strong> ${cleanName}</p>
-          <p><strong>Phone:</strong> <a href="tel:${cleanPhone}">${cleanPhone}</a></p>
-          <p><strong>Email:</strong> ${cleanEmail ? `<a href="mailto:${cleanEmail}">${cleanEmail}</a>` : 'Not provided'}</p>
-          <p><strong>Subject:</strong> ${cleanSubject}</p>
-          <hr/>
-          <p><strong>Message:</strong></p>
-          <p style="white-space: pre-wrap;">${cleanMessage}</p>
-        `
+    // 5. Build and send email to official support desk
+    const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@mobiletechnologystation.com.np';
+    const safeEmailSubject = `[MTS Lab Inquiry] ${cleanSubject} - ${cleanName}`.replace(/[\r\n]+/g, ' ');
+    const nepalTimestamp = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' });
+
+    const emailText = [
+      `New Customer Inquiry — MTS Lab`,
+      ``,
+      `Customer Name: ${cleanName}`,
+      `Phone: ${cleanPhone}`,
+      `Email: ${cleanEmail || 'Not provided'}`,
+      `Subject: ${cleanSubject}`,
+      ``,
+      `Message:`,
+      `${cleanMessage}`,
+      ``,
+      `Submitted:`,
+      `${nepalTimestamp} (Nepal Time)`
+    ].join('\n');
+
+    const emailHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+        <div style="border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 20px; color: #0f172a;">New Customer Inquiry — MTS Lab</h2>
+          <p style="margin: 4px 0 0; font-size: 13px; color: #64748b;">Central Diagnostic & Screen Refurbishment Facility</p>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; width: 130px; font-weight: 600;">Customer Name:</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: bold;">${escapeHtml(cleanName)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Phone Number:</td>
+            <td style="padding: 8px 0; color: #0f172a;"><a href="tel:${escapeHtml(cleanPhone)}" style="color: #059669; text-decoration: none; font-weight: bold;">${escapeHtml(cleanPhone)}</a></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Email Address:</td>
+            <td style="padding: 8px 0; color: #0f172a;">${cleanEmail ? `<a href="mailto:${escapeHtml(cleanEmail)}" style="color: #4f46e5; text-decoration: none;">${escapeHtml(cleanEmail)}</a>` : '<span style="color: #94a3b8;">Not provided</span>'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Inquiry Subject:</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${escapeHtml(cleanSubject)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Submitted Time:</td>
+            <td style="padding: 8px 0; color: #64748b; font-size: 12px;">${nepalTimestamp} (Nepal Time)</td>
+          </tr>
+        </table>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 10px; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Customer Message</h4>
+          <div style="font-size: 14px; line-height: 1.6; color: #1e293b; white-space: pre-wrap;">${escapeHtml(cleanMessage)}</div>
+        </div>
+
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; font-size: 12px; color: #94a3b8;">
+          This customer inquiry was submitted through the official MTS Lab Contact Page at <a href="https://mobiletechnologystation.com.np" style="color: #64748b;">mobiletechnologystation.com.np</a>.
+        </div>
+      </div>
+    `;
+
+    // 6. Deliver email to support desk via configured provider
+    const emailResult = await sendEmailDetailed({
+      to: SUPPORT_EMAIL,
+      subject: safeEmailSubject,
+      text: emailText,
+      html: emailHtml
+    });
+
+    // Save inquiry record locally
+    saveInquiryRecord({
+      id: inquiryId,
+      name: cleanName,
+      phone: cleanPhone,
+      email: cleanEmail,
+      subject: cleanSubject,
+      message: cleanMessage,
+      submittedAt: submissionTime,
+      emailStatus: emailResult.success ? 'sent' : 'failed',
+      emailProvider: emailResult.provider,
+      clientIp
+    });
+
+    if (!emailResult.success) {
+      console.error('[PUBLIC CONTACT EMAIL FAILURE]', emailResult.error);
+      return res.status(502).json({
+        error: "We couldn't submit your inquiry right now. Please try again or contact us directly via WhatsApp or phone."
       });
-    } catch (emailErr) {
-      console.warn('[CONTACT EMAIL WARN]', emailErr);
     }
 
     return res.json({
       success: true,
-      message: 'Thank you! Your message has been received. Our support reception team will contact you shortly.'
+      message: 'Your inquiry has been submitted successfully. Our support team will get back to you.',
+      inquiry: {
+        name: cleanName,
+        phone: cleanPhone,
+        email: cleanEmail,
+        subject: cleanSubject,
+        message: cleanMessage,
+        submittedAt: submissionTime
+      }
     });
   } catch (err: any) {
     console.error('[PUBLIC CONTACT EXCEPTION]', err);
