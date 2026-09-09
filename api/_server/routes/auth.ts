@@ -78,6 +78,16 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     if (userErr || !users || users.length === 0) {
+      await logAudit({
+        userEmail: normalizedIdentifier,
+        action: 'FAILED_LOGIN',
+        resource: 'Auth',
+        status: 'FAILED',
+        ipAddress: ipAddress || req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        deviceInfo: { deviceIdentifier, deviceName, browser, os },
+        details: { reason: 'User account not found', enteredIdentifier: normalizedIdentifier },
+      });
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
@@ -85,6 +95,20 @@ router.post('/login', async (req: Request, res: Response) => {
 
     // Check account status
     if (user.accountStatus === 'REJECTED' || user.accountStatus === 'DISABLED' || user.isActive === false) {
+      await logAudit({
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: 'LOGIN_DISABLED_ACCOUNT',
+        resource: 'User',
+        resourceId: user.id,
+        status: 'DENIED',
+        ipAddress: ipAddress || req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        deviceInfo: { deviceIdentifier, deviceName, browser, os },
+        details: { accountStatus: user.accountStatus, isActive: user.isActive, reason: 'Account disabled or pending approval' },
+      });
       return res.status(403).json({
         error: 'Forbidden',
         message: 'Your account is currently disabled or pending approval. Contact the administrator.',

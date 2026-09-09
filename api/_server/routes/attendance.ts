@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
+import { logAuditFromRequest } from '../services/auditService';
 import {
   getNepalBusinessTime,
   getAuthorizedStaffList,
@@ -251,6 +252,21 @@ router.post('/pending-requests/:id/approve', authenticate, authorize(ATTENDANCE_
       console.warn('[ATTENDANCE APPROVE NOTIF WARN]', notifErr);
     }
 
+    await logAuditFromRequest(req, {
+      action: 'ATTENDANCE_REQUEST_APPROVED',
+      resource: 'Attendance',
+      resourceId: updated.id,
+      status: 'SUCCESS',
+      details: {
+        staffUserId: existing.userId,
+        date: existing.date,
+        approvedStatus: status,
+        notes,
+      },
+      previousValue: { status: existing.status, requestStatus: existing.requestStatus },
+      newValue: { status: updated.status, requestStatus: updated.requestStatus },
+    });
+
     return res.json({ success: true, message: 'Attendance request approved.', record: updated });
   } catch (err: any) {
     console.error('[APPROVE ATTENDANCE ERROR]', err);
@@ -303,6 +319,20 @@ router.post('/pending-requests/:id/reject', authenticate, authorize(ATTENDANCE_M
     } catch (notifErr) {
       console.warn('[ATTENDANCE REJECT NOTIF WARN]', notifErr);
     }
+
+    await logAuditFromRequest(req, {
+      action: 'ATTENDANCE_REQUEST_REJECTED',
+      resource: 'Attendance',
+      resourceId: updated.id,
+      status: 'SUCCESS',
+      details: {
+        staffUserId: existing.userId,
+        date: existing.date,
+        rejectionReason: reason,
+      },
+      previousValue: { status: existing.status, requestStatus: existing.requestStatus },
+      newValue: { status: updated.status, requestStatus: updated.requestStatus },
+    });
 
     return res.json({ success: true, message: 'Attendance request rejected.', record: updated });
   } catch (err: any) {
@@ -606,6 +636,12 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
     } else if (isManager) {
       // 2. Manager: Cannot take their own attendance
       if (targetUserId === currentUser.id) {
+        logAuditFromRequest(req, {
+          action: 'UNAUTHORIZED_ATTENDANCE_ATTEMPT',
+          resource: 'Attendance',
+          status: 'DENIED',
+          details: { reason: 'Managers cannot take their own attendance.', attemptedUserId: targetUserId },
+        }).catch(() => {});
         return res.status(403).json({
           error: 'Managers cannot take their own attendance. Manager attendance must be verified and recorded by an Administrator or Super Administrator.',
           code: 'MANAGER_SELF_ATTENDANCE_PROHIBITED',
@@ -614,6 +650,12 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
 
       // 2. Manager: Strictly restricted to 10:00 AM - 10:45 AM Nepal Time (Asia/Kathmandu)
       if (!time.isWithinWindow) {
+        logAuditFromRequest(req, {
+          action: 'UNAUTHORIZED_ATTENDANCE_ATTEMPT',
+          resource: 'Attendance',
+          status: 'DENIED',
+          details: { reason: 'Outside manager attendance window.', serverTime: time.timeString, window: '10:00 AM - 10:45 AM NPT' },
+        }).catch(() => {});
         return res.status(403).json({
           error: `Manager can only record staff attendance between 10:00 AM and 10:45 AM Nepal Time (Asia/Kathmandu). Current NPT time: ${time.timeString}`,
           code: 'OUTSIDE_ATTENDANCE_WINDOW',
@@ -624,6 +666,12 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
     } else {
       // 3. Receptionist, Technician, Head Technician, and other Staff:
       // Strictly CANNOT take attendance for themselves or others.
+      logAuditFromRequest(req, {
+        action: 'UNAUTHORIZED_ATTENDANCE_ATTEMPT',
+        resource: 'Attendance',
+        status: 'DENIED',
+        details: { reason: 'Staff role cannot record attendance directly.', userRole: currentUser.role },
+      }).catch(() => {});
       return res.status(403).json({
         error: 'Access denied: Staff members (Technicians, Receptionists, etc.) cannot record attendance. Attendance is recorded and verified authoritatively by Lab Management.',
         code: 'UNAUTHORIZED_ROLE',
@@ -659,6 +707,29 @@ router.post('/mark', authenticate, async (req: AuthRequest, res: Response) => {
         role: currentUser.role,
       }
     );
+
+    await logAuditFromRequest(req, {
+      action: 'ATTENDANCE_RECORDED',
+      resource: 'Attendance',
+      resourceId: saved.id,
+      status: 'SUCCESS',
+      details: {
+        targetUserId,
+        targetUserName: targetUser?.name || 'Staff Member',
+        date: targetDate,
+        status: saved.status,
+        checkInTime,
+        checkOutTime,
+        notes,
+      },
+      newValue: {
+        userId: targetUserId,
+        date: targetDate,
+        status: saved.status,
+        checkInTime,
+        checkOutTime,
+      },
+    });
 
     return res.status(200).json({
       success: true,
@@ -880,6 +951,13 @@ router.patch('/:id', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async
 
     // Manager check: cannot update own attendance record
     if (isManager && existing.userId === currentUser.id) {
+      logAuditFromRequest(req, {
+        action: 'UNAUTHORIZED_ATTENDANCE_ATTEMPT',
+        resource: 'Attendance',
+        resourceId: id,
+        status: 'DENIED',
+        details: { reason: 'Managers cannot modify their own attendance records.' },
+      }).catch(() => {});
       return res.status(403).json({
         error: 'Managers cannot modify their own attendance records. Only an Administrator or Super Administrator can update Manager attendance.',
         code: 'MANAGER_SELF_UPDATE_PROHIBITED',
@@ -888,6 +966,13 @@ router.patch('/:id', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async
 
     // Manager time window check if modifying others' attendance
     if (isManager && !time.isWithinWindow) {
+      logAuditFromRequest(req, {
+        action: 'UNAUTHORIZED_ATTENDANCE_ATTEMPT',
+        resource: 'Attendance',
+        resourceId: id,
+        status: 'DENIED',
+        details: { reason: 'Outside manager attendance window for update.', serverTime: time.timeString },
+      }).catch(() => {});
       return res.status(403).json({
         error: `Manager can only update attendance during 10:00 AM – 10:45 AM NPT. (Current NPT: ${time.timeString})`,
         code: 'OUTSIDE_ATTENDANCE_WINDOW',
@@ -911,6 +996,30 @@ router.patch('/:id', authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), async
       }
     );
 
+    await logAuditFromRequest(req, {
+      action: 'ATTENDANCE_RECORD_UPDATED',
+      resource: 'Attendance',
+      resourceId: updated.id,
+      status: 'SUCCESS',
+      details: {
+        staffUserId: existing.userId,
+        date: existing.date,
+        correctionReason: correctionReason || 'Administrative correction',
+      },
+      previousValue: {
+        status: existing.status,
+        checkInTime: existing.checkInTime,
+        checkOutTime: existing.checkOutTime,
+        notes: existing.notes,
+      },
+      newValue: {
+        status: updated.status,
+        checkInTime: updated.checkInTime,
+        checkOutTime: updated.checkOutTime,
+        notes: updated.notes,
+      },
+    });
+
     return res.json({
       success: true,
       message: 'Attendance record successfully updated.',
@@ -930,6 +1039,8 @@ router.delete('/:id', authenticate, authorize(ATTENDANCE_ADMIN_ROLES), async (re
     const currentUser = req.user!;
     const { id } = req.params;
 
+    const existing = await getAttendanceRecordById(id);
+
     const success = await deleteAttendanceRecord(id, {
       id: currentUser.id,
       name: currentUser.name || 'Admin',
@@ -939,6 +1050,19 @@ router.delete('/:id', authenticate, authorize(ATTENDANCE_ADMIN_ROLES), async (re
     if (!success) {
       return res.status(404).json({ error: 'Attendance record not found.' });
     }
+
+    await logAuditFromRequest(req, {
+      action: 'ATTENDANCE_RECORD_DELETED',
+      resource: 'Attendance',
+      resourceId: id,
+      status: 'SUCCESS',
+      details: {
+        staffUserId: existing?.userId,
+        date: existing?.date,
+        previousStatus: existing?.status,
+      },
+      previousValue: existing || undefined,
+    });
 
     return res.json({
       success: true,
@@ -1026,6 +1150,17 @@ router.delete('/staff/:userId', authenticate, authorize(['SUPER_ADMIN']), async 
       id: currentUser.id,
       name: currentUser.name || 'Super Admin',
       role: currentUser.role,
+    });
+
+    await logAuditFromRequest(req, {
+      action: 'ATTENDANCE_PURGED',
+      resource: 'Attendance',
+      resourceId: userId,
+      status: 'SUCCESS',
+      details: {
+        staffUserId: userId,
+        recordsDeleted: count,
+      },
     });
 
     return res.json({

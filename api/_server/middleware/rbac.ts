@@ -1,5 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from './auth';
+import { logAuditFromRequest } from '../services/auditService';
 
 export function normalizeRole(role: string): string {
   if (!role) return '';
@@ -31,9 +32,24 @@ export function authorize(allowedRoles: string[]) {
       return next();
     }
 
+    // Record authoritative security DENIED event in real-time
+    logAuditFromRequest(req, {
+      action: 'UNAUTHORIZED_ACCESS_ATTEMPT',
+      resource: req.baseUrl || req.path || 'API',
+      status: 'DENIED',
+      details: {
+        method: req.method,
+        path: req.originalUrl || req.path,
+        userRole: req.user.role,
+        requiredRoles: allowedRoles,
+        reason: `Role '${req.user.role}' is not in authorized roles [${allowedRoles.join(', ')}]`,
+      },
+    }).catch(() => {});
+
     return res.status(403).json({
       error: 'Forbidden',
       message: `Access denied. Requires one of roles: [${allowedRoles.join(', ')}]. Current role: ${req.user.role}`,
     });
   };
 }
+

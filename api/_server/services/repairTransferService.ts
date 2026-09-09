@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { broadcastServerChange } from './realtimeSync';
 import { createNotification } from './notificationStorage';
+import { logAudit } from './auditService';
 
 export interface RepairTransferRequestRecord {
   id: string;
@@ -295,6 +296,26 @@ export async function createRepairTransferRequest(params: {
   // 9. Realtime broadcast for transfer request
   await broadcastServerChange('RepairTransfer', 'CREATE', transferId, newTransfer);
 
+  await logAudit({
+    userId: senderId,
+    userName: senderName,
+    userRole: senderRole,
+    action: 'TRANSFER_REQUEST_CREATED',
+    resource: 'Repair',
+    resourceId: repair.id,
+    status: 'SUCCESS',
+    details: {
+      repairNumber: repair.repairNumber,
+      senderTechnicianId: senderId,
+      senderTechnicianName: senderName,
+      targetTechnicianId: targetTech.id,
+      targetTechnicianName: targetTech.name,
+      reason: reason.trim(),
+    },
+    previousValue: { technicianId: senderId, technicianName: senderName },
+    newValue: { targetTechnicianId: targetTech.id, targetTechnicianName: targetTech.name, transferStatus: 'PENDING' },
+  });
+
   return { success: true, data: newTransfer };
 }
 
@@ -428,6 +449,24 @@ export async function respondToTransferRequest(params: {
       await broadcastServerChange('Repair', 'UPDATE', transfer.repairId, updatedRepair);
     }
 
+    await logAudit({
+      userId: responderId,
+      userName: responderName,
+      userRole: responderRole,
+      action: 'TRANSFER_REQUEST_ACCEPTED',
+      resource: 'Repair',
+      resourceId: transfer.repairId,
+      status: 'SUCCESS',
+      details: {
+        repairNumber: transfer.repairNumber,
+        fromTechnician: transfer.senderTechnicianName,
+        toTechnician: responderName,
+        responseNote: transfer.responseNote,
+      },
+      previousValue: { technicianId: transfer.senderTechnicianId, technicianName: transfer.senderTechnicianName },
+      newValue: { technicianId: transfer.targetTechnicianId, technicianName: responderName },
+    });
+
     return {
       success: true,
       data: {
@@ -496,6 +535,21 @@ export async function respondToTransferRequest(params: {
     // Broadcast real-time changes
     await broadcastServerChange('RepairTransfer', 'UPDATE', transfer.id, transfer);
 
+    await logAudit({
+      userId: responderId,
+      userName: responderName,
+      userRole: responderRole,
+      action: 'TRANSFER_REQUEST_REJECTED',
+      resource: 'Repair',
+      resourceId: transfer.repairId,
+      status: 'SUCCESS',
+      details: {
+        repairNumber: transfer.repairNumber,
+        rejectedBy: responderName,
+        responseNote: transfer.responseNote,
+      },
+    });
+
     return {
       success: true,
       data: {
@@ -556,6 +610,20 @@ export async function cancelTransferRequest(params: {
   }
 
   await broadcastServerChange('RepairTransfer', 'UPDATE', transfer.id, transfer);
+
+  await logAudit({
+    userId,
+    userRole,
+    action: 'TRANSFER_REQUEST_CANCELLED',
+    resource: 'Repair',
+    resourceId: transfer.repairId,
+    status: 'SUCCESS',
+    details: {
+      repairNumber: transfer.repairNumber,
+      transferId: transfer.id,
+      cancelledBy: userId,
+    },
+  });
 
   return { success: true, data: transfer };
 }
@@ -682,6 +750,25 @@ export async function directTransferRepair(params: {
 
   // 7. Realtime broadcast for repair
   await broadcastServerChange('Repair', 'UPDATE', repair.id, updatedRepair);
+
+  await logAudit({
+    userId: actorId,
+    userName: actorName,
+    userRole: params.actorRole,
+    action: 'REPAIR_DIRECT_TRANSFERRED',
+    resource: 'Repair',
+    resourceId: repair.id,
+    status: 'SUCCESS',
+    details: {
+      repairNumber: repair.repairNumber,
+      targetTechnicianId: targetTech.id,
+      targetTechnicianName: targetTech.name,
+      reason: reason.trim(),
+      priority: priority || null,
+    },
+    previousValue: { technicianId: repair.technicianId || null },
+    newValue: { technicianId: targetTech.id, technicianName: targetTech.name },
+  });
 
   return {
     success: true,

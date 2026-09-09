@@ -5,7 +5,7 @@ import multer from 'multer';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize, normalizeRole } from '../middleware/rbac';
-import { logAudit } from '../services/auditService';
+import { logAudit, logAuditFromRequest } from '../services/auditService';
 import { createExcelBuffer, parseExcelBuffer } from '../services/excelService';
 import { broadcastServerChange } from '../services/realtimeSync';
 import { createNotification } from '../services/notificationStorage';
@@ -875,12 +875,31 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     ]);
     await broadcastServerChange('RepairLog', 'CREATE', logId);
 
-    await logAudit({
-      userId: req.user!.id,
+    await logAuditFromRequest(req, {
       action: 'REPAIR_CREATED',
       resource: 'Repair',
       resourceId: created.id,
-      details: { repairNumber: created.repairNumber, customerName: created.customerName },
+      status: 'SUCCESS',
+      details: {
+        repairNumber: created.repairNumber,
+        customerName: created.customerName,
+        customerPhone: created.customerPhone,
+        deviceBrand: created.deviceBrand,
+        deviceModel: created.deviceModel,
+        status: created.status,
+        priority: created.priority,
+        technicianId: created.technicianId,
+        technicianName: assignedTechName,
+        estimatedCost: created.estimatedCost,
+      },
+      newValue: {
+        repairNumber: created.repairNumber,
+        status: created.status,
+        priority: created.priority,
+        technicianId: created.technicianId,
+        technicianName: assignedTechName,
+        estimatedCost: created.estimatedCost,
+      },
     });
 
     // Dispatch realtime notification to assigned technician or role
@@ -1246,10 +1265,24 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
     const existingStatus = String(existingRepair.status || '').toUpperCase().trim();
     if (existingStatus === 'CANCELLED') {
       if (['TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT', 'TECH'].includes(role)) {
+        logAuditFromRequest(req, {
+          action: 'UNAUTHORIZED_REPAIR_UPDATE',
+          resource: 'Repair',
+          resourceId: id,
+          status: 'DENIED',
+          details: { reason: 'Cancelled repairs cannot be modified by technicians.', attemptedStatus: rawBody.status, existingStatus },
+        }).catch(() => {});
         return res.status(403).json({ error: 'Access denied: Cancelled repairs cannot be modified by technicians.' });
       }
       if (rawBody.status && String(rawBody.status).toUpperCase().trim() !== 'CANCELLED') {
         if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(role)) {
+          logAuditFromRequest(req, {
+            action: 'UNAUTHORIZED_REPAIR_UPDATE',
+            resource: 'Repair',
+            resourceId: id,
+            status: 'DENIED',
+            details: { reason: 'Only Administrators and Managers can re-open or restore a cancelled repair.', attemptedStatus: rawBody.status, existingStatus },
+          }).catch(() => {});
           return res.status(403).json({ error: 'Access denied: Only Administrators and Managers can re-open or restore a cancelled repair.' });
         }
       }
@@ -1258,6 +1291,13 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
     // Role-based authorization: Technicians can ONLY update repairs assigned to them
     if (role === 'TECHNICIAN') {
       if (existingRepair.technicianId !== req.user!.id) {
+        logAuditFromRequest(req, {
+          action: 'UNAUTHORIZED_REPAIR_UPDATE',
+          resource: 'Repair',
+          resourceId: id,
+          status: 'DENIED',
+          details: { reason: 'Technicians can only modify repairs assigned to them.', assignedTechnicianId: existingRepair.technicianId, attemptTechnicianId: req.user!.id },
+        }).catch(() => {});
         return res.status(403).json({ error: 'Access denied: You can only modify repairs assigned to you.' });
       }
 
@@ -1271,6 +1311,13 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
         'CANCELLED'
       ];
       if (rawBody.status && FORBIDDEN_TECHNICIAN_STATUSES.includes(String(rawBody.status).toUpperCase().trim())) {
+        logAuditFromRequest(req, {
+          action: 'UNAUTHORIZED_REPAIR_UPDATE',
+          resource: 'Repair',
+          resourceId: id,
+          status: 'DENIED',
+          details: { reason: `Technicians cannot set status "${rawBody.status}".`, attemptedStatus: rawBody.status },
+        }).catch(() => {});
         return res.status(403).json({
           error: `Access denied: Technicians cannot set status "${rawBody.status}". Only Managers, Admins, and Receptionists can mark repairs as Delivered, Ready for Pickup, Re-Problem, or Cancelled.`
         });
@@ -1279,6 +1326,13 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
 
     if (rawBody.status && String(rawBody.status).toUpperCase().trim() === 'CANCELLED') {
       if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(role)) {
+        logAuditFromRequest(req, {
+          action: 'UNAUTHORIZED_REPAIR_UPDATE',
+          resource: 'Repair',
+          resourceId: id,
+          status: 'DENIED',
+          details: { reason: 'Only Super Admins, Admins, Managers, and Receptionists can cancel repairs.', attemptedStatus: 'CANCELLED' },
+        }).catch(() => {});
         return res.status(403).json({
           error: 'Access denied: Only Super Admins, Admins, Managers, and Receptionists can cancel repairs.'
         });
@@ -1371,6 +1425,97 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Compute diff of modified fields for granular audit tracking
+    const diffPrevious: Record<string, any> = {};
+    const diffNext: Record<string, any> = {};
+    for (const key of Object.keys(updateData)) {
+      if (key === 'updatedAt') continue;
+      if (existingRepair[key] !== updated[key]) {
+        diffPrevious[key] = existingRepair[key];
+        diffNext[key] = updated[key];
+      }
+    }
+
+    const statusChanged = rawBody.status && String(rawBody.status).trim() !== String(existingRepair.status || '').trim();
+    const priorityChanged = newPriority && newPriority !== oldPriority;
+    const paymentChanged = (updateData.estimatedCost !== undefined && updateData.estimatedCost !== existingRepair.estimatedCost) ||
+                          (updateData.advancePaid !== undefined && updateData.advancePaid !== existingRepair.advancePaid) ||
+                          (updateData.totalPaid !== undefined && updateData.totalPaid !== existingRepair.totalPaid);
+
+    if (statusChanged) {
+      await logAuditFromRequest(req, {
+        action: 'REPAIR_STATUS_CHANGED',
+        resource: 'Repair',
+        resourceId: id,
+        status: 'SUCCESS',
+        details: {
+          repairNumber: updated.repairNumber,
+          customerName: updated.customerName,
+          oldStatus: existingRepair.status,
+          newStatus: updated.status,
+          remarks: rawBody.remarks || null,
+        },
+        previousValue: { status: existingRepair.status },
+        newValue: { status: updated.status },
+      });
+    }
+
+    if (priorityChanged) {
+      await logAuditFromRequest(req, {
+        action: 'REPAIR_PRIORITY_CHANGED',
+        resource: 'Repair',
+        resourceId: id,
+        status: 'SUCCESS',
+        details: {
+          repairNumber: updated.repairNumber,
+          oldPriority,
+          newPriority,
+        },
+        previousValue: { priority: oldPriority },
+        newValue: { priority: newPriority },
+      });
+    }
+
+    if (paymentChanged) {
+      await logAuditFromRequest(req, {
+        action: 'REPAIR_PAYMENT_UPDATED',
+        resource: 'Repair',
+        resourceId: id,
+        status: 'SUCCESS',
+        details: {
+          repairNumber: updated.repairNumber,
+          estimatedCost: updated.estimatedCost,
+          advancePaid: updated.advancePaid,
+          totalPaid: updated.totalPaid,
+        },
+        previousValue: {
+          estimatedCost: existingRepair.estimatedCost,
+          advancePaid: existingRepair.advancePaid,
+          totalPaid: existingRepair.totalPaid,
+        },
+        newValue: {
+          estimatedCost: updated.estimatedCost,
+          advancePaid: updated.advancePaid,
+          totalPaid: updated.totalPaid,
+        },
+      });
+    }
+
+    if (Object.keys(diffNext).length > 0 && !statusChanged && !priorityChanged && !paymentChanged) {
+      await logAuditFromRequest(req, {
+        action: 'REPAIR_UPDATED',
+        resource: 'Repair',
+        resourceId: id,
+        status: 'SUCCESS',
+        details: {
+          repairNumber: updated.repairNumber,
+          changedFields: Object.keys(diffNext),
+        },
+        previousValue: diffPrevious,
+        newValue: diffNext,
+      });
+    }
+
     await broadcastServerChange('Repair', 'UPDATE', id, updated);
 
     return res.json(updated);
@@ -1419,6 +1564,13 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
     if (role === 'TECHNICIAN') {
       // 1. Ownership check: Must be assigned to this technician
       if (existingRepair.technicianId !== req.user!.id) {
+        logAuditFromRequest(req, {
+          action: 'UNAUTHORIZED_REPAIR_UPDATE',
+          resource: 'Repair',
+          resourceId: id,
+          status: 'DENIED',
+          details: { reason: 'Technicians can only update repairs assigned to them.', assignedTechnicianId: existingRepair.technicianId, attemptTechnicianId: req.user!.id },
+        }).catch(() => {});
         return res.status(403).json({ error: 'Access denied: You can only update repairs assigned to you.' });
       }
 
@@ -1433,6 +1585,13 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
         'CANCELLED'
       ];
       if (status && FORBIDDEN_TECHNICIAN_STATUSES.includes(String(status).toUpperCase().trim())) {
+        logAuditFromRequest(req, {
+          action: 'UNAUTHORIZED_REPAIR_UPDATE',
+          resource: 'Repair',
+          resourceId: id,
+          status: 'DENIED',
+          details: { reason: `Technicians cannot set status "${status}".`, attemptedStatus: status },
+        }).catch(() => {});
         return res.status(403).json({
           error: `Access denied: Technicians cannot set status "${status}". Only Managers, Admins, and Receptionists can mark repairs as Delivered, Ready for Pickup, Re-Problem, or Cancelled.`
         });
@@ -1501,6 +1660,30 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
     } catch (notifErr) {
       console.warn('[NOTIFICATION DISPATCH WARN - NON FATAL]', notifErr);
     }
+
+    await logAuditFromRequest(req, {
+      action: status && status !== existingRepair.status ? 'REPAIR_STATUS_CHANGED' : 'REPAIR_PROGRESS_UPDATED',
+      resource: 'Repair',
+      resourceId: id,
+      status: 'SUCCESS',
+      details: {
+        repairNumber: updatedRepair.repairNumber,
+        oldStatus: existingRepair.status,
+        newStatus: updatedRepair.status,
+        partsUsed: resolvedParts,
+        remarks: resolvedRemarks,
+      },
+      previousValue: {
+        status: existingRepair.status,
+        partsUsed: existingRepair.partsUsed,
+        remarks: existingRepair.remarks,
+      },
+      newValue: {
+        status: updatedRepair.status,
+        partsUsed: updatedRepair.partsUsed,
+        remarks: updatedRepair.remarks,
+      },
+    });
 
     await broadcastServerChange('Repair', 'UPDATE', id, updatedRepair);
 
@@ -1831,6 +2014,12 @@ router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MAN
       techName = tech?.name || null;
     }
 
+    const { data: existingRepair } = await supabaseAdmin
+      .from('Repair')
+      .select('technicianId, assignedByName, repairNumber')
+      .eq('id', id)
+      .maybeSingle();
+
     const { data: updated, error } = await supabaseAdmin
       .from('Repair')
       .update({
@@ -1865,6 +2054,27 @@ router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MAN
     } catch (logErr) {
       console.warn('[REPAIR LOG NON FATAL]', logErr);
     }
+
+    await logAuditFromRequest(req, {
+      action: normalizedTechId ? 'REPAIR_ASSIGNED' : 'REPAIR_UNASSIGNED',
+      resource: 'Repair',
+      resourceId: id,
+      status: 'SUCCESS',
+      details: {
+        repairNumber: updated.repairNumber,
+        assignedTechnicianId: normalizedTechId,
+        assignedTechnicianName: techName,
+        previousTechnicianName: existingRepair?.assignedByName || null,
+      },
+      previousValue: {
+        technicianId: existingRepair?.technicianId || null,
+        assignedByName: existingRepair?.assignedByName || null,
+      },
+      newValue: {
+        technicianId: normalizedTechId,
+        assignedByName: techName,
+      },
+    });
 
     // Dispatch realtime notification to newly assigned technician
     if (normalizedTechId) {

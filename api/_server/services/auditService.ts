@@ -74,3 +74,36 @@ export async function logAudit(entry: AuditLogEntry): Promise<void> {
   }
 }
 
+export async function logAuditFromRequest(
+  req: any,
+  entry: {
+    action: string;
+    resource: string;
+    resourceId?: string | null;
+    status?: 'SUCCESS' | 'FAILED' | 'DENIED' | string;
+    deviceInfo?: any;
+    details?: any;
+    previousValue?: any;
+    newValue?: any;
+    metadata?: any;
+    userId?: string | null;
+    userEmail?: string | null;
+    userName?: string | null;
+    userRole?: string | null;
+  }
+): Promise<void> {
+  const user = req?.user;
+  const ipAddress = req?.ip || (req?.headers ? (req.headers['x-forwarded-for'] as string) : null) || null;
+  const userAgent = req?.headers ? (req.headers['user-agent'] as string) : null;
+
+  return logAudit({
+    userId: entry.userId ?? user?.id ?? null,
+    userEmail: entry.userEmail ?? user?.email ?? null,
+    userName: entry.userName ?? user?.name ?? null,
+    userRole: entry.userRole ?? user?.role ?? null,
+    ipAddress,
+    userAgent,
+    ...entry,
+  });
+}
+

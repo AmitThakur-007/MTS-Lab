@@ -5,7 +5,7 @@ import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize, normalizeRole } from '../middleware/rbac';
 import { broadcastServerChange } from '../services/realtimeSync';
-import { logAudit } from '../services/auditService';
+import { logAudit, logAuditFromRequest } from '../services/auditService';
 
 const router = Router();
 
@@ -118,12 +118,24 @@ router.post('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: 
       return res.status(500).json({ error: 'Failed to create staff member profile.' });
     }
 
-    await logAudit({
-      userId: req.user!.id,
+    await logAuditFromRequest(req, {
       action: 'STAFF_CREATED',
       resource: 'User',
       resourceId: insertedUser.id,
-      details: { email: insertedUser.email, role: insertedUser.role, createdBy: req.user!.name },
+      status: 'SUCCESS',
+      details: {
+        email: insertedUser.email,
+        name: insertedUser.name,
+        role: insertedUser.role,
+        department: insertedUser.department,
+      },
+      newValue: {
+        email: insertedUser.email,
+        name: insertedUser.name,
+        role: insertedUser.role,
+        accountStatus: insertedUser.accountStatus,
+        isActive: insertedUser.isActive,
+      },
     });
 
     await broadcastServerChange('User', 'CREATE', insertedUser.id, insertedUser);
@@ -158,8 +170,21 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const isSuperAdminOrAdmin = callerRole === 'SUPER_ADMIN' || callerRole === 'ADMIN';
 
     if (!isSelf && !isSuperAdminOrAdmin) {
+      logAuditFromRequest(req, {
+        action: 'UNAUTHORIZED_USER_MUTATION',
+        resource: 'User',
+        resourceId: id,
+        status: 'DENIED',
+        details: { reason: 'Caller is neither the user nor an administrator.', targetUserId: id },
+      }).catch(() => {});
       return res.status(403).json({ error: 'You are not authorized to modify this user account.' });
     }
+
+    const { data: existingUser } = await supabaseAdmin
+      .from('User')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
 
     const updatePayload: any = {
       updatedAt: new Date().toISOString(),
@@ -202,12 +227,39 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ error: 'Failed to update user profile.' });
     }
 
-    await logAudit({
-      userId: req.user!.id,
+    if (updatePayload.role && existingUser && updatePayload.role !== existingUser.role) {
+      await logAuditFromRequest(req, {
+        action: 'STAFF_ROLE_CHANGED',
+        resource: 'User',
+        resourceId: id,
+        status: 'SUCCESS',
+        details: { targetEmail: existingUser.email, targetName: existingUser.name, oldRole: existingUser.role, newRole: updatePayload.role },
+        previousValue: { role: existingUser.role },
+        newValue: { role: updatePayload.role },
+      });
+    }
+
+    if ((updatePayload.accountStatus && existingUser && updatePayload.accountStatus !== existingUser.accountStatus) ||
+        (updatePayload.isActive !== undefined && existingUser && updatePayload.isActive !== existingUser.isActive)) {
+      await logAuditFromRequest(req, {
+        action: 'STAFF_STATUS_CHANGED',
+        resource: 'User',
+        resourceId: id,
+        status: 'SUCCESS',
+        details: { targetEmail: existingUser.email, oldStatus: existingUser.accountStatus, newStatus: updatePayload.accountStatus, oldActive: existingUser.isActive, newActive: updatePayload.isActive },
+        previousValue: { accountStatus: existingUser.accountStatus, isActive: existingUser.isActive },
+        newValue: { accountStatus: updated.accountStatus, isActive: updated.isActive },
+      });
+    }
+
+    await logAuditFromRequest(req, {
       action: 'STAFF_UPDATED',
       resource: 'User',
       resourceId: id,
-      details: updatePayload,
+      status: 'SUCCESS',
+      details: { targetEmail: existingUser?.email, changedFields: Object.keys(updatePayload).filter(k => k !== 'updatedAt') },
+      previousValue: existingUser ? { name: existingUser.name, role: existingUser.role, department: existingUser.department, phoneNumber: existingUser.phoneNumber } : undefined,
+      newValue: { name: updated.name, role: updated.role, department: updated.department, phoneNumber: updated.phoneNumber },
     });
 
     await broadcastServerChange('User', 'UPDATE', id, updated);
@@ -242,6 +294,16 @@ const handle2FAToggle = async (req: AuthRequest, res: Response) => {
 
     await broadcastServerChange('User', 'UPDATE', id, updated);
 
+    await logAuditFromRequest(req, {
+      action: 'STAFF_2FA_TOGGLED',
+      resource: 'User',
+      resourceId: id,
+      status: 'SUCCESS',
+      details: { email: updated.email, twoFactorEnabled: isEnabled },
+      previousValue: { twoFactorEnabled: !isEnabled },
+      newValue: { twoFactorEnabled: isEnabled },
+    });
+
     return res.json({ success: true, message: `2FA ${isEnabled ? 'enabled' : 'disabled'} successfully.`, user: updated });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to toggle 2FA.' });
@@ -274,6 +336,15 @@ const handleDirectVerifyEmail = async (req: AuthRequest, res: Response) => {
 
     await broadcastServerChange('User', 'UPDATE', id, updated);
 
+    await logAuditFromRequest(req, {
+      action: 'STAFF_EMAIL_VERIFIED',
+      resource: 'User',
+      resourceId: id,
+      status: 'SUCCESS',
+      details: { email: updated.email },
+      newValue: { emailVerified: true, accountStatus: 'ACTIVE' },
+    });
+
     return res.json({ success: true, message: 'Email directly verified successfully.', user: updated });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to verify email.' });
@@ -296,6 +367,13 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
 
     const { data: user } = await supabaseAdmin.from('User').select('role, email').eq('id', id).single();
     if (user && normalizeRole(user.role) === 'SUPER_ADMIN' && normalizeRole(req.user!.role) !== 'SUPER_ADMIN') {
+      logAuditFromRequest(req, {
+        action: 'UNAUTHORIZED_USER_MUTATION',
+        resource: 'User',
+        resourceId: id,
+        status: 'DENIED',
+        details: { reason: 'Only a Super Admin can delete another Super Admin.', targetRole: user.role },
+      }).catch(() => {});
       return res.status(403).json({ error: 'Only a Super Admin can delete another Super Admin.' });
     }
 
@@ -312,12 +390,14 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
       return res.status(500).json({ error: 'Failed to remove staff member.' });
     }
 
-    await logAudit({
-      userId: req.user!.id,
+    await logAuditFromRequest(req, {
       action: 'STAFF_DELETED',
       resource: 'User',
       resourceId: id,
-      details: { deletedEmail: user?.email },
+      status: 'SUCCESS',
+      details: { deletedEmail: user?.email, deletedRole: user?.role },
+      previousValue: { email: user?.email, role: user?.role, isActive: true, accountStatus: 'ACTIVE' },
+      newValue: { isActive: false, accountStatus: 'DISABLED' },
     });
 
     await broadcastServerChange('User', 'DELETE', id);
