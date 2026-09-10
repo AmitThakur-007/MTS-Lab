@@ -44,13 +44,13 @@ function isPhoneMatching(providedPhoneDigits: string, recordPhone?: string | nul
   // Exact digits match
   if (providedPhoneDigits === dbDigits) return true;
 
-  // Last 10 digits match (Nepal standard 10-digit mobile, ignoring +977 or leading 0)
+  // 10-digit mobile matching (Nepal standard 10-digit mobile, ignoring +977 or country codes)
   const p10 = providedPhoneDigits.length >= 10 ? providedPhoneDigits.slice(-10) : providedPhoneDigits;
   const db10 = dbDigits.length >= 10 ? dbDigits.slice(-10) : dbDigits;
-  if (p10 === db10) return true;
+  if (p10.length === 10 && db10.length === 10 && p10 === db10) return true;
 
-  // Last 7 digits match for landlines
-  if (providedPhoneDigits.length >= 7 && dbDigits.length >= 7) {
+  // If both are exact landline numbers (7-8 digits)
+  if (providedPhoneDigits.length < 10 && dbDigits.length < 10 && providedPhoneDigits.length >= 7 && dbDigits.length >= 7) {
     if (providedPhoneDigits.slice(-7) === dbDigits.slice(-7)) return true;
   }
 
@@ -74,7 +74,11 @@ const handlePublicTrack = async (req: Request, res: Response) => {
     const phone10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
 
     if (!cleanRepairNumber && !cleanPhone) {
-      return res.status(400).json({ error: 'Please enter your Repair Number or Registered Phone Number.' });
+      return res.status(400).json({ success: false, error: 'Please enter your Repair Number or Registered Phone Number.' });
+    }
+
+    if (!cleanRepairNumber && cleanPhone.length < 7) {
+      return res.status(400).json({ success: false, error: 'Please enter a valid Phone Number (minimum 7 digits) or Repair Number.' });
     }
 
     const selectFields = `
@@ -217,7 +221,13 @@ const handlePublicTrack = async (req: Request, res: Response) => {
     }
 
     if (!allMatchingRepairs || allMatchingRepairs.length === 0) {
-      return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
+      return res.status(200).json({
+        success: true,
+        repair: null,
+        repairs: [],
+        devices: [],
+        message: 'No repair records found matching your tracking information.'
+      });
     }
 
     // Query RepairLog for all matching repairs to determine authoritative delivery timestamps and diagnostic trace
@@ -233,7 +243,13 @@ const handlePublicTrack = async (req: Request, res: Response) => {
     const trackableRepairs = filterPubliclyTrackableRepairs(allMatchingRepairs, allExplicitLogs || []);
 
     if (!trackableRepairs || trackableRepairs.length === 0) {
-      return res.status(404).json({ error: 'No repair records found matching your tracking information.' });
+      return res.status(200).json({
+        success: true,
+        repair: null,
+        repairs: [],
+        devices: [],
+        message: 'No active repair records found matching your tracking information.'
+      });
     }
 
     const primaryRepair = trackableRepairs[0];

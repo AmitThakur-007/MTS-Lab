@@ -457,17 +457,32 @@ export default function Tracking() {
       let normalizedData: any = null;
 
       if (Array.isArray(res)) {
-        if (res.length === 0) throw new Error('No repair records found matching your tracking information.');
+        if (res.length === 0) {
+          toast.info('No repair records found matching your tracking information.');
+          setTrackingData(null);
+          return;
+        }
         normalizedData = res.length === 1 ? res[0] : { devices: res, customer: { name: res[0]?.customerName } };
-      } else if (res?.repair) {
-        normalizedData = res.repair;
       } else if (res?.repairs && Array.isArray(res.repairs)) {
+        if (res.repairs.length === 0) {
+          toast.info(res?.message || 'No repair records found matching your tracking information.');
+          setTrackingData(null);
+          return;
+        }
         normalizedData =
           res.repairs.length === 1
             ? res.repairs[0]
             : { devices: res.repairs, customer: { name: res.repairs[0]?.customerName } };
-      } else {
+      } else if (res?.repair) {
+        normalizedData = res.repair;
+      } else if (res && !res.error) {
         normalizedData = res;
+      }
+
+      if (!normalizedData || (normalizedData.devices && normalizedData.devices.length === 0)) {
+        toast.info('No active repair records found matching your tracking information.');
+        setTrackingData(null);
+        return;
       }
 
       setTrackingData(normalizedData);
