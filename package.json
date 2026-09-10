@@ -4,8 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild api/_server/app.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js",
+    "dev": "node scripts/patch-base-ui.cjs && tsx server.ts",
+    "postinstall": "node scripts/patch-base-ui.cjs",
+    "build": "node scripts/patch-base-ui.cjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild api/_server/app.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",

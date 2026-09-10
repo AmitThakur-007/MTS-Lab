@@ -69,7 +69,11 @@ export default function HeroSlider() {
   const [isPaused, setIsPaused] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const touchStartX = useRef<number | null>(null);
+
+  // Unified Pointer Swipe Tracking for Multi-device Responsiveness (Mobile, Tablet, Desktop, Stylus)
+  const pointerStartX = useRef<number | null>(null);
+  const pointerStartY = useRef<number | null>(null);
+  const isDragging = useRef(false);
 
   // Authoritative data fetch from backend API
   const loadSlides = useCallback(async () => {
@@ -144,22 +148,46 @@ export default function HeroSlider() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [next, prev]);
 
-  // Touch Swipe Handlers for Mobile
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
+  // Unified Pointer Swipe Handlers (Seamless on Mobile Touch, iPad, Stylus, and Desktop Mouse Drag)
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // For mouse interactions, only respond to primary left-click
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pointerStartX.current = e.clientX;
+    pointerStartY.current = e.clientY;
+    isDragging.current = true;
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX.current === null) return;
-    const touchEndX = e.changedTouches[0].clientX;
-    const diff = touchStartX.current - touchEndX;
-
-    if (diff > 50) {
-      next(); // Swiped left -> next slide
-    } else if (diff < -50) {
-      prev(); // Swiped right -> prev slide
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging.current || pointerStartX.current === null || pointerStartY.current === null) {
+      pointerStartX.current = null;
+      pointerStartY.current = null;
+      isDragging.current = false;
+      return;
     }
-    touchStartX.current = null;
+
+    const diffX = pointerStartX.current - e.clientX;
+    const diffY = pointerStartY.current - e.clientY;
+    const absDiffX = Math.abs(diffX);
+    const absDiffY = Math.abs(diffY);
+
+    // Intentional horizontal swipe threshold: minimum 40px and dominant horizontal angle
+    if (absDiffX > 40 && absDiffX > absDiffY * 1.1) {
+      if (diffX > 0) {
+        next(); // Dragged/swiped left -> advance to next slide
+      } else {
+        prev(); // Dragged/swiped right -> go to previous slide
+      }
+    }
+
+    pointerStartX.current = null;
+    pointerStartY.current = null;
+    isDragging.current = false;
+  };
+
+  const handlePointerCancel = () => {
+    pointerStartX.current = null;
+    pointerStartY.current = null;
+    isDragging.current = false;
   };
 
   // If database explicitly returned empty active slides list
@@ -206,11 +234,17 @@ export default function HeroSlider() {
 
   return (
     <div 
-      className="relative w-full overflow-hidden rounded-[28px] sm:rounded-[40px] md:rounded-[48px] shadow-2xl shadow-slate-950/20 bg-slate-950 min-h-[560px] sm:min-h-[620px] lg:min-h-[660px] flex items-center select-none"
+      className="relative w-full overflow-hidden rounded-[28px] sm:rounded-[40px] md:rounded-[48px] shadow-2xl shadow-slate-950/20 bg-slate-950 min-h-[560px] sm:min-h-[620px] lg:min-h-[660px] flex items-center select-none touch-pan-y cursor-grab active:cursor-grabbing"
+      style={{ touchAction: 'pan-y' }}
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      role="region"
+      aria-roledescription="carousel"
+      aria-label="MTS Lab Featured Highlights Slideshow"
+      aria-live={isPaused ? 'polite' : 'off'}
     >
       <AnimatePresence mode="wait">
         <motion.div

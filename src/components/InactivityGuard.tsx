@@ -8,7 +8,7 @@ const INACTIVITY_TIMEOUT_MS    = 2 * 60 * 60 * 1000;   // 2 hours
 const WARNING_BEFORE_MS        = 5 * 60 * 1000;          // warn 5 min before expiry
 const WARNING_AT_MS            = INACTIVITY_TIMEOUT_MS - WARNING_BEFORE_MS; // 1h55m
 const STORAGE_KEY              = 'mts_last_activity';
-const ACTIVITY_EVENTS          = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'] as const;
+const ACTIVITY_EVENTS          = ['mousemove', 'pointerdown', 'keydown', 'scroll', 'click'] as const;
 const THROTTLE_MS              = 10_000; // update localStorage at most once per 10s
 
 function getLastActivity(): number {
