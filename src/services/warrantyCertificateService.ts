@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
+import { api } from '@/services/api';
 
 export interface BatteryWarrantyData {
   id: string;
@@ -333,3 +334,40 @@ export function getWarrantyWhatsAppShareUrl(warranty: BatteryWarrantyData): stri
 
   return `https://wa.me/${waPhone}?text=${message}`;
 }
+
+/**
+ * Uploads the Battery Warranty Certificate PDF to the backend / Cloudinary document archive
+ */
+export async function uploadWarrantyCertificateToCloudinary(
+  warranty: BatteryWarrantyData
+): Promise<{
+  success: boolean;
+  url?: string;
+  secureUrl?: string;
+  publicId?: string;
+  storageProvider?: string;
+  error?: string;
+}> {
+  try {
+    const pdfBase64 = getWarrantyCertificateDataUrl(warranty);
+    const res = await api.post('/upload/pdf', {
+      pdfBase64,
+      docType: 'BATTERY_WARRANTY',
+      referenceNumber: warranty.warrantyNumber,
+    });
+    return {
+      success: true,
+      url: res.secureUrl || res.url,
+      secureUrl: res.secureUrl || res.url,
+      publicId: res.publicId,
+      storageProvider: res.storageProvider || 'UNKNOWN',
+    };
+  } catch (err: any) {
+    console.error('[UPLOAD WARRANTY CERTIFICATE ERROR]', err);
+    return {
+      success: false,
+      error: err.message || 'Failed to archive warranty certificate to cloud.',
+    };
+  }
+}
+

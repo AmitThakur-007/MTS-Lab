@@ -10,7 +10,10 @@ import {
   ZoomIn, 
   ZoomOut, 
   Maximize2,
-  Scan
+  Scan,
+  Cloud,
+  ExternalLink,
+  Copy
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -28,6 +31,7 @@ import {
   downloadServiceSlipPdf, 
   generateVectorSlipPdf,
   printServiceSlipElement, 
+  uploadServiceSlipToCloudinary,
   RepairSlipItem, 
   ServiceSlipCustomer 
 } from '@/services/serviceSlipService';
@@ -55,6 +59,9 @@ export const ServiceSlipModal: React.FC<ServiceSlipModalProps> = ({
   const [activeBillIndex, setActiveBillIndex] = useState(0);
   const [downloading, setDownloading] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [cloudDocUrl, setCloudDocUrl] = useState<string | null>(null);
+  const [storageProvider, setStorageProvider] = useState<string | null>(null);
   
   // Responsive zoom and container scaling state
   const containerRef = useRef<HTMLDivElement>(null);
@@ -229,6 +236,33 @@ export const ServiceSlipModal: React.FC<ServiceSlipModalProps> = ({
       toast.error(err?.message || 'Failed to download all bills');
     } finally {
       setDownloadingAll(false);
+    }
+  };
+
+  // Archive to Cloudinary / Backend Storage
+  const handleArchiveToCloud = async () => {
+    const el = document.getElementById(`service-slip-view-${activeBillIndex}`) || document.getElementById(`service-slip-batch-${activeBillIndex}`);
+    if (!el) {
+      toast.error('Service slip element not rendered yet.');
+      return;
+    }
+
+    setArchiving(true);
+    try {
+      const billRef = currentBill.billNumber || currentBill.devices.map(d => d.repairNumber).join('-') || 'SLIP';
+      const res = await uploadServiceSlipToCloudinary(el, billRef, currentBill);
+      if (res.success && res.url) {
+        setCloudDocUrl(res.url);
+        setStorageProvider(res.storageProvider || null);
+        const isCld = res.storageProvider === 'CLOUDINARY';
+        toast.success(isCld ? 'Archived to Cloudinary permanently!' : 'Archived to server storage.');
+      } else {
+        toast.error(res.error || 'Failed to archive service slip.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Archiving failed.');
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -438,6 +472,36 @@ export const ServiceSlipModal: React.FC<ServiceSlipModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 justify-end flex-wrap sm:flex-nowrap">
+            {cloudDocUrl && (
+              <a
+                href={cloudDocUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-colors"
+                title={cloudDocUrl}
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">{storageProvider === 'CLOUDINARY' ? 'Cloudinary' : 'Cloud'} Stored</span>
+                <ExternalLink className="w-3 h-3 ml-0.5 opacity-70" />
+              </a>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleArchiveToCloud}
+              disabled={archiving}
+              className="rounded-xl border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-slate-100 font-bold h-10 px-3.5 text-xs cursor-pointer flex-1 sm:flex-initial"
+              title="Upload and archive this Service Slip PDF permanently to Cloudinary"
+            >
+              {archiving ? (
+                <Loader2 className="w-4 h-4 mr-1.5 animate-spin text-cyan-400" />
+              ) : (
+                <Cloud className="w-4 h-4 mr-1.5 text-cyan-400" />
+              )}
+              <span>{cloudDocUrl ? 'Re-Sync Cloud' : 'Save to Cloud'}</span>
+            </Button>
+
             {bills.length > 1 && (
               <Button
                 type="button"

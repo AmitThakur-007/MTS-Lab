@@ -7,14 +7,7 @@ let isConfigured = false;
  * Lazily configures Cloudinary SDK with latest environment variables
  */
 export function ensureCloudinaryConfigured(): boolean {
-  if (isConfigured) return true;
-
   const creds = config.getCloudinaryCredentials();
-  if (creds.cldUrl) {
-    cloudinary.config(true); // Auto-parses CLOUDINARY_URL
-    isConfigured = true;
-    return true;
-  }
 
   if (creds.cloudName && creds.apiKey && creds.apiSecret) {
     cloudinary.config({
@@ -27,6 +20,16 @@ export function ensureCloudinaryConfigured(): boolean {
     return true;
   }
 
+  if (creds.cldUrl) {
+    cloudinary.config({
+      url: creds.cldUrl,
+      secure: true,
+    });
+    isConfigured = true;
+    return true;
+  }
+
+  isConfigured = false;
   return false;
 }
 
@@ -51,9 +54,10 @@ export async function pingCloudinary(): Promise<{
   error?: string;
 }> {
   if (!ensureCloudinaryConfigured()) {
+    const creds = config.getCloudinaryCredentials();
     return {
       connected: false,
-      cloudName: '',
+      cloudName: creds.cloudName || '',
       status: 'NOT_CONFIGURED',
       error: 'Cloudinary credentials (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET or CLOUDINARY_URL) are not set.',
     };
@@ -64,7 +68,7 @@ export async function pingCloudinary(): Promise<{
     const creds = config.getCloudinaryCredentials();
     return {
       connected: true,
-      cloudName: creds.cloudName,
+      cloudName: creds.cloudName || cloudinary.config().cloud_name || '',
       status: pingResult.status || 'ok',
       rateLimit: {
         allowed: pingResult.rate_limit_allowed,
@@ -73,11 +77,64 @@ export async function pingCloudinary(): Promise<{
       },
     };
   } catch (err: any) {
+    const creds = config.getCloudinaryCredentials();
     return {
       connected: false,
-      cloudName: config.getCloudinaryCredentials().cloudName,
+      cloudName: creds.cloudName || cloudinary.config().cloud_name || '',
       status: 'ERROR',
       error: err.message || 'Failed to ping Cloudinary API.',
+    };
+  }
+}
+
+/**
+ * Performs an active end-to-end upload and delete test in Cloudinary
+ */
+export async function testCloudinaryUpload(): Promise<{
+  success: boolean;
+  url?: string;
+  publicId?: string;
+  latencyMs?: number;
+  error?: string;
+}> {
+  if (!ensureCloudinaryConfigured()) {
+    return {
+      success: false,
+      error: 'Cloudinary is not configured. Missing credentials.',
+    };
+  }
+
+  const start = Date.now();
+  // 1x1 transparent GIF base64
+  const testPixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  const testPublicId = `mts_lab/test/test_ping_${Date.now()}`;
+
+  try {
+    const uploadResult = await cloudinary.uploader.upload(testPixel, {
+      folder: 'mts_lab/test',
+      public_id: testPublicId,
+      overwrite: true,
+      tags: ['mts_lab', 'test', 'health_check'],
+    });
+
+    const latencyMs = Date.now() - start;
+
+    // Clean up immediately
+    try {
+      await cloudinary.uploader.destroy(uploadResult.public_id);
+    } catch (_) { }
+
+    return {
+      success: true,
+      url: uploadResult.secure_url,
+      publicId: uploadResult.public_id,
+      latencyMs,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || 'Upload test failed.',
+      latencyMs: Date.now() - start,
     };
   }
 }

@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { api } from '@/services/api';
 
 export interface RepairSlipItem {
   id?: string;
@@ -436,6 +437,103 @@ export async function downloadServiceSlipPdf(
     if (wrapper.parentNode) {
       wrapper.parentNode.removeChild(wrapper);
     }
+  }
+}
+
+/**
+ * Builds the Service Slip PDF in memory and returns a Base64 data URI string.
+ */
+export async function generateServiceSlipPdfBase64(
+  element: HTMLElement,
+  slipDataFallback?: ServiceSlipData
+): Promise<string> {
+  const cloned = element.cloneNode(true) as HTMLElement;
+  const wrapper = document.createElement('div');
+  wrapper.style.position = 'fixed';
+  wrapper.style.left = '-9999px';
+  wrapper.style.top = '0';
+  wrapper.style.width = '1000px';
+  wrapper.style.background = '#ffffff';
+  wrapper.style.zIndex = '-9999';
+  wrapper.appendChild(cloned);
+  document.body.appendChild(wrapper);
+
+  try {
+    const canvas = await html2canvas(cloned, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const slipWidth = 240;
+    const slipHeight = 157;
+    const posX = (pageWidth - slipWidth) / 2;
+    const posY = (pageHeight - slipHeight) / 2;
+
+    pdf.addImage(imgData, 'JPEG', posX, posY, slipWidth, slipHeight, undefined, 'FAST');
+    return pdf.output('datauristring');
+  } catch (err) {
+    console.warn('[SERVICE SLIP PDF BASE64 RASTER ERROR, USING VECTOR]', err);
+    if (slipDataFallback) {
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      // Minimal vector rendering fallback
+      doc.text(`MTS LAB SERVICE SLIP: ${slipDataFallback.billNumber || 'SLIP'}`, 20, 20);
+      return doc.output('datauristring');
+    }
+    throw err;
+  } finally {
+    if (wrapper.parentNode) {
+      wrapper.parentNode.removeChild(wrapper);
+    }
+  }
+}
+
+/**
+ * Archives a Service Slip to Cloudinary (with automatic fallback to local backend storage)
+ */
+export async function uploadServiceSlipToCloudinary(
+  element: HTMLElement,
+  billRef: string,
+  slipDataFallback?: ServiceSlipData
+): Promise<{
+  success: boolean;
+  url?: string;
+  secureUrl?: string;
+  publicId?: string;
+  storageProvider?: string;
+  error?: string;
+}> {
+  try {
+    const pdfBase64 = await generateServiceSlipPdfBase64(element, slipDataFallback);
+    const res = await api.post('/upload/pdf', {
+      pdfBase64,
+      docType: 'SERVICE_SLIP',
+      referenceNumber: billRef,
+    });
+    return {
+      success: true,
+      url: res.secureUrl || res.url,
+      secureUrl: res.secureUrl || res.url,
+      publicId: res.publicId,
+      storageProvider: res.storageProvider || 'UNKNOWN',
+    };
+  } catch (err: any) {
+    console.error('[UPLOAD SERVICE SLIP ERROR]', err);
+    return {
+      success: false,
+      error: err.message || 'Failed to archive service slip to cloud.',
+    };
   }
 }
 

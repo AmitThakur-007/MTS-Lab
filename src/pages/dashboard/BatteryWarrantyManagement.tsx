@@ -36,7 +36,8 @@ import {
   FileSpreadsheet,
   Upload,
   FileDown,
-  FileCheck2
+  FileCheck2,
+  Cloud
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +70,7 @@ import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import {
   downloadWarrantyCertificatePdf,
   getWarrantyWhatsAppShareUrl,
+  uploadWarrantyCertificateToCloudinary,
   BatteryWarrantyData
 } from '@/services/warrantyCertificateService';
 import { cn } from '@/lib/utils';
@@ -135,6 +137,9 @@ export default function BatteryWarrantyManagement() {
   // Email Send State
   const [emailInput, setEmailInput] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [archivingCertificate, setArchivingCertificate] = useState(false);
+  const [archivedCertUrl, setArchivedCertUrl] = useState<string | null>(null);
+  const [certStorageProvider, setCertStorageProvider] = useState<string | null>(null);
 
   // Standalone Warranty Creation Form State
   const [allRepairs, setAllRepairs] = useState<any[]>([]);
@@ -465,7 +470,34 @@ export default function BatteryWarrantyManagement() {
   const handleOpenCertificate = (warranty: any) => {
     setSelectedWarranty(warranty);
     setEmailInput(warranty.customerEmail || warranty.customer?.email || '');
+    setArchivedCertUrl(null);
+    setCertStorageProvider(null);
     setIsCertificateModalOpen(true);
+  };
+
+  // Archive Warranty Certificate to Cloudinary
+  const handleArchiveCertificate = async (warranty: any) => {
+    if (!warranty) return;
+    setArchivingCertificate(true);
+    try {
+      const res = await uploadWarrantyCertificateToCloudinary(warranty);
+      if (res.success && res.url) {
+        setArchivedCertUrl(res.url);
+        setCertStorageProvider(res.storageProvider || null);
+        const isCld = res.storageProvider === 'CLOUDINARY';
+        toast.success(
+          isCld
+            ? `Certificate #${warranty.warrantyNumber} archived to Cloudinary permanently!`
+            : `Certificate #${warranty.warrantyNumber} archived to server storage.`
+        );
+      } else {
+        toast.error(res.error || 'Failed to archive certificate to cloud');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error archiving certificate');
+    } finally {
+      setArchivingCertificate(false);
+    }
   };
 
   // Download PDF
@@ -1441,18 +1473,50 @@ export default function BatteryWarrantyManagement() {
             </div>
           )}
 
-          <DialogFooter className="flex items-center justify-between sm:justify-between border-t border-slate-100 pt-4 mt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleShareWhatsApp(selectedWarranty)}
-              className="rounded-xl border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs flex items-center gap-1.5"
-            >
-              <MessageCircle className="w-3.5 h-3.5 text-emerald-700" />
-              <span>WhatsApp Share</span>
-            </Button>
+          <DialogFooter className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4 mt-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleShareWhatsApp(selectedWarranty)}
+                className="rounded-xl border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs flex items-center gap-1.5"
+              >
+                <MessageCircle className="w-3.5 h-3.5 text-emerald-700" />
+                <span>WhatsApp Share</span>
+              </Button>
 
-            <div className="flex items-center gap-2">
+              {archivedCertUrl && (
+                <a
+                  href={archivedCertUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 text-xs font-bold hover:bg-emerald-500/20 transition-colors"
+                  title={archivedCertUrl}
+                >
+                  <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{certStorageProvider === 'CLOUDINARY' ? 'Cloudinary' : 'Cloud'} Archived</span>
+                  <ExternalLink className="w-3 h-3 ml-0.5 opacity-70" />
+                </a>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleArchiveCertificate(selectedWarranty)}
+                disabled={archivingCertificate}
+                className="rounded-xl border-slate-300 text-slate-700 hover:bg-slate-50 font-bold text-xs flex items-center gap-1.5"
+                title="Archive certificate PDF permanently to Cloudinary"
+              >
+                {archivingCertificate ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-600" />
+                ) : (
+                  <Cloud className="w-3.5 h-3.5 text-cyan-600" />
+                )}
+                <span>{archivedCertUrl ? 'Re-Sync Cloud' : 'Save to Cloud'}</span>
+              </Button>
+
               <Button
                 variant="outline"
                 size="sm"

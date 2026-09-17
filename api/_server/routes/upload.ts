@@ -11,10 +11,12 @@ import {
   uploadPdfToCloudinary,
   deleteFromCloudinary,
   pingCloudinary,
+  testCloudinaryUpload,
   extractPublicIdFromUrl,
   isValidCloudinaryUrl,
   isCloudinaryConfigured,
 } from '../services/cloudinaryService';
+import { supabaseAdmin } from '../config/supabase';
 
 const router = Router();
 
@@ -122,6 +124,87 @@ router.get('/status', async (req, res: Response) => {
   }
 });
 
+// 1.1 POST /api/upload/test — Active end-to-end upload & latency check
+router.post('/test', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const isConfigured = isCloudinaryConfigured();
+    if (!isConfigured) {
+      return res.json({
+        success: false,
+        storage: 'LOCAL_STORAGE',
+        connected: false,
+        message: 'Cloudinary is not configured in this environment. Falling back to local storage.',
+      });
+    }
+
+    const testResult = await testCloudinaryUpload();
+    return res.json({
+      success: testResult.success,
+      storage: 'CLOUDINARY',
+      connected: testResult.success,
+      latencyMs: testResult.latencyMs,
+      testUrl: testResult.url,
+      error: testResult.error,
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Cloudinary test upload failed.',
+    });
+  }
+});
+
+// 1.2 GET /api/upload/documents — Query archived documents (Service Slips, Warranties)
+router.get('/documents', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const referenceNumber = (req.query.referenceNumber as string || '').trim();
+    const docType = (req.query.docType as string || '').trim().toUpperCase();
+
+    let query = supabaseAdmin
+      .from('AuditLog')
+      .select('*')
+      .eq('action', 'DOCUMENT_UPLOAD')
+      .order('createdAt', { ascending: false });
+
+    if (referenceNumber) {
+      query = query.eq('resourceId', referenceNumber);
+    }
+    if (docType) {
+      query = query.eq('resource', docType);
+    }
+
+    const { data: logs, error } = await query.limit(50);
+    if (error) {
+      console.warn('[QUERY DOCUMENTS WARN]', error);
+      return res.json({ success: true, documents: [] });
+    }
+
+    const documents = (logs || []).map((l: any) => {
+      let meta: any = {};
+      try {
+        meta = typeof l.metadata === 'string' ? JSON.parse(l.metadata) : (l.metadata || {});
+      } catch (_) { }
+      return {
+        id: l.id,
+        docType: l.resource,
+        referenceNumber: l.resourceId,
+        url: meta.url || meta.secureUrl,
+        secureUrl: meta.secureUrl || meta.url,
+        publicId: meta.publicId,
+        storageProvider: meta.storageProvider || 'UNKNOWN',
+        bytes: meta.bytes,
+        format: meta.format,
+        uploadedAt: l.createdAt,
+        uploadedByName: l.userName || 'System',
+      };
+    });
+
+    return res.json({ success: true, documents });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to retrieve documents.' });
+  }
+});
+
 // 2. POST /api/upload — Upload media file (multipart/form-data or Base64)
 router.post('/', authenticate, upload.single('file') as any, async (req: AuthRequest, res: Response) => {
   try {
@@ -145,6 +228,7 @@ router.post('/', authenticate, upload.single('file') as any, async (req: AuthReq
 
         return res.json({
           success: true,
+          storageProvider: 'CLOUDINARY',
           url: result.secure_url,
           secureUrl: result.secure_url,
           publicId: result.public_id,
@@ -159,6 +243,7 @@ router.post('/', authenticate, upload.single('file') as any, async (req: AuthReq
         const local = saveFileLocally(req.file.buffer, req.file.originalname, req.file.mimetype);
         return res.json({
           success: true,
+          storageProvider: 'LOCAL_STORAGE',
           ...local,
           folder,
         });
@@ -179,6 +264,7 @@ router.post('/', authenticate, upload.single('file') as any, async (req: AuthReq
 
         return res.json({
           success: true,
+          storageProvider: 'CLOUDINARY',
           url: result.secure_url,
           secureUrl: result.secure_url,
           publicId: result.public_id,
@@ -193,6 +279,7 @@ router.post('/', authenticate, upload.single('file') as any, async (req: AuthReq
         const local = saveBase64Locally(base64Data);
         return res.json({
           success: true,
+          storageProvider: 'LOCAL_STORAGE',
           ...local,
           folder,
         });
@@ -214,6 +301,16 @@ router.post('/pdf', authenticate, upload.single('file') as any, async (req: Auth
     const useCloudinary = isCloudinaryConfigured();
     const docType = (req.body?.docType || req.query.docType || 'GENERAL').toUpperCase();
     const referenceNumber = (req.body?.referenceNumber || req.query.referenceNumber || 'doc').trim();
+
+    let uploadedDoc: {
+      url: string;
+      secureUrl: string;
+      publicId: string;
+      format: string;
+      bytes: number;
+      resourceType: string;
+      storageProvider: 'CLOUDINARY' | 'LOCAL_STORAGE';
+    };
 
     if (useCloudinary) {
       let result;
@@ -242,17 +339,15 @@ router.post('/pdf', authenticate, upload.single('file') as any, async (req: Auth
         return res.status(400).json({ error: 'No PDF file or base64 data provided.' });
       }
 
-      return res.json({
-        success: true,
+      uploadedDoc = {
         url: result.secure_url,
         secureUrl: result.secure_url,
         publicId: result.public_id,
         format: result.format || 'pdf',
         bytes: result.bytes,
         resourceType: result.resource_type,
-        docType,
-        referenceNumber,
-      });
+        storageProvider: 'CLOUDINARY',
+      };
     } else {
       let local;
       if (req.file) {
@@ -263,13 +358,49 @@ router.post('/pdf', authenticate, upload.single('file') as any, async (req: Auth
       } else {
         return res.status(400).json({ error: 'No PDF file or base64 data provided.' });
       }
-      return res.json({
-        success: true,
-        ...local,
-        referenceNumber,
-        docType,
-      });
+
+      uploadedDoc = {
+        url: local.url,
+        secureUrl: local.secureUrl,
+        publicId: local.publicId,
+        format: local.format || 'pdf',
+        bytes: local.bytes,
+        resourceType: local.resourceType,
+        storageProvider: 'LOCAL_STORAGE',
+      };
     }
+
+    // Persist document metadata in AuditLog as authoritative document registry
+    try {
+      await supabaseAdmin.from('AuditLog').insert({
+        userId: req.user?.id || 'system',
+        userEmail: req.user?.email || null,
+        userName: req.user?.name || null,
+        userRole: req.user?.role || null,
+        action: 'DOCUMENT_UPLOAD',
+        resource: docType,
+        resourceId: referenceNumber,
+        status: 'SUCCESS',
+        details: `Uploaded ${docType} PDF (${referenceNumber}) via ${uploadedDoc.storageProvider}`,
+        metadata: JSON.stringify({
+          ...uploadedDoc,
+          docType,
+          referenceNumber,
+          uploadedAt: new Date().toISOString(),
+          uploadedById: req.user?.id,
+          uploadedByName: req.user?.name,
+        }),
+      });
+    } catch (auditErr) {
+      console.warn('[DOC AUDIT LOG INSERT WARN]', auditErr);
+    }
+
+    return res.json({
+      success: true,
+      ...uploadedDoc,
+      docType,
+      referenceNumber,
+    });
   } catch (err: any) {
     console.error('[PDF UPLOAD ERROR]', err);
     return res.status(500).json({
