@@ -192,7 +192,7 @@ export default function Inventory() {
   const isInventoryManager = user?.role === 'INVENTORY_MANAGER';
   const isTechnician = user?.role === 'TECHNICIAN' || user?.role === 'LEAD_TECHNICIAN';
 
-  const canManage = isSuperAdmin || isAdmin || isManager || isReceptionist || isInventoryManager;
+  const canManage = isSuperAdmin || isAdmin || isManager || isReceptionist || isInventoryManager || isTechnician;
   const canDelete = isSuperAdmin || isAdmin || isManager || isInventoryManager;
 
   // Data states
@@ -292,6 +292,7 @@ export default function Inventory() {
   } | null>(null);
 
   // Form States
+  const [folderLevel, setFolderLevel] = useState<'brand' | 'model' | 'category'>('brand');
   const [folderFormData, setFolderFormData] = useState({
     brand: '',
     model: '',
@@ -357,7 +358,7 @@ export default function Inventory() {
         api.get('/inventory?status=ALL'),
         api.get('/inventory/stats').catch(() => ({})),
         api.get('/inventory/categories').catch(() => []),
-        api.get('/inventory/folders').catch(() => []),
+        api.get('/inventory/folders?status=ALL').catch(() => []),
         api.get('/inventory/suppliers').catch(() => []),
         api.get('/inventory/locations').catch(() => [])
       ]);
@@ -518,22 +519,22 @@ export default function Inventory() {
     const safeActiveItems = Array.isArray(activeItems) ? activeItems : [];
     const catsMap = new Map<string, { category: string; itemCount: number; totalUnits: number; hasLowStock: boolean }>();
 
+    const targetBrand = (navPath.brand || '').trim().toLowerCase();
+    const targetModel = (navPath.model || '').trim().toLowerCase();
+
     // From custom folders
     safeCustomFolders.forEach(f => {
-      if (
-        f &&
-        f.brand &&
-        f.brand.toLowerCase() === navPath.brand?.toLowerCase() &&
-        f.model?.toLowerCase() === navPath.model?.toLowerCase() &&
-        f.category
-      ) {
+      if (f && f.brand && f.brand.trim().toLowerCase() === targetBrand && f.category) {
         const isFolderArchived = (f as any).status === 'ARCHIVED';
         if (stockFilter === 'ARCHIVED' && !isFolderArchived) return;
         if (stockFilter !== 'ARCHIVED' && isFolderArchived) return;
 
-        const c = f.category.trim();
-        if (!catsMap.has(c)) {
-          catsMap.set(c, { category: c, itemCount: 0, totalUnits: 0, hasLowStock: false });
+        const fModel = (f.model || '').trim().toLowerCase();
+        if (!fModel || fModel === targetModel || fModel === 'universal / all' || targetModel === 'universal / all') {
+          const c = f.category.trim();
+          if (!catsMap.has(c)) {
+            catsMap.set(c, { category: c, itemCount: 0, totalUnits: 0, hasLowStock: false });
+          }
         }
       }
     });
@@ -541,9 +542,12 @@ export default function Inventory() {
     // From items
     safeActiveItems.forEach(item => {
       if (!item) return;
+      const itemBrand = (item.brand || 'Other').trim().toLowerCase();
+      const itemModel = (item.model || 'Universal / All').trim().toLowerCase();
+
       if (
-        (item.brand || 'Other').toLowerCase() === navPath.brand?.toLowerCase() &&
-        (item.model || 'Universal / All').toLowerCase() === navPath.model?.toLowerCase()
+        itemBrand === targetBrand &&
+        (itemModel === targetModel || itemModel === 'universal / all' || targetModel === 'universal / all')
       ) {
         const c = (item.category || 'Spare Parts').trim();
         if (!catsMap.has(c)) {
@@ -674,7 +678,19 @@ export default function Inventory() {
   // MODAL OPENERS
   // ==========================================
 
-  const handleOpenNewFolder = () => {
+  const handleOpenNewFolder = (overrideLevel?: 'brand' | 'model' | 'category') => {
+    let targetLevel: 'brand' | 'model' | 'category' = 'brand';
+    if (overrideLevel) {
+      targetLevel = overrideLevel;
+    } else if (navPath.brand && navPath.model) {
+      targetLevel = 'category';
+    } else if (navPath.brand) {
+      targetLevel = 'model';
+    } else {
+      targetLevel = 'brand';
+    }
+
+    setFolderLevel(targetLevel);
     setFolderFormData({
       brand: navPath.brand || '',
       model: navPath.model || '',
@@ -823,17 +839,38 @@ export default function Inventory() {
   // Save New Folder
   const handleCreateFolderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!folderFormData.brand.trim()) {
+    const b = folderFormData.brand.trim();
+    const m = folderFormData.model.trim();
+    const c = folderFormData.category.trim();
+
+    if (!b) {
       toast.error('Brand name is required');
       return;
     }
 
+    if (folderLevel === 'model' && !m) {
+      toast.error('Device Model name is required');
+      return;
+    }
+
+    if (folderLevel === 'category' && !c) {
+      toast.error('Part Category name is required');
+      return;
+    }
+
+    const payload = {
+      brand: b,
+      model: m || (folderLevel === 'category' ? (navPath.model || 'Universal / All') : null),
+      category: c || null
+    };
+
     setSubmitting(true);
     try {
-      await api.post('/inventory/folders', folderFormData);
-      toast.success('✓ Folder created successfully.');
+      await api.post('/inventory/folders', payload);
+      const createdTarget = folderLevel === 'category' ? payload.category : folderLevel === 'model' ? payload.model : payload.brand;
+      toast.success(`✓ ${folderLevel === 'category' ? 'Category' : folderLevel === 'model' ? 'Model' : 'Brand'} folder "${createdTarget}" created successfully.`);
       setIsNewFolderOpen(false);
-      fetchData();
+      await fetchData(true);
     } catch (err: any) {
       toast.error(err.message || 'Failed to create folder');
     } finally {
@@ -1268,7 +1305,7 @@ export default function Inventory() {
             <>
               <Button
                 variant="outline"
-                onClick={handleOpenNewFolder}
+                onClick={() => handleOpenNewFolder()}
                 className="rounded-2xl h-11 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs md:text-sm shadow-xs"
               >
                 <FolderPlus className="mr-2 h-4 w-4 text-amber-500" />
@@ -1765,7 +1802,7 @@ export default function Inventory() {
                   <Folder className="h-12 w-12 text-slate-300 mx-auto mb-3" />
                   <h3 className="text-lg font-bold text-slate-900">No Brand Folders Available</h3>
                   <p className="text-slate-500 text-xs mt-1">Create your first brand folder to organize parts.</p>
-                  <Button onClick={handleOpenNewFolder} className="rounded-2xl bg-black text-white font-bold text-xs mt-4">
+                  <Button onClick={() => handleOpenNewFolder('brand')} className="rounded-2xl bg-black text-white font-bold text-xs mt-4">
                     <FolderPlus className="mr-2 h-4 w-4" /> Create Brand Folder
                   </Button>
                 </Card>
@@ -1857,6 +1894,17 @@ export default function Inventory() {
                   <h3 className="text-base font-black text-slate-900">{navPath.brand} Models ({modelList.length})</h3>
                   <p className="text-xs text-slate-500 font-medium">Select a device model to manage parts & stock</p>
                 </div>
+                {canManage && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleOpenNewFolder('model')}
+                    className="rounded-2xl border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs shadow-xs"
+                  >
+                    <FolderPlus className="mr-1.5 h-3.5 w-3.5 text-amber-500" />
+                    + New Model
+                  </Button>
+                )}
               </div>
 
               {modelList.length === 0 ? (
@@ -1864,7 +1912,7 @@ export default function Inventory() {
                   <Smartphone className="h-12 w-12 text-slate-300 mx-auto mb-3" />
                   <h3 className="text-lg font-bold text-slate-900">No Models for {navPath.brand}</h3>
                   <p className="text-slate-500 text-xs mt-1">Create a model folder (e.g. Galaxy S23 Ultra, iPhone 14 Pro) to add components.</p>
-                  <Button onClick={handleOpenNewFolder} className="rounded-2xl bg-black text-white font-bold text-xs mt-4">
+                  <Button onClick={() => handleOpenNewFolder('model')} className="rounded-2xl bg-black text-white font-bold text-xs mt-4">
                     <FolderPlus className="mr-2 h-4 w-4" /> Create Model Folder
                   </Button>
                 </Card>
@@ -1956,6 +2004,17 @@ export default function Inventory() {
                   <h3 className="text-base font-black text-slate-900">{navPath.brand} {navPath.model} Categories ({categoryList.length})</h3>
                   <p className="text-xs text-slate-500 font-medium">Select a part category to view parts and perform stock operations</p>
                 </div>
+                {canManage && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleOpenNewFolder('category')}
+                    className="rounded-2xl border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs shadow-xs"
+                  >
+                    <FolderPlus className="mr-1.5 h-3.5 w-3.5 text-amber-500" />
+                    + New Category
+                  </Button>
+                )}
               </div>
 
               {categoryList.length === 0 ? (
@@ -1964,7 +2023,7 @@ export default function Inventory() {
                   <h3 className="text-lg font-bold text-slate-900">No Categories Found for {navPath.model}</h3>
                   <p className="text-slate-500 text-xs mt-1">Create a category folder or add a new part.</p>
                   <div className="flex justify-center gap-3 mt-4">
-                    <Button onClick={handleOpenNewFolder} variant="outline" className="rounded-2xl font-bold text-xs">
+                    <Button onClick={() => handleOpenNewFolder('category')} variant="outline" className="rounded-2xl font-bold text-xs">
                       <FolderPlus className="mr-2 h-4 w-4 text-amber-500" /> Create Category
                     </Button>
                     <Button onClick={handleOpenAddItem} className="rounded-2xl bg-black text-white font-bold text-xs">
@@ -2357,51 +2416,147 @@ export default function Inventory() {
         <DialogContent className="max-w-md rounded-3xl p-6">
           <DialogHeader>
             <DialogTitle className="text-xl font-black text-slate-900 flex items-center gap-2">
-              <FolderPlus className="h-5 w-5 text-amber-500" /> Create Hierarchy Folder
+              <FolderPlus className="h-5 w-5 text-amber-500" />
+              {folderLevel === 'brand' && 'Create Brand Folder'}
+              {folderLevel === 'model' && 'Create Device Model Folder'}
+              {folderLevel === 'category' && 'Create Part Category Folder'}
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Create a new Brand, Model, or Category branch in the inventory directory.
+              {folderLevel === 'brand' && 'Add a new phone or device manufacturer directory.'}
+              {folderLevel === 'model' && `Add a device model folder under ${folderFormData.brand || navPath.brand || 'selected brand'}.`}
+              {folderLevel === 'category' && `Add a component or spare parts folder under ${folderFormData.brand || navPath.brand || 'Brand'} > ${folderFormData.model || navPath.model || 'Model'}.`}
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleCreateFolderSubmit} className="space-y-3.5 py-2">
+          {/* Level Switcher Tabs */}
+          <div className="flex p-1 bg-slate-100 rounded-2xl gap-1 my-1">
+            <button
+              type="button"
+              onClick={() => setFolderLevel('brand')}
+              className={cn(
+                "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all",
+                folderLevel === 'brand' ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              1. Brand
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFolderLevel('model');
+                if (!folderFormData.brand && navPath.brand) {
+                  setFolderFormData(prev => ({ ...prev, brand: navPath.brand || '' }));
+                }
+              }}
+              className={cn(
+                "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all",
+                folderLevel === 'model' ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              2. Model
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFolderLevel('category');
+                setFolderFormData(prev => ({
+                  ...prev,
+                  brand: prev.brand || navPath.brand || '',
+                  model: prev.model || navPath.model || 'Universal / All'
+                }));
+              }}
+              className={cn(
+                "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all",
+                folderLevel === 'category' ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              3. Category
+            </button>
+          </div>
+
+          <form onSubmit={handleCreateFolderSubmit} className="space-y-3.5 py-1">
+            {/* BRAND INPUT */}
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Brand Name <span className="text-rose-500">*</span></label>
+              <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                <span>Brand Name <span className="text-rose-500">*</span></span>
+                {folderLevel !== 'brand' && folderFormData.brand && (
+                  <span className="text-[10px] text-slate-400 font-normal">Parent Brand</span>
+                )}
+              </label>
               <Input
                 required
-                placeholder="e.g. Samsung, Apple, Xiaomi, Relife"
+                placeholder="e.g. Samsung, Apple, Google, Xiaomi, Vivo, Oppo, Relife"
                 value={folderFormData.brand}
                 onChange={e => setFolderFormData({ ...folderFormData, brand: e.target.value })}
                 className="h-11 rounded-2xl border-slate-200 text-sm font-semibold"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Device Model (Optional)</label>
-              <Input
-                placeholder="e.g. Galaxy S23 Ultra, iPhone 14 Pro"
-                value={folderFormData.model}
-                onChange={e => setFolderFormData({ ...folderFormData, model: e.target.value })}
-                className="h-11 rounded-2xl border-slate-200 text-sm"
-              />
-            </div>
+            {/* MODEL INPUT (Optional for brand, Required for model & category) */}
+            {folderLevel === 'brand' ? (
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Initial Device Model (Optional)</label>
+                <Input
+                  placeholder="e.g. Galaxy S24 Ultra, iPhone 16 Pro (leave blank for brand only)"
+                  value={folderFormData.model}
+                  onChange={e => setFolderFormData({ ...folderFormData, model: e.target.value })}
+                  className="h-11 rounded-2xl border-slate-200 text-sm"
+                />
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span>Device Model Name <span className="text-rose-500">*</span></span>
+                  {folderLevel === 'category' && (
+                    <span className="text-[10px] text-slate-400 font-normal">Target Model</span>
+                  )}
+                </label>
+                <Input
+                  required
+                  placeholder="e.g. Galaxy S24 Ultra, iPhone 16 Pro Max, Pixel 8, Universal / All"
+                  value={folderFormData.model}
+                  onChange={e => setFolderFormData({ ...folderFormData, model: e.target.value })}
+                  className="h-11 rounded-2xl border-slate-200 text-sm font-semibold"
+                />
+              </div>
+            )}
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Category Name (Optional)</label>
-              <Select
-                value={folderFormData.category}
-                onValueChange={val => setFolderFormData({ ...folderFormData, category: val })}
-              >
-                <SelectTrigger className="h-11 rounded-2xl border-slate-200 text-sm">
-                  <SelectValue placeholder="Select or type custom category" />
-                </SelectTrigger>
-                <SelectContent className="rounded-2xl max-h-56">
-                  {categories.map(c => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* CATEGORY INPUT (Shown when level is category) */}
+            {folderLevel === 'category' && (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700">
+                  Part Category Name <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  required
+                  placeholder="Type custom category name (e.g. Displays, Cameras, Charging Flex)..."
+                  value={folderFormData.category}
+                  onChange={e => setFolderFormData({ ...folderFormData, category: e.target.value })}
+                  className="h-11 rounded-2xl border-slate-200 text-sm font-semibold"
+                />
+
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[11px] font-semibold text-slate-500">Quick-select popular category:</span>
+                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                    {categories.map(c => (
+                      <button
+                        type="button"
+                        key={c}
+                        onClick={() => setFolderFormData(prev => ({ ...prev, category: c }))}
+                        className={cn(
+                          "px-2.5 py-1 text-xs rounded-xl font-medium border transition-all cursor-pointer",
+                          folderFormData.category === c
+                            ? "bg-amber-500 border-amber-600 text-white font-bold shadow-xs"
+                            : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                        )}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <DialogFooter className="pt-3 gap-2">
               <Button type="button" variant="outline" onClick={() => setIsNewFolderOpen(false)} className="h-11 rounded-2xl border-slate-200">
@@ -2409,7 +2564,9 @@ export default function Inventory() {
               </Button>
               <Button type="submit" disabled={submitting} className="h-11 rounded-2xl bg-black text-white font-bold px-6">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FolderPlus className="h-4 w-4 mr-2" />}
-                Create Folder
+                {folderLevel === 'brand' && 'Create Brand Folder'}
+                {folderLevel === 'model' && 'Create Model Folder'}
+                {folderLevel === 'category' && 'Create Category Folder'}
               </Button>
             </DialogFooter>
           </form>

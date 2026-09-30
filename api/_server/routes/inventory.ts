@@ -8,22 +8,109 @@ import { broadcastServerChange } from '../services/realtimeSync';
 
 const router = Router();
 
-const INVENTORY_MANAGERS = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'RECEPTIONIST'];
+const INVENTORY_MANAGERS = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'LEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST'];
 const INVENTORY_STOCK_OUT_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'INVENTORY_MANAGER', 'LEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST'];
 
-// In-memory persistent registry for custom-created folders (even when empty of items)
+// In-memory cache fallback for custom-created folders
 interface CustomFolderEntry {
+  id?: string;
   brand: string;
   model: string | null;
   category: string | null;
   subcategory?: string | null;
   status?: string;
+  createdAt?: string;
 }
 
 const customFoldersRegistry = new Map<string, CustomFolderEntry>();
 
 function getFolderKey(brand: string, model?: string | null, category?: string | null): string {
   return `${(brand || '').trim().toLowerCase()}|${(model || '').trim().toLowerCase()}|${(category || '').trim().toLowerCase()}`;
+}
+
+/**
+ * Helper to ensure a specific folder metadata record is persisted in Supabase database
+ */
+async function ensureFolderMetadataInDatabase(
+  brand: string,
+  model: string | null,
+  category: string | null,
+  userId: string
+): Promise<string> {
+  const trimmedBrand = (brand || '').trim();
+  const trimmedModel = model && typeof model === 'string' && model.trim() ? model.trim() : null;
+  const trimmedCategory = category && typeof category === 'string' && category.trim() ? category.trim() : null;
+
+  if (!trimmedBrand) {
+    throw new Error('Brand name is required for folder metadata.');
+  }
+
+  // Build exact query for existing .folder_metadata row
+  let checkQuery = supabaseAdmin
+    .from('InventoryItem')
+    .select('id, status, name, brand, model, category')
+    .eq('name', '.folder_metadata')
+    .ilike('brand', trimmedBrand);
+
+  if (trimmedModel) {
+    checkQuery = checkQuery.ilike('model', trimmedModel);
+  } else {
+    checkQuery = checkQuery.is('model', null);
+  }
+
+  if (trimmedCategory) {
+    checkQuery = checkQuery.ilike('category', trimmedCategory);
+  } else {
+    checkQuery = checkQuery.is('category', null);
+  }
+
+  const { data: existing, error: checkErr } = await checkQuery.limit(1);
+  if (checkErr) {
+    console.warn('[INVENTORY FOLDER CHECK DB WARN]', checkErr);
+  }
+
+  if (existing && existing.length > 0) {
+    const row = existing[0];
+    // If it was archived, reactivate it back to FOLDER_METADATA
+    if (row.status === 'ARCHIVED') {
+      await supabaseAdmin
+        .from('InventoryItem')
+        .update({ status: 'FOLDER_METADATA', updatedAt: new Date().toISOString() })
+        .eq('id', row.id);
+    }
+    return row.id;
+  }
+
+  // Insert fresh persistent folder metadata
+  const newId = uuidv4();
+  const now = new Date().toISOString();
+  const { data: inserted, error: insertErr } = await supabaseAdmin
+    .from('InventoryItem')
+    .insert([
+      {
+        id: newId,
+        name: '.folder_metadata',
+        brand: trimmedBrand,
+        model: trimmedModel,
+        category: trimmedCategory,
+        status: 'FOLDER_METADATA',
+        currentStock: 0,
+        minStockLevel: 0,
+        unit: 'Piece',
+        createdById: userId,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ])
+    .select('id')
+    .single();
+
+  if (insertErr) {
+    console.error('[INVENTORY FOLDER DB INSERT ERROR]', insertErr);
+    throw new Error('Failed to save folder record in database: ' + insertErr.message);
+  }
+
+  return inserted?.id || newId;
 }
 
 export function getDeviceType(item: {
@@ -57,15 +144,16 @@ export function getDeviceType(item: {
 // 1. DYNAMIC CATALOG METADATA (Placed before /:id)
 // ==========================================
 
-// GET /api/inventory/folders
+// GET /api/inventory/folders - Retrieve all folder hierarchy branches (Brand, Model, Category)
 router.get('/folders', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { status = 'ACTIVE' } = req.query;
+    const { status = 'ALL' } = req.query;
     let query = supabaseAdmin
       .from('InventoryItem')
-      .select('brand, model, category, subcategory, status')
+      .select('id, name, brand, model, category, subcategory, status, createdAt')
       .not('brand', 'is', null)
-      .neq('status', 'INVENTORY_FILE');
+      .neq('status', 'INVENTORY_FILE')
+      .limit(5000);
 
     if (status && status !== 'ALL') {
       if (status === 'ACTIVE') {
@@ -82,29 +170,94 @@ router.get('/folders', authenticate, async (req: AuthRequest, res: Response) => 
 
     const folderMap = new Map<string, CustomFolderEntry>();
 
-    // 1. Add custom registered folders if status matches
-    customFoldersRegistry.forEach((folder, key) => {
-      const folderStatus = folder.status || 'ACTIVE';
-      if (status === 'ALL' || (status === 'ACTIVE' && folderStatus === 'ACTIVE') || (status === 'ARCHIVED' && folderStatus === 'ARCHIVED')) {
-        folderMap.set(key, folder);
-      }
+    // 1. Sort items so .folder_metadata items take priority to assign accurate persistent IDs
+    const sortedItems = [...(items || [])].sort((a: any, b: any) => {
+      const aIsMeta = a.name === '.folder_metadata';
+      const bIsMeta = b.name === '.folder_metadata';
+      if (aIsMeta && !bIsMeta) return -1;
+      if (!aIsMeta && bIsMeta) return 1;
+      return 0;
     });
 
-    // 2. Add all unique folder combinations from items in database matching the status filter
-    (items || []).forEach((item: any) => {
+    // 2. Process all items from database (both .folder_metadata rows and actual stock parts)
+    sortedItems.forEach((item: any) => {
       const b = (item.brand || '').trim();
       const m = (item.model || '').trim();
       const c = (item.category || '').trim();
-      if (b) {
-        const key = getFolderKey(b, m, c);
-        if (!folderMap.has(key)) {
-          folderMap.set(key, {
+      if (!b) return;
+
+      const isArchived = item.status === 'ARCHIVED';
+      const branchStatus = isArchived ? 'ARCHIVED' : 'ACTIVE';
+      const isMeta = item.name === '.folder_metadata';
+
+      // Always register the Brand-level branch
+      const brandKey = getFolderKey(b, null, null);
+      if (!folderMap.has(brandKey)) {
+        folderMap.set(brandKey, {
+          id: isMeta && !m && !c ? item.id : undefined,
+          brand: b,
+          model: null,
+          category: null,
+          subcategory: item.subcategory || null,
+          status: branchStatus,
+          createdAt: item.createdAt,
+        });
+      } else if (isMeta && !m && !c) {
+        const entry = folderMap.get(brandKey)!;
+        entry.id = item.id;
+        entry.status = branchStatus;
+        entry.createdAt = item.createdAt;
+      }
+
+      // If model is present, register the Model-level branch
+      if (m) {
+        const modelKey = getFolderKey(b, m, null);
+        if (!folderMap.has(modelKey)) {
+          folderMap.set(modelKey, {
+            id: isMeta && m && !c ? item.id : undefined,
+            brand: b,
+            model: m,
+            category: null,
+            subcategory: item.subcategory || null,
+            status: branchStatus,
+            createdAt: item.createdAt,
+          });
+        } else if (isMeta && m && !c) {
+          const entry = folderMap.get(modelKey)!;
+          entry.id = item.id;
+          entry.status = branchStatus;
+          entry.createdAt = item.createdAt;
+        }
+      }
+
+      // If category is present, register the Category-level branch
+      if (c) {
+        const catKey = getFolderKey(b, m || null, c);
+        if (!folderMap.has(catKey)) {
+          folderMap.set(catKey, {
+            id: isMeta && c ? item.id : undefined,
             brand: b,
             model: m || null,
-            category: c || null,
+            category: c,
             subcategory: item.subcategory || null,
-            status: item.status || 'ACTIVE',
+            status: branchStatus,
+            createdAt: item.createdAt,
           });
+        } else if (isMeta && c) {
+          const entry = folderMap.get(catKey)!;
+          entry.id = item.id;
+          entry.status = branchStatus;
+          entry.createdAt = item.createdAt;
+        }
+      }
+    });
+
+    // 3. Include in-memory custom folders registry if any
+    customFoldersRegistry.forEach((folder, key) => {
+      const folderStatus = folder.status || 'ACTIVE';
+      if (status === 'ALL' || (status === 'ACTIVE' && folderStatus === 'ACTIVE') || (status === 'ARCHIVED' && folderStatus === 'ARCHIVED')) {
+        if (!folderMap.has(key)) {
+          folderMap.set(key, folder);
         }
       }
     });
@@ -113,11 +266,11 @@ router.get('/folders', authenticate, async (req: AuthRequest, res: Response) => 
     return res.json(foldersArray);
   } catch (err: any) {
     console.error('[INVENTORY GET FOLDERS ERROR]', err);
-    return res.json(Array.from(customFoldersRegistry.values()));
+    return res.status(500).json({ error: 'Failed to retrieve inventory folders.' });
   }
 });
 
-// POST /api/inventory/folders - Create/register new brand, model or category branch
+// POST /api/inventory/folders - Create/register new brand, model or category branch with database persistence
 router.post('/folders', authenticate, authorize(INVENTORY_MANAGERS), async (req: AuthRequest, res: Response) => {
   try {
     const { brand, model, category } = req.body;
@@ -126,52 +279,58 @@ router.post('/folders', authenticate, authorize(INVENTORY_MANAGERS), async (req:
     }
 
     const trimmedBrand = brand.trim();
-    const trimmedModel = model && typeof model === 'string' && model.trim() ? model.trim() : null;
+    let trimmedModel = model && typeof model === 'string' && model.trim() ? model.trim() : null;
     const trimmedCategory = category && typeof category === 'string' && category.trim() ? category.trim() : null;
+
+    // If Category is provided but Model is not, assign to 'Universal / All' model branch so category is accessible
+    if (trimmedCategory && !trimmedModel) {
+      trimmedModel = 'Universal / All';
+    }
+
+    // 1. Ensure Brand branch exists in database
+    const brandFolderId = await ensureFolderMetadataInDatabase(trimmedBrand, null, null, req.user!.id);
+
+    // 2. If Model provided, ensure Model branch exists in database
+    let modelFolderId: string | null = null;
+    if (trimmedModel) {
+      modelFolderId = await ensureFolderMetadataInDatabase(trimmedBrand, trimmedModel, null, req.user!.id);
+    }
+
+    // 3. If Category provided, ensure Category branch exists in database
+    let categoryFolderId: string | null = null;
+    if (trimmedCategory) {
+      categoryFolderId = await ensureFolderMetadataInDatabase(trimmedBrand, trimmedModel, trimmedCategory, req.user!.id);
+    }
 
     const key = getFolderKey(trimmedBrand, trimmedModel, trimmedCategory);
     const entry: CustomFolderEntry = {
+      id: categoryFolderId || modelFolderId || brandFolderId,
       brand: trimmedBrand,
       model: trimmedModel,
       category: trimmedCategory,
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString(),
     };
 
+    // Keep in-memory cache synchronized
     customFoldersRegistry.set(key, entry);
-
-    // Persist folder in database so it survives server restarts
-    try {
-      let checkQuery = supabaseAdmin
-        .from('InventoryItem')
-        .select('id')
-        .eq('brand', trimmedBrand);
-      if (trimmedModel) {
-        checkQuery = checkQuery.eq('model', trimmedModel);
-      }
-      if (trimmedCategory) {
-        checkQuery = checkQuery.eq('category', trimmedCategory);
-      }
-      const { data: existing } = await checkQuery.limit(1);
-
-      if (!existing || existing.length === 0) {
-        await supabaseAdmin.from('InventoryItem').insert([
-          {
-            id: uuidv4(),
-            name: '.folder_metadata',
-            brand: trimmedBrand,
-            model: trimmedModel,
-            category: trimmedCategory,
-            status: 'FOLDER_METADATA',
-            currentStock: 0,
-            minStockLevel: 0,
-            unit: 'Piece',
-            createdById: req.user!.id,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ]);
-      }
-    } catch (dbErr) {
-      console.warn('[INVENTORY DB FOLDER PERSIST WARN]', dbErr);
+    if (!customFoldersRegistry.has(getFolderKey(trimmedBrand, null, null))) {
+      customFoldersRegistry.set(getFolderKey(trimmedBrand, null, null), {
+        id: brandFolderId,
+        brand: trimmedBrand,
+        model: null,
+        category: null,
+        status: 'ACTIVE',
+      });
+    }
+    if (trimmedModel && !customFoldersRegistry.has(getFolderKey(trimmedBrand, trimmedModel, null))) {
+      customFoldersRegistry.set(getFolderKey(trimmedBrand, trimmedModel, null), {
+        id: modelFolderId || undefined,
+        brand: trimmedBrand,
+        model: trimmedModel,
+        category: null,
+        status: 'ACTIVE',
+      });
     }
 
     await logAudit({
@@ -181,7 +340,9 @@ router.post('/folders', authenticate, authorize(INVENTORY_MANAGERS), async (req:
       details: { brand: trimmedBrand, model: trimmedModel, category: trimmedCategory },
     });
 
-    await broadcastServerChange('InventoryFolder', 'CREATE', `${trimmedBrand}-${trimmedModel || ''}-${trimmedCategory || ''}`, entry);
+    // Broadcast across all connected client listeners
+    await broadcastServerChange('inventory', 'CREATE', entry.id || `${trimmedBrand}-${trimmedModel || ''}-${trimmedCategory || ''}`, entry);
+    await broadcastServerChange('inventoryfolder', 'CREATE', entry.id || `${trimmedBrand}-${trimmedModel || ''}-${trimmedCategory || ''}`, entry);
 
     return res.status(201).json({
       success: true,
@@ -192,11 +353,11 @@ router.post('/folders', authenticate, authorize(INVENTORY_MANAGERS), async (req:
     });
   } catch (err: any) {
     console.error('[INVENTORY POST FOLDERS ERROR]', err);
-    return res.status(500).json({ error: 'Failed to create folder branch.' });
+    return res.status(500).json({ error: err.message || 'Failed to create folder branch in database.' });
   }
 });
 
-// POST /api/inventory/rename-folder - Rename brand, model, or category folder
+// POST /api/inventory/rename-folder - Rename brand, model, or category folder (case-insensitive update across items and metadata)
 router.post('/rename-folder', authenticate, authorize(INVENTORY_MANAGERS), async (req: AuthRequest, res: Response) => {
   try {
     const { level, oldName, newName, parentBrand, parentModel } = req.body;
@@ -211,14 +372,14 @@ router.post('/rename-folder', authenticate, authorize(INVENTORY_MANAGERS), async
     });
 
     if (level === 'brand') {
-      query = query.eq('brand', oldName);
+      query = query.ilike('brand', oldName);
     } else if (level === 'model') {
-      query = query.eq('model', oldName);
-      if (parentBrand) query = query.eq('brand', parentBrand);
+      query = query.ilike('model', oldName);
+      if (parentBrand) query = query.ilike('brand', parentBrand);
     } else if (level === 'category') {
-      query = query.eq('category', oldName);
-      if (parentBrand) query = query.eq('brand', parentBrand);
-      if (parentModel) query = query.eq('model', parentModel);
+      query = query.ilike('category', oldName);
+      if (parentBrand) query = query.ilike('brand', parentBrand);
+      if (parentModel) query = query.ilike('model', parentModel);
     }
 
     const { data: updatedItems, error } = await query.select('id, name, brand, model, category');
@@ -263,12 +424,8 @@ router.post('/rename-folder', authenticate, authorize(INVENTORY_MANAGERS), async
       details: { level, oldName, newName: trimmedNew, parentBrand, parentModel, affected: updatedItems?.length || 0 },
     });
 
-    if (updatedItems && updatedItems.length > 0) {
-      for (const it of updatedItems) {
-        await broadcastServerChange('InventoryItem', 'UPDATE', it.id, it);
-      }
-    }
-    await broadcastServerChange('InventoryFolder', 'UPDATE', `${level}-${oldName}`, { level, oldName, newName: trimmedNew });
+    await broadcastServerChange('inventory', 'UPDATE', `${level}-${oldName}`, { level, oldName, newName: trimmedNew });
+    await broadcastServerChange('inventoryfolder', 'UPDATE', `${level}-${oldName}`, { level, oldName, newName: trimmedNew });
 
     return res.json({ success: true, count: updatedItems?.length || 0 });
   } catch (err: any) {
@@ -307,15 +464,8 @@ router.post('/move', authenticate, authorize(INVENTORY_MANAGERS), async (req: Au
       return res.status(500).json({ error: 'Failed to move items.' });
     }
 
-    // Ensure target folder exists in registry
-    const targetKey = getFolderKey(updatePayload.brand, updatePayload.model, updatePayload.category);
-    if (!customFoldersRegistry.has(targetKey)) {
-      customFoldersRegistry.set(targetKey, {
-        brand: updatePayload.brand,
-        model: updatePayload.model || null,
-        category: updatePayload.category || null,
-      });
-    }
+    // Ensure target folder exists in registry and DB
+    await ensureFolderMetadataInDatabase(updatePayload.brand, updatePayload.model || null, updatePayload.category || null, req.user!.id).catch(() => {});
 
     await logAudit({
       userId: req.user!.id,
@@ -326,7 +476,7 @@ router.post('/move', authenticate, authorize(INVENTORY_MANAGERS), async (req: Au
 
     if (updated && updated.length > 0) {
       for (const it of updated) {
-        await broadcastServerChange('InventoryItem', 'UPDATE', it.id, it);
+        await broadcastServerChange('inventory', 'UPDATE', it.id, it);
       }
     }
 
@@ -375,7 +525,7 @@ router.post('/delete-folder', authenticate, authorize(INVENTORY_MANAGERS), async
         await supabaseAdmin.from('InventoryTransaction').delete().in('itemId', itemIds);
         await supabaseAdmin.from('InventoryItem').delete().in('id', itemIds);
         for (const id of itemIds) {
-          await broadcastServerChange('InventoryItem', 'DELETE', id);
+          await broadcastServerChange('inventory', 'DELETE', id);
         }
       } else {
         // Cascade archive safely to protect stock and repair history
@@ -384,7 +534,7 @@ router.post('/delete-folder', authenticate, authorize(INVENTORY_MANAGERS), async
           .update({ status: 'ARCHIVED', updatedAt: new Date().toISOString() })
           .in('id', itemIds);
         for (const id of itemIds) {
-          await broadcastServerChange('InventoryItem', 'UPDATE', id, { id, status: 'ARCHIVED' });
+          await broadcastServerChange('inventory', 'UPDATE', id, { id, status: 'ARCHIVED' });
         }
       }
     }
@@ -426,7 +576,13 @@ router.post('/delete-folder', authenticate, authorize(INVENTORY_MANAGERS), async
       details: { brand: trimmedBrand, model: trimmedModel, category: trimmedCategory, permanent, affectedCount: itemIds.length },
     });
 
-    await broadcastServerChange('InventoryFolder', permanent ? 'DELETE' : 'UPDATE', `${trimmedBrand}-${trimmedModel || ''}-${trimmedCategory || ''}`, {
+    await broadcastServerChange('inventory', permanent ? 'DELETE' : 'UPDATE', `${trimmedBrand}-${trimmedModel || ''}-${trimmedCategory || ''}`, {
+      brand: trimmedBrand,
+      model: trimmedModel,
+      category: trimmedCategory,
+      status: permanent ? 'DELETED' : 'ARCHIVED',
+    });
+    await broadcastServerChange('inventoryfolder', permanent ? 'DELETE' : 'UPDATE', `${trimmedBrand}-${trimmedModel || ''}-${trimmedCategory || ''}`, {
       brand: trimmedBrand,
       model: trimmedModel,
       category: trimmedCategory,
@@ -471,23 +627,37 @@ router.post('/restore-folder', authenticate, authorize(INVENTORY_MANAGERS), asyn
       return res.status(500).json({ error: 'Failed to find archived items in folder.' });
     }
 
-    const itemIds = (itemsToRestore || []).map((i: any) => i.id);
+    const allItems = itemsToRestore || [];
+    const metadataIds = allItems.filter((i: any) => i.name === '.folder_metadata').map((i: any) => i.id);
+    const realItemIds = allItems.filter((i: any) => i.name !== '.folder_metadata').map((i: any) => i.id);
 
-    if (itemIds.length > 0) {
-      const { error: restoreErr } = await supabaseAdmin
+    // Restore real parts to ACTIVE
+    if (realItemIds.length > 0) {
+      const { error: restoreRealErr } = await supabaseAdmin
         .from('InventoryItem')
         .update({ status: 'ACTIVE', updatedAt: new Date().toISOString() })
-        .in('id', itemIds);
+        .in('id', realItemIds);
 
-      if (restoreErr) {
-        console.error('[INVENTORY RESTORE ITEMS ERROR]', restoreErr);
+      if (restoreRealErr) {
+        console.error('[INVENTORY RESTORE ITEMS ERROR]', restoreRealErr);
         return res.status(500).json({ error: 'Failed to restore archived items.' });
       }
 
-      for (const id of itemIds) {
-        await broadcastServerChange('InventoryItem', 'UPDATE', id, { id, status: 'ACTIVE' });
+      for (const id of realItemIds) {
+        await broadcastServerChange('inventory', 'UPDATE', id, { id, status: 'ACTIVE' });
       }
     }
+
+    // Restore folder metadata rows to FOLDER_METADATA (never to ACTIVE so they never leak as real parts)
+    if (metadataIds.length > 0) {
+      await supabaseAdmin
+        .from('InventoryItem')
+        .update({ status: 'FOLDER_METADATA', updatedAt: new Date().toISOString() })
+        .in('id', metadataIds);
+    }
+
+    // Ensure folder itself is registered in DB as active FOLDER_METADATA
+    await ensureFolderMetadataInDatabase(trimmedBrand, trimmedModel || null, trimmedCategory || null, req.user!.id).catch(() => {});
 
     // Re-activate in registry
     const registryEntries = Array.from(customFoldersRegistry.entries());
@@ -515,25 +685,20 @@ router.post('/restore-folder', authenticate, authorize(INVENTORY_MANAGERS), asyn
       }
     });
 
-    // Ensure folder itself is registered
-    const fKey = getFolderKey(trimmedBrand, trimmedModel || null, trimmedCategory || null);
-    if (!customFoldersRegistry.has(fKey)) {
-      customFoldersRegistry.set(fKey, {
-        brand: trimmedBrand,
-        model: trimmedModel || null,
-        category: trimmedCategory || null,
-        status: 'ACTIVE',
-      });
-    }
-
     await logAudit({
       userId: req.user!.id,
       action: 'INVENTORY_FOLDER_RESTORED',
       resource: 'InventoryFolder',
-      details: { brand: trimmedBrand, model: trimmedModel, category: trimmedCategory, restoredCount: itemIds.length },
+      details: { brand: trimmedBrand, model: trimmedModel, category: trimmedCategory, restoredCount: realItemIds.length },
     });
 
-    await broadcastServerChange('InventoryFolder', 'UPDATE', `${trimmedBrand}-${trimmedModel || ''}-${trimmedCategory || ''}`, {
+    await broadcastServerChange('inventory', 'UPDATE', `${trimmedBrand}-${trimmedModel || ''}-${trimmedCategory || ''}`, {
+      brand: trimmedBrand,
+      model: trimmedModel,
+      category: trimmedCategory,
+      status: 'ACTIVE',
+    });
+    await broadcastServerChange('inventoryfolder', 'UPDATE', `${trimmedBrand}-${trimmedModel || ''}-${trimmedCategory || ''}`, {
       brand: trimmedBrand,
       model: trimmedModel,
       category: trimmedCategory,
@@ -542,7 +707,7 @@ router.post('/restore-folder', authenticate, authorize(INVENTORY_MANAGERS), asyn
 
     return res.json({
       success: true,
-      restoredCount: itemIds.length,
+      restoredCount: realItemIds.length,
       brand: trimmedBrand,
       model: trimmedModel,
       category: trimmedCategory,
