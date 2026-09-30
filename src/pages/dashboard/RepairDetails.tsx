@@ -456,12 +456,16 @@ export default function RepairDetails() {
             <Button
               variant="outline"
               onClick={() => setIsSmsModalOpen(true)}
-              className="rounded-2xl border-teal-300 bg-teal-50/80 hover:bg-teal-100 text-teal-800 font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5 transition-all"
+              className={`rounded-2xl font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5 transition-all ${
+                repair.smsSummary?.status === 'SENT'
+                  ? 'border-emerald-300 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800'
+                  : 'border-teal-300 bg-teal-50/80 hover:bg-teal-100 text-teal-800'
+              }`}
               title="Send SMS to Customer"
               aria-label="Send SMS to Customer"
             >
-              <MessageSquare className="h-4 w-4 text-teal-600" />
-              <span>Send SMS</span>
+              <MessageSquare className={`h-4 w-4 ${repair.smsSummary?.status === 'SENT' ? 'text-emerald-600' : 'text-teal-600'}`} />
+              <span>{repair.smsSummary?.status === 'SENT' ? 'Send SMS Again' : 'Send SMS'}</span>
             </Button>
           )}
 
@@ -962,19 +966,60 @@ export default function RepairDetails() {
                   <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Phone Number</span>
                   <span className="font-mono font-bold text-slate-900 truncate">{repair.customerPhone}</span>
                 </div>
-                {canSendSms && isRepairedOrReady && (
-                  <div className="pt-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsSmsModalOpen(true)}
-                      className="w-full rounded-xl border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs h-8 px-2.5 flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
-                      title="Send SMS to Customer"
-                      aria-label="Send SMS to Customer"
-                    >
-                      <MessageSquare className="h-3.5 w-3.5 text-teal-600" />
-                      <span>Send Customer SMS</span>
-                    </Button>
+                {isRepairedOrReady && (
+                  <div className="mt-2 p-3 rounded-2xl bg-teal-50/50 border border-teal-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5 text-teal-600" />
+                        <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">SMS Notification</span>
+                      </div>
+                      {repair.smsSummary?.status === 'SENT' ? (
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>SMS: Sent</span>
+                        </Badge>
+                      ) : repair.smsSummary?.status === 'INITIATED' ? (
+                        <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                          <Clock className="w-3 h-3 text-sky-600" />
+                          <span>SMS: Initiated</span>
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
+                          SMS: Not Sent
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="text-xs text-slate-700 flex items-center justify-between">
+                      <span>Messages Sent:</span>
+                      <strong className="text-slate-900 font-bold">{repair.smsSummary?.count || 0}</strong>
+                    </div>
+
+                    {repair.smsSummary?.lastSentAt && (
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        Last: {format(new Date(repair.smsSummary.lastSentAt), 'dd MMM yyyy, h:mm a')}
+                      </div>
+                    )}
+
+                    {canSendSms && (
+                      <div className="pt-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsSmsModalOpen(true)}
+                          className={`w-full rounded-xl font-bold text-xs h-8 px-2.5 flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer ${
+                            repair.smsSummary?.status === 'SENT'
+                              ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
+                              : 'border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800'
+                          }`}
+                          title="Send Customer SMS (Google Messages for Web)"
+                          aria-label="Send Customer SMS"
+                        >
+                          <MessageSquare className={`h-3.5 w-3.5 ${repair.smsSummary?.status === 'SENT' ? 'text-emerald-600' : 'text-teal-600'}`} />
+                          <span>{repair.smsSummary?.status === 'SENT' ? 'Send SMS Again' : 'Send Customer SMS'}</span>
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
                 {repair.customerEmail && (

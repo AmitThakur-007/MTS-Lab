@@ -222,6 +222,44 @@ export default function Repairs() {
   const [smsModalRepair, setSmsModalRepair] = useState<any | null>(null);
   const [isSmsModalOpen, setIsSmsModalOpen] = useState(false);
 
+  // Instant update handler for SMS status without needing page reload
+  const handleSmsSuccess = (record?: any) => {
+    if (!record) {
+      fetchData(true);
+      return;
+    }
+    const repairId = record.repairId;
+    const repairNum = record.repairNumber;
+    setRepairs((prev) =>
+      prev.map((r) => {
+        if (r.id === repairId || r.repairNumber === repairNum) {
+          const prevSummary = r.smsSummary || { count: 0, totalAttempts: 0 };
+          const isSent = record.status === 'SENT';
+          const newSentCount = isSent
+            ? (prevSummary.status === 'SENT' ? (prevSummary.count || 0) : (prevSummary.count || 0) + 1)
+            : (prevSummary.count || 0);
+
+          return {
+            ...r,
+            smsSummary: {
+              ...prevSummary,
+              repairId: r.id,
+              repairNumber: r.repairNumber,
+              status: isSent ? 'SENT' : (prevSummary.status === 'SENT' ? 'SENT' : 'INITIATED'),
+              count: newSentCount,
+              totalAttempts: (prevSummary.totalAttempts || 0) + 1,
+              lastSentAt: record.sentAt || record.confirmedAt || record.createdAt || new Date().toISOString(),
+              lastChannel: record.channel,
+              lastStaffName: record.senderStaffName,
+              lastRecordId: record.id,
+            },
+          };
+        }
+        return r;
+      })
+    );
+  };
+
   // Excel Import / Export state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
@@ -1260,6 +1298,9 @@ export default function Repairs() {
                     <th className="py-3.5 px-4">Problem</th>
                     <th className="py-3.5 px-4">Technician</th>
                     <th className="py-3.5 px-4">Status</th>
+                    {activeStatusTab === 'REPAIRED' && (
+                      <th className="py-3.5 px-4">Customer SMS</th>
+                    )}
                     <th className="py-3.5 px-4">Payment</th>
                     <th className="py-3.5 px-4 text-right">Actions</th>
                   </tr>
@@ -1271,6 +1312,13 @@ export default function Repairs() {
                       badgeClass: 'bg-slate-100 text-slate-700',
                       bgSoft: 'bg-slate-50',
                       textClass: 'text-slate-700'
+                    };
+
+                    const smsSummary = repair.smsSummary || {
+                      status: 'NOT_SENT',
+                      count: 0,
+                      totalAttempts: 0,
+                      lastSentAt: null,
                     };
 
                     const isUnpaid = !repair.paymentStatus || repair.paymentStatus === 'UNPAID';
@@ -1395,6 +1443,45 @@ export default function Repairs() {
                           </Badge>
                         </td>
 
+                        {/* Customer SMS Status (Repaired Tab) */}
+                        {activeStatusTab === 'REPAIRED' && (
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <div className="flex flex-col items-start gap-1">
+                              {smsSummary.status === 'SENT' ? (
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <span>SMS: Sent</span>
+                                </Badge>
+                              ) : smsSummary.status === 'INITIATED' ? (
+                                <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                                  <Clock className="w-3 h-3 text-sky-600" />
+                                  <span>SMS: Initiated</span>
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
+                                  SMS: Not Sent
+                                </Badge>
+                              )}
+
+                              {smsSummary.count > 0 ? (
+                                <span className="text-[11px] text-slate-700 font-medium">
+                                  Messages Sent: <strong className="text-slate-900 font-bold">{smsSummary.count}</strong>
+                                </span>
+                              ) : smsSummary.totalAttempts > 0 ? (
+                                <span className="text-[10px] text-slate-500">
+                                  Initiated: {smsSummary.totalAttempts}
+                                </span>
+                              ) : null}
+
+                              {smsSummary.lastSentAt && (
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  Last: {formatDateSafe(smsSummary.lastSentAt, 'dd MMM, h:mm a')}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+
                         {/* Payment */}
                         <td className="py-3.5 px-4 whitespace-nowrap">
                           <div className="font-mono text-xs font-bold text-slate-900">
@@ -1432,11 +1519,21 @@ export default function Repairs() {
                                   setSmsModalRepair(repair);
                                   setIsSmsModalOpen(true);
                                 }}
-                                className="h-8 px-2.5 rounded-xl border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs gap-1.5 shadow-2xs cursor-pointer"
-                                title="Send Customer SMS (Google Messages for Web)"
+                                className={`h-8 px-2.5 rounded-xl font-bold text-xs gap-1.5 shadow-2xs cursor-pointer ${
+                                  smsSummary.status === 'SENT'
+                                    ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
+                                    : 'border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800'
+                                }`}
+                                title={
+                                  smsSummary.status === 'SENT'
+                                    ? `Sent ${smsSummary.count} SMS. Click to send again.`
+                                    : 'Send Customer SMS (Google Messages for Web)'
+                                }
                               >
-                                <MessageSquare className="h-3.5 w-3.5 text-teal-600" />
-                                <span className="hidden xl:inline">Send SMS</span>
+                                <MessageSquare className={`h-3.5 w-3.5 ${smsSummary.status === 'SENT' ? 'text-emerald-600' : 'text-teal-600'}`} />
+                                <span className="hidden xl:inline">
+                                  {smsSummary.status === 'SENT' ? 'Send SMS Again' : 'Send SMS'}
+                                </span>
                               </Button>
                             )}
 
@@ -1576,6 +1673,12 @@ export default function Repairs() {
                 badgeClass: 'bg-slate-100 text-slate-700',
                 bgSoft: 'bg-slate-50',
                 textClass: 'text-slate-700'
+              };
+              const smsSummary = repair.smsSummary || {
+                status: 'NOT_SENT',
+                count: 0,
+                totalAttempts: 0,
+                lastSentAt: null,
               };
               const isSelected = selectedRepairIds.has(repair.id);
 
@@ -1719,6 +1822,64 @@ export default function Repairs() {
                     </div>
                   </div>
 
+                  {/* SMS Status & Action Box for Repaired devices */}
+                  {isRepairedOrReadyStatus(repair.status) && (
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          {smsSummary.status === 'SENT' ? (
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>SMS: Sent</span>
+                            </Badge>
+                          ) : smsSummary.status === 'INITIATED' ? (
+                            <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <Clock className="w-3 h-3 text-sky-600" />
+                              <span>SMS: Initiated</span>
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
+                              SMS: Not Sent
+                            </Badge>
+                          )}
+                          {smsSummary.count > 0 ? (
+                            <span className="text-[11px] text-slate-700 font-medium">
+                              Messages Sent: <strong className="text-slate-900 font-bold">{smsSummary.count}</strong>
+                            </span>
+                          ) : smsSummary.totalAttempts > 0 ? (
+                            <span className="text-[10px] text-slate-500">
+                              Initiated: {smsSummary.totalAttempts}
+                            </span>
+                          ) : null}
+                        </div>
+                        {smsSummary.lastSentAt && (
+                          <p className="text-[10px] text-slate-500 font-mono">
+                            Last Sent: {formatDateSafe(smsSummary.lastSentAt, 'dd MMM yyyy, h:mm a')}
+                          </p>
+                        )}
+                      </div>
+
+                      {canSendSms && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSmsModalRepair(repair);
+                            setIsSmsModalOpen(true);
+                          }}
+                          className={`h-7 px-2.5 rounded-lg text-xs font-bold gap-1 cursor-pointer shadow-xs ${
+                            smsSummary.status === 'SENT'
+                              ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
+                              : 'border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800'
+                          }`}
+                        >
+                          <MessageSquare className={`h-3 w-3 ${smsSummary.status === 'SENT' ? 'text-emerald-600' : 'text-teal-600'}`} />
+                          <span>{smsSummary.status === 'SENT' ? 'Send SMS Again' : 'Send SMS'}</span>
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-bold block">Cost / Paid</span>
@@ -1726,23 +1887,6 @@ export default function Repairs() {
                         {formatRepairCost(repair.totalCost ?? repair.estimatedCost)}
                       </span>
                     </div>
-
-                    {canSendSms && isRepairedOrReadyStatus(repair.status) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSmsModalRepair(repair);
-                          setIsSmsModalOpen(true);
-                        }}
-                        className="h-8 rounded-xl border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold px-2.5 gap-1 cursor-pointer"
-                        title="Send SMS to Customer"
-                        aria-label="Send SMS to Customer"
-                      >
-                        <MessageSquare className="h-3.5 w-3.5 text-teal-600" />
-                        <span>SMS</span>
-                      </Button>
-                    )}
 
                     <Button
                       size="sm"

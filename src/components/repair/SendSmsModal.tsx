@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -26,18 +26,20 @@ import {
   ShieldCheck,
   RefreshCw,
   Info,
+  RotateCcw,
   HelpCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatNepalPhone, isValidNepalPhone } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 interface SendSmsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repair: any;
-  onSuccess?: () => void;
+  onSuccess?: (record?: any) => void;
 }
 
 const ALLOWED_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'];
@@ -56,6 +58,10 @@ export default function SendSmsModal({
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
+  const [activeSmsRecordId, setActiveSmsRecordId] = useState<string | null>(null);
+
+  // Synchronous lock against rapid multi-clicking
+  const isProcessingRef = useRef(false);
 
   const userRole = (user?.role || '').toUpperCase().trim();
   const isAuthorized = ALLOWED_ROLES.includes(userRole);
@@ -70,8 +76,14 @@ export default function SendSmsModal({
   const isValidPhone = isValidNepalPhone(normalizedPhoneDigits);
   const internationalPhone = isValidPhone ? `+977${normalizedPhoneDigits}` : '';
 
-  // Default clean message (no staff names, internal IDs, or tech diagnostic notes)
-  const defaultTemplate = `Dear ${customerName}, your ${deviceModel} repair (Repair No: ${repairNumber}) has been completed and is ready for pickup at MTS Lab. For assistance, please contact MTS Lab. Thank you.`;
+  // Default clean message: fits strictly in exactly ONE SMS (<= 160 chars)
+  const defaultTemplate = (() => {
+    let tpl = `Dear ${customerName}, your ${deviceModel} (Repair #${repairNumber}) is repaired & ready for pickup at MTS Lab. Thank you.`;
+    if (tpl.length > 160) {
+      tpl = tpl.slice(0, 160);
+    }
+    return tpl;
+  })();
 
   // Fetch status and history from server when modal opens
   useEffect(() => {
@@ -80,6 +92,8 @@ export default function SendSmsModal({
     setMessage(defaultTemplate);
     setCopiedMessage(false);
     setCopiedPhone(false);
+    setActiveSmsRecordId(null);
+    isProcessingRef.current = false;
 
     let isMounted = true;
     setLoading(true);
@@ -90,10 +104,18 @@ export default function SendSmsModal({
         if (isMounted && data) {
           setSmsStatusData(data);
           if (data.defaultMessage) {
-            setMessage(data.defaultMessage);
+            const trimmedDefault = data.defaultMessage.length > 160
+              ? data.defaultMessage.slice(0, 160)
+              : data.defaultMessage;
+            setMessage(trimmedDefault);
           }
           if (Array.isArray(data.history)) {
             setHistory(data.history);
+            // If there's an ongoing INITIATED record, link it
+            const initiatedRecord = data.history.find((h: any) => h.status === 'INITIATED');
+            if (initiatedRecord) {
+              setActiveSmsRecordId(initiatedRecord.id);
+            }
           }
         }
       })
@@ -113,7 +135,7 @@ export default function SendSmsModal({
     try {
       await navigator.clipboard.writeText(message);
       setCopiedMessage(true);
-      toast.success('Message copied.');
+      toast.success('Message copied to clipboard.');
       setTimeout(() => setCopiedMessage(false), 2500);
     } catch (_) {
       toast.error('Could not copy to clipboard. Please copy manually.');
@@ -125,7 +147,7 @@ export default function SendSmsModal({
       const phoneToCopy = internationalPhone || normalizedPhoneDigits || customerPhoneRaw;
       await navigator.clipboard.writeText(phoneToCopy);
       setCopiedPhone(true);
-      toast.success('Phone number copied.');
+      toast.success('Phone number copied to clipboard.');
       setTimeout(() => setCopiedPhone(false), 2500);
     } catch (_) {
       toast.error('Could not copy phone number.');
@@ -134,90 +156,148 @@ export default function SendSmsModal({
 
   // Open Google Messages for Web with active paired session
   const handleOpenGoogleMessages = async () => {
+    if (isProcessingRef.current || submitting) return;
     if (!isValidPhone) {
       toast.error('Invalid customer phone number. Please update customer phone first.');
       return;
     }
 
+    const cleanMsg = (message || '').trim();
+    if (!cleanMsg) {
+      toast.error('SMS message content cannot be empty.');
+      return;
+    }
+
+    if (cleanMsg.length > 160) {
+      toast.error('Message exceeds the 160-character limit. Please shorten the message before sending.');
+      return;
+    }
+
+    isProcessingRef.current = true;
+    setSubmitting(true);
+
     try {
       // Copy message to clipboard automatically for convenient paste
       try {
-        await navigator.clipboard.writeText(message);
+        await navigator.clipboard.writeText(cleanMsg);
         setCopiedMessage(true);
       } catch (_) {}
 
-      // Log the preparation in MTS Lab backend
-      setSubmitting(true);
+      // Log the preparation in MTS Lab backend (only 1 SMS triggered)
       const res = await api.post(`/repairs/${repair.id}/send-sms`, {
-        customMessage: message,
+        smsRecordId: activeSmsRecordId || undefined,
+        customMessage: cleanMsg,
         channel: 'GOOGLE_MESSAGES_WEB',
         action: 'INITIATED',
         notes: 'Opened Google Messages for Web paired session',
       });
 
       if (res?.record) {
-        setHistory((prev) => [res.record, ...prev]);
+        setActiveSmsRecordId(res.record.id);
+        setHistory((prev) => {
+          const filtered = prev.filter((p) => p.id !== res.record.id);
+          return [res.record, ...filtered];
+        });
       }
 
-      // Open official Google Messages for Web
+      // Open official Google Messages for Web ONCE in a new tab
       window.open('https://messages.google.com/web/', '_blank', 'noopener,noreferrer');
 
       toast.success(
-        'Google Messages opened! Message copied to clipboard. Paste into customer conversation.',
+        'Google Messages opened! Message copied. Paste and send manually in Google Messages.',
         { duration: 5000 }
       );
 
-      if (onSuccess) onSuccess();
+      if (onSuccess) onSuccess(res?.record);
     } catch (err: any) {
       toast.error(err.message || 'Failed to initiate Google Messages workflow.');
     } finally {
       setSubmitting(false);
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 600);
     }
   };
 
   // Open native default SMS app (for Android phone / mobile device users)
   const handleOpenNativeSms = async () => {
+    if (isProcessingRef.current || submitting) return;
     if (!isValidPhone) {
       toast.error('Invalid customer phone number.');
       return;
     }
 
+    const cleanMsg = (message || '').trim();
+    if (!cleanMsg) {
+      toast.error('SMS message content cannot be empty.');
+      return;
+    }
+
+    if (cleanMsg.length > 160) {
+      toast.error('Message exceeds the 160-character limit. Please shorten the message before sending.');
+      return;
+    }
+
+    isProcessingRef.current = true;
+    setSubmitting(true);
+
     try {
-      setSubmitting(true);
-      const smsUrl = `sms:${internationalPhone}?body=${encodeURIComponent(message)}`;
+      const smsUrl = `sms:${internationalPhone}?body=${encodeURIComponent(cleanMsg)}`;
 
       const res = await api.post(`/repairs/${repair.id}/send-sms`, {
-        customMessage: message,
+        customMessage: cleanMsg,
         channel: 'SMS_PROTOCOL',
         action: 'INITIATED',
         notes: 'Launched native SMS protocol intent',
       });
 
       if (res?.record) {
-        setHistory((prev) => [res.record, ...prev]);
+        setActiveSmsRecordId(res.record.id);
+        setHistory((prev) => {
+          const filtered = prev.filter((p) => p.id !== res.record.id);
+          return [res.record, ...filtered];
+        });
       }
 
       window.location.href = smsUrl;
       toast.success('Launching SMS application...');
-      if (onSuccess) onSuccess();
+      if (onSuccess) onSuccess(res?.record);
     } catch (err: any) {
       toast.error(err.message || 'Failed to prepare SMS.');
     } finally {
       setSubmitting(false);
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 600);
     }
   };
 
   // Explicit confirmation when staff completes sending in Google Messages
   const handleConfirmSent = async () => {
+    if (isProcessingRef.current || submitting) return;
     if (!isValidPhone) {
       toast.error('Invalid customer phone number.');
       return;
     }
 
+    const cleanMsg = (message || '').trim();
+    if (!cleanMsg) {
+      toast.error('SMS message content cannot be empty.');
+      return;
+    }
+
+    if (cleanMsg.length > 160) {
+      toast.error('Message exceeds the 160-character limit. Please shorten the message before sending.');
+      return;
+    }
+
+    isProcessingRef.current = true;
+    setSubmitting(true);
+
     try {
-      setSubmitting(true);
       const res = await api.post(`/repairs/${repair.id}/send-sms`, {
-        customMessage: message,
+        smsRecordId: activeSmsRecordId || undefined,
+        customMessage: cleanMsg,
         channel: 'GOOGLE_MESSAGES_WEB',
         action: 'SENT',
         notes: 'Staff confirmed SMS dispatch via Google Messages for Web',
@@ -225,14 +305,20 @@ export default function SendSmsModal({
 
       toast.success('SMS send confirmed and recorded in repair history.');
       if (res?.record) {
-        setHistory((prev) => [res.record, ...prev]);
+        setHistory((prev) => {
+          const filtered = prev.filter((p) => p.id !== res.record.id);
+          return [res.record, ...filtered];
+        });
       }
-      if (onSuccess) onSuccess();
+      if (onSuccess) onSuccess(res?.record);
       onOpenChange(false);
     } catch (err: any) {
       toast.error(err.message || 'Failed to confirm SMS send.');
     } finally {
       setSubmitting(false);
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 600);
     }
   };
 
@@ -260,7 +346,15 @@ export default function SendSmsModal({
   }
 
   const charCount = message.length;
-  const smsSegments = Math.ceil(charCount / 160) || 1;
+  const remainingChars = 160 - charCount;
+  const isOverLimit = charCount > 160;
+  const isApproachingLimit = charCount >= 140 && !isOverLimit;
+  const isSendDisabled = !isValidPhone || submitting || charCount === 0 || isOverLimit;
+
+  const sentCount = history.filter((h) => h.status === 'SENT').length;
+  const initiatedCount = history.filter((h) => h.status === 'INITIATED').length;
+  const lastSentRecord = history.find((h) => h.status === 'SENT') || history[0];
+  const lastSentDate = lastSentRecord?.sentAt || lastSentRecord?.confirmedAt || lastSentRecord?.createdAt;
   const hasRecentSent = history.some((h) => h.status === 'SENT' || h.status === 'INITIATED');
 
   return (
@@ -330,6 +424,37 @@ export default function SendSmsModal({
                   </Badge>
                 )}
               </div>
+
+              {/* Live SMS Status & Messages Sent Counter */}
+              <div className="pt-2 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">SMS:</span>
+                  {sentCount > 0 ? (
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 gap-1 text-[10px] py-0 font-bold">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      <span>Sent</span>
+                    </Badge>
+                  ) : initiatedCount > 0 ? (
+                    <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-300 gap-1 text-[10px] py-0 font-bold">
+                      <Clock className="w-3 h-3 text-sky-600" />
+                      <span>Initiated</span>
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300 text-[10px] py-0 font-bold">
+                      Not Sent
+                    </Badge>
+                  )}
+                  <span className="font-semibold text-slate-700 text-xs">
+                    Messages Sent: <strong className="text-slate-900 font-bold">{sentCount}</strong>
+                  </span>
+                </div>
+
+                {lastSentDate && (
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    Last Sent: {new Date(lastSentDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}, {new Date(lastSentDate).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Phone Validation Warning Banner */}
@@ -365,16 +490,55 @@ export default function SendSmsModal({
 
             {/* Message Preview & Editor */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-1.5">
                 <Label htmlFor="sms-message" className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <span>Message</span>
+                  <span>SMS Message</span>
+                  <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-800 border-emerald-300 font-bold py-0 h-4">
+                    1 SMS Max (160 chars)
+                  </Badge>
                   <span title="Privacy verified"><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /></span>
                 </Label>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    {charCount} chars ({smsSegments} SMS)
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn(
+                      "text-xs font-mono font-bold transition-colors",
+                      isOverLimit
+                        ? "text-rose-600"
+                        : isApproachingLimit
+                        ? "text-amber-600"
+                        : "text-slate-700"
+                    )}>
+                      {charCount} / 160 characters
+                    </span>
+                    <span className={cn(
+                      "text-[10px] font-medium",
+                      isOverLimit
+                        ? "text-rose-600 font-bold"
+                        : isApproachingLimit
+                        ? "text-amber-600 font-semibold"
+                        : "text-slate-400"
+                    )}>
+                      {isOverLimit
+                        ? `(${charCount - 160} over limit)`
+                        : `(${remainingChars} remaining)`}
+                    </span>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const tpl = defaultTemplate.length > 160 ? defaultTemplate.slice(0, 160) : defaultTemplate;
+                      setMessage(tpl);
+                    }}
+                    className="h-6 px-1.5 text-[10px] text-slate-500 hover:text-slate-800"
+                    title="Reset to default message"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-1" />
+                    Reset
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"
@@ -391,14 +555,51 @@ export default function SendSmsModal({
               <Textarea
                 id="sms-message"
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={4}
-                className="text-xs font-medium resize-none bg-white border-slate-300 rounded-xl focus:ring-teal-500"
-                placeholder="Enter SMS message..."
+                maxLength={160}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val.length <= 160) {
+                    setMessage(val);
+                  } else {
+                    setMessage(val.slice(0, 160));
+                    toast.warning('Maximum 160 characters allowed for single SMS.');
+                  }
+                }}
+                rows={3}
+                className={cn(
+                  "text-xs font-medium resize-none bg-white rounded-xl focus:ring-teal-500 transition-colors",
+                  isOverLimit
+                    ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20"
+                    : isApproachingLimit
+                    ? "border-amber-300 focus:ring-amber-500"
+                    : "border-slate-300"
+                )}
+                placeholder="Enter SMS message (maximum 160 characters)..."
               />
-              <p className="text-[10px] text-slate-400">
-                Staff names, technician names, and internal database keys are strictly excluded for customer privacy.
-              </p>
+
+              {/* Over Limit Warning Banner */}
+              {isOverLimit && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-bold">Message exceeds the 160-character limit.</p>
+                    <p className="text-[11px] text-rose-700">Please shorten the message before sending. Sending multi-part or split SMS is strictly prohibited.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Approaching Limit Warning */}
+              {isApproachingLimit && (
+                <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Approaching 160-character single SMS limit ({remainingChars} characters remaining).</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-[10px] text-slate-400">
+                <span>Staff names and internal database keys are strictly excluded for customer privacy.</span>
+                <span className="font-semibold text-slate-500">Exactly 1 SMS per send</span>
+              </div>
             </div>
 
             {/* Google Messages Setup Help Section */}
@@ -476,12 +677,21 @@ export default function SendSmsModal({
               variant="outline"
               size="sm"
               onClick={handleOpenNativeSms}
-              disabled={!isValidPhone || submitting}
-              className="h-9 text-xs font-bold text-slate-700 sm:hidden"
+              disabled={isSendDisabled}
+              className="h-9 text-xs font-bold text-slate-700 sm:hidden disabled:opacity-50 disabled:cursor-not-allowed"
               title="Open default SMS app on mobile"
             >
-              <Smartphone className="w-3.5 h-3.5 mr-1.5 text-indigo-600" />
-              SMS App
+              {submitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  <span>Preparing SMS...</span>
+                </>
+              ) : (
+                <>
+                  <Smartphone className="w-3.5 h-3.5 mr-1.5 text-indigo-600" />
+                  <span>SMS App</span>
+                </>
+              )}
             </Button>
           </div>
 
@@ -502,11 +712,20 @@ export default function SendSmsModal({
               type="button"
               size="sm"
               onClick={handleOpenGoogleMessages}
-              disabled={!isValidPhone || submitting}
-              className="h-9 px-3.5 bg-teal-600 hover:bg-teal-700 active:scale-[0.98] text-white text-xs font-bold gap-1.5 shadow-xs"
+              disabled={isSendDisabled}
+              className="h-9 px-3.5 bg-teal-600 hover:bg-teal-700 active:scale-[0.98] text-white text-xs font-bold gap-1.5 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
-              <span>Open Google Messages</span>
+              {submitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Preparing SMS...</span>
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open Google Messages</span>
+                </>
+              )}
             </Button>
 
             {/* Secondary Action: Confirm Sent in MTS Lab */}
@@ -514,11 +733,20 @@ export default function SendSmsModal({
               type="button"
               size="sm"
               onClick={handleConfirmSent}
-              disabled={!isValidPhone || submitting}
-              className="h-9 px-3.5 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white text-xs font-bold gap-1.5 shadow-xs"
+              disabled={isSendDisabled}
+              className="h-9 px-3.5 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white text-xs font-bold gap-1.5 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
-              <span>Confirm Sent</span>
+              {submitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Preparing SMS...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Confirm Sent</span>
+                </>
+              )}
             </Button>
           </div>
         </DialogFooter>

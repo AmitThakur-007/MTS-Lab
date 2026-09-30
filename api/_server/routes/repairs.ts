@@ -27,10 +27,14 @@ import {
   getSmsNotificationsForRepair,
   updateSmsNotification,
   hasRecentSmsNotification,
+  getRepairSmsSummary,
+  getAllRepairSmsSummaries,
 } from '../services/smsStorage';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+export const ALLOWED_SMS_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'];
 
 const ALLOWED_REPAIR_COLUMNS = new Set([
   'customerId',
@@ -401,7 +405,23 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ error: 'Failed to retrieve repairs list.' });
     }
 
-    return res.json(repairs || []);
+    const smsSummaries = getAllRepairSmsSummaries();
+    const repairsWithSms = (repairs || []).map((r: any) => ({
+      ...r,
+      smsSummary: smsSummaries[r.id] || (r.repairNumber ? smsSummaries[r.repairNumber] : null) || {
+        repairId: r.id,
+        repairNumber: r.repairNumber,
+        status: 'NOT_SENT',
+        count: 0,
+        totalAttempts: 0,
+        lastSentAt: null,
+        lastChannel: null,
+        lastStaffName: null,
+        lastRecordId: null,
+      },
+    }));
+
+    return res.json(repairsWithSms);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to load repair records.' });
   }
@@ -602,6 +622,19 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
 });
 
 // ----------------------------------------------------
+// 6.5 GET /sms-summaries — All Repairs SMS Summaries & Counts
+// ----------------------------------------------------
+router.get('/sms-summaries', authenticate, authorize(ALLOWED_SMS_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const summaries = getAllRepairSmsSummaries();
+    return res.json(summaries);
+  } catch (err: any) {
+    console.error('[GET SMS SUMMARIES ERROR]', err);
+    return res.status(500).json({ error: 'Failed to retrieve SMS summaries.' });
+  }
+});
+
+// ----------------------------------------------------
 // 7. GET /:id — Get Single Repair Details
 // ----------------------------------------------------
 router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
@@ -633,7 +666,10 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ error: 'Repair ticket not found or has been cancelled.' });
           }
         }
-        return res.json(byNum);
+        return res.json({
+          ...byNum,
+          smsSummary: getRepairSmsSummary(byNum.id),
+        });
       }
       return res.status(404).json({ error: 'Repair ticket not found.' });
     }
@@ -646,7 +682,10 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    return res.json(repair);
+    return res.json({
+      ...repair,
+      smsSummary: getRepairSmsSummary(repair.id),
+    });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to load repair record.' });
   }
@@ -2389,8 +2428,6 @@ router.post('/:id/transfer', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'M
 // Unauthorized: TECHNICIAN, LEAD_TECHNICIAN, CUSTOMER
 // ====================================================
 
-const ALLOWED_SMS_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'];
-
 function isRepairedStatusEligible(status?: string | null): boolean {
   if (!status) return false;
   const s = status.toUpperCase().trim();
@@ -2440,6 +2477,7 @@ router.get('/:id/sms-status', authenticate, authorize(ALLOWED_SMS_ROLES), async 
       phoneValidation,
       defaultMessage,
       history,
+      smsSummary: getRepairSmsSummary(repair.id),
       hasRecentSent: recentCheck.hasSent,
       lastNotification: recentCheck.lastNotification,
       googleMessagesUrl,
@@ -2458,6 +2496,7 @@ router.post('/:id/send-sms', authenticate, authorize(ALLOWED_SMS_ROLES), async (
   try {
     const { id } = req.params;
     const {
+      smsRecordId,
       customMessage,
       channel = 'GOOGLE_MESSAGES_WEB',
       action = 'INITIATED', // 'INITIATED' | 'SENT'
@@ -2492,6 +2531,13 @@ router.post('/:id/send-sms', authenticate, authorize(ALLOWED_SMS_ROLES), async (
 
     const deviceModelFull = `${repair.deviceBrand ? `${repair.deviceBrand} ` : ''}${repair.deviceModel || ''}`.trim();
 
+    // Strict business rule: exactly ONE SMS, maximum 160 characters
+    if (customMessage && typeof customMessage === 'string' && customMessage.length > 160) {
+      return res.status(400).json({
+        error: 'Message must not exceed 160 characters. Exactly one SMS (max 160 characters) is permitted per send action.'
+      });
+    }
+
     // Use custom message if provided and non-empty, otherwise standard template
     const finalMessage = customMessage && typeof customMessage === 'string' && customMessage.trim()
       ? customMessage.trim()
@@ -2501,31 +2547,83 @@ router.post('/:id/send-sms', authenticate, authorize(ALLOWED_SMS_ROLES), async (
           repairNumber: repair.repairNumber,
         });
 
+    if (!finalMessage || finalMessage.length > 160) {
+      return res.status(400).json({
+        error: 'Message must not exceed 160 characters. Exactly one SMS (max 160 characters) is permitted per send action.'
+      });
+    }
+
     const isDirectSent = action === 'SENT';
     const nowIso = new Date().toISOString();
 
-    const record = await recordSmsNotification({
-      repairId: repair.id,
-      repairNumber: repair.repairNumber,
-      customerId: repair.customerId || null,
-      customerName: repair.customerName,
-      customerPhoneRaw: repair.customerPhone,
-      customerPhoneNormalized: phoneValidation.normalized,
-      customerPhoneInternational: phoneValidation.international,
-      deviceModel: deviceModelFull,
-      deviceBrand: repair.deviceBrand || null,
-      messageType: 'REPAIR_COMPLETED_SMS',
-      messageContent: finalMessage,
-      status: isDirectSent ? 'SENT' : 'INITIATED',
-      channel: channel === 'SMS_PROTOCOL' ? 'SMS_PROTOCOL' : 'GOOGLE_MESSAGES_WEB',
-      senderStaffId: req.user!.id,
-      senderStaffName: req.user!.name || 'Staff',
-      senderStaffRole: req.user!.role,
-      notes: notes || null,
-      initiatedAt: nowIso,
-      sentAt: isDirectSent ? nowIso : null,
-      confirmedAt: isDirectSent ? nowIso : null,
-    });
+    let record: any = null;
+
+    // 1. If smsRecordId provided, update existing initiated record
+    if (smsRecordId) {
+      record = await updateSmsNotification(smsRecordId, {
+        status: isDirectSent ? 'SENT' : 'INITIATED',
+        sentAt: isDirectSent ? nowIso : undefined,
+        confirmedAt: isDirectSent ? nowIso : undefined,
+        notes: notes || undefined,
+        messageContent: finalMessage,
+      });
+    }
+
+    // 2. Prevent accidental double sends within 2.5 seconds on exact same repair ticket
+    if (!record) {
+      const recentHistory = getSmsNotificationsForRepair(repair.id);
+      if (recentHistory.length > 0) {
+        const last = recentHistory[0];
+        const timeDiff = Date.now() - new Date(last.createdAt).getTime();
+        if (timeDiff < 2500 && last.messageContent === finalMessage) {
+          // If the previous was initiated and current action is SENT, upgrade it
+          if (last.status === 'INITIATED' && isDirectSent) {
+            record = await updateSmsNotification(last.id, {
+              status: 'SENT',
+              sentAt: nowIso,
+              confirmedAt: nowIso,
+              notes: notes || 'Upgraded initiated SMS to SENT',
+            });
+          } else {
+            // Return existing record smoothly without creating duplicate
+            return res.status(200).json({
+              success: true,
+              message: last.status === 'SENT' ? 'SMS already sent.' : 'SMS workflow already prepared.',
+              record: last,
+              smsSummary: getRepairSmsSummary(repair.id),
+              googleMessagesUrl: 'https://messages.google.com/web/',
+              smsProtocolUrl: `sms:${phoneValidation.international}?body=${encodeURIComponent(finalMessage)}`,
+            });
+          }
+        }
+      }
+    }
+
+    // 3. If still no record, create a new record
+    if (!record) {
+      record = await recordSmsNotification({
+        repairId: repair.id,
+        repairNumber: repair.repairNumber,
+        customerId: repair.customerId || null,
+        customerName: repair.customerName,
+        customerPhoneRaw: repair.customerPhone,
+        customerPhoneNormalized: phoneValidation.normalized,
+        customerPhoneInternational: phoneValidation.international,
+        deviceModel: deviceModelFull,
+        deviceBrand: repair.deviceBrand || null,
+        messageType: 'REPAIR_COMPLETED_SMS',
+        messageContent: finalMessage,
+        status: isDirectSent ? 'SENT' : 'INITIATED',
+        channel: channel === 'SMS_PROTOCOL' ? 'SMS_PROTOCOL' : 'GOOGLE_MESSAGES_WEB',
+        senderStaffId: req.user!.id,
+        senderStaffName: req.user!.name || 'Staff',
+        senderStaffRole: req.user!.role,
+        notes: notes || null,
+        initiatedAt: nowIso,
+        sentAt: isDirectSent ? nowIso : null,
+        confirmedAt: isDirectSent ? nowIso : null,
+      });
+    }
 
     // Record audit in RepairLog
     const logId = uuidv4();
@@ -2560,6 +2658,9 @@ router.post('/:id/send-sms', authenticate, authorize(ALLOWED_SMS_ROLES), async (
       },
     });
 
+    // Notify connected clients that this repair has updated SMS status
+    await broadcastServerChange('Repair', 'UPDATE', repair.id);
+
     const googleMessagesUrl = 'https://messages.google.com/web/';
     const smsProtocolUrl = `sms:${phoneValidation.international}?body=${encodeURIComponent(finalMessage)}`;
 
@@ -2567,6 +2668,7 @@ router.post('/:id/send-sms', authenticate, authorize(ALLOWED_SMS_ROLES), async (
       success: true,
       message: isDirectSent ? 'SMS sent successfully.' : 'SMS workflow prepared for Google Messages.',
       record,
+      smsSummary: getRepairSmsSummary(repair.id),
       googleMessagesUrl,
       smsProtocolUrl,
     });
@@ -2582,7 +2684,7 @@ router.post('/:id/send-sms', authenticate, authorize(ALLOWED_SMS_ROLES), async (
 router.post('/:id/confirm-sms', authenticate, authorize(ALLOWED_SMS_ROLES), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { smsRecordId, notes } = req.body || {};
+    let { smsRecordId, notes } = req.body || {};
 
     const { data: repair } = await supabaseAdmin
       .from('Repair')
@@ -2597,12 +2699,46 @@ router.post('/:id/confirm-sms', authenticate, authorize(ALLOWED_SMS_ROLES), asyn
     const nowIso = new Date().toISOString();
     let updatedRecord = null;
 
+    if (!smsRecordId) {
+      const history = getSmsNotificationsForRepair(repair.id);
+      const pending = history.find((h) => h.status === 'INITIATED');
+      if (pending) {
+        smsRecordId = pending.id;
+      }
+    }
+
     if (smsRecordId) {
       updatedRecord = await updateSmsNotification(smsRecordId, {
         status: 'SENT',
         sentAt: nowIso,
         confirmedAt: nowIso,
         notes: notes || undefined,
+      });
+    } else {
+      const phoneValidation = validateAndNormalizeNepalPhone(repair.customerPhone);
+      updatedRecord = await recordSmsNotification({
+        repairId: repair.id,
+        repairNumber: repair.repairNumber,
+        customerName: repair.customerName,
+        customerPhoneRaw: repair.customerPhone,
+        customerPhoneNormalized: phoneValidation.normalized || repair.customerPhone,
+        customerPhoneInternational: phoneValidation.international || repair.customerPhone,
+        deviceModel: 'Device',
+        messageType: 'REPAIR_COMPLETED_SMS',
+        messageContent: generateRepairCompletedSmsMessage({
+          customerName: repair.customerName,
+          deviceModel: 'Device',
+          repairNumber: repair.repairNumber,
+        }),
+        status: 'SENT',
+        channel: 'GOOGLE_MESSAGES_WEB',
+        senderStaffId: req.user!.id,
+        senderStaffName: req.user!.name || 'Staff',
+        senderStaffRole: req.user!.role,
+        notes: notes || 'Confirmed sent in Google Messages',
+        initiatedAt: nowIso,
+        sentAt: nowIso,
+        confirmedAt: nowIso,
       });
     }
 
@@ -2620,10 +2756,13 @@ router.post('/:id/confirm-sms', authenticate, authorize(ALLOWED_SMS_ROLES), asyn
       await broadcastServerChange('RepairLog', 'CREATE', logId);
     } catch (_) {}
 
+    await broadcastServerChange('Repair', 'UPDATE', repair.id);
+
     return res.json({
       success: true,
       message: 'SMS send confirmed successfully.',
       record: updatedRecord,
+      smsSummary: getRepairSmsSummary(repair.id),
     });
   } catch (err: any) {
     console.error('[CONFIRM SMS ERROR]', err);
