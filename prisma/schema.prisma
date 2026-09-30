@@ -549,7 +549,7 @@ model HomeSlide {
 model BatteryWarranty {
   id               String                 @id @default(uuid())
   warrantyNumber   String                 @unique // e.g. "BW-2026-0001"
-  repairId         String?                @unique
+  repairId         String                 @unique
   repairNumber     String
   customerId       String?
   customerName     String
@@ -572,7 +572,7 @@ model BatteryWarranty {
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
 
-  repair           Repair?                @relation(fields: [repairId], references: [id], onDelete: SetNull)
+  repair           Repair                 @relation(fields: [repairId], references: [id], onDelete: Cascade)
   customer         Customer?              @relation(fields: [customerId], references: [id])
   createdBy        User                   @relation("BatteryWarrantyCreator", fields: [createdById], references: [id])
   claims           BatteryWarrantyClaim[]
