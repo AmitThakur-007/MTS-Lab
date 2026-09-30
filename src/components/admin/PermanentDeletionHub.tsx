@@ -854,6 +854,9 @@ export default function PermanentDeletionHub() {
               <p className="text-rose-800 text-xs leading-relaxed">
                 This action will permanently purge all technician notes, logs, payment records, and notification history. This action cannot be undone.
               </p>
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] leading-relaxed font-medium">
+                🛡️ <strong>Battery Warranty Records Preserved:</strong> Deleting repairs does <u>not</u> delete Battery Warranty records. Any associated battery warranties remain active in the Battery Warranty Hub and require dedicated 2FA verification to delete.
+              </div>
               <div className="max-h-28 overflow-y-auto bg-white/80 rounded-xl p-2.5 border border-rose-100 text-[11px] font-mono space-y-1">
                 {targetDeleteRepairs.map((r, idx) => (
                   <div key={r.id || idx} className="text-slate-800 flex justify-between">

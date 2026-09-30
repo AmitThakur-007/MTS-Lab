@@ -1773,6 +1773,9 @@ export default function Repairs() {
             </DialogTitle>
             <DialogDescription className="text-slate-500 text-sm pt-2 leading-relaxed">
               Are you sure you want to delete this repair record? This action will permanently remove its associated logs, notes, and payment records. Customer accounts will not be affected.
+              <span className="block mt-2.5 font-medium text-emerald-800 bg-emerald-50/90 border border-emerald-200 rounded-xl p-2.5 text-xs text-left leading-normal">
+                🛡️ <strong>Battery Warranty Protection:</strong> Deleting this repair will <u>not</u> delete its associated Battery Warranty record. The warranty record is preserved independently for customer service and claims, and can only be deleted separately with 2FA security verification in the Battery Warranty Hub.
+              </span>
             </DialogDescription>
           </DialogHeader>
 
@@ -1832,6 +1835,9 @@ export default function Repairs() {
             </DialogTitle>
             <DialogDescription className="text-slate-500 text-sm pt-2 leading-relaxed">
               You are about to permanently delete <strong>{selectedRepairIds.size}</strong> repair record(s). This action will remove all associated logs, notes, and payment records. Customer accounts will not be affected.
+              <span className="block mt-2.5 font-medium text-emerald-800 bg-emerald-50/90 border border-emerald-200 rounded-xl p-2.5 text-xs text-left leading-normal">
+                🛡️ <strong>Battery Warranty Protection:</strong> Associated Battery Warranty records will <u>not</u> be deleted. They remain safely preserved in the Battery Warranty Hub and require dedicated 2FA verification to remove.
+              </span>
             </DialogDescription>
           </DialogHeader>
 

@@ -1,8 +1,8 @@
 // api/_server/app.ts
 import express from "express";
 import cookieParser from "cookie-parser";
-import path9 from "path";
-import fs9 from "fs";
+import path10 from "path";
+import fs10 from "fs";
 
 // api/_server/routes/auth.ts
 import { Router } from "express";
@@ -349,39 +349,147 @@ async function logAudit(entry) {
     console.warn("[AUDIT LOG WARNING] Failed to record audit log:", err);
   }
 }
+async function logAuditFromRequest(req, entry) {
+  const user = req?.user;
+  const ipAddress = req?.ip || (req?.headers ? req.headers["x-forwarded-for"] : null) || null;
+  const userAgent = req?.headers ? req.headers["user-agent"] : null;
+  return logAudit({
+    userId: entry.userId ?? user?.id ?? null,
+    userEmail: entry.userEmail ?? user?.email ?? null,
+    userName: entry.userName ?? user?.name ?? null,
+    userRole: entry.userRole ?? user?.role ?? null,
+    ipAddress,
+    userAgent,
+    ...entry
+  });
+}
 
 // api/_server/services/emailService.ts
 import { Resend } from "resend";
-var resendApiKey = process.env.RESEND_API_KEY;
-var resend = resendApiKey ? new Resend(resendApiKey) : null;
-async function sendEmail(options) {
-  if (!resend) {
-    console.warn(`[EMAIL NOTICE] RESEND_API_KEY is not configured. Email to ${options.to} not sent.`);
-    return true;
+import nodemailer from "nodemailer";
+var cachedTestTransporter = null;
+async function sendEmailDetailed(options) {
+  const fromAddress = process.env.SMTP_FROM || "MTS Lab Support <support@mobiletechnologystation.com.np>";
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (resendApiKey && resendApiKey.trim().length > 0) {
+    try {
+      const resend = new Resend(resendApiKey.trim());
+      const { data, error } = await resend.emails.send({
+        from: fromAddress,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        attachments: options.attachments?.map((att) => ({
+          filename: att.filename,
+          content: att.content
+        }))
+      });
+      if (error) {
+        console.error("[RESEND ERROR] Failed to send email:", error);
+        return { success: false, status: "failed", provider: "resend", error: error.message };
+      }
+      console.log(`[EMAIL SUCCESS via Resend] Sent to ${options.to}, id: ${data?.id}`);
+      return { success: true, status: "sent", provider: "resend", messageId: data?.id };
+    } catch (err) {
+      console.error("[RESEND EXCEPTION]", err);
+      return { success: false, status: "failed", provider: "resend", error: err?.message || "Resend error" };
+    }
+  }
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port,
+        secure: process.env.SMTP_SECURE === "true" || port === 465,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS
+        }
+      });
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        attachments: options.attachments
+      });
+      console.log(`[EMAIL SUCCESS via SMTP] Sent to ${options.to}, id: ${info.messageId}`);
+      return { success: true, status: "sent", provider: "smtp", messageId: info.messageId };
+    } catch (err) {
+      console.error("[SMTP EXCEPTION]", err);
+      return { success: false, status: "failed", provider: "smtp", error: err?.message || "SMTP error" };
+    }
+  }
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    try {
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD
+        }
+      });
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        attachments: options.attachments
+      });
+      console.log(`[EMAIL SUCCESS via Gmail] Sent to ${options.to}, id: ${info.messageId}`);
+      return { success: true, status: "sent", provider: "gmail", messageId: info.messageId };
+    } catch (err) {
+      console.error("[GMAIL EXCEPTION]", err);
+      return { success: false, status: "failed", provider: "gmail", error: err?.message || "Gmail error" };
+    }
   }
   try {
-    const fromAddress = process.env.SMTP_FROM || "MTS Lab Security <noreply@mobiletechnologystation.com.np>";
-    const { error } = await resend.emails.send({
+    if (!cachedTestTransporter) {
+      const testAccount = await nodemailer.createTestAccount();
+      cachedTestTransporter = nodemailer.createTransport({
+        host: testAccount.smtp.host,
+        port: testAccount.smtp.port,
+        secure: testAccount.smtp.secure,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass
+        }
+      });
+    }
+    const info = await cachedTestTransporter.sendMail({
       from: fromAddress,
       to: options.to,
       subject: options.subject,
       html: options.html,
       text: options.text,
-      attachments: options.attachments?.map((att) => ({
-        filename: att.filename,
-        content: att.content
-      }))
+      attachments: options.attachments
     });
-    if (error) {
-      console.error("[RESEND ERROR] Failed to send email:", error);
-      return false;
-    }
-    console.log(`[EMAIL SUCCESS] Sent email to ${options.to}`);
-    return true;
+    const preview = nodemailer.getTestMessageUrl(info) || void 0;
+    console.log(`[EMAIL DISPATCHED via Ethereal SMTP] Message ID: ${info.messageId} | Preview: ${preview}`);
+    return {
+      success: true,
+      status: "sent",
+      provider: "ethereal",
+      messageId: info.messageId,
+      previewUrl: preview
+    };
   } catch (err) {
-    console.error("[EMAIL ERROR] Exception sending email via Resend:", err);
-    return false;
+    console.error("[TEST EMAIL DISPATCH ERROR]", err);
+    return {
+      success: false,
+      status: "failed",
+      provider: "none",
+      error: "No email service configured and test dispatch failed."
+    };
   }
+}
+async function sendEmail(options) {
+  const result = await sendEmailDetailed(options);
+  return result.success;
 }
 
 // api/_server/routes/auth.ts
@@ -430,10 +538,34 @@ router.post("/login", async (req, res) => {
       }
     }
     if (userErr || !users || users.length === 0) {
+      await logAudit({
+        userEmail: normalizedIdentifier,
+        action: "FAILED_LOGIN",
+        resource: "Auth",
+        status: "FAILED",
+        ipAddress: ipAddress || req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        deviceInfo: { deviceIdentifier, deviceName, browser, os },
+        details: { reason: "User account not found", enteredIdentifier: normalizedIdentifier }
+      });
       return res.status(401).json({ error: "Invalid email or password." });
     }
     const user = users[0];
     if (user.accountStatus === "REJECTED" || user.accountStatus === "DISABLED" || user.isActive === false) {
+      await logAudit({
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "LOGIN_DISABLED_ACCOUNT",
+        resource: "User",
+        resourceId: user.id,
+        status: "DENIED",
+        ipAddress: ipAddress || req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        deviceInfo: { deviceIdentifier, deviceName, browser, os },
+        details: { accountStatus: user.accountStatus, isActive: user.isActive, reason: "Account disabled or pending approval" }
+      });
       return res.status(403).json({
         error: "Forbidden",
         message: "Your account is currently disabled or pending approval. Contact the administrator."
@@ -1030,6 +1162,19 @@ function authorize(allowedRoles) {
     if (normalizedAllowed.includes(userRole)) {
       return next();
     }
+    logAuditFromRequest(req, {
+      action: "UNAUTHORIZED_ACCESS_ATTEMPT",
+      resource: req.baseUrl || req.path || "API",
+      status: "DENIED",
+      details: {
+        method: req.method,
+        path: req.originalUrl || req.path,
+        userRole: req.user.role,
+        requiredRoles: allowedRoles,
+        reason: `Role '${req.user.role}' is not in authorized roles [${allowedRoles.join(", ")}]`
+      }
+    }).catch(() => {
+    });
     return res.status(403).json({
       error: "Forbidden",
       message: `Access denied. Requires one of roles: [${allowedRoles.join(", ")}]. Current role: ${req.user.role}`
@@ -1118,12 +1263,24 @@ router2.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req,
       console.error("[STAFF INSERT ERROR]", insertErr);
       return res.status(500).json({ error: "Failed to create staff member profile." });
     }
-    await logAudit({
-      userId: req.user.id,
+    await logAuditFromRequest(req, {
       action: "STAFF_CREATED",
       resource: "User",
       resourceId: insertedUser.id,
-      details: { email: insertedUser.email, role: insertedUser.role, createdBy: req.user.name }
+      status: "SUCCESS",
+      details: {
+        email: insertedUser.email,
+        name: insertedUser.name,
+        role: insertedUser.role,
+        department: insertedUser.department
+      },
+      newValue: {
+        email: insertedUser.email,
+        name: insertedUser.name,
+        role: insertedUser.role,
+        accountStatus: insertedUser.accountStatus,
+        isActive: insertedUser.isActive
+      }
     });
     await broadcastServerChange("User", "CREATE", insertedUser.id, insertedUser);
     return res.status(201).json(insertedUser);
@@ -1152,8 +1309,17 @@ router2.patch("/:id", authenticate, async (req, res) => {
     const isSelf = req.user.id === id;
     const isSuperAdminOrAdmin = callerRole === "SUPER_ADMIN" || callerRole === "ADMIN";
     if (!isSelf && !isSuperAdminOrAdmin) {
+      logAuditFromRequest(req, {
+        action: "UNAUTHORIZED_USER_MUTATION",
+        resource: "User",
+        resourceId: id,
+        status: "DENIED",
+        details: { reason: "Caller is neither the user nor an administrator.", targetUserId: id }
+      }).catch(() => {
+      });
       return res.status(403).json({ error: "You are not authorized to modify this user account." });
     }
+    const { data: existingUser } = await supabaseAdmin.from("User").select("*").eq("id", id).maybeSingle();
     const updatePayload = {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
@@ -1182,12 +1348,36 @@ router2.patch("/:id", authenticate, async (req, res) => {
       console.error("[USER UPDATE ERROR]", updateErr);
       return res.status(500).json({ error: "Failed to update user profile." });
     }
-    await logAudit({
-      userId: req.user.id,
+    if (updatePayload.role && existingUser && updatePayload.role !== existingUser.role) {
+      await logAuditFromRequest(req, {
+        action: "STAFF_ROLE_CHANGED",
+        resource: "User",
+        resourceId: id,
+        status: "SUCCESS",
+        details: { targetEmail: existingUser.email, targetName: existingUser.name, oldRole: existingUser.role, newRole: updatePayload.role },
+        previousValue: { role: existingUser.role },
+        newValue: { role: updatePayload.role }
+      });
+    }
+    if (updatePayload.accountStatus && existingUser && updatePayload.accountStatus !== existingUser.accountStatus || updatePayload.isActive !== void 0 && existingUser && updatePayload.isActive !== existingUser.isActive) {
+      await logAuditFromRequest(req, {
+        action: "STAFF_STATUS_CHANGED",
+        resource: "User",
+        resourceId: id,
+        status: "SUCCESS",
+        details: { targetEmail: existingUser.email, oldStatus: existingUser.accountStatus, newStatus: updatePayload.accountStatus, oldActive: existingUser.isActive, newActive: updatePayload.isActive },
+        previousValue: { accountStatus: existingUser.accountStatus, isActive: existingUser.isActive },
+        newValue: { accountStatus: updated.accountStatus, isActive: updated.isActive }
+      });
+    }
+    await logAuditFromRequest(req, {
       action: "STAFF_UPDATED",
       resource: "User",
       resourceId: id,
-      details: updatePayload
+      status: "SUCCESS",
+      details: { targetEmail: existingUser?.email, changedFields: Object.keys(updatePayload).filter((k) => k !== "updatedAt") },
+      previousValue: existingUser ? { name: existingUser.name, role: existingUser.role, department: existingUser.department, phoneNumber: existingUser.phoneNumber } : void 0,
+      newValue: { name: updated.name, role: updated.role, department: updated.department, phoneNumber: updated.phoneNumber }
     });
     await broadcastServerChange("User", "UPDATE", id, updated);
     return res.json(updated);
@@ -1209,6 +1399,15 @@ var handle2FAToggle = async (req, res) => {
       return res.status(500).json({ error: "Failed to update 2FA configuration." });
     }
     await broadcastServerChange("User", "UPDATE", id, updated);
+    await logAuditFromRequest(req, {
+      action: "STAFF_2FA_TOGGLED",
+      resource: "User",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { email: updated.email, twoFactorEnabled: isEnabled },
+      previousValue: { twoFactorEnabled: !isEnabled },
+      newValue: { twoFactorEnabled: isEnabled }
+    });
     return res.json({ success: true, message: `2FA ${isEnabled ? "enabled" : "disabled"} successfully.`, user: updated });
   } catch (err) {
     return res.status(500).json({ error: "Failed to toggle 2FA." });
@@ -1230,6 +1429,14 @@ var handleDirectVerifyEmail = async (req, res) => {
       return res.status(500).json({ error: "Failed to verify staff email." });
     }
     await broadcastServerChange("User", "UPDATE", id, updated);
+    await logAuditFromRequest(req, {
+      action: "STAFF_EMAIL_VERIFIED",
+      resource: "User",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { email: updated.email },
+      newValue: { emailVerified: true, accountStatus: "ACTIVE" }
+    });
     return res.json({ success: true, message: "Email directly verified successfully.", user: updated });
   } catch (err) {
     return res.status(500).json({ error: "Failed to verify email." });
@@ -1247,6 +1454,14 @@ router2.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async 
     }
     const { data: user } = await supabaseAdmin.from("User").select("role, email").eq("id", id).single();
     if (user && normalizeRole(user.role) === "SUPER_ADMIN" && normalizeRole(req.user.role) !== "SUPER_ADMIN") {
+      logAuditFromRequest(req, {
+        action: "UNAUTHORIZED_USER_MUTATION",
+        resource: "User",
+        resourceId: id,
+        status: "DENIED",
+        details: { reason: "Only a Super Admin can delete another Super Admin.", targetRole: user.role }
+      }).catch(() => {
+      });
       return res.status(403).json({ error: "Only a Super Admin can delete another Super Admin." });
     }
     const { error } = await supabaseAdmin.from("User").update({
@@ -1257,12 +1472,14 @@ router2.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async 
     if (error) {
       return res.status(500).json({ error: "Failed to remove staff member." });
     }
-    await logAudit({
-      userId: req.user.id,
+    await logAuditFromRequest(req, {
       action: "STAFF_DELETED",
       resource: "User",
       resourceId: id,
-      details: { deletedEmail: user?.email }
+      status: "SUCCESS",
+      details: { deletedEmail: user?.email, deletedRole: user?.role },
+      previousValue: { email: user?.email, role: user?.role, isActive: true, accountStatus: "ACTIVE" },
+      newValue: { isActive: false, accountStatus: "DISABLED" }
     });
     await broadcastServerChange("User", "DELETE", id);
     return res.json({ success: true, message: "Staff member account safely deactivated." });
@@ -1713,6 +1930,25 @@ async function createRepairTransferRequest(params) {
     console.warn("[REPAIR LOG NON FATAL]", logErr);
   }
   await broadcastServerChange("RepairTransfer", "CREATE", transferId, newTransfer);
+  await logAudit({
+    userId: senderId,
+    userName: senderName,
+    userRole: senderRole,
+    action: "TRANSFER_REQUEST_CREATED",
+    resource: "Repair",
+    resourceId: repair.id,
+    status: "SUCCESS",
+    details: {
+      repairNumber: repair.repairNumber,
+      senderTechnicianId: senderId,
+      senderTechnicianName: senderName,
+      targetTechnicianId: targetTech.id,
+      targetTechnicianName: targetTech.name,
+      reason: reason.trim()
+    },
+    previousValue: { technicianId: senderId, technicianName: senderName },
+    newValue: { targetTechnicianId: targetTech.id, targetTechnicianName: targetTech.name, transferStatus: "PENDING" }
+  });
   return { success: true, data: newTransfer };
 }
 async function respondToTransferRequest(params) {
@@ -1805,6 +2041,23 @@ async function respondToTransferRequest(params) {
     if (updatedRepair) {
       await broadcastServerChange("Repair", "UPDATE", transfer.repairId, updatedRepair);
     }
+    await logAudit({
+      userId: responderId,
+      userName: responderName,
+      userRole: responderRole,
+      action: "TRANSFER_REQUEST_ACCEPTED",
+      resource: "Repair",
+      resourceId: transfer.repairId,
+      status: "SUCCESS",
+      details: {
+        repairNumber: transfer.repairNumber,
+        fromTechnician: transfer.senderTechnicianName,
+        toTechnician: responderName,
+        responseNote: transfer.responseNote
+      },
+      previousValue: { technicianId: transfer.senderTechnicianId, technicianName: transfer.senderTechnicianName },
+      newValue: { technicianId: transfer.targetTechnicianId, technicianName: responderName }
+    });
     return {
       success: true,
       data: {
@@ -1861,6 +2114,20 @@ async function respondToTransferRequest(params) {
       console.warn("[REJECT LOG NON FATAL]", logErr);
     }
     await broadcastServerChange("RepairTransfer", "UPDATE", transfer.id, transfer);
+    await logAudit({
+      userId: responderId,
+      userName: responderName,
+      userRole: responderRole,
+      action: "TRANSFER_REQUEST_REJECTED",
+      resource: "Repair",
+      resourceId: transfer.repairId,
+      status: "SUCCESS",
+      details: {
+        repairNumber: transfer.repairNumber,
+        rejectedBy: responderName,
+        responseNote: transfer.responseNote
+      }
+    });
     return {
       success: true,
       data: {
@@ -1903,6 +2170,19 @@ async function cancelTransferRequest(params) {
     console.warn("[CANCEL TRANSFER DB NON FATAL]", e);
   }
   await broadcastServerChange("RepairTransfer", "UPDATE", transfer.id, transfer);
+  await logAudit({
+    userId,
+    userRole,
+    action: "TRANSFER_REQUEST_CANCELLED",
+    resource: "Repair",
+    resourceId: transfer.repairId,
+    status: "SUCCESS",
+    details: {
+      repairNumber: transfer.repairNumber,
+      transferId: transfer.id,
+      cancelledBy: userId
+    }
+  });
   return { success: true, data: transfer };
 }
 async function directTransferRepair(params) {
@@ -1977,6 +2257,24 @@ async function directTransferRepair(params) {
     console.warn("[DIRECT TRANSFER LOG NON FATAL]", logErr);
   }
   await broadcastServerChange("Repair", "UPDATE", repair.id, updatedRepair);
+  await logAudit({
+    userId: actorId,
+    userName: actorName,
+    userRole: params.actorRole,
+    action: "REPAIR_DIRECT_TRANSFERRED",
+    resource: "Repair",
+    resourceId: repair.id,
+    status: "SUCCESS",
+    details: {
+      repairNumber: repair.repairNumber,
+      targetTechnicianId: targetTech.id,
+      targetTechnicianName: targetTech.name,
+      reason: reason.trim(),
+      priority: priority || null
+    },
+    previousValue: { technicianId: repair.technicianId || null },
+    newValue: { technicianId: targetTech.id, technicianName: targetTech.name }
+  });
   return {
     success: true,
     data: {
@@ -3054,12 +3352,31 @@ router3.post("/", authenticate, async (req, res) => {
       }
     ]);
     await broadcastServerChange("RepairLog", "CREATE", logId);
-    await logAudit({
-      userId: req.user.id,
+    await logAuditFromRequest(req, {
       action: "REPAIR_CREATED",
       resource: "Repair",
       resourceId: created.id,
-      details: { repairNumber: created.repairNumber, customerName: created.customerName }
+      status: "SUCCESS",
+      details: {
+        repairNumber: created.repairNumber,
+        customerName: created.customerName,
+        customerPhone: created.customerPhone,
+        deviceBrand: created.deviceBrand,
+        deviceModel: created.deviceModel,
+        status: created.status,
+        priority: created.priority,
+        technicianId: created.technicianId,
+        technicianName: assignedTechName,
+        estimatedCost: created.estimatedCost
+      },
+      newValue: {
+        repairNumber: created.repairNumber,
+        status: created.status,
+        priority: created.priority,
+        technicianId: created.technicianId,
+        technicianName: assignedTechName,
+        estimatedCost: created.estimatedCost
+      }
     });
     if (created.technicianId) {
       try {
@@ -3349,16 +3666,40 @@ var handleRepairUpdate = async (req, res) => {
     const existingStatus = String(existingRepair.status || "").toUpperCase().trim();
     if (existingStatus === "CANCELLED") {
       if (["TECHNICIAN", "HEAD_TECHNICIAN", "LEAD_TECHNICIAN", "TECHNICAL_ASSISTANT", "TECH"].includes(role)) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: "Cancelled repairs cannot be modified by technicians.", attemptedStatus: rawBody.status, existingStatus }
+        }).catch(() => {
+        });
         return res.status(403).json({ error: "Access denied: Cancelled repairs cannot be modified by technicians." });
       }
       if (rawBody.status && String(rawBody.status).toUpperCase().trim() !== "CANCELLED") {
         if (!["SUPER_ADMIN", "ADMIN", "MANAGER"].includes(role)) {
+          logAuditFromRequest(req, {
+            action: "UNAUTHORIZED_REPAIR_UPDATE",
+            resource: "Repair",
+            resourceId: id,
+            status: "DENIED",
+            details: { reason: "Only Administrators and Managers can re-open or restore a cancelled repair.", attemptedStatus: rawBody.status, existingStatus }
+          }).catch(() => {
+          });
           return res.status(403).json({ error: "Access denied: Only Administrators and Managers can re-open or restore a cancelled repair." });
         }
       }
     }
     if (role === "TECHNICIAN") {
       if (existingRepair.technicianId !== req.user.id) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: "Technicians can only modify repairs assigned to them.", assignedTechnicianId: existingRepair.technicianId, attemptTechnicianId: req.user.id }
+        }).catch(() => {
+        });
         return res.status(403).json({ error: "Access denied: You can only modify repairs assigned to you." });
       }
       const FORBIDDEN_TECHNICIAN_STATUSES = [
@@ -3371,6 +3712,14 @@ var handleRepairUpdate = async (req, res) => {
         "CANCELLED"
       ];
       if (rawBody.status && FORBIDDEN_TECHNICIAN_STATUSES.includes(String(rawBody.status).toUpperCase().trim())) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: `Technicians cannot set status "${rawBody.status}".`, attemptedStatus: rawBody.status }
+        }).catch(() => {
+        });
         return res.status(403).json({
           error: `Access denied: Technicians cannot set status "${rawBody.status}". Only Managers, Admins, and Receptionists can mark repairs as Delivered, Ready for Pickup, Re-Problem, or Cancelled.`
         });
@@ -3378,6 +3727,14 @@ var handleRepairUpdate = async (req, res) => {
     }
     if (rawBody.status && String(rawBody.status).toUpperCase().trim() === "CANCELLED") {
       if (!["SUPER_ADMIN", "ADMIN", "MANAGER", "RECEPTIONIST"].includes(role)) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: "Only Super Admins, Admins, Managers, and Receptionists can cancel repairs.", attemptedStatus: "CANCELLED" }
+        }).catch(() => {
+        });
         return res.status(403).json({
           error: "Access denied: Only Super Admins, Admins, Managers, and Receptionists can cancel repairs."
         });
@@ -3409,7 +3766,8 @@ var handleRepairUpdate = async (req, res) => {
     if (rawBody.hasBatteryWarranty !== void 0 || updated.hasBatteryWarranty !== void 0) {
       await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody, id, repairNumber: updated.repairNumber }, req.user);
     }
-    if (rawBody.status) {
+    const newStatusStr = rawBody.status ? String(rawBody.status).toUpperCase().trim() : void 0;
+    if (newStatusStr && newStatusStr !== existingStatus) {
       const logId = uuidv47();
       try {
         await supabaseAdmin.from("RepairLog").insert([
@@ -3454,6 +3812,88 @@ var handleRepairUpdate = async (req, res) => {
         }
       }
     }
+    const diffPrevious = {};
+    const diffNext = {};
+    for (const key of Object.keys(updateData)) {
+      if (key === "updatedAt") continue;
+      if (existingRepair[key] !== updated[key]) {
+        diffPrevious[key] = existingRepair[key];
+        diffNext[key] = updated[key];
+      }
+    }
+    const statusChanged = rawBody.status && String(rawBody.status).trim() !== String(existingRepair.status || "").trim();
+    const priorityChanged = newPriority && newPriority !== oldPriority;
+    const paymentChanged = updateData.estimatedCost !== void 0 && updateData.estimatedCost !== existingRepair.estimatedCost || updateData.advancePaid !== void 0 && updateData.advancePaid !== existingRepair.advancePaid || updateData.totalPaid !== void 0 && updateData.totalPaid !== existingRepair.totalPaid;
+    if (statusChanged) {
+      await logAuditFromRequest(req, {
+        action: "REPAIR_STATUS_CHANGED",
+        resource: "Repair",
+        resourceId: id,
+        status: "SUCCESS",
+        details: {
+          repairNumber: updated.repairNumber,
+          customerName: updated.customerName,
+          oldStatus: existingRepair.status,
+          newStatus: updated.status,
+          remarks: rawBody.remarks || null
+        },
+        previousValue: { status: existingRepair.status },
+        newValue: { status: updated.status }
+      });
+    }
+    if (priorityChanged) {
+      await logAuditFromRequest(req, {
+        action: "REPAIR_PRIORITY_CHANGED",
+        resource: "Repair",
+        resourceId: id,
+        status: "SUCCESS",
+        details: {
+          repairNumber: updated.repairNumber,
+          oldPriority,
+          newPriority
+        },
+        previousValue: { priority: oldPriority },
+        newValue: { priority: newPriority }
+      });
+    }
+    if (paymentChanged) {
+      await logAuditFromRequest(req, {
+        action: "REPAIR_PAYMENT_UPDATED",
+        resource: "Repair",
+        resourceId: id,
+        status: "SUCCESS",
+        details: {
+          repairNumber: updated.repairNumber,
+          estimatedCost: updated.estimatedCost,
+          advancePaid: updated.advancePaid,
+          totalPaid: updated.totalPaid
+        },
+        previousValue: {
+          estimatedCost: existingRepair.estimatedCost,
+          advancePaid: existingRepair.advancePaid,
+          totalPaid: existingRepair.totalPaid
+        },
+        newValue: {
+          estimatedCost: updated.estimatedCost,
+          advancePaid: updated.advancePaid,
+          totalPaid: updated.totalPaid
+        }
+      });
+    }
+    if (Object.keys(diffNext).length > 0 && !statusChanged && !priorityChanged && !paymentChanged) {
+      await logAuditFromRequest(req, {
+        action: "REPAIR_UPDATED",
+        resource: "Repair",
+        resourceId: id,
+        status: "SUCCESS",
+        details: {
+          repairNumber: updated.repairNumber,
+          changedFields: Object.keys(diffNext)
+        },
+        previousValue: diffPrevious,
+        newValue: diffNext
+      });
+    }
     await broadcastServerChange("Repair", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
@@ -3487,6 +3927,14 @@ router3.patch("/:id/technician-update", authenticate, async (req, res) => {
     const role = normalizeRole(req.user.role);
     if (role === "TECHNICIAN") {
       if (existingRepair.technicianId !== req.user.id) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: "Technicians can only update repairs assigned to them.", assignedTechnicianId: existingRepair.technicianId, attemptTechnicianId: req.user.id }
+        }).catch(() => {
+        });
         return res.status(403).json({ error: "Access denied: You can only update repairs assigned to you." });
       }
       const FORBIDDEN_TECHNICIAN_STATUSES = [
@@ -3499,6 +3947,14 @@ router3.patch("/:id/technician-update", authenticate, async (req, res) => {
         "CANCELLED"
       ];
       if (status && FORBIDDEN_TECHNICIAN_STATUSES.includes(String(status).toUpperCase().trim())) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: `Technicians cannot set status "${status}".`, attemptedStatus: status }
+        }).catch(() => {
+        });
         return res.status(403).json({
           error: `Access denied: Technicians cannot set status "${status}". Only Managers, Admins, and Receptionists can mark repairs as Delivered, Ready for Pickup, Re-Problem, or Cancelled.`
         });
@@ -3554,6 +4010,29 @@ router3.patch("/:id/technician-update", authenticate, async (req, res) => {
     } catch (notifErr) {
       console.warn("[NOTIFICATION DISPATCH WARN - NON FATAL]", notifErr);
     }
+    await logAuditFromRequest(req, {
+      action: status && status !== existingRepair.status ? "REPAIR_STATUS_CHANGED" : "REPAIR_PROGRESS_UPDATED",
+      resource: "Repair",
+      resourceId: id,
+      status: "SUCCESS",
+      details: {
+        repairNumber: updatedRepair.repairNumber,
+        oldStatus: existingRepair.status,
+        newStatus: updatedRepair.status,
+        partsUsed: resolvedParts,
+        remarks: resolvedRemarks
+      },
+      previousValue: {
+        status: existingRepair.status,
+        partsUsed: existingRepair.partsUsed,
+        remarks: existingRepair.remarks
+      },
+      newValue: {
+        status: updatedRepair.status,
+        partsUsed: updatedRepair.partsUsed,
+        remarks: updatedRepair.remarks
+      }
+    });
     await broadcastServerChange("Repair", "UPDATE", id, updatedRepair);
     return res.json({
       success: true,
@@ -3793,6 +4272,7 @@ router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MA
       const { data: tech } = await supabaseAdmin.from("User").select("name").eq("id", normalizedTechId).single();
       techName = tech?.name || null;
     }
+    const { data: existingRepair } = await supabaseAdmin.from("Repair").select("technicianId, assignedByName, repairNumber").eq("id", id).maybeSingle();
     const { data: updated, error } = await supabaseAdmin.from("Repair").update({
       technicianId: normalizedTechId,
       assignedAt: normalizedTechId ? (/* @__PURE__ */ new Date()).toISOString() : null,
@@ -3818,6 +4298,26 @@ router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MA
     } catch (logErr) {
       console.warn("[REPAIR LOG NON FATAL]", logErr);
     }
+    await logAuditFromRequest(req, {
+      action: normalizedTechId ? "REPAIR_ASSIGNED" : "REPAIR_UNASSIGNED",
+      resource: "Repair",
+      resourceId: id,
+      status: "SUCCESS",
+      details: {
+        repairNumber: updated.repairNumber,
+        assignedTechnicianId: normalizedTechId,
+        assignedTechnicianName: techName,
+        previousTechnicianName: existingRepair?.assignedByName || null
+      },
+      previousValue: {
+        technicianId: existingRepair?.technicianId || null,
+        assignedByName: existingRepair?.assignedByName || null
+      },
+      newValue: {
+        technicianId: normalizedTechId,
+        assignedByName: techName
+      }
+    });
     if (normalizedTechId) {
       try {
         const isUrgent = updated.priority === "URGENT";
@@ -6282,6 +6782,7 @@ router7.patch("/:id/status", authenticate, async (req, res) => {
       updatePayload.courierOutStatus = status;
       if (status === "DELIVERED") {
         updatePayload.status = "DELIVERED";
+        updatePayload.courierOutDeliveredDate = now;
       }
     }
     const { data: updated, error } = await supabaseAdmin.from("Repair").update(updatePayload).eq("id", id).select("*").single();
@@ -7763,6 +8264,20 @@ router9.post("/pending-requests/:id/approve", authenticate, authorize(ATTENDANCE
     } catch (notifErr) {
       console.warn("[ATTENDANCE APPROVE NOTIF WARN]", notifErr);
     }
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_REQUEST_APPROVED",
+      resource: "Attendance",
+      resourceId: updated.id,
+      status: "SUCCESS",
+      details: {
+        staffUserId: existing.userId,
+        date: existing.date,
+        approvedStatus: status,
+        notes
+      },
+      previousValue: { status: existing.status, requestStatus: existing.requestStatus },
+      newValue: { status: updated.status, requestStatus: updated.requestStatus }
+    });
     return res.json({ success: true, message: "Attendance request approved.", record: updated });
   } catch (err) {
     console.error("[APPROVE ATTENDANCE ERROR]", err);
@@ -7809,6 +8324,19 @@ router9.post("/pending-requests/:id/reject", authenticate, authorize(ATTENDANCE_
     } catch (notifErr) {
       console.warn("[ATTENDANCE REJECT NOTIF WARN]", notifErr);
     }
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_REQUEST_REJECTED",
+      resource: "Attendance",
+      resourceId: updated.id,
+      status: "SUCCESS",
+      details: {
+        staffUserId: existing.userId,
+        date: existing.date,
+        rejectionReason: reason
+      },
+      previousValue: { status: existing.status, requestStatus: existing.requestStatus },
+      newValue: { status: updated.status, requestStatus: updated.requestStatus }
+    });
     return res.json({ success: true, message: "Attendance request rejected.", record: updated });
   } catch (err) {
     console.error("[REJECT ATTENDANCE ERROR]", err);
@@ -8056,12 +8584,26 @@ router9.post("/mark", authenticate, async (req, res) => {
     if (isSuperAdmin || isAdmin) {
     } else if (isManager) {
       if (targetUserId === currentUser.id) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_ATTENDANCE_ATTEMPT",
+          resource: "Attendance",
+          status: "DENIED",
+          details: { reason: "Managers cannot take their own attendance.", attemptedUserId: targetUserId }
+        }).catch(() => {
+        });
         return res.status(403).json({
           error: "Managers cannot take their own attendance. Manager attendance must be verified and recorded by an Administrator or Super Administrator.",
           code: "MANAGER_SELF_ATTENDANCE_PROHIBITED"
         });
       }
       if (!time.isWithinWindow) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_ATTENDANCE_ATTEMPT",
+          resource: "Attendance",
+          status: "DENIED",
+          details: { reason: "Outside manager attendance window.", serverTime: time.timeString, window: "10:00 AM - 10:45 AM NPT" }
+        }).catch(() => {
+        });
         return res.status(403).json({
           error: `Manager can only record staff attendance between 10:00 AM and 10:45 AM Nepal Time (Asia/Kathmandu). Current NPT time: ${time.timeString}`,
           code: "OUTSIDE_ATTENDANCE_WINDOW",
@@ -8070,6 +8612,13 @@ router9.post("/mark", authenticate, async (req, res) => {
         });
       }
     } else {
+      logAuditFromRequest(req, {
+        action: "UNAUTHORIZED_ATTENDANCE_ATTEMPT",
+        resource: "Attendance",
+        status: "DENIED",
+        details: { reason: "Staff role cannot record attendance directly.", userRole: currentUser.role }
+      }).catch(() => {
+      });
       return res.status(403).json({
         error: "Access denied: Staff members (Technicians, Receptionists, etc.) cannot record attendance. Attendance is recorded and verified authoritatively by Lab Management.",
         code: "UNAUTHORIZED_ROLE"
@@ -8098,6 +8647,28 @@ router9.post("/mark", authenticate, async (req, res) => {
         role: currentUser.role
       }
     );
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_RECORDED",
+      resource: "Attendance",
+      resourceId: saved.id,
+      status: "SUCCESS",
+      details: {
+        targetUserId,
+        targetUserName: targetUser?.name || "Staff Member",
+        date: targetDate,
+        status: saved.status,
+        checkInTime,
+        checkOutTime,
+        notes
+      },
+      newValue: {
+        userId: targetUserId,
+        date: targetDate,
+        status: saved.status,
+        checkInTime,
+        checkOutTime
+      }
+    });
     return res.status(200).json({
       success: true,
       message: `Attendance marked as ${saved.status} for ${targetUser?.name || "employee"}.`,
@@ -8259,12 +8830,28 @@ router9.patch("/:id", authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), asyn
     const isAdmin = currentUser.role === "ADMIN";
     const isManager = currentUser.role === "MANAGER";
     if (isManager && existing.userId === currentUser.id) {
+      logAuditFromRequest(req, {
+        action: "UNAUTHORIZED_ATTENDANCE_ATTEMPT",
+        resource: "Attendance",
+        resourceId: id,
+        status: "DENIED",
+        details: { reason: "Managers cannot modify their own attendance records." }
+      }).catch(() => {
+      });
       return res.status(403).json({
         error: "Managers cannot modify their own attendance records. Only an Administrator or Super Administrator can update Manager attendance.",
         code: "MANAGER_SELF_UPDATE_PROHIBITED"
       });
     }
     if (isManager && !time.isWithinWindow) {
+      logAuditFromRequest(req, {
+        action: "UNAUTHORIZED_ATTENDANCE_ATTEMPT",
+        resource: "Attendance",
+        resourceId: id,
+        status: "DENIED",
+        details: { reason: "Outside manager attendance window for update.", serverTime: time.timeString }
+      }).catch(() => {
+      });
       return res.status(403).json({
         error: `Manager can only update attendance during 10:00 AM \u2013 10:45 AM NPT. (Current NPT: ${time.timeString})`,
         code: "OUTSIDE_ATTENDANCE_WINDOW"
@@ -8286,6 +8873,29 @@ router9.patch("/:id", authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), asyn
         role: currentUser.role
       }
     );
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_RECORD_UPDATED",
+      resource: "Attendance",
+      resourceId: updated.id,
+      status: "SUCCESS",
+      details: {
+        staffUserId: existing.userId,
+        date: existing.date,
+        correctionReason: correctionReason || "Administrative correction"
+      },
+      previousValue: {
+        status: existing.status,
+        checkInTime: existing.checkInTime,
+        checkOutTime: existing.checkOutTime,
+        notes: existing.notes
+      },
+      newValue: {
+        status: updated.status,
+        checkInTime: updated.checkInTime,
+        checkOutTime: updated.checkOutTime,
+        notes: updated.notes
+      }
+    });
     return res.json({
       success: true,
       message: "Attendance record successfully updated.",
@@ -8299,6 +8909,7 @@ router9.delete("/:id", authenticate, authorize(ATTENDANCE_ADMIN_ROLES), async (r
   try {
     const currentUser = req.user;
     const { id } = req.params;
+    const existing = await getAttendanceRecordById(id);
     const success = await deleteAttendanceRecord(id, {
       id: currentUser.id,
       name: currentUser.name || "Admin",
@@ -8307,6 +8918,18 @@ router9.delete("/:id", authenticate, authorize(ATTENDANCE_ADMIN_ROLES), async (r
     if (!success) {
       return res.status(404).json({ error: "Attendance record not found." });
     }
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_RECORD_DELETED",
+      resource: "Attendance",
+      resourceId: id,
+      status: "SUCCESS",
+      details: {
+        staffUserId: existing?.userId,
+        date: existing?.date,
+        previousStatus: existing?.status
+      },
+      previousValue: existing || void 0
+    });
     return res.json({
       success: true,
       message: "Attendance record deleted successfully."
@@ -8372,6 +8995,16 @@ router9.delete("/staff/:userId", authenticate, authorize(["SUPER_ADMIN"]), async
       id: currentUser.id,
       name: currentUser.name || "Super Admin",
       role: currentUser.role
+    });
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_PURGED",
+      resource: "Attendance",
+      resourceId: userId,
+      status: "SUCCESS",
+      details: {
+        staffUserId: userId,
+        recordsDeleted: count
+      }
     });
     return res.json({
       success: true,
@@ -9705,13 +10338,7 @@ import path6 from "path";
 import { v2 as cloudinary } from "cloudinary";
 var isConfigured = false;
 function ensureCloudinaryConfigured() {
-  if (isConfigured) return true;
   const creds = config.getCloudinaryCredentials();
-  if (creds.cldUrl) {
-    cloudinary.config(true);
-    isConfigured = true;
-    return true;
-  }
   if (creds.cloudName && creds.apiKey && creds.apiSecret) {
     cloudinary.config({
       cloud_name: creds.cloudName,
@@ -9722,6 +10349,15 @@ function ensureCloudinaryConfigured() {
     isConfigured = true;
     return true;
   }
+  if (creds.cldUrl) {
+    cloudinary.config({
+      url: creds.cldUrl,
+      secure: true
+    });
+    isConfigured = true;
+    return true;
+  }
+  isConfigured = false;
   return false;
 }
 ensureCloudinaryConfigured();
@@ -9730,9 +10366,10 @@ function isCloudinaryConfigured() {
 }
 async function pingCloudinary() {
   if (!ensureCloudinaryConfigured()) {
+    const creds = config.getCloudinaryCredentials();
     return {
       connected: false,
-      cloudName: "",
+      cloudName: creds.cloudName || "",
       status: "NOT_CONFIGURED",
       error: "Cloudinary credentials (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET or CLOUDINARY_URL) are not set."
     };
@@ -9742,7 +10379,7 @@ async function pingCloudinary() {
     const creds = config.getCloudinaryCredentials();
     return {
       connected: true,
-      cloudName: creds.cloudName,
+      cloudName: creds.cloudName || cloudinary.config().cloud_name || "",
       status: pingResult.status || "ok",
       rateLimit: {
         allowed: pingResult.rate_limit_allowed,
@@ -9751,11 +10388,48 @@ async function pingCloudinary() {
       }
     };
   } catch (err) {
+    const creds = config.getCloudinaryCredentials();
     return {
       connected: false,
-      cloudName: config.getCloudinaryCredentials().cloudName,
+      cloudName: creds.cloudName || cloudinary.config().cloud_name || "",
       status: "ERROR",
       error: err.message || "Failed to ping Cloudinary API."
+    };
+  }
+}
+async function testCloudinaryUpload() {
+  if (!ensureCloudinaryConfigured()) {
+    return {
+      success: false,
+      error: "Cloudinary is not configured. Missing credentials."
+    };
+  }
+  const start = Date.now();
+  const testPixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  const testPublicId = `mts_lab/test/test_ping_${Date.now()}`;
+  try {
+    const uploadResult = await cloudinary.uploader.upload(testPixel, {
+      folder: "mts_lab/test",
+      public_id: testPublicId,
+      overwrite: true,
+      tags: ["mts_lab", "test", "health_check"]
+    });
+    const latencyMs = Date.now() - start;
+    try {
+      await cloudinary.uploader.destroy(uploadResult.public_id);
+    } catch (_) {
+    }
+    return {
+      success: true,
+      url: uploadResult.secure_url,
+      publicId: uploadResult.public_id,
+      latencyMs
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message || "Upload test failed.",
+      latencyMs: Date.now() - start
     };
   }
 }
@@ -12729,6 +13403,74 @@ router19.get("/status", async (req, res) => {
     });
   }
 });
+router19.post("/test", authenticate, async (req, res) => {
+  try {
+    const isConfigured2 = isCloudinaryConfigured();
+    if (!isConfigured2) {
+      return res.json({
+        success: false,
+        storage: "LOCAL_STORAGE",
+        connected: false,
+        message: "Cloudinary is not configured in this environment. Falling back to local storage."
+      });
+    }
+    const testResult = await testCloudinaryUpload();
+    return res.json({
+      success: testResult.success,
+      storage: "CLOUDINARY",
+      connected: testResult.success,
+      latencyMs: testResult.latencyMs,
+      testUrl: testResult.url,
+      error: testResult.error
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Cloudinary test upload failed."
+    });
+  }
+});
+router19.get("/documents", authenticate, async (req, res) => {
+  try {
+    const referenceNumber = (req.query.referenceNumber || "").trim();
+    const docType = (req.query.docType || "").trim().toUpperCase();
+    let query = supabaseAdmin.from("AuditLog").select("*").eq("action", "DOCUMENT_UPLOAD").order("createdAt", { ascending: false });
+    if (referenceNumber) {
+      query = query.eq("resourceId", referenceNumber);
+    }
+    if (docType) {
+      query = query.eq("resource", docType);
+    }
+    const { data: logs, error } = await query.limit(50);
+    if (error) {
+      console.warn("[QUERY DOCUMENTS WARN]", error);
+      return res.json({ success: true, documents: [] });
+    }
+    const documents = (logs || []).map((l) => {
+      let meta = {};
+      try {
+        meta = typeof l.metadata === "string" ? JSON.parse(l.metadata) : l.metadata || {};
+      } catch (_) {
+      }
+      return {
+        id: l.id,
+        docType: l.resource,
+        referenceNumber: l.resourceId,
+        url: meta.url || meta.secureUrl,
+        secureUrl: meta.secureUrl || meta.url,
+        publicId: meta.publicId,
+        storageProvider: meta.storageProvider || "UNKNOWN",
+        bytes: meta.bytes,
+        format: meta.format,
+        uploadedAt: l.createdAt,
+        uploadedByName: l.userName || "System"
+      };
+    });
+    return res.json({ success: true, documents });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to retrieve documents." });
+  }
+});
 router19.post("/", authenticate, upload5.single("file"), async (req, res) => {
   try {
     const useCloudinary = isCloudinaryConfigured();
@@ -12746,6 +13488,7 @@ router19.post("/", authenticate, upload5.single("file"), async (req, res) => {
         });
         return res.json({
           success: true,
+          storageProvider: "CLOUDINARY",
           url: result.secure_url,
           secureUrl: result.secure_url,
           publicId: result.public_id,
@@ -12760,6 +13503,7 @@ router19.post("/", authenticate, upload5.single("file"), async (req, res) => {
         const local = saveFileLocally(req.file.buffer, req.file.originalname, req.file.mimetype);
         return res.json({
           success: true,
+          storageProvider: "LOCAL_STORAGE",
           ...local,
           folder
         });
@@ -12776,6 +13520,7 @@ router19.post("/", authenticate, upload5.single("file"), async (req, res) => {
         });
         return res.json({
           success: true,
+          storageProvider: "CLOUDINARY",
           url: result.secure_url,
           secureUrl: result.secure_url,
           publicId: result.public_id,
@@ -12790,6 +13535,7 @@ router19.post("/", authenticate, upload5.single("file"), async (req, res) => {
         const local = saveBase64Locally(base64Data);
         return res.json({
           success: true,
+          storageProvider: "LOCAL_STORAGE",
           ...local,
           folder
         });
@@ -12808,6 +13554,7 @@ router19.post("/pdf", authenticate, upload5.single("file"), async (req, res) => 
     const useCloudinary = isCloudinaryConfigured();
     const docType = (req.body?.docType || req.query.docType || "GENERAL").toUpperCase();
     const referenceNumber = (req.body?.referenceNumber || req.query.referenceNumber || "doc").trim();
+    let uploadedDoc;
     if (useCloudinary) {
       let result;
       if (req.file) {
@@ -12826,17 +13573,15 @@ router19.post("/pdf", authenticate, upload5.single("file"), async (req, res) => 
       } else {
         return res.status(400).json({ error: "No PDF file or base64 data provided." });
       }
-      return res.json({
-        success: true,
+      uploadedDoc = {
         url: result.secure_url,
         secureUrl: result.secure_url,
         publicId: result.public_id,
         format: result.format || "pdf",
         bytes: result.bytes,
         resourceType: result.resource_type,
-        docType,
-        referenceNumber
-      });
+        storageProvider: "CLOUDINARY"
+      };
     } else {
       let local;
       if (req.file) {
@@ -12847,13 +13592,45 @@ router19.post("/pdf", authenticate, upload5.single("file"), async (req, res) => 
       } else {
         return res.status(400).json({ error: "No PDF file or base64 data provided." });
       }
-      return res.json({
-        success: true,
-        ...local,
-        referenceNumber,
-        docType
-      });
+      uploadedDoc = {
+        url: local.url,
+        secureUrl: local.secureUrl,
+        publicId: local.publicId,
+        format: local.format || "pdf",
+        bytes: local.bytes,
+        resourceType: local.resourceType,
+        storageProvider: "LOCAL_STORAGE"
+      };
     }
+    try {
+      await supabaseAdmin.from("AuditLog").insert({
+        userId: req.user?.id || "system",
+        userEmail: req.user?.email || null,
+        userName: req.user?.name || null,
+        userRole: req.user?.role || null,
+        action: "DOCUMENT_UPLOAD",
+        resource: docType,
+        resourceId: referenceNumber,
+        status: "SUCCESS",
+        details: `Uploaded ${docType} PDF (${referenceNumber}) via ${uploadedDoc.storageProvider}`,
+        metadata: JSON.stringify({
+          ...uploadedDoc,
+          docType,
+          referenceNumber,
+          uploadedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          uploadedById: req.user?.id,
+          uploadedByName: req.user?.name
+        })
+      });
+    } catch (auditErr) {
+      console.warn("[DOC AUDIT LOG INSERT WARN]", auditErr);
+    }
+    return res.json({
+      success: true,
+      ...uploadedDoc,
+      docType,
+      referenceNumber
+    });
   } catch (err) {
     console.error("[PDF UPLOAD ERROR]", err);
     return res.status(500).json({
@@ -12909,6 +13686,96 @@ var events_default = router20;
 
 // api/_server/routes/public.ts
 import { Router as Router21 } from "express";
+
+// api/_server/services/trackingExpiration.ts
+var NEPAL_TIMEZONE2 = "Asia/Kathmandu";
+function toNepalDateString3(val) {
+  if (!val) return "";
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: NEPAL_TIMEZONE2,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(d);
+  } catch {
+    return "";
+  }
+}
+function getAuthoritativeDeliveryDate(repair, logsForRepair) {
+  if (!repair) return null;
+  if (repair.deliveredAt) {
+    return repair.deliveredAt;
+  }
+  if (repair.courierOutDeliveredDate) {
+    return repair.courierOutDeliveredDate;
+  }
+  if (logsForRepair && logsForRepair.length > 0) {
+    const deliveredLog = logsForRepair.find((l) => {
+      const s = String(l.status || "").toUpperCase().trim();
+      return s === "DELIVERED" || s === "COMPLETED";
+    });
+    if (deliveredLog && deliveredLog.createdAt) {
+      return deliveredLog.createdAt;
+    }
+  }
+  const st = String(repair.status || "").toUpperCase().trim();
+  if (st === "DELIVERED" || st === "COMPLETED") {
+    return repair.updatedAt || repair.createdAt || null;
+  }
+  return null;
+}
+function isRepairPubliclyTrackable(repair, logsForRepair, referenceDate = /* @__PURE__ */ new Date()) {
+  if (!repair) return false;
+  const st = String(repair.status || "").toUpperCase().trim();
+  const isDelivered = st === "DELIVERED" || st === "COMPLETED";
+  if (!isDelivered) {
+    return true;
+  }
+  const deliveryIso = getAuthoritativeDeliveryDate(repair, logsForRepair);
+  if (!deliveryIso) {
+    return true;
+  }
+  const deliveryNepalDate = toNepalDateString3(deliveryIso);
+  const currentNepalDate = toNepalDateString3(referenceDate);
+  if (!deliveryNepalDate || !currentNepalDate) {
+    return true;
+  }
+  return currentNepalDate <= deliveryNepalDate;
+}
+function filterPubliclyTrackableRepairs(repairs, allLogs = [], referenceDate = /* @__PURE__ */ new Date()) {
+  if (!repairs || !Array.isArray(repairs)) return [];
+  const logsByRepairId = {};
+  for (const log of allLogs) {
+    if (log && log.repairId) {
+      if (!logsByRepairId[log.repairId]) {
+        logsByRepairId[log.repairId] = [];
+      }
+      logsByRepairId[log.repairId].push(log);
+    }
+  }
+  return repairs.filter((rep) => {
+    const logs = logsByRepairId[rep.id] || [];
+    return isRepairPubliclyTrackable(rep, logs, referenceDate);
+  }).map((rep) => {
+    const logs = logsByRepairId[rep.id] || [];
+    const delDate = getAuthoritativeDeliveryDate(rep, logs);
+    if (delDate) {
+      return {
+        ...rep,
+        deliveredAt: delDate
+      };
+    }
+    return rep;
+  });
+}
+
+// api/_server/routes/public.ts
+import fs9 from "fs";
+import path9 from "path";
+import crypto3 from "crypto";
 var router21 = Router21();
 var handlePublicSlides = async (req, res) => {
   try {
@@ -12935,8 +13802,8 @@ function isPhoneMatching(providedPhoneDigits, recordPhone) {
   if (providedPhoneDigits === dbDigits) return true;
   const p10 = providedPhoneDigits.length >= 10 ? providedPhoneDigits.slice(-10) : providedPhoneDigits;
   const db10 = dbDigits.length >= 10 ? dbDigits.slice(-10) : dbDigits;
-  if (p10 === db10) return true;
-  if (providedPhoneDigits.length >= 7 && dbDigits.length >= 7) {
+  if (p10.length === 10 && db10.length === 10 && p10 === db10) return true;
+  if (providedPhoneDigits.length < 10 && dbDigits.length < 10 && providedPhoneDigits.length >= 7 && dbDigits.length >= 7) {
     if (providedPhoneDigits.slice(-7) === dbDigits.slice(-7)) return true;
   }
   return false;
@@ -12952,7 +13819,10 @@ var handlePublicTrack = async (req, res) => {
     const cleanPhone = normalizePhoneDigits(String(rawPhone));
     const phone10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
     if (!cleanRepairNumber && !cleanPhone) {
-      return res.status(400).json({ error: "Please enter your Repair Number or Registered Phone Number." });
+      return res.status(400).json({ success: false, error: "Please enter your Repair Number or Registered Phone Number." });
+    }
+    if (!cleanRepairNumber && cleanPhone.length < 7) {
+      return res.status(400).json({ success: false, error: "Please enter a valid Phone Number (minimum 7 digits) or Repair Number." });
     }
     const selectFields = `
       id,
@@ -13045,11 +13915,27 @@ var handlePublicTrack = async (req, res) => {
       }
     }
     if (!allMatchingRepairs || allMatchingRepairs.length === 0) {
-      return res.status(404).json({ error: "No repair records found matching your tracking information." });
+      return res.status(200).json({
+        success: true,
+        repair: null,
+        repairs: [],
+        devices: [],
+        message: "No repair records found matching your tracking information."
+      });
     }
-    const primaryRepair = allMatchingRepairs[0];
     const allRepairIds = allMatchingRepairs.map((r) => r.id);
     const { data: allExplicitLogs } = await supabaseAdmin.from("RepairLog").select("id, repairId, status, message, createdAt").in("repairId", allRepairIds).order("createdAt", { ascending: false });
+    const trackableRepairs = filterPubliclyTrackableRepairs(allMatchingRepairs, allExplicitLogs || []);
+    if (!trackableRepairs || trackableRepairs.length === 0) {
+      return res.status(200).json({
+        success: true,
+        repair: null,
+        repairs: [],
+        devices: [],
+        message: "No active repair records found matching your tracking information."
+      });
+    }
+    const primaryRepair = trackableRepairs[0];
     const getCustomerLogDesc = (logStatus, currentOverallStatus) => {
       const st = (logStatus || currentOverallStatus || "RECEIVED").toUpperCase().trim();
       const currentSt = (currentOverallStatus || "RECEIVED").toUpperCase().trim();
@@ -13273,7 +14159,7 @@ var handlePublicTrack = async (req, res) => {
       };
     };
     const sanitizedPrimary = sanitizePublicRepairObj(primaryRepair);
-    const sanitizedAll = allMatchingRepairs.map((rep) => sanitizePublicRepairObj(rep));
+    const sanitizedAll = trackableRepairs.map((rep) => sanitizePublicRepairObj(rep));
     return res.json({
       success: true,
       repair: sanitizedPrimary,
@@ -13290,6 +14176,230 @@ router21.get("/track", handlePublicTrack);
 router21.post("/track", handlePublicTrack);
 router21.get("/public/track", handlePublicTrack);
 router21.post("/public/track", handlePublicTrack);
+var inquiryRateMap = /* @__PURE__ */ new Map();
+var INQUIRY_MAX_PER_WINDOW = 5;
+var INQUIRY_WINDOW_MS = 10 * 60 * 1e3;
+var INQUIRY_DUPLICATE_WINDOW_MS = 60 * 1e3;
+function checkInquiryRateLimit(ip, phone, messageHash) {
+  const now = Date.now();
+  const key = `${ip}_${phone}`;
+  const record = inquiryRateMap.get(key) || { timestamps: [] };
+  record.timestamps = record.timestamps.filter((ts) => now - ts < INQUIRY_WINDOW_MS);
+  if (record.lastHash === messageHash && record.lastSubmitTime && now - record.lastSubmitTime < INQUIRY_DUPLICATE_WINDOW_MS) {
+    return { allowed: false, isDuplicate: true };
+  }
+  if (record.timestamps.length >= INQUIRY_MAX_PER_WINDOW) {
+    return {
+      allowed: false,
+      reason: "Too many inquiries submitted from your connection. Please contact our reception desk directly via phone (+977 9869276668) or WhatsApp."
+    };
+  }
+  record.timestamps.push(now);
+  record.lastHash = messageHash;
+  record.lastSubmitTime = now;
+  inquiryRateMap.set(key, record);
+  return { allowed: true };
+}
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+var INQUIRIES_FILE = path9.join(process.cwd(), "data", "inquiries.json");
+function saveInquiryRecord(inquiry) {
+  try {
+    const dataDir = path9.join(process.cwd(), "data");
+    if (!fs9.existsSync(dataDir)) {
+      fs9.mkdirSync(dataDir, { recursive: true });
+    }
+    let list = [];
+    if (fs9.existsSync(INQUIRIES_FILE)) {
+      try {
+        list = JSON.parse(fs9.readFileSync(INQUIRIES_FILE, "utf8"));
+      } catch {
+        list = [];
+      }
+    }
+    list.unshift(inquiry);
+    if (list.length > 300) list = list.slice(0, 300);
+    fs9.writeFileSync(INQUIRIES_FILE, JSON.stringify(list, null, 2), "utf8");
+  } catch (err) {
+    console.warn("[INQUIRY STORAGE WARN]", err);
+  }
+}
+var handlePublicContact = async (req, res) => {
+  try {
+    const { name, phone, email, subject, message, botTrap, website, companyAddress } = req.body || {};
+    if (botTrap || website || companyAddress) {
+      console.warn("[BOT DETECTED ON CONTACT FORM]");
+      return res.status(400).json({ error: "Invalid submission parameter." });
+    }
+    if (!name || typeof name !== "string" || name.trim().length < 2) {
+      return res.status(400).json({ error: "Please enter your full name (minimum 2 characters)." });
+    }
+    if (!phone || typeof phone !== "string") {
+      return res.status(400).json({ error: "Please enter your contact phone number." });
+    }
+    const cleanPhone = phone.trim().replace(/[^\d+-\s]/g, "").slice(0, 25);
+    const digitsOnly = cleanPhone.replace(/\D/g, "");
+    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+      return res.status(400).json({ error: "Please enter a valid phone number (at least 7 digits)." });
+    }
+    let cleanEmail = "";
+    if (email && typeof email === "string" && email.trim().length > 0) {
+      cleanEmail = email.trim().slice(0, 100);
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        return res.status(400).json({ error: "Please enter a valid email address format (or leave blank)." });
+      }
+    }
+    if (!message || typeof message !== "string" || message.trim().length < 10) {
+      return res.status(400).json({ error: "Please enter a message of at least 10 characters describing your device inquiry." });
+    }
+    const cleanName = name.trim().slice(0, 100);
+    const cleanSubject = typeof subject === "string" && subject.trim().length > 0 ? subject.trim().slice(0, 150) : "General Inquiry";
+    const cleanMessage = message.trim().slice(0, 3e3);
+    const clientIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || "unknown";
+    const messageHash = crypto3.createHash("md5").update(`${cleanPhone}_${cleanSubject}_${cleanMessage}`).digest("hex");
+    const rateCheck = checkInquiryRateLimit(clientIp, cleanPhone, messageHash);
+    if (!rateCheck.allowed) {
+      if (rateCheck.isDuplicate) {
+        return res.json({
+          success: true,
+          message: "Your inquiry has already been received. Our support team will get back to you shortly.",
+          inquiry: {
+            name: cleanName,
+            phone: cleanPhone,
+            email: cleanEmail,
+            subject: cleanSubject,
+            message: cleanMessage,
+            submittedAt: (/* @__PURE__ */ new Date()).toISOString()
+          }
+        });
+      }
+      return res.status(429).json({ error: rateCheck.reason || "Too many submissions. Please wait before submitting again." });
+    }
+    const inquiryId = `inq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const submissionTime = (/* @__PURE__ */ new Date()).toISOString();
+    try {
+      await createNotification({
+        title: `Web Inquiry: ${cleanSubject}`,
+        message: `From ${cleanName} (${cleanPhone}${cleanEmail ? `, ${cleanEmail}` : ""}): "${cleanMessage.slice(0, 150)}${cleanMessage.length > 150 ? "..." : ""}"`,
+        type: "GENERAL",
+        priority: "NORMAL",
+        targetRole: "RECEPTIONIST",
+        metadata: {
+          inquiryId,
+          customerName: cleanName,
+          customerPhone: cleanPhone,
+          customerEmail: cleanEmail,
+          subject: cleanSubject,
+          fullMessage: cleanMessage,
+          source: "CONTACT_PAGE",
+          receivedAt: submissionTime
+        }
+      });
+    } catch (notifErr) {
+      console.warn("[CONTACT NOTIFICATION WARN]", notifErr);
+    }
+    const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@mobiletechnologystation.com.np";
+    const safeEmailSubject = `[MTS Lab Inquiry] ${cleanSubject} - ${cleanName}`.replace(/[\r\n]+/g, " ");
+    const nepalTimestamp = (/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Kathmandu" });
+    const emailText = [
+      `New Customer Inquiry \u2014 MTS Lab`,
+      ``,
+      `Customer Name: ${cleanName}`,
+      `Phone: ${cleanPhone}`,
+      `Email: ${cleanEmail || "Not provided"}`,
+      `Subject: ${cleanSubject}`,
+      ``,
+      `Message:`,
+      `${cleanMessage}`,
+      ``,
+      `Submitted:`,
+      `${nepalTimestamp} (Nepal Time)`
+    ].join("\n");
+    const emailHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+        <div style="border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 20px; color: #0f172a;">New Customer Inquiry \u2014 MTS Lab</h2>
+          <p style="margin: 4px 0 0; font-size: 13px; color: #64748b;">Central Diagnostic & Screen Refurbishment Facility</p>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; width: 130px; font-weight: 600;">Customer Name:</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: bold;">${escapeHtml(cleanName)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Phone Number:</td>
+            <td style="padding: 8px 0; color: #0f172a;"><a href="tel:${escapeHtml(cleanPhone)}" style="color: #059669; text-decoration: none; font-weight: bold;">${escapeHtml(cleanPhone)}</a></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Email Address:</td>
+            <td style="padding: 8px 0; color: #0f172a;">${cleanEmail ? `<a href="mailto:${escapeHtml(cleanEmail)}" style="color: #4f46e5; text-decoration: none;">${escapeHtml(cleanEmail)}</a>` : '<span style="color: #94a3b8;">Not provided</span>'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Inquiry Subject:</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${escapeHtml(cleanSubject)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Submitted Time:</td>
+            <td style="padding: 8px 0; color: #64748b; font-size: 12px;">${nepalTimestamp} (Nepal Time)</td>
+          </tr>
+        </table>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 10px; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Customer Message</h4>
+          <div style="font-size: 14px; line-height: 1.6; color: #1e293b; white-space: pre-wrap;">${escapeHtml(cleanMessage)}</div>
+        </div>
+
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; font-size: 12px; color: #94a3b8;">
+          This customer inquiry was submitted through the official MTS Lab Contact Page at <a href="https://mobiletechnologystation.com.np" style="color: #64748b;">mobiletechnologystation.com.np</a>.
+        </div>
+      </div>
+    `;
+    const emailResult = await sendEmailDetailed({
+      to: SUPPORT_EMAIL,
+      subject: safeEmailSubject,
+      text: emailText,
+      html: emailHtml
+    });
+    saveInquiryRecord({
+      id: inquiryId,
+      name: cleanName,
+      phone: cleanPhone,
+      email: cleanEmail,
+      subject: cleanSubject,
+      message: cleanMessage,
+      submittedAt: submissionTime,
+      emailStatus: emailResult.success ? "sent" : "failed",
+      emailProvider: emailResult.provider,
+      clientIp
+    });
+    if (!emailResult.success) {
+      console.error("[PUBLIC CONTACT EMAIL FAILURE]", emailResult.error);
+      return res.status(502).json({
+        error: "We couldn't submit your inquiry right now. Please try again or contact us directly via WhatsApp or phone."
+      });
+    }
+    return res.json({
+      success: true,
+      message: "Your inquiry has been submitted successfully. Our support team will get back to you.",
+      inquiry: {
+        name: cleanName,
+        phone: cleanPhone,
+        email: cleanEmail,
+        subject: cleanSubject,
+        message: cleanMessage,
+        submittedAt: submissionTime
+      }
+    });
+  } catch (err) {
+    console.error("[PUBLIC CONTACT EXCEPTION]", err);
+    return res.status(500).json({ error: "Failed to submit inquiry. Please call our hotline directly." });
+  }
+};
+router21.post("/contact", handlePublicContact);
+router21.post("/public/contact", handlePublicContact);
 router21.get("/manager/stats", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
   try {
     const { data: repairs } = await supabaseAdmin.from("Repair").select("technicianId, status, priority, estimatedCost, advancePaid, totalPaid");
@@ -13417,10 +14527,10 @@ function createApp() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
   app.use(cookieParser());
-  const uploadsDir = path9.join(process.cwd(), "uploads");
-  if (!fs9.existsSync(uploadsDir)) {
+  const uploadsDir = path10.join(process.cwd(), "uploads");
+  if (!fs10.existsSync(uploadsDir)) {
     try {
-      fs9.mkdirSync(uploadsDir, { recursive: true });
+      fs10.mkdirSync(uploadsDir, { recursive: true });
     } catch (_) {
     }
   }

@@ -178,18 +178,9 @@ async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
       repairData.hasBatteryWarranty === 'true';
 
     if (!isWarrantyActive) {
-      const { data: existing } = await supabaseAdmin
-        .from('BatteryWarranty')
-        .select('id')
-        .eq('repairId', repairData.id);
-
-      if (existing && existing.length > 0) {
-        for (const w of existing) {
-          await supabaseAdmin.from('BatteryWarrantyClaim').delete().eq('warrantyId', w.id);
-          await supabaseAdmin.from('BatteryWarranty').delete().eq('id', w.id);
-          await broadcastServerChange('BatteryWarranty', 'DELETE', w.id);
-        }
-      }
+      // SECURITY & BUSINESS RULE:
+      // Battery Warranty Hub records are independent business records requiring elevated 2FA confirmation to permanently delete.
+      // Modifying or updating a repair record must NEVER automatically delete or purge existing registered battery warranties.
       return;
     }
 
@@ -588,14 +579,90 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'No repair IDs specified.' });
     }
+
+    // 1. Check for any associated Battery Warranty records
+    const { data: linkedWarranties, error: fetchWarError } = await supabaseAdmin
+      .from('BatteryWarranty')
+      .select('id, warrantyNumber, repairNumber, repairId')
+      .in('repairId', ids);
+
+    if (fetchWarError) {
+      console.error('[REPAIRS BULK DELETE] Error querying linked warranties:', fetchWarError);
+    }
+
+    if (linkedWarranties && linkedWarranties.length > 0) {
+      // Safely unlink repairId so that the battery warranty records survive repair deletion
+      const { error: unlinkError } = await supabaseAdmin
+        .from('BatteryWarranty')
+        .update({
+          repairId: null,
+          updatedAt: new Date().toISOString(),
+        })
+        .in('repairId', ids);
+
+      if (unlinkError) {
+        console.error('[REPAIRS BULK DELETE] Failed to unlink warranties:', unlinkError);
+        return res.status(500).json({
+          error: 'Failed to safely unlink associated battery warranty records. Repair bulk deletion aborted to protect warranty data.',
+        });
+      }
+
+      for (const w of linkedWarranties) {
+        await logAudit({
+          userId: req.user!.id,
+          userEmail: req.user!.email,
+          userName: req.user!.name,
+          userRole: req.user!.role,
+          action: 'BATTERY_WARRANTY_UNLINKED_FROM_REPAIR',
+          resource: 'BatteryWarranty',
+          resourceId: w.id,
+          status: 'SUCCESS',
+          details: `Battery Warranty #${w.warrantyNumber} preserved and unlinked from bulk-deleted Repair #${w.repairNumber || w.repairId}`,
+          metadata: JSON.stringify({
+            warrantyId: w.id,
+            warrantyNumber: w.warrantyNumber,
+            repairId: w.repairId,
+            repairNumber: w.repairNumber,
+          }),
+        });
+        await broadcastServerChange('BatteryWarranty', 'UPDATE', w.id);
+      }
+    }
+
+    // 2. Remove dependent child records
     await supabaseAdmin.from('RepairLog').delete().in('repairId', ids);
     await supabaseAdmin.from('TechnicianNote').delete().in('repairId', ids);
     await supabaseAdmin.from('Payment').delete().in('repairId', ids);
+
+    // 3. Delete the repairs
     const { error } = await supabaseAdmin.from('Repair').delete().in('id', ids);
     if (error) {
       return res.status(500).json({ error: 'Failed to bulk delete repairs.' });
     }
-    return res.json({ success: true, message: `Successfully deleted ${ids.length} repair records.` });
+
+    await logAudit({
+      userId: req.user!.id,
+      userEmail: req.user!.email,
+      userName: req.user!.name,
+      userRole: req.user!.role,
+      action: 'REPAIRS_DELETED',
+      resource: 'Repair',
+      status: 'SUCCESS',
+      details: `Bulk deleted ${ids.length} repair records. Any associated battery warranties have been preserved.`,
+      metadata: JSON.stringify({ deletedIds: ids, warrantiesPreserved: linkedWarranties?.length || 0 }),
+    });
+
+    for (const id of ids) {
+      await broadcastServerChange('Repair', 'DELETE', id);
+    }
+
+    return res.json({
+      success: true,
+      message: `Successfully deleted ${ids.length} repair record(s). Associated battery warranties have been preserved.`,
+      warrantiesPreserved: linkedWarranties?.length || 0,
+      deletedIds: ids,
+      count: ids.length,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to bulk delete repairs.' });
   }
@@ -2305,18 +2372,88 @@ router.post('/:id/re-problem', authenticate, async (req: Request, res: Response)
 router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+
+    // 1. Check for any associated Battery Warranty records
+    const { data: linkedWarranties, error: fetchWarError } = await supabaseAdmin
+      .from('BatteryWarranty')
+      .select('id, warrantyNumber, repairNumber, repairId')
+      .eq('repairId', id);
+
+    if (fetchWarError) {
+      console.error('[SINGLE REPAIR DELETE] Error querying linked warranties:', fetchWarError);
+    }
+
+    if (linkedWarranties && linkedWarranties.length > 0) {
+      // Safely unlink repairId so that the battery warranty record survives repair deletion
+      const { error: unlinkError } = await supabaseAdmin
+        .from('BatteryWarranty')
+        .update({
+          repairId: null,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq('repairId', id);
+
+      if (unlinkError) {
+        console.error('[SINGLE REPAIR DELETE] Failed to unlink warranty:', unlinkError);
+        return res.status(500).json({
+          error: 'Failed to safely unlink associated battery warranty record. Repair deletion aborted to protect warranty data.',
+        });
+      }
+
+      for (const w of linkedWarranties) {
+        await logAudit({
+          userId: req.user!.id,
+          userEmail: req.user!.email,
+          userName: req.user!.name,
+          userRole: req.user!.role,
+          action: 'BATTERY_WARRANTY_UNLINKED_FROM_REPAIR',
+          resource: 'BatteryWarranty',
+          resourceId: w.id,
+          status: 'SUCCESS',
+          details: `Battery Warranty #${w.warrantyNumber} preserved and unlinked from deleted Repair #${w.repairNumber || id}`,
+          metadata: JSON.stringify({
+            warrantyId: w.id,
+            warrantyNumber: w.warrantyNumber,
+            repairId: id,
+            repairNumber: w.repairNumber,
+          }),
+        });
+        await broadcastServerChange('BatteryWarranty', 'UPDATE', w.id);
+      }
+    }
+
+    // 2. Remove dependent child records
     await supabaseAdmin.from('RepairLog').delete().eq('repairId', id);
     await supabaseAdmin.from('TechnicianNote').delete().eq('repairId', id);
     await supabaseAdmin.from('Payment').delete().eq('repairId', id);
+
+    // 3. Delete the repair record
     const { error } = await supabaseAdmin.from('Repair').delete().eq('id', id);
 
     if (error) {
       return res.status(500).json({ error: 'Failed to delete repair.' });
     }
 
+    await logAudit({
+      userId: req.user!.id,
+      userEmail: req.user!.email,
+      userName: req.user!.name,
+      userRole: req.user!.role,
+      action: 'REPAIR_DELETED',
+      resource: 'Repair',
+      resourceId: id,
+      status: 'SUCCESS',
+      details: `Repair record #${id} deleted by ${req.user!.name}. Any associated battery warranties have been preserved.`,
+      metadata: JSON.stringify({ repairId: id, warrantiesPreserved: linkedWarranties?.length || 0 }),
+    });
+
     await broadcastServerChange('Repair', 'DELETE', id);
 
-    return res.json({ success: true, message: 'Repair deleted successfully.' });
+    return res.json({
+      success: true,
+      message: 'Repair deleted successfully. Associated battery warranties have been preserved.',
+      warrantiesPreserved: linkedWarranties?.length || 0,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to delete repair record.' });
   }

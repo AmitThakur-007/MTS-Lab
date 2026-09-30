@@ -1207,14 +1207,21 @@ export default function BatteryWarrantyManagement() {
                               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                               {item.warrantyNumber}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => item.repairId && navigate(`/dashboard/repairs/${item.repairId}`)}
-                              className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold text-left mt-0.5 hover:underline cursor-pointer inline-flex items-center gap-1"
-                            >
-                              Job #{item.repairNumber}
-                              <ExternalLink className="w-2.5 h-2.5" />
-                            </button>
+                            {item.repairId ? (
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/dashboard/repairs/${item.repairId}`)}
+                                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold text-left mt-0.5 hover:underline cursor-pointer inline-flex items-center gap-1"
+                              >
+                                Job #{item.repairNumber}
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-slate-500 font-medium text-left mt-0.5 inline-flex items-center gap-1" title="Original repair was deleted; warranty preserved">
+                                Job #{item.repairNumber || 'N/A'}
+                                <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.2 rounded font-semibold border border-amber-200">Preserved</span>
+                              </span>
+                            )}
                           </div>
                         </td>
 
@@ -1424,7 +1431,23 @@ export default function BatteryWarrantyManagement() {
                   </div>
                   <div>
                     <span className="text-slate-400 text-[11px] block">Repair Job #</span>
-                    <span className="font-bold text-blue-600 font-mono">#{selectedWarranty.repairNumber}</span>
+                    {selectedWarranty.repairId ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/dashboard/repairs/${selectedWarranty.repairId}`)}
+                        className="font-bold text-blue-600 font-mono hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        #{selectedWarranty.repairNumber}
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
+                    ) : (
+                      <div className="font-bold text-slate-800 font-mono flex items-center gap-1.5 flex-wrap">
+                        #{selectedWarranty.repairNumber || 'N/A'}
+                        <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded font-sans font-semibold border border-amber-200">
+                          Original Repair: Deleted / Preserved
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <span className="text-slate-400 text-[11px] block">Device / Model</span>
@@ -1568,7 +1591,7 @@ export default function BatteryWarrantyManagement() {
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Customer & Device</span>
                   <div className="font-bold text-slate-900 mt-0.5">{selectedWarranty.customerName} ({selectedWarranty.customerPhone})</div>
-                  <div className="text-slate-600">{(selectedWarranty.deviceBrand || '').toUpperCase()} {selectedWarranty.deviceModel} • Job #{selectedWarranty.repairNumber}</div>
+                  <div className="text-slate-600">{(selectedWarranty.deviceBrand || '').toUpperCase()} {selectedWarranty.deviceModel} • Job #{selectedWarranty.repairNumber || 'N/A'}{!selectedWarranty.repairId && ' (Preserved)'}</div>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Expiry Status</span>

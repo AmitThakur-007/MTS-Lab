@@ -6,7 +6,7 @@ import { api } from '@/services/api';
 export interface BatteryWarrantyData {
   id: string;
   warrantyNumber: string;
-  repairId: string;
+  repairId?: string | null;
   repairNumber: string;
   customerId?: string | null;
   customerName: string;

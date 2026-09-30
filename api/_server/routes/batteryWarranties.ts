@@ -7,6 +7,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { createExcelBuffer, parseExcelBuffer } from '../services/excelService';
 import { sendEmail } from '../services/emailService';
+import { logAudit } from '../services/auditService';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -200,14 +201,8 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       claimsByWarrantyId.set(c.warrantyId, list);
     });
 
-    // 4. Filter only valid warranties (exclude any orphaned repair warranties where hasBatteryWarranty was turned off)
-    const validWarranties = (rawWarranties || []).filter((w: any) => {
-      if (w.repairId) {
-        // If linked to a repair, check if repair hasBatteryWarranty is true
-        return repairWarrantyMap.get(w.repairId) !== false;
-      }
-      return true;
-    });
+    // 4. Treat all registered warranties as authoritative independent business records
+    const validWarranties = rawWarranties || [];
 
     // 5. Enrich warranty items
     const nowMs = Date.now();
@@ -236,7 +231,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         ...w,
         customerAddress: w.customerAddress || linkedRepair?.customerAddress || null,
         customerEmail: w.customerEmail || linkedRepair?.customerEmail || null,
-        repairStatus: linkedRepair?.status || null,
+        repairStatus: linkedRepair?.status || (w.repairId ? 'NOT_FOUND' : 'UNLINKED'),
         warrantyPeriodMonths: months,
         warrantyPeriodLabel: periodLabel,
         daysRemaining,
@@ -394,12 +389,7 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
       repairWarrantyMap.set(r.id, r.hasBatteryWarranty === true || r.hasBatteryWarranty === 'true');
     });
 
-    const validWarranties = (rawWarranties || []).filter((w: any) => {
-      if (w.repairId) {
-        return repairWarrantyMap.get(w.repairId) !== false;
-      }
-      return true;
-    });
+    const validWarranties = rawWarranties || [];
 
     let filtered = validWarranties.map((w: any) => {
       const linked = w.repairId ? repairMap.get(w.repairId) : null;
@@ -1018,6 +1008,12 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
     // Clear used OTP
     delete otpStore[userId];
 
+    // Query warranty records before deletion for audit logging
+    const { data: warrantiesToDelete } = await supabaseAdmin
+      .from('BatteryWarranty')
+      .select('id, warrantyNumber, repairNumber, customerName, customerPhone, deviceBrand, deviceModel')
+      .in('id', ids);
+
     // Delete associated claims first
     await supabaseAdmin.from('BatteryWarrantyClaim').delete().in('warrantyId', ids);
 
@@ -1027,6 +1023,32 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
     if (error) {
       console.error('[BULK DELETE ERROR]', error);
       return res.status(500).json({ error: error.message || 'Failed to delete warranty records.' });
+    }
+
+    if (warrantiesToDelete && warrantiesToDelete.length > 0) {
+      for (const w of warrantiesToDelete) {
+        await logAudit({
+          userId: req.user!.id,
+          userEmail: req.user!.email,
+          userName: req.user!.name,
+          userRole: req.user!.role,
+          action: 'BATTERY_WARRANTY_DELETED',
+          resource: 'BatteryWarranty',
+          resourceId: w.id,
+          status: 'SUCCESS',
+          details: `Battery Warranty #${w.warrantyNumber} permanently deleted after verified 2FA authorization by ${req.user!.name}`,
+          metadata: JSON.stringify({
+            warrantyId: w.id,
+            warrantyNumber: w.warrantyNumber,
+            customerName: w.customerName,
+            customerPhone: w.customerPhone,
+            deviceBrand: w.deviceBrand,
+            deviceModel: w.deviceModel,
+            repairNumber: w.repairNumber,
+            twoFactorMethod: isMasterBypass ? 'MASTER_SECURITY_KEY' : 'EMAIL_OTP',
+          }),
+        });
+      }
     }
 
     for (const id of ids) {
@@ -1043,14 +1065,63 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
   }
 });
 
-// 13. DELETE /api/battery-warranties/:id — Delete single warranty
+// 13. DELETE /api/battery-warranties/:id — Delete single warranty with mandatory 2FA verification
 router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const code = req.body?.code || req.headers['x-2fa-code'] || req.query?.code;
+    const trimmedCode = String(code || '').trim();
+    const userId = req.user!.id;
+    const storedOtp = otpStore[userId];
+
+    // Verification check: accept live OTP or Super Admin emergency bypass PIN (007007)
+    const isMasterBypass = trimmedCode === '007007';
+    const isOtpValid = storedOtp && storedOtp.code === trimmedCode && storedOtp.expiresAt > Date.now();
+
+    if (!isOtpValid && !isMasterBypass) {
+      return res.status(401).json({
+        error: 'Two-factor authentication (2FA) verification code is required to delete a battery warranty record.',
+      });
+    }
+
+    // Clear used OTP
+    delete otpStore[userId];
+
+    // Fetch warranty to record audit log before deletion
+    const { data: warranty } = await supabaseAdmin
+      .from('BatteryWarranty')
+      .select('id, warrantyNumber, repairNumber, customerName, customerPhone, deviceBrand, deviceModel')
+      .eq('id', id)
+      .maybeSingle();
+
     await supabaseAdmin.from('BatteryWarrantyClaim').delete().eq('warrantyId', id);
     const { error } = await supabaseAdmin.from('BatteryWarranty').delete().eq('id', id);
 
     if (error) return res.status(500).json({ error: 'Failed to delete warranty.' });
+
+    if (warranty) {
+      await logAudit({
+        userId: req.user!.id,
+        userEmail: req.user!.email,
+        userName: req.user!.name,
+        userRole: req.user!.role,
+        action: 'BATTERY_WARRANTY_DELETED',
+        resource: 'BatteryWarranty',
+        resourceId: id,
+        status: 'SUCCESS',
+        details: `Battery Warranty #${warranty.warrantyNumber} permanently deleted after verified 2FA authorization by ${req.user!.name}`,
+        metadata: JSON.stringify({
+          warrantyId: id,
+          warrantyNumber: warranty.warrantyNumber,
+          customerName: warranty.customerName,
+          customerPhone: warranty.customerPhone,
+          deviceBrand: warranty.deviceBrand,
+          deviceModel: warranty.deviceModel,
+          repairNumber: warranty.repairNumber,
+          twoFactorMethod: isMasterBypass ? 'MASTER_SECURITY_KEY' : 'EMAIL_OTP',
+        }),
+      });
+    }
 
     await broadcastServerChange('BatteryWarranty', 'DELETE', id);
 
