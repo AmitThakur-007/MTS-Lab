@@ -1,10 +1,9 @@
-import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import path from 'path';
 
 const BASE_URL = 'http://localhost:3000/api';
-const JWT_SECRET = process.env.JWT_SECRET || 'mts-lab-super-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'mts-lab-super-secret-key-2026';
 
 async function runTests() {
   console.log('=== STARTING MTS LAB SLIDESHOW CMS & IMAGE UPLOAD VERIFICATION ===\n');
@@ -22,28 +21,16 @@ async function runTests() {
     }
   }
 
-  const prisma = new PrismaClient();
-
   try {
     // 1. Generate Auth Tokens
     console.log('--- 1. Authenticating Admin and Super Admin ---');
-    let superAdmin = await prisma.user.findFirst({
-      where: { role: 'SUPER_ADMIN', deletedAt: null }
-    });
-
-    if (!superAdmin) {
-      superAdmin = await prisma.user.create({
-        data: {
-          email: 'admin_slideshow_test@mtslab.com',
-          name: 'Slideshow Test Admin',
-          role: 'SUPER_ADMIN',
-          password: 'testpassword123'
-        }
-      });
-    }
-
     const adminToken = jwt.sign(
-      { id: superAdmin.id, email: superAdmin.email, role: superAdmin.role, name: superAdmin.name },
+      {
+        id: 'bd2bd9a4-f6a6-4168-871f-7ed8f9731591',
+        email: 'amitsharma64017900@gmail.com',
+        role: 'SUPER_ADMIN',
+        name: 'Amit Thakur'
+      },
       JWT_SECRET,
       { expiresIn: '1h' }
     );
@@ -203,8 +190,6 @@ async function runTests() {
   } catch (err) {
     console.error('Test execution error:', err);
     process.exit(1);
-  } finally {
-    await prisma.$disconnect();
   }
 }
 

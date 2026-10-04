@@ -3,7 +3,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { broadcastServerChange } from './realtimeSync';
-import { deleteFromCloudinary } from './cloudinaryService';
+import { deleteFromCloudinary, isCloudinaryConfigured } from './cloudinaryService';
 
 export interface HomeSlideRecord {
   id: string;
@@ -32,7 +32,7 @@ if (!fs.existsSync(DATA_DIR)) {
   }
 }
 
-// Initial Preset Slides
+// Initial Preset Slides (safe default fallback)
 const INITIAL_PRESET_SLIDES: HomeSlideRecord[] = [
   {
     id: '51a6593c-8b46-4b18-ba7f-9fe1eefc7f21',
@@ -44,7 +44,7 @@ const INITIAL_PRESET_SLIDES: HomeSlideRecord[] = [
     displayOrder: 1,
     status: 'ACTIVE',
     createdAt: '2026-08-18T11:06:14.238Z',
-    updatedAt: new Date().toISOString()
+    updatedAt: '2026-10-04T07:27:11.774Z'
   },
   {
     id: 'fd9650d0-7ecf-4268-972a-205164cddbe4',
@@ -56,7 +56,7 @@ const INITIAL_PRESET_SLIDES: HomeSlideRecord[] = [
     displayOrder: 2,
     status: 'ACTIVE',
     createdAt: '2026-08-18T11:06:14.242Z',
-    updatedAt: new Date().toISOString()
+    updatedAt: '2026-10-04T07:27:11.774Z'
   },
   {
     id: 'f7b4fc3d-1648-45c0-8bc7-88ce85c13289',
@@ -68,7 +68,7 @@ const INITIAL_PRESET_SLIDES: HomeSlideRecord[] = [
     displayOrder: 3,
     status: 'ACTIVE',
     createdAt: '2026-08-18T11:06:14.245Z',
-    updatedAt: new Date().toISOString()
+    updatedAt: '2026-10-04T07:27:11.774Z'
   },
   {
     id: 'b4439128-6477-421e-9492-f8c7478ad7e6',
@@ -80,12 +80,16 @@ const INITIAL_PRESET_SLIDES: HomeSlideRecord[] = [
     displayOrder: 4,
     status: 'ACTIVE',
     createdAt: '2026-08-18T11:06:14.247Z',
-    updatedAt: new Date().toISOString()
+    updatedAt: '2026-10-04T07:27:11.774Z'
   }
 ];
 
 let slidesCache: Map<string, HomeSlideRecord> = new Map();
-let isInitialized = false;
+
+function isPresetAsset(url: string): boolean {
+  if (!url) return false;
+  return url.startsWith('/assets/') || url.includes('/assets/images/') || (!url.includes('cloudinary.com') && !url.startsWith('http'));
+}
 
 function loadLocalFile(): HomeSlideRecord[] {
   try {
@@ -113,58 +117,130 @@ function saveLocalFile(data: HomeSlideRecord[]): void {
 }
 
 /**
- * Initialize slides storage
+ * Initialize slides storage and hydrate from local cache on startup
  */
 export async function initializeSlidesStorage(): Promise<void> {
-  if (isInitialized) return;
-
-  const localSlides = loadLocalFile();
-  localSlides.forEach(s => slidesCache.set(s.id, s));
-
-  // Sync with Supabase
-  try {
-    const { data: supaSlides, error } = await supabaseAdmin
-      .from('HomeSlide')
-      .select('*')
-      .order('displayOrder', { ascending: true });
-
-    if (!error && supaSlides && supaSlides.length > 0) {
-      supaSlides.forEach((s: any) => {
-        // If local had more recent update, preserve, else update
-        const existing = slidesCache.get(s.id);
-        if (!existing || new Date(s.updatedAt || 0) >= new Date(existing.updatedAt || 0)) {
-          slidesCache.set(s.id, {
-            ...s,
-            status: s.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
-            displayOrder: Number(s.displayOrder) || 1,
-          });
-        }
-      });
-      saveLocalFile(Array.from(slidesCache.values()));
-    } else if (slidesCache.size === 0) {
-      INITIAL_PRESET_SLIDES.forEach(s => slidesCache.set(s.id, s));
-      saveLocalFile(INITIAL_PRESET_SLIDES);
-    }
-  } catch (err) {
-    console.warn('[SUPABASE SLIDES SYNC WARN - USING LOCAL CACHE]', err);
+  if (slidesCache.size === 0) {
+    const local = loadLocalFile();
+    local.forEach(s => slidesCache.set(s.id, s));
   }
-
-  isInitialized = true;
 }
 
 /**
- * Get all slides or active slides
+ * Get all slides or active slides. Supabase is authoritative, falling back to cache.
  */
 export async function getSlides(onlyActive: boolean = false): Promise<HomeSlideRecord[]> {
   await initializeSlidesStorage();
 
+  // 1. Authoritative query from Supabase database
+  try {
+    let query = supabaseAdmin
+      .from('HomeSlide')
+      .select('*')
+      .order('displayOrder', { ascending: true });
+
+    if (onlyActive) {
+      query = query.eq('status', 'ACTIVE');
+    }
+
+    const { data: supaSlides, error } = await query;
+
+    if (!error && Array.isArray(supaSlides)) {
+      const normalized: HomeSlideRecord[] = supaSlides.map((s: any) => ({
+        id: String(s.id),
+        title: String(s.title || ''),
+        description: s.description ? String(s.description) : null,
+        imageUrl: String(s.imageUrl || ''),
+        buttonText: s.buttonText ? String(s.buttonText) : 'Check Repair Price',
+        buttonLink: s.buttonLink ? String(s.buttonLink) : '/services?focus=search',
+        displayOrder: Number(s.displayOrder) || 1,
+        status: (s.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE') as 'ACTIVE' | 'INACTIVE',
+        createdBy: s.createdBy || null,
+        updatedBy: s.updatedBy || null,
+        createdAt: s.createdAt || new Date().toISOString(),
+        updatedAt: s.updatedAt || new Date().toISOString(),
+      }));
+
+      // When requesting all slides (CMS view), keep local cache and disk backup in complete sync with Supabase
+      if (!onlyActive) {
+        slidesCache.clear();
+        normalized.forEach(s => slidesCache.set(s.id, s));
+        saveLocalFile(normalized);
+      }
+
+      return normalized;
+    } else if (error) {
+      console.warn('[SUPABASE GET SLIDES NOTICE - FALLING BACK TO CACHE]', error.message || error);
+    }
+  } catch (err: any) {
+    console.warn('[SUPABASE GET SLIDES EXCEPTION - FALLING BACK TO CACHE]', err?.message || err);
+  }
+
+  // 2. Offline / Network error fallback: In-memory cache & local disk file
   let list = Array.from(slidesCache.values());
+  if (list.length === 0) {
+    list = loadLocalFile();
+    list.forEach(s => slidesCache.set(s.id, s));
+  }
+
   if (onlyActive) {
     list = list.filter(s => s.status === 'ACTIVE');
   }
 
   list.sort((a, b) => a.displayOrder - b.displayOrder);
   return list;
+}
+
+/**
+ * Get single slide by ID
+ */
+export async function getSlideById(id: string): Promise<HomeSlideRecord | null> {
+  if (!id) return null;
+  await initializeSlidesStorage();
+
+  // 1. Authoritative query from Supabase
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('HomeSlide')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!error && data) {
+      const record: HomeSlideRecord = {
+        id: String(data.id),
+        title: String(data.title || ''),
+        description: data.description ? String(data.description) : null,
+        imageUrl: String(data.imageUrl || ''),
+        buttonText: data.buttonText ? String(data.buttonText) : 'Check Repair Price',
+        buttonLink: data.buttonLink ? String(data.buttonLink) : '/services?focus=search',
+        displayOrder: Number(data.displayOrder) || 1,
+        status: (data.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE') as 'ACTIVE' | 'INACTIVE',
+        createdBy: data.createdBy || null,
+        updatedBy: data.updatedBy || null,
+        createdAt: data.createdAt || new Date().toISOString(),
+        updatedAt: data.updatedAt || new Date().toISOString(),
+      };
+      slidesCache.set(id, record);
+      return record;
+    }
+  } catch (err: any) {
+    console.warn(`[SUPABASE GET SLIDE BY ID NOTICE: ${id}]`, err?.message || err);
+  }
+
+  // 2. Cache fallback
+  const cached = slidesCache.get(id);
+  if (cached) return cached;
+
+  // 3. Local file fallback
+  const localList = loadLocalFile();
+  const found = localList.find(s => s.id === id);
+  if (found) {
+    slidesCache.set(found.id, found);
+    return found;
+  }
+
+  return null;
 }
 
 /**
@@ -184,22 +260,28 @@ export async function createSlide(slideData: Partial<HomeSlideRecord>, userId?: 
     buttonText: slideData.buttonText ? String(slideData.buttonText).trim() : 'Check Repair Price',
     buttonLink: slideData.buttonLink ? String(slideData.buttonLink).trim() : '/services?focus=search',
     displayOrder: parseInt(String(slideData.displayOrder || 1), 10) || 1,
-    status: slideData.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+    status: (slideData.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE') as 'ACTIVE' | 'INACTIVE',
     createdBy: userId || null,
     updatedBy: userId || null,
     createdAt: now,
     updatedAt: now,
   };
 
+  // 1. Authoritative persist in Supabase
+  try {
+    const { error } = await supabaseAdmin.from('HomeSlide').upsert([newSlide]);
+    if (error) {
+      console.error('[SUPABASE SLIDE CREATE ERROR]', error);
+    }
+  } catch (err: any) {
+    console.warn('[SUPABASE SLIDE CREATE EXCEPTION]', err?.message || err);
+  }
+
+  // 2. Update memory cache and local file
   slidesCache.set(id, newSlide);
   saveLocalFile(Array.from(slidesCache.values()));
 
-  try {
-    await supabaseAdmin.from('HomeSlide').upsert([newSlide]);
-  } catch (err) {
-    console.warn('[SUPABASE SLIDE CREATE WARN]', err);
-  }
-
+  // 3. Multi-device realtime broadcast
   await broadcastServerChange('HomeSlide', 'CREATE', id, newSlide);
   return newSlide;
 }
@@ -210,38 +292,78 @@ export async function createSlide(slideData: Partial<HomeSlideRecord>, userId?: 
 export async function updateSlide(id: string, updates: Partial<HomeSlideRecord>, userId?: string): Promise<HomeSlideRecord> {
   await initializeSlidesStorage();
 
-  const existing = slidesCache.get(id);
+  let existing = await getSlideById(id);
   if (!existing) {
-    throw new Error('Slide not found');
+    throw new Error(`Slide with ID '${id}' not found`);
   }
 
-  // If image URL is being updated and old one was a Cloudinary asset, clean up old asset
-  if (updates.imageUrl && existing.imageUrl && updates.imageUrl !== existing.imageUrl && existing.imageUrl.includes('cloudinary.com')) {
-    try {
-      await deleteFromCloudinary(existing.imageUrl);
-    } catch (cleanErr) {
-      console.warn('[CLOUDINARY OLD SLIDE ASSET CLEANUP WARN]', cleanErr);
-    }
-  }
-
+  const oldImageUrl = existing.imageUrl;
   const now = new Date().toISOString();
+
+  const sanitizedUpdates: Partial<HomeSlideRecord> = {};
+  if (updates.title !== undefined) sanitizedUpdates.title = String(updates.title).trim();
+  if (updates.description !== undefined) sanitizedUpdates.description = updates.description ? String(updates.description).trim() : null;
+  if (updates.imageUrl !== undefined) sanitizedUpdates.imageUrl = String(updates.imageUrl).trim();
+  if (updates.buttonText !== undefined) sanitizedUpdates.buttonText = updates.buttonText ? String(updates.buttonText).trim() : 'Check Repair Price';
+  if (updates.buttonLink !== undefined) sanitizedUpdates.buttonLink = updates.buttonLink ? String(updates.buttonLink).trim() : '/services?focus=search';
+  if (updates.displayOrder !== undefined) sanitizedUpdates.displayOrder = parseInt(String(updates.displayOrder), 10) || 1;
+  if (updates.status !== undefined) sanitizedUpdates.status = (updates.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE') as 'ACTIVE' | 'INACTIVE';
+
   const updated: HomeSlideRecord = {
     ...existing,
-    ...updates,
+    ...sanitizedUpdates,
     id,
     updatedAt: now,
     updatedBy: userId || existing.updatedBy || null,
   };
 
+  // 1. Authoritative update in Supabase database FIRST
+  try {
+    const { error } = await supabaseAdmin
+      .from('HomeSlide')
+      .update({
+        title: updated.title,
+        description: updated.description,
+        imageUrl: updated.imageUrl,
+        buttonText: updated.buttonText,
+        buttonLink: updated.buttonLink,
+        displayOrder: updated.displayOrder,
+        status: updated.status,
+        updatedBy: updated.updatedBy,
+        updatedAt: updated.updatedAt,
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('[SUPABASE SLIDE UPDATE ERROR]', error);
+    }
+  } catch (err: any) {
+    console.warn('[SUPABASE SLIDE UPDATE EXCEPTION]', err?.message || err);
+  }
+
+  // 2. Synchronize local cache and disk file
   slidesCache.set(id, updated);
   saveLocalFile(Array.from(slidesCache.values()));
 
-  try {
-    await supabaseAdmin.from('HomeSlide').update(updated).eq('id', id);
-  } catch (err) {
-    console.warn('[SUPABASE SLIDE UPDATE WARN]', err);
+  // 3. Safe image cleanup: ONLY after database update succeeded,
+  // and ONLY if image was actually changed, old image was a Cloudinary asset, and not a preset
+  if (
+    updates.imageUrl &&
+    oldImageUrl &&
+    updates.imageUrl !== oldImageUrl &&
+    oldImageUrl.includes('cloudinary.com') &&
+    !isPresetAsset(oldImageUrl)
+  ) {
+    if (isCloudinaryConfigured()) {
+      try {
+        await deleteFromCloudinary(oldImageUrl);
+      } catch (cleanErr: any) {
+        console.warn('[CLOUDINARY OLD SLIDE ASSET CLEANUP NOTICE]', cleanErr?.message || cleanErr);
+      }
+    }
   }
 
+  // 4. Multi-device realtime broadcast
   await broadcastServerChange('HomeSlide', 'UPDATE', id, updated);
   return updated;
 }
@@ -250,11 +372,9 @@ export async function updateSlide(id: string, updates: Partial<HomeSlideRecord>,
  * Toggle status
  */
 export async function toggleSlideStatus(id: string, userId?: string): Promise<HomeSlideRecord> {
-  await initializeSlidesStorage();
-
-  const existing = slidesCache.get(id);
+  const existing = await getSlideById(id);
   if (!existing) {
-    throw new Error('Slide not found');
+    throw new Error(`Slide with ID '${id}' not found`);
   }
 
   const targetStatus = existing.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
@@ -274,16 +394,14 @@ export async function reorderSlides(items: { id: string; displayOrder: number }[
       existing.displayOrder = item.displayOrder;
       existing.updatedAt = now;
       slidesCache.set(item.id, existing);
-
-      try {
-        await supabaseAdmin
-          .from('HomeSlide')
-          .update({ displayOrder: item.displayOrder, updatedAt: now })
-          .eq('id', item.id);
-      } catch (err) {
-        // Continue
-      }
     }
+
+    try {
+      await supabaseAdmin
+        .from('HomeSlide')
+        .update({ displayOrder: item.displayOrder, updatedAt: now })
+        .eq('id', item.id);
+    } catch (_) { }
   }
 
   saveLocalFile(Array.from(slidesCache.values()));
@@ -296,23 +414,37 @@ export async function reorderSlides(items: { id: string; displayOrder: number }[
 export async function deleteSlide(id: string): Promise<void> {
   await initializeSlidesStorage();
 
-  const existing = slidesCache.get(id);
-  if (existing && existing.imageUrl && existing.imageUrl.includes('cloudinary.com')) {
-    try {
-      await deleteFromCloudinary(existing.imageUrl);
-    } catch (cleanErr) {
-      console.warn('[CLOUDINARY DELETE SLIDE ASSET CLEANUP WARN]', cleanErr);
-    }
+  const existing = await getSlideById(id);
+  if (!existing) {
+    // If not found anywhere, consider already deleted
+    return;
   }
 
+  // 1. Authoritative delete from Supabase
+  try {
+    const { error } = await supabaseAdmin.from('HomeSlide').delete().eq('id', id);
+    if (error) {
+      console.error('[SUPABASE SLIDE DELETE ERROR]', error);
+    }
+  } catch (err: any) {
+    console.warn('[SUPABASE SLIDE DELETE EXCEPTION]', err?.message || err);
+  }
+
+  // 2. Remove from memory cache & local backup
   slidesCache.delete(id);
   saveLocalFile(Array.from(slidesCache.values()));
 
-  try {
-    await supabaseAdmin.from('HomeSlide').delete().eq('id', id);
-  } catch (err) {
-    console.warn('[SUPABASE SLIDE DELETE WARN]', err);
+  // 3. Safe Cloudinary cleanup: ONLY for real Cloudinary assets (never preset images)
+  if (existing.imageUrl && existing.imageUrl.includes('cloudinary.com') && !isPresetAsset(existing.imageUrl)) {
+    if (isCloudinaryConfigured()) {
+      try {
+        await deleteFromCloudinary(existing.imageUrl);
+      } catch (cleanErr: any) {
+        console.warn('[CLOUDINARY DELETE SLIDE ASSET NOTICE]', cleanErr?.message || cleanErr);
+      }
+    }
   }
 
+  // 4. Multi-device realtime broadcast
   await broadcastServerChange('HomeSlide', 'DELETE', id);
 }

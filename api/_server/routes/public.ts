@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
-import { getSlides } from '../services/slidesStorage';
+import { getSlides, getSlideById } from '../services/slidesStorage';
 import { filterPubliclyTrackableRepairs } from '../services/trackingExpiration';
 import { createNotification } from '../services/notificationStorage';
 import { sendEmail, sendEmailDetailed } from '../services/emailService';
@@ -29,6 +29,27 @@ const handlePublicSlides = async (req: Request, res: Response) => {
 
 router.get('/slides', handlePublicSlides);
 router.get('/home-slides', handlePublicSlides);
+
+const handlePublicSlideById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'Valid slide ID is required.' });
+    }
+    const slide = await getSlideById(id);
+    if (!slide) {
+      return res.status(404).json({ error: `Slide with ID '${id}' not found.` });
+    }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    return res.json(slide);
+  } catch (err: any) {
+    console.error('[PUBLIC SLIDE BY ID EXCEPTION]', err);
+    return res.status(500).json({ error: 'Failed to retrieve slide.' });
+  }
+};
+
+router.get('/slides/:id', handlePublicSlideById);
+router.get('/home-slides/:id', handlePublicSlideById);
 
 // Helper functions for phone verification & IDOR prevention
 function normalizePhoneDigits(phone?: string | null): string {

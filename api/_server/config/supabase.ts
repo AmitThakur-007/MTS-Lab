@@ -138,17 +138,15 @@ function getCloudinaryCredentials() {
   return { cloudName, apiKey, apiSecret, cldUrl };
 }
 
-const cldCreds = getCloudinaryCredentials();
-
 export const config = {
   supabaseUrl: SUPABASE_URL,
   supabaseAnonKey: SUPABASE_ANON_KEY,
   jwtSecret: process.env.JWT_SECRET || 'mts-lab-super-secret-key-2026',
   refreshSecret: process.env.REFRESH_SECRET || 'mts-lab-refresh-secret-key-2026',
   appUrl: process.env.APP_URL || 'http://localhost:3000',
-  cloudinaryCloudName: cldCreds.cloudName,
-  cloudinaryApiKey: cldCreds.apiKey,
-  cloudinaryApiSecret: cldCreds.apiSecret,
-  cloudinaryUrl: cldCreds.cldUrl,
+  get cloudinaryCloudName() { return getCloudinaryCredentials().cloudName; },
+  get cloudinaryApiKey() { return getCloudinaryCredentials().apiKey; },
+  get cloudinaryApiSecret() { return getCloudinaryCredentials().apiSecret; },
+  get cloudinaryUrl() { return getCloudinaryCredentials().cldUrl; },
   getCloudinaryCredentials,
 };

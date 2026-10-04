@@ -179,6 +179,7 @@ export default function SlideshowManagement() {
       // Preferred fast method: Multipart FormData
       const uploadFormData = new FormData();
       uploadFormData.append('image', file);
+      uploadFormData.append('file', file);
 
       try {
         const res = await api.post('/admin/slides/upload-image', uploadFormData);
@@ -198,7 +199,7 @@ export default function SlideshowManagement() {
       reader.onload = async () => {
         try {
           const base64Image = reader.result as string;
-          const res = await api.post('/admin/slides/upload-image', { base64Image });
+          const res = await api.post('/admin/slides/upload-image', { base64Image, image: base64Image });
           if (res && res.url) {
             setFormData(prev => ({ ...prev, imageUrl: res.url }));
             toast.success('Slide image uploaded successfully!');
@@ -207,7 +208,7 @@ export default function SlideshowManagement() {
           }
         } catch (upErr: any) {
           console.error('[SLIDE IMAGE UPLOAD ERROR]', upErr);
-          const msg = upErr?.message || upErr?.error || 'Upload failed. Please try again.';
+          const msg = upErr?.response?.data?.error || upErr?.message || upErr?.error || 'Upload failed. Please try again.';
           toast.error(msg);
         } finally {
           setUploadingImage(false);
@@ -240,13 +241,16 @@ export default function SlideshowManagement() {
 
     try {
       setSubmitting(true);
-      await api.post('/admin/slides', formData);
+      const created = await api.post('/admin/slides', formData);
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: { table: 'HomeSlide' } }));
       toast.success('Hero slide created successfully');
+      if (created && created.id) {
+        setSlides(prev => [...prev.filter(s => s.id !== created.id), created].sort((a, b) => a.displayOrder - b.displayOrder));
+      }
       setIsCreateOpen(false);
       fetchSlides();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to create slide');
+      toast.error(err?.response?.data?.error || err?.message || 'Failed to create slide');
     } finally {
       setSubmitting(false);
     }
@@ -266,13 +270,16 @@ export default function SlideshowManagement() {
 
     try {
       setSubmitting(true);
-      await api.put(`/admin/slides/${selectedSlide.id}`, formData);
+      const updated = await api.put(`/admin/slides/${selectedSlide.id}`, formData);
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: { table: 'HomeSlide' } }));
       toast.success('Hero slide updated successfully');
+      if (updated && updated.id) {
+        setSlides(prev => prev.map(s => s.id === selectedSlide.id ? updated : s).sort((a, b) => a.displayOrder - b.displayOrder));
+      }
       setIsEditOpen(false);
       fetchSlides();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to update slide');
+      toast.error(err?.response?.data?.error || err?.message || 'Failed to update slide');
     } finally {
       setSubmitting(false);
     }
@@ -280,12 +287,15 @@ export default function SlideshowManagement() {
 
   const handleToggleStatus = async (slide: HomeSlideItem) => {
     try {
-      await api.patch(`/admin/slides/${slide.id}/toggle-status`, {});
+      const updated = await api.patch(`/admin/slides/${slide.id}/toggle-status`, {});
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: { table: 'HomeSlide' } }));
       toast.success(`Slide "${slide.title}" is now ${slide.status === 'ACTIVE' ? 'Inactive' : 'Active'}`);
+      if (updated && updated.id) {
+        setSlides(prev => prev.map(s => s.id === slide.id ? updated : s));
+      }
       fetchSlides();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to toggle status');
+      toast.error(err?.response?.data?.error || err?.message || 'Failed to toggle status');
     }
   };
 
@@ -296,10 +306,12 @@ export default function SlideshowManagement() {
       await api.delete(`/admin/slides/${selectedSlide.id}`);
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: { table: 'HomeSlide' } }));
       toast.success('Hero slide deleted successfully');
+      setSlides(prev => prev.filter(s => s.id !== selectedSlide.id));
       setIsDeleteOpen(false);
+      setSelectedSlide(null);
       fetchSlides();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to delete slide');
+      toast.error(err?.response?.data?.error || err?.message || 'Failed to delete slide');
     } finally {
       setSubmitting(false);
     }
@@ -318,13 +330,25 @@ export default function SlideshowManagement() {
     const targetOrder = targetSlide.displayOrder;
 
     try {
-      await api.put(`/admin/slides/${slide.id}`, { displayOrder: targetOrder });
-      await api.put(`/admin/slides/${targetSlide.id}`, { displayOrder: currentOrder });
+      const updatedList = sorted.map(s => {
+        if (s.id === slide.id) return { ...s, displayOrder: targetOrder };
+        if (s.id === targetSlide.id) return { ...s, displayOrder: currentOrder };
+        return s;
+      }).sort((a, b) => a.displayOrder - b.displayOrder);
+      setSlides(updatedList);
+
+      await api.put('/admin/slides/reorder', {
+        slides: [
+          { id: slide.id, displayOrder: targetOrder },
+          { id: targetSlide.id, displayOrder: currentOrder }
+        ]
+      });
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: { table: 'HomeSlide' } }));
       toast.success('Slide order updated');
       fetchSlides();
     } catch (err) {
       toast.error('Failed to change slide order');
+      fetchSlides();
     }
   };
 

@@ -39,6 +39,16 @@ export function createApp() {
   }
   app.use('/uploads', express.static(uploadsDir));
 
+  // Static assets/images directory (ensures slideshow images are served in both dev & production)
+  const publicAssetsImagesDir = path.join(process.cwd(), 'public', 'assets', 'images');
+  if (!fs.existsSync(publicAssetsImagesDir)) {
+    try {
+      fs.mkdirSync(publicAssetsImagesDir, { recursive: true });
+    } catch (_) { }
+  }
+  app.use('/assets/images', express.static(publicAssetsImagesDir));
+  app.use('/public/assets/images', express.static(publicAssetsImagesDir));
+
   // Mount API routes
   app.use('/api/auth', authRoutes);
   app.use('/api/users', usersRoutes);
