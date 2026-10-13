@@ -7,6 +7,26 @@
       "destination": "/api/index.js"
     },
     {
+      "source": "/sitemap.xml",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/services",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/services/(.*)",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/about",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/contact",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -1,0 +1,50 @@
+# MTS Lab Kathmandu Robots Configuration
+# Production Domain: https://www.mobiletechnologystation.com.np
+
+User-agent: *
+Allow: /
+Allow: /services
+Allow: /services/
+Allow: /about
+Allow: /contact
+Allow: /shop
+Allow: /track
+Allow: /terms
+Allow: /privacy
+Allow: /price-finder
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /pending-approval
+Disallow: /rejected-access
+Disallow: /api/
+
+# Explicit permissions for AI & Search Answer Crawlers
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+Sitemap: https://www.mobiletechnologystation.com.np/sitemap.xml

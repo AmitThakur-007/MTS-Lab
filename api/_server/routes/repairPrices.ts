@@ -25,6 +25,16 @@ function getFolderKey(brand: string, model?: string | null, category?: string | 
   return `${(brand || '').trim().toLowerCase()}|${(model || '').trim().toLowerCase()}|${(category || '').trim().toLowerCase()}`;
 }
 
+const priceChangeListeners: Array<() => void> = [];
+export function onRepairPricesChanged(fn: () => void) {
+  priceChangeListeners.push(fn);
+}
+export function notifyRepairPricesChanged() {
+  priceChangeListeners.forEach((fn) => {
+    try { fn(); } catch (_) {}
+  });
+}
+
 // ==========================================
 // Metadata & Sanitization Helpers
 // ==========================================
@@ -263,6 +273,7 @@ router.post('/rename-folder', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', '
     });
 
     await broadcastServerChange('RepairPrice', 'UPDATE', 'folders');
+    notifyRepairPricesChanged();
 
     return res.json({ success: true, message: `Folder renamed to "${newClean}".` });
   } catch (err: any) {
@@ -300,6 +311,7 @@ router.post('/delete-folder', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', '
     toDelete.forEach((k) => customRepairFoldersRegistry.delete(k));
 
     await broadcastServerChange('RepairPrice', 'DELETE', 'folder');
+    notifyRepairPricesChanged();
 
     return res.json({ success: true, message: 'Folder deleted.', deletedCount });
   } catch (err: any) {
@@ -337,6 +349,7 @@ router.post('/move', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER',
     }
 
     await broadcastServerChange('RepairPrice', 'UPDATE', 'relocate');
+    notifyRepairPricesChanged();
 
     return res.json({ success: true, message: 'Services relocated successfully.' });
   } catch (err: any) {
@@ -493,6 +506,7 @@ router.post('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'
 
     const parsedCreated = parseServiceItem(finalItem, false);
     await broadcastServerChange('RepairPrice', 'CREATE', finalItem.id, parsedCreated);
+    notifyRepairPricesChanged();
 
     return res.status(201).json(parsedCreated);
   } catch (err: any) {
@@ -576,6 +590,7 @@ const handleUpdatePrice = async (req: AuthRequest, res: Response) => {
 
     const parsedUpdated = parseServiceItem(finalItem, false);
     await broadcastServerChange('RepairPrice', 'UPDATE', id, parsedUpdated);
+    notifyRepairPricesChanged();
 
     return res.json(parsedUpdated);
   } catch (err: any) {
@@ -618,6 +633,7 @@ router.patch('/:id/toggle-status', authenticate, authorize(['SUPER_ADMIN', 'ADMI
 
     const parsedUpdated = parseServiceItem(finalItem, false);
     await broadcastServerChange('RepairPrice', 'UPDATE', id, parsedUpdated);
+    notifyRepairPricesChanged();
 
     return res.json(parsedUpdated);
   } catch (err: any) {
@@ -637,6 +653,7 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'RECEPTIO
     } catch (_) {}
 
     await broadcastServerChange('RepairPrice', 'DELETE', id);
+    notifyRepairPricesChanged();
 
     return res.json({ success: true, message: 'Repair price deleted.' });
   } catch (err: any) {
@@ -662,6 +679,7 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'RE
     for (const id of ids) {
       await broadcastServerChange('RepairPrice', 'DELETE', id);
     }
+    notifyRepairPricesChanged();
 
     return res.json({ success: true, message: `Deleted ${ids.length} price items.` });
   } catch (err: any) {

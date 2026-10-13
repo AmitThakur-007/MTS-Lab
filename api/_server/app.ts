@@ -23,6 +23,7 @@ import securityRoutes from './routes/security';
 import uploadRoutes from './routes/upload';
 import eventsRoutes from './routes/events';
 import publicRoutes from './routes/public';
+import seoRoutes from './routes/seo';
 
 export function createApp() {
   const app = express();
@@ -90,6 +91,9 @@ export function createApp() {
   app.use('/api/events', eventsRoutes);
   app.use('/api/public', publicRoutes);
   app.use('/api', publicRoutes);
+
+  // Mount SEO router for crawler-readable HTML and sitemap.xml
+  app.use('/', seoRoutes);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'healthy', timestamp: new Date().toISOString() });

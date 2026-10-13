@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
+import { buildSlugMap } from '@/lib/seo';
 import { 
   Search, 
   Smartphone, 
@@ -479,6 +480,9 @@ export default function Services() {
   const [prices, setPrices] = useState<RepairPriceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Memoized deterministic service slug map
+  const { serviceIdToSlug } = useMemo(() => buildSlugMap(prices), [prices]);
 
   // Search input and applied active filters
   const [searchInput, setSearchInput] = useState('');
@@ -1117,7 +1121,24 @@ export default function Services() {
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-slate-950 selection:text-white antialiased">
       <Navbar />
 
-      <main className="flex-1 pt-20 sm:pt-24 lg:pt-28 pb-16 px-2.5 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-4 sm:space-y-8">
+      <main className="flex-1 pt-24 sm:pt-28 lg:pt-32 pb-16 px-2.5 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-4 sm:space-y-6">
+        
+        {/* Dedicated Breadcrumb Container */}
+        <div className="w-full bg-white border border-slate-200/80 rounded-2xl px-3.5 sm:px-4 py-2.5 shadow-2xs">
+          <nav 
+            aria-label="Breadcrumb" 
+            className="flex items-center text-xs sm:text-sm text-slate-500 gap-1.5 overflow-x-auto whitespace-nowrap py-0.5 min-w-0 max-w-full"
+          >
+            <Link to="/" className="hover:text-slate-900 font-medium shrink-0 transition-colors">Home</Link>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />
+            <span 
+              className="font-bold text-slate-900 shrink-0"
+              aria-current="page"
+            >
+              Repair Services
+            </span>
+          </nav>
+        </div>
         
         {/* ========================================================= */}
         {/* 1. HERO SECTION & E-COMMERCE STYLE SERVICE SEARCH BAR      */}
@@ -1631,20 +1652,27 @@ export default function Services() {
                   const fullDeviceName = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`;
                   const shortDescription = item.description || item.notes || (item.problem && item.problem !== item.serviceName ? `Addresses: ${item.problem}` : `Original-grade laboratory repair for ${fullDeviceName}.`);
                   const isTablet = item.deviceType === 'Tablet' || item.deviceType === 'iPad';
+                  const serviceSlug = serviceIdToSlug.get(item.id);
+                  const serviceUrl = serviceSlug ? `/services/${serviceSlug}` : '/services';
 
                   return (
-                    <div
+                    <article
                       key={item.id}
-                      onClick={() => handleOpenDetail(item)}
+                      onClick={() => navigate(serviceUrl)}
                       className={`group bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 hover:border-slate-400/80 p-3 sm:p-4.5 md:p-5 h-full flex flex-col justify-between hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 ${catInfo.cardHover} transition-all duration-200 cursor-pointer relative overflow-hidden`}
                     >
                       {/* Top Header: Icon + Category Badge + Brand Pill */}
                       <div className="space-y-2 sm:space-y-3">
                         <div className="flex items-start justify-between gap-1 sm:gap-2">
                           {/* Category Icon in Curved Square Badge */}
-                          <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl ${catInfo.bgClass} flex items-center justify-center border border-slate-100/90 group-hover:scale-105 transition-transform shrink-0 shadow-2xs`}>
+                          <Link
+                            to={serviceUrl}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`View full details for ${item.serviceName}`}
+                            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl ${catInfo.bgClass} flex items-center justify-center border border-slate-100/90 group-hover:scale-105 transition-transform shrink-0 shadow-2xs cursor-pointer`}
+                          >
                             <CategoryIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${catInfo.iconClass}`} />
-                          </div>
+                          </Link>
 
                           {/* Brand Pill & Device Indicator */}
                           <div className="flex items-center gap-1 shrink-0">
@@ -1666,9 +1694,15 @@ export default function Services() {
                             <span className="truncate">{fullDeviceName}</span>
                           </div>
                           
-                          <h3 className="text-xs sm:text-sm md:text-base font-black text-slate-950 tracking-tight leading-snug group-hover:text-indigo-900 transition-colors line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] flex items-center">
-                            {item.serviceName}
-                          </h3>
+                          <Link
+                            to={serviceUrl}
+                            onClick={(e) => e.stopPropagation()}
+                            className="block focus-visible:outline-none focus-visible:underline"
+                          >
+                            <h3 className="text-xs sm:text-sm md:text-base font-black text-slate-950 tracking-tight leading-snug group-hover:text-indigo-900 transition-colors line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] flex items-center cursor-pointer">
+                              {item.serviceName}
+                            </h3>
+                          </Link>
                         </div>
 
                         {/* Short Description */}
@@ -1697,22 +1731,34 @@ export default function Services() {
                           {renderPriceBadge(item)}
                         </div>
 
-                        {/* View Details Button */}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenDetail(item);
-                          }}
-                          className="h-7 sm:h-8 px-2 sm:px-3 rounded-lg sm:rounded-xl bg-slate-100 group-hover:bg-slate-950 group-hover:text-white text-slate-900 text-[10px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-0.5 sm:gap-1"
-                        >
-                          <span>Details</span>
-                          <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                        </Button>
+                        {/* Actions: Quick View Modal & Direct Full Page */}
+                        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenDetail(item);
+                            }}
+                            aria-label={`Quick preview modal for ${item.serviceName}`}
+                            className="h-7 sm:h-8 px-2 sm:px-2.5 rounded-lg sm:rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <span>Quick View</span>
+                          </Button>
+
+                          <Link
+                            to={serviceUrl}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`View full service details for ${item.serviceName}`}
+                            className="h-7 sm:h-8 px-2 sm:px-2.5 rounded-lg sm:rounded-xl bg-slate-950 hover:bg-slate-800 text-white text-[10px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-0.5 sm:gap-1 shadow-2xs cursor-pointer"
+                          >
+                            <span>Details</span>
+                            <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                          </Link>
+                        </div>
                       </div>
 
-                    </div>
+                    </article>
                   );
                 })}
               </div>
@@ -1811,6 +1857,7 @@ export default function Services() {
               const catInfo = getCategoryInfo(selectedService.category, selectedService.serviceName);
               const CategoryIcon = catInfo.icon;
               const fullDeviceName = `${selectedService.brand} ${selectedService.model}${selectedService.variant ? ` ${selectedService.variant}` : ''}`;
+              const serviceSlug = serviceIdToSlug.get(selectedService.id);
               const whatsappMessage = `Hello MTS Lab, I would like to inquire about ${selectedService.serviceName} for my ${fullDeviceName}. Price: ${selectedService.price > 0 ? `NPR ${selectedService.price.toLocaleString()}` : 'Price on Inspection'}.`;
               const whatsappUrl = `https://wa.me/${MTS_WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappMessage)}`;
 
@@ -1999,26 +2046,38 @@ export default function Services() {
                     {/* Bottom Action Bar */}
                     <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                       
-                      {/* Copy Info Action */}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleShareService(selectedService)}
-                        className="text-xs font-bold text-slate-600 hover:text-slate-900 rounded-xl h-10 px-3 shrink-0"
-                      >
-                        {copiedLink ? (
-                          <span className="flex items-center gap-1.5 text-emerald-600">
-                            <Check className="w-4 h-4" />
-                            <span>Copied to Clipboard!</span>
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1.5">
-                            <Share2 className="w-4 h-4" />
-                            <span>Copy Quotation</span>
-                          </span>
+                      {/* Copy Info Action & Full Page Link */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleShareService(selectedService)}
+                          className="text-xs font-bold text-slate-600 hover:text-slate-900 rounded-xl h-10 px-3 shrink-0"
+                        >
+                          {copiedLink ? (
+                            <span className="flex items-center gap-1.5 text-emerald-600">
+                              <Check className="w-4 h-4" />
+                              <span>Copied to Clipboard!</span>
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1.5">
+                              <Share2 className="w-4 h-4" />
+                              <span>Copy Quotation</span>
+                            </span>
+                          )}
+                        </Button>
+
+                        {serviceSlug && (
+                          <Link
+                            to={`/services/${serviceSlug}`}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors py-2 px-3 rounded-xl hover:bg-blue-50/80 shrink-0"
+                          >
+                            <span>View full page for this service</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
                         )}
-                      </Button>
+                      </div>
 
                       {/* Contact Actions: Direct Call & WhatsApp */}
                       <div className="flex items-center gap-2.5">

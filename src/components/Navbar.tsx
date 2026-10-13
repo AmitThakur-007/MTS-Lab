@@ -107,33 +107,33 @@ export default function Navbar() {
   ];
 
   const glassStyle = isScrolled 
-    ? "bg-white/80 backdrop-blur-xl border-b border-slate-200/50 shadow-sm py-3" 
-    : "bg-transparent py-5";
+    ? "bg-white/95 backdrop-blur-xl border-b border-slate-200/80 shadow-xs py-2.5 sm:py-3.5" 
+    : "bg-white/90 backdrop-blur-md border-b border-slate-200/50 shadow-2xs py-3 sm:py-4";
 
   return (
     <>
       <nav className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-4 sm:px-12",
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-3.5 sm:px-8 lg:px-12",
         glassStyle
       )}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
           {/* Brand Logo & Wordmark */}
           <Link 
             to="/" 
-            className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 rounded-lg py-1 transition-opacity hover:opacity-90 cursor-pointer"
+            className="flex items-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 rounded-lg py-1 transition-opacity hover:opacity-90 cursor-pointer"
             aria-label="MTS Lab - Home"
           >
             {/* Mobile View (Smartphones < 640px): Professional, clean MTS Lab wordmark */}
-            <span className="sm:hidden text-lg font-bold tracking-tight text-slate-950 flex items-center select-none leading-none">
+            <span className="sm:hidden text-lg font-bold tracking-tight text-slate-950 flex items-center select-none leading-none shrink-0">
               MTS<span className="text-slate-500 font-semibold ml-1">Lab</span>
             </span>
 
             {/* Desktop & Tablet View (>= 640px): Preserved Brand Icon + MTSLAB */}
-            <div className="hidden sm:flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-3 shrink-0">
               <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-black/20 shrink-0">
                 M
               </div>
-              <span className="text-xl font-bold tracking-tight text-slate-900">
+              <span className="text-xl font-bold tracking-tight text-slate-900 shrink-0">
                 MTS<span className="text-slate-400 font-medium">LAB</span>
               </span>
             </div>
@@ -160,21 +160,21 @@ export default function Navbar() {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <button 
               id="navbar-search-repair-button"
               onClick={() => navigate('/services?focus=search')}
               aria-label="Search Repair Prices"
-              className="p-2.5 text-slate-600 hover:text-slate-950 hover:bg-slate-100 rounded-full transition-all cursor-pointer"
+              className="p-2 sm:p-2.5 text-slate-600 hover:text-slate-950 hover:bg-slate-100 rounded-full transition-all cursor-pointer shrink-0"
             >
               <Search className="h-4.5 w-4.5" />
             </button>
             
-            <div className="hidden sm:flex gap-2">
+            <div className="hidden sm:flex gap-2 shrink-0">
               {!isAuthenticated ? (
                 <Button 
                   onClick={() => navigate('/login')}
-                  className="rounded-full bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs h-10 px-5 shadow-sm cursor-pointer"
+                  className="rounded-full bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer"
                 >
                   Staff Portal
                 </Button>
@@ -182,7 +182,7 @@ export default function Navbar() {
                 <Button 
                   onClick={() => navigate('/dashboard')}
                   variant="outline"
-                  className="rounded-full border-slate-300 font-bold text-xs h-10 px-5 shadow-sm cursor-pointer"
+                  className="rounded-full border-slate-300 font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer"
                 >
                   Dashboard
                 </Button>
@@ -191,7 +191,7 @@ export default function Navbar() {
 
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-full cursor-pointer relative z-[70]"
+              className="lg:hidden p-2 sm:p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-full cursor-pointer relative z-[70] shrink-0"
               aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
