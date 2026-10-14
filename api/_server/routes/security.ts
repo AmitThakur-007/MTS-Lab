@@ -384,7 +384,7 @@ router.get('/activity-timeline', async (req: AuthRequest, res: Response) => {
 
     let query = supabaseAdmin
       .from('AuditLog')
-      .select('*', { count: 'exact' })
+      .select('*, user:User(id, name, email, role)', { count: 'exact' })
       .order('createdAt', { ascending: false });
 
     if (userId && userId !== 'ALL') {
@@ -392,23 +392,41 @@ router.get('/activity-timeline', async (req: AuthRequest, res: Response) => {
     }
 
     if (status && status !== 'ALL') {
-      query = query.eq('status', status as string);
+      query = query.eq('status', (status as string).toUpperCase());
     }
 
     if (resource && resource !== 'ALL') {
-      query = query.eq('resource', resource as string);
+      const resVal = String(resource).toUpperCase().trim();
+      if (resVal === 'USER') {
+        query = query.or('resource.eq.USER,resource.eq.User,resource.ilike.%User%');
+      } else if (resVal === 'REPAIR') {
+        query = query.or('resource.eq.REPAIR,resource.eq.Repair,resource.ilike.%Repair%');
+      } else if (resVal === 'CUSTOMER') {
+        query = query.or('resource.eq.CUSTOMER,resource.eq.Customer,resource.ilike.%Customer%');
+      } else if (resVal === 'INVENTORY') {
+        query = query.or('resource.ilike.%Inventory%,resource.ilike.%INVENTORY%');
+      } else if (resVal === 'AUTH') {
+        query = query.or('resource.eq.AUTH,resource.eq.Auth,resource.ilike.%Auth%');
+      } else {
+        query = query.ilike('resource', `%${resVal}%`);
+      }
     }
 
     if (action && action !== 'ALL') {
       query = query.eq('action', action as string);
     } else if (category && category !== 'ALL') {
       if (category === 'AUTH') {
-        query = query.in('action', ['LOGIN', 'LOGOUT', '2FA_VERIFY', 'LOGIN_2FA', 'PASSWORD_RESET', 'FAILED_LOGIN']);
+        query = query.in('action', [
+          'LOGIN', 'LOGIN_SUCCESS', 'LOGOUT', '2FA_VERIFY', '2FA_VERIFIED',
+          'OTP_VERIFICATION_SUCCESS', 'OTP_VERIFICATION_FAILED', 'OTP_REQUESTED',
+          'LOGIN_2FA', 'PASSWORD_RESET', 'FAILED_LOGIN', 'LOGIN_FAILED'
+        ]);
       } else if (category === 'SECURITY') {
         query = query.in('action', [
-          'FAILED_LOGIN', 'LOGIN_BLOCKED_DEVICE', 'DEVICE_BLOCKED', 'DEVICE_REVOKED',
-          'DEVICE_UNBLOCKED', 'ACCESS_REQUEST_REJECTED', 'ACCESS_REQUEST_APPROVED',
-          'ACCOUNT_DISABLED', 'USER_ROLE_CHANGED', 'DATA_PURGED'
+          'FAILED_LOGIN', 'LOGIN_FAILED', 'LOGIN_BLOCKED_DEVICE', 'LOGIN_DISABLED_ACCOUNT',
+          'DEVICE_BLOCKED', 'DEVICE_REVOKED', 'DEVICE_UNBLOCKED', 'DEVICE_DELETED',
+          'ACCESS_REQUEST_REJECTED', 'ACCESS_REQUEST_APPROVED', 'ACCOUNT_DISABLED',
+          'USER_ROLE_CHANGED', 'DATA_PURGED', 'UNAUTHORIZED_ACCESS_ATTEMPT', 'UNAUTHORIZED_USER_MUTATION'
         ]);
       } else if (category === 'DATA_MUTATION') {
         query = query.or('action.ilike.%CREATE%,action.ilike.%UPDATE%,action.ilike.%DELETE%');
@@ -426,9 +444,11 @@ router.get('/activity-timeline', async (req: AuthRequest, res: Response) => {
       query = query.lte('createdAt', end.toISOString());
     }
 
-    if (search) {
-      const s = search as string;
-      query = query.or(`userName.ilike.%${s}%,userEmail.ilike.%${s}%,action.ilike.%${s}%,resource.ilike.%${s}%,ipAddress.ilike.%${s}%,details.ilike.%${s}%`);
+    if (search && String(search).trim()) {
+      const s = String(search).trim().replace(/[%,]/g, '');
+      if (s) {
+        query = query.or(`userName.ilike.%${s}%,userEmail.ilike.%${s}%,action.ilike.%${s}%,resource.ilike.%${s}%,ipAddress.ilike.%${s}%,details.ilike.%${s}%`);
+      }
     }
 
     query = query.range(offset, offset + limit - 1);
@@ -436,13 +456,20 @@ router.get('/activity-timeline', async (req: AuthRequest, res: Response) => {
     const { data: logs, count, error } = await query;
     if (error) throw error;
 
+    const enrichedLogs = (logs || []).map((l: any) => ({
+      ...l,
+      userName: l.userName || l.user?.name || (l.userId ? 'Staff Member' : 'System'),
+      userEmail: l.userEmail || l.user?.email || null,
+      userRole: l.userRole || l.user?.role || null,
+    }));
+
     return res.json({
       success: true,
-      logs: logs || [],
+      logs: enrichedLogs,
       total: count || 0,
       page,
       limit,
-      totalPages: Math.ceil((count || 0) / limit),
+      totalPages: Math.ceil((count || 0) / limit) || 1,
     });
   } catch (err: any) {
     console.error('[ACTIVITY TIMELINE ERROR]', err);

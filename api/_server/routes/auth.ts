@@ -324,6 +324,21 @@ router.post('/login', async (req: Request, res: Response) => {
         `,
       });
 
+      await logAudit({
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: 'OTP_REQUESTED',
+        resource: 'Auth',
+        resourceId: mfaTicket,
+        status: 'SUCCESS',
+        ipAddress: ipAddress || req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        deviceInfo: { deviceIdentifier, deviceName, deviceType, browser, os },
+        details: { email: user.email, purpose: 'LOGIN_2FA' },
+      });
+
       return res.json({
         success: true,
         requires2FA: true,
@@ -342,7 +357,7 @@ router.post('/login', async (req: Request, res: Response) => {
       userEmail: user.email,
       userName: user.name,
       userRole: user.role,
-      action: 'LOGIN',
+      action: 'LOGIN_SUCCESS',
       resource: 'User',
       resourceId: user.id,
       status: 'SUCCESS',
@@ -408,12 +423,34 @@ router.post('/2fa/verify', async (req: Request, res: Response) => {
     const otp = otps[0];
 
     if (new Date(otp.expiresAt) < new Date()) {
+      await logAudit({
+        userId: otp.userId,
+        userEmail: otp.email,
+        action: 'OTP_VERIFICATION_FAILED',
+        resource: 'Auth',
+        resourceId: otp.id,
+        status: 'FAILED',
+        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        details: { reason: 'Verification code expired', email: otp.email },
+      });
       return res.status(400).json({ error: 'Verification code has expired. Please request a new code.' });
     }
 
     if (otp.codeHash !== inputHash) {
       const attempts = (otp.attempts || 0) + 1;
       await supabaseAdmin.from('OTPVerification').update({ attempts }).eq('id', otp.id);
+      await logAudit({
+        userId: otp.userId,
+        userEmail: otp.email,
+        action: 'OTP_VERIFICATION_FAILED',
+        resource: 'Auth',
+        resourceId: otp.id,
+        status: 'FAILED',
+        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        details: { attemptNumber: attempts, reason: 'Incorrect verification code', email: otp.email },
+      });
       return res.status(400).json({ error: 'Incorrect verification code. Please try again.' });
     }
 
@@ -436,10 +473,16 @@ router.post('/2fa/verify', async (req: Request, res: Response) => {
 
     await logAudit({
       userId: user.id,
-      action: '2FA_VERIFIED',
-      resource: 'User',
+      userEmail: user.email,
+      userName: user.name,
+      userRole: user.role,
+      action: 'OTP_VERIFICATION_SUCCESS',
+      resource: 'Auth',
       resourceId: user.id,
-      details: { email: user.email },
+      status: 'SUCCESS',
+      ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+      userAgent: req.headers['user-agent'] || null,
+      details: { email: user.email, method: '2FA_OTP' },
     });
 
     return res.json({
@@ -658,6 +701,20 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       `,
     });
 
+    await logAudit({
+      userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+      userRole: user.role,
+      action: 'OTP_REQUESTED',
+      resource: 'Auth',
+      resourceId: otpId,
+      status: 'SUCCESS',
+      ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+      userAgent: req.headers['user-agent'] || null,
+      details: { email: user.email, purpose: 'PASSWORD_RESET' },
+    });
+
     return res.json({
       success: true,
       message: 'Password reset code sent to your email.',
@@ -767,10 +824,16 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
     await logAudit({
       userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+      userRole: user.role,
       action: 'PASSWORD_RESET',
       resource: 'User',
       resourceId: user.id,
-      details: { email: user.email },
+      status: 'SUCCESS',
+      ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+      userAgent: req.headers['user-agent'] || null,
+      details: { email: user.email, method: 'OTP_RESET' },
     });
 
     return res.json({ success: true, message: 'Password updated successfully. Please log in with your new password.' });
@@ -840,6 +903,76 @@ router.get('/sessions', authenticate, async (req: AuthRequest, res: Response) =>
       createdAt: new Date().toISOString(),
     },
   ]);
+});
+
+// 14. POST /api/auth/logout
+router.post('/logout', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let token = '';
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim();
+    } else if (req.cookies && req.cookies.token) {
+      token = req.cookies.token;
+    }
+
+    let user: any = null;
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, config.jwtSecret) as any;
+        if (decoded?.id || decoded?.sub) {
+          user = decoded;
+        }
+      } catch (_) { }
+    }
+
+    if (user) {
+      await logAudit({
+        userId: user.id || user.sub,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: 'LOGOUT',
+        resource: 'Auth',
+        status: 'SUCCESS',
+        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        details: { message: 'User logged out successfully' },
+      });
+    }
+
+    res.clearCookie('token');
+    res.clearCookie('refreshToken');
+    return res.json({ success: true, message: 'Logged out successfully.' });
+  } catch (err: any) {
+    return res.json({ success: true, message: 'Logged out.' });
+  }
+});
+
+// 15. POST /api/auth/logout-all
+router.post('/logout-all', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (req.user) {
+      await logAudit({
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: 'LOGOUT',
+        resource: 'Auth',
+        status: 'SUCCESS',
+        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        details: { message: 'User terminated sessions on all devices' },
+      });
+    }
+
+    res.clearCookie('token');
+    res.clearCookie('refreshToken');
+    return res.json({ success: true, message: 'Logged out from all devices.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to logout from all devices.' });
+  }
 });
 
 export default router;

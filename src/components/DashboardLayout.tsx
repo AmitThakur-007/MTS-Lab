@@ -195,7 +195,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/logout', {});
+    } catch (_) { }
     logout();
     navigate('/login');
   };

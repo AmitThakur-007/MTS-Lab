@@ -25,7 +25,8 @@ import {
   Info,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -89,12 +90,36 @@ export default function SuperAdmin() {
   const [auditTotalPages, setAuditTotalPages] = useState(1);
   const [auditLimit] = useState(15);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterAction, setFilterAction] = useState('ALL');
   const [filterRole, setFilterRole] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterResource, setFilterResource] = useState('ALL');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
   const [selectedLog, setSelectedLog] = useState<any | null>(null);
+
+  const hasActiveFilters =
+    filterAction !== 'ALL' ||
+    filterRole !== 'ALL' ||
+    filterStatus !== 'ALL' ||
+    filterResource !== 'ALL' ||
+    Boolean(filterStartDate) ||
+    Boolean(filterEndDate) ||
+    searchQuery.trim().length > 0;
+
+  const handleResetFilters = () => {
+    setFilterAction('ALL');
+    setFilterRole('ALL');
+    setFilterStatus('ALL');
+    setFilterResource('ALL');
+    setFilterStartDate('');
+    setFilterEndDate('');
+    setSearchQuery('');
+    setAuditPage(1);
+    fetchAuditLogs(1, '', 'ALL', 'ALL', 'ALL', 'ALL', '', '');
+  };
 
   const fetchHistory = async () => {
     try {
@@ -116,27 +141,44 @@ export default function SuperAdmin() {
     }
   };
 
-  const fetchAuditLogs = async () => {
+  const fetchAuditLogs = async (
+    targetPage = auditPage,
+    targetSearch = searchQuery,
+    targetAction = filterAction,
+    targetRole = filterRole,
+    targetStatus = filterStatus,
+    targetResource = filterResource,
+    targetStartDate = filterStartDate,
+    targetEndDate = filterEndDate
+  ) => {
     setAuditLoading(true);
+    setAuditError(null);
     try {
       const params = new URLSearchParams({
-        page: String(auditPage),
+        page: String(targetPage),
         limit: String(auditLimit),
-        ...(searchQuery ? { search: searchQuery } : {}),
-        ...(filterAction !== 'ALL' ? { action: filterAction } : {}),
-        ...(filterRole !== 'ALL' ? { role: filterRole } : {}),
-        ...(filterStatus !== 'ALL' ? { status: filterStatus } : {}),
-        ...(filterResource !== 'ALL' ? { resource: filterResource } : {})
+        ...(targetSearch.trim() ? { search: targetSearch.trim() } : {}),
+        ...(targetAction !== 'ALL' ? { action: targetAction } : {}),
+        ...(targetRole !== 'ALL' ? { role: targetRole } : {}),
+        ...(targetStatus !== 'ALL' ? { status: targetStatus } : {}),
+        ...(targetResource !== 'ALL' ? { resource: targetResource } : {}),
+        ...(targetStartDate ? { startDate: targetStartDate } : {}),
+        ...(targetEndDate ? { endDate: targetEndDate } : {}),
       });
 
       const res: any = await api.get(`/admin/audit-logs?${params.toString()}`);
-      if (res && res.success) {
+      if (res && (res.success || Array.isArray(res.logs))) {
         setAuditLogs(res.logs || []);
-        setAuditTotal(res.total || 0);
-        setAuditTotalPages(res.totalPages || 1);
+        setAuditTotal(res.total ?? (res.logs?.length || 0));
+        setAuditTotalPages(res.totalPages || Math.ceil((res.total || 0) / auditLimit) || 1);
+        setAuditError(null);
+      } else {
+        throw new Error(res?.error || 'Invalid response from audit logs server');
       }
     } catch (err: any) {
       console.error("[AUDIT LOGS LOAD ERROR]", err);
+      const errMsg = err?.message || 'Failed to load audit logs. Please check your connection or permissions.';
+      setAuditError(errMsg);
     } finally {
       setAuditLoading(false);
     }
@@ -149,17 +191,23 @@ export default function SuperAdmin() {
 
   useEffect(() => {
     fetchAuditLogs();
-  }, [auditPage, filterAction, filterRole, filterStatus, filterResource]);
+  }, [auditPage, filterAction, filterRole, filterStatus, filterResource, filterStartDate, filterEndDate]);
 
   // Real-time synchronization for audit logs
-  useRealtimeSync(['auditLog'], () => {
+  useRealtimeSync(['auditLog', 'AuditLog', 'audit_log'], () => {
     fetchAuditLogs();
   });
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAuditPage(1);
-    fetchAuditLogs();
+    fetchAuditLogs(1, searchQuery);
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setAuditPage(1);
+    fetchAuditLogs(1, '');
   };
 
   const handleShareApplet = async (e: React.FormEvent) => {
@@ -223,13 +271,14 @@ export default function SuperAdmin() {
   };
 
   const getActionBadgeColor = (action: string) => {
-    if (action.includes('SUCCESS') || action.includes('CREATED') || action.includes('ENABLED')) {
+    const act = (action || '').toUpperCase();
+    if (act.includes('SUCCESS') || act.includes('CREATED') || act.includes('ENABLED')) {
       return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     }
-    if (action.includes('FAILED') || action.includes('DELETED') || action.includes('DISABLED')) {
+    if (act.includes('FAILED') || act.includes('DELETED') || act.includes('DISABLED') || act.includes('DENIED') || act.includes('BLOCKED')) {
       return 'bg-rose-50 text-rose-700 border-rose-200';
     }
-    if (action.includes('OTP') || action.includes('PASSWORD') || action.includes('EMAIL')) {
+    if (act.includes('OTP') || act.includes('PASSWORD') || act.includes('EMAIL') || act.includes('STATUS') || act.includes('ROLE')) {
       return 'bg-amber-50 text-amber-700 border-amber-200';
     }
     return 'bg-slate-50 text-slate-700 border-slate-200';
@@ -340,6 +389,17 @@ export default function SuperAdmin() {
                 </CardDescription>
               </div>
               <div className="flex items-center gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => fetchAuditLogs()}
+                  disabled={auditLoading}
+                  className="h-10 px-3.5 bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 hover:text-white rounded-xl text-xs font-bold gap-2 cursor-pointer transition-colors"
+                  title="Synchronize audit logs from database"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${auditLoading ? 'animate-spin text-indigo-400' : 'text-slate-400'}`} />
+                  <span>Sync</span>
+                </Button>
                 <div className="px-4 py-2 bg-slate-800/80 rounded-2xl border border-slate-700/60 text-right">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Total Entries</div>
                   <div className="text-xl font-black text-emerald-400">{auditTotal.toLocaleString()}</div>
@@ -357,10 +417,20 @@ export default function SuperAdmin() {
                       placeholder="Search action, email, user, IP, resource..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 h-11 bg-white rounded-xl border-slate-200 text-xs font-semibold"
+                      className="pl-10 pr-8 h-11 bg-white rounded-xl border-slate-200 text-xs font-semibold"
                     />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={handleClearSearch}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold p-1 cursor-pointer"
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
-                  <Button type="submit" size="sm" className="h-11 px-5 rounded-xl bg-slate-900 text-white font-bold text-xs">
+                  <Button type="submit" size="sm" className="h-11 px-5 rounded-xl bg-slate-900 text-white font-bold text-xs cursor-pointer">
                     Search
                   </Button>
                 </form>
@@ -385,6 +455,8 @@ export default function SuperAdmin() {
                     <option value="USER_UPDATED">User Updated</option>
                     <option value="USER_DELETED">User Deleted</option>
                     <option value="ROLE_CHANGED">Role Changed</option>
+                    <option value="REPAIR_CREATED">Repair Created</option>
+                    <option value="REPAIR_STATUS_CHANGED">Repair Status Changed</option>
                     <option value="LOGOUT">Logout</option>
                   </select>
 
@@ -430,6 +502,38 @@ export default function SuperAdmin() {
                     <option value="INVENTORY">INVENTORY</option>
                     <option value="PAYMENT">PAYMENT</option>
                   </select>
+
+                  {/* Date Range Filters */}
+                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 h-11">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">From</span>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => { setFilterStartDate(e.target.value); setAuditPage(1); }}
+                      className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 h-11">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">To</span>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => { setFilterEndDate(e.target.value); setAuditPage(1); }}
+                      className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+                    />
+                  </div>
+
+                  {hasActiveFilters && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleResetFilters}
+                      className="h-11 px-3.5 rounded-xl border-dashed border-slate-300 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+                    >
+                      Reset Filters
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -456,11 +560,42 @@ export default function SuperAdmin() {
                             <p className="font-semibold text-xs">Loading Security Audit Logs...</p>
                           </td>
                         </tr>
+                      ) : auditError ? (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-rose-500">
+                            <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-rose-500" />
+                            <p className="font-bold text-xs text-rose-700">{auditError}</p>
+                            <p className="text-[11px] text-slate-500 mt-1">Unable to load audit logs from the database.</p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => fetchAuditLogs()}
+                              className="mt-3 h-8 px-4 text-xs font-bold border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
+                            >
+                              Retry
+                            </Button>
+                          </td>
+                        </tr>
                       ) : auditLogs.length === 0 ? (
                         <tr>
                           <td colSpan={7} className="py-12 text-center text-slate-400">
                             <Activity className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                            <p className="font-semibold text-xs">No audit logs matching current criteria</p>
+                            <p className="font-semibold text-xs text-slate-700">
+                              {hasActiveFilters ? 'No audit logs matching current filter criteria' : 'No audit logs recorded in system yet'}
+                            </p>
+                            {hasActiveFilters && (
+                              <div className="mt-2">
+                                <p className="text-[11px] text-slate-400 mb-2">Try adjusting search keywords or clearing active filters.</p>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={handleResetFilters}
+                                  className="h-8 px-3 text-xs font-bold cursor-pointer"
+                                >
+                                  Reset All Filters
+                                </Button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ) : (
@@ -482,9 +617,9 @@ export default function SuperAdmin() {
                             <td className="py-3.5 px-4">
                               <div className="font-bold text-slate-900 truncate max-w-[140px]">{log.userName || log.user?.name || 'System'}</div>
                               <div className="text-[10px] text-slate-400 truncate max-w-[140px]">{log.userEmail || log.user?.email || 'N/A'}</div>
-                              {log.userRole && (
+                              {(log.userRole || log.user?.role) && (
                                 <Badge className="text-[9px] font-black bg-slate-100 text-slate-600 mt-0.5 px-1.5 py-0">
-                                  {log.userRole}
+                                  {log.userRole || log.user?.role}
                                 </Badge>
                               )}
                             </td>

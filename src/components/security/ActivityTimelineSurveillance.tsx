@@ -79,6 +79,7 @@ export default function ActivityTimelineSurveillance({
   const [totalPages, setTotalPages] = useState(1);
   const [limit] = useState(25);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Filters
   const [selectedStaffId, setSelectedStaffId] = useState<string>(initialUserId || 'ALL');
@@ -90,6 +91,26 @@ export default function ActivityTimelineSurveillance({
   const [endDate, setEndDate] = useState('');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
+  const hasActiveFilters =
+    selectedStaffId !== 'ALL' ||
+    categoryFilter !== 'ALL' ||
+    resourceFilter !== 'ALL' ||
+    statusFilter !== 'ALL' ||
+    searchQuery.trim().length > 0 ||
+    Boolean(startDate) ||
+    Boolean(endDate);
+
+  const handleResetFilters = () => {
+    setSelectedStaffId('ALL');
+    setCategoryFilter('ALL');
+    setResourceFilter('ALL');
+    setStatusFilter('ALL');
+    setSearchQuery('');
+    setStartDate('');
+    setEndDate('');
+    setPage(1);
+  };
+
   useEffect(() => {
     if (initialUserId) {
       setSelectedStaffId(initialUserId);
@@ -98,6 +119,7 @@ export default function ActivityTimelineSurveillance({
 
   const fetchTimeline = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({
         page: String(page),
@@ -106,19 +128,25 @@ export default function ActivityTimelineSurveillance({
         ...(categoryFilter !== 'ALL' ? { category: categoryFilter } : {}),
         ...(resourceFilter !== 'ALL' ? { resource: resourceFilter } : {}),
         ...(statusFilter !== 'ALL' ? { status: statusFilter } : {}),
-        ...(searchQuery ? { search: searchQuery } : {}),
+        ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}),
         ...(startDate ? { startDate } : {}),
         ...(endDate ? { endDate } : {}),
       });
 
       const res = await api.get(`/security/activity-timeline?${params.toString()}`);
-      if (res && res.success) {
+      if (res && (res.success || Array.isArray(res.logs))) {
         setLogs(res.logs || []);
         setTotal(res.total || 0);
-        setTotalPages(res.totalPages || 1);
+        setTotalPages(res.totalPages || Math.ceil((res.total || 0) / limit) || 1);
+        setError(null);
+      } else {
+        throw new Error(res?.error || 'Failed to retrieve activity timeline.');
       }
     } catch (err: any) {
-      toast.error('Failed to load system activity logs.');
+      console.error('[ACTIVITY TIMELINE LOAD ERROR]', err);
+      const errMsg = err?.message || 'Failed to load system activity logs.';
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setLoading(false);
     }
@@ -382,11 +410,40 @@ export default function ActivityTimelineSurveillance({
                     </div>
                   </TableCell>
                 </TableRow>
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-10 text-rose-600">
+                    <p className="text-sm font-bold text-rose-700">{error}</p>
+                    <p className="text-xs text-slate-500 mt-1">Unable to load activity logs from server.</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => fetchTimeline()}
+                      className="mt-3 h-8 px-4 text-xs font-bold border-rose-200 text-rose-700 hover:bg-rose-50"
+                    >
+                      Retry
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ) : logs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-10 text-slate-500">
-                    <p className="text-sm font-medium text-slate-700">No activity records match your criteria.</p>
-                    <p className="text-xs text-slate-400 mt-1">Try broadening your date range or clearing specific filters.</p>
+                    <p className="text-sm font-medium text-slate-700">
+                      {hasActiveFilters ? 'No activity records match your criteria.' : 'No activity records logged in system yet.'}
+                    </p>
+                    {hasActiveFilters && (
+                      <div className="mt-2">
+                        <p className="text-xs text-slate-400 mb-2">Try broadening your date range or clearing specific filters.</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleResetFilters}
+                          className="h-8 px-3 text-xs font-bold"
+                        >
+                          Reset Filters
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (

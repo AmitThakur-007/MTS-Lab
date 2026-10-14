@@ -17,18 +17,116 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 // 1. GET /api/admin/audit-logs
 router.get('/audit-logs', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
-    const { action, resource, userId, page = '1', limit = '50', startDate, endDate } = req.query;
-    const pageNum = parseInt(page as string, 10) || 1;
-    const limitNum = parseInt(limit as string, 10) || 50;
+    const { action, resource, userId, role, status, search, page = '1', limit = '15', startDate, endDate } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+    const limitNum = Math.min(Math.max(1, parseInt(limit as string, 10) || 15), 100);
     const offset = (pageNum - 1) * limitNum;
 
-    let query = supabaseAdmin.from('AuditLog').select('*', { count: 'exact' });
+    let query = supabaseAdmin
+      .from('AuditLog')
+      .select('*, user:User(id, name, email, role)', { count: 'exact' });
 
-    if (action && action !== 'ALL') query = query.eq('action', String(action));
-    if (resource && resource !== 'ALL') query = query.eq('resource', String(resource));
-    if (userId && userId !== 'ALL') query = query.eq('userId', String(userId));
-    if (startDate) query = query.gte('createdAt', String(startDate));
-    if (endDate) query = query.lte('createdAt', String(endDate));
+    // Filter by specific user if provided
+    if (userId && userId !== 'ALL') {
+      query = query.eq('userId', String(userId));
+    }
+
+    // Filter by status (SUCCESS / FAILED)
+    if (status && status !== 'ALL') {
+      const stat = String(status).toUpperCase().trim();
+      if (stat === 'FAILED') {
+        query = query.in('status', ['FAILED', 'DENIED', 'BLOCKED', 'ERROR']);
+      } else {
+        query = query.eq('status', stat);
+      }
+    }
+
+    // Filter by role (SUPER_ADMIN, ADMIN, MANAGER, etc.)
+    if (role && role !== 'ALL') {
+      const normalizedRole = String(role).toUpperCase().trim();
+      if (normalizedRole === 'SUPER_ADMIN') {
+        query = query.in('userRole', ['SUPER_ADMIN', 'SUPERADMIN']);
+      } else if (normalizedRole === 'LEAD_TECHNICIAN') {
+        query = query.in('userRole', ['LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'LEADTECHNICIAN']);
+      } else {
+        query = query.eq('userRole', normalizedRole);
+      }
+    }
+
+    // Filter by action with alias & family expansion
+    if (action && action !== 'ALL') {
+      const act = String(action).toUpperCase().trim();
+      if (act === 'LOGIN_SUCCESS') {
+        query = query.in('action', ['LOGIN_SUCCESS', 'LOGIN', '2FA_VERIFIED', 'OTP_VERIFICATION_SUCCESS']);
+      } else if (act === 'LOGIN_FAILED') {
+        query = query.in('action', ['LOGIN_FAILED', 'FAILED_LOGIN', 'LOGIN_BLOCKED_DEVICE', 'LOGIN_DISABLED_ACCOUNT']);
+      } else if (act === 'OTP_REQUESTED') {
+        query = query.in('action', ['OTP_REQUESTED', '2FA_CHALLENGE']);
+      } else if (act === 'OTP_VERIFICATION_SUCCESS') {
+        query = query.in('action', ['OTP_VERIFICATION_SUCCESS', '2FA_VERIFIED', '2FA_ENABLED', 'LOGIN_2FA_SUCCESS']);
+      } else if (act === 'OTP_VERIFICATION_FAILED') {
+        query = query.in('action', ['OTP_VERIFICATION_FAILED', '2FA_FAILED']);
+      } else if (act === 'PASSWORD_CHANGED') {
+        query = query.in('action', ['PASSWORD_CHANGED', 'PASSWORD_UPDATED']);
+      } else if (act === 'PASSWORD_RESET') {
+        query = query.in('action', ['PASSWORD_RESET', 'PASSWORD_RESET_COMPLETED', 'PASSWORD_RESET_REQUESTED', 'PASSWORD_RESET_OTP_VERIFIED']);
+      } else if (act === 'EMAIL_CHANGED') {
+        query = query.in('action', ['EMAIL_CHANGED', 'STAFF_EMAIL_VERIFIED', 'EMAIL_VERIFIED_BY_SUPER_ADMIN']);
+      } else if (act === 'USER_CREATED') {
+        query = query.in('action', ['USER_CREATED', 'STAFF_CREATED', 'CREATE']);
+      } else if (act === 'USER_UPDATED') {
+        query = query.in('action', ['USER_UPDATED', 'STAFF_UPDATED', 'UPDATE', 'STAFF_ROLE_CHANGED', 'USER_ENABLED', 'USER_DISABLED']);
+      } else if (act === 'USER_DELETED') {
+        query = query.in('action', ['USER_DELETED', 'STAFF_DELETED', 'DELETE', 'DELETE_REPAIR', 'REPAIRS_DELETED']);
+      } else if (act === 'ROLE_CHANGED') {
+        query = query.in('action', ['ROLE_CHANGED', 'STAFF_ROLE_CHANGED']);
+      } else if (act === 'REPAIR_CREATED') {
+        query = query.in('action', ['REPAIR_CREATED', 'BATCH_REGISTER_REPAIRS']);
+      } else if (act === 'REPAIR_STATUS_CHANGED') {
+        query = query.in('action', ['REPAIR_STATUS_CHANGED', 'UPDATE_STATUS', 'ASSIGN_TECHNICIAN', 'REPAIR_PRIORITY_UPDATED', 'REPAIR_TRANSFERRED']);
+      } else if (act === 'LOGOUT') {
+        query = query.in('action', ['LOGOUT', 'LOGOUT_ALL_DEVICES']);
+      } else {
+        query = query.eq('action', act);
+      }
+    }
+
+    // Filter by resource with case-insensitive / table matching
+    if (resource && resource !== 'ALL') {
+      const resVal = String(resource).toUpperCase().trim();
+      if (resVal === 'USER') {
+        query = query.or('resource.eq.USER,resource.eq.User,resource.ilike.%User%');
+      } else if (resVal === 'REPAIR') {
+        query = query.or('resource.eq.REPAIR,resource.eq.Repair,resource.ilike.%Repair%');
+      } else if (resVal === 'CUSTOMER') {
+        query = query.or('resource.eq.CUSTOMER,resource.eq.Customer,resource.ilike.%Customer%');
+      } else if (resVal === 'INVENTORY') {
+        query = query.or('resource.ilike.%Inventory%,resource.ilike.%INVENTORY%');
+      } else if (resVal === 'AUTH') {
+        query = query.or('resource.eq.AUTH,resource.eq.Auth,resource.ilike.%Auth%');
+      } else if (resVal === 'PAYMENT') {
+        query = query.or('resource.ilike.%Payment%,resource.ilike.%PAYMENT%');
+      } else {
+        query = query.ilike('resource', `%${resVal}%`);
+      }
+    }
+
+    // Search query across multiple fields
+    if (search && String(search).trim()) {
+      const s = String(search).trim().replace(/[%,]/g, '');
+      if (s) {
+        query = query.or(`userName.ilike.%${s}%,userEmail.ilike.%${s}%,action.ilike.%${s}%,resource.ilike.%${s}%,ipAddress.ilike.%${s}%,details.ilike.%${s}%`);
+      }
+    }
+
+    if (startDate) {
+      const startIso = String(startDate).includes('T') ? String(startDate) : `${String(startDate)}T00:00:00.000Z`;
+      query = query.gte('createdAt', startIso);
+    }
+    if (endDate) {
+      const endIso = String(endDate).includes('T') ? String(endDate) : `${String(endDate)}T23:59:59.999Z`;
+      query = query.lte('createdAt', endIso);
+    }
 
     const { data: logs, count, error } = await query
       .order('createdAt', { ascending: false })
@@ -36,18 +134,27 @@ router.get('/audit-logs', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), asy
 
     if (error) {
       console.error('[AUDIT LOGS ERROR]', error);
-      return res.status(500).json({ error: 'Failed to fetch audit logs.' });
+      return res.status(500).json({ success: false, error: 'Failed to fetch audit logs from database.' });
     }
 
+    const enrichedLogs = (logs || []).map((l: any) => ({
+      ...l,
+      userName: l.userName || l.user?.name || (l.userId ? 'Staff Member' : 'System'),
+      userEmail: l.userEmail || l.user?.email || null,
+      userRole: l.userRole || l.user?.role || null,
+    }));
+
     return res.json({
-      logs: logs || [],
+      success: true,
+      logs: enrichedLogs,
       total: count || 0,
       page: pageNum,
       limit: limitNum,
-      totalPages: Math.ceil((count || 0) / limitNum),
+      totalPages: Math.ceil((count || 0) / limitNum) || 1,
     });
   } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to retrieve system audit logs.' });
+    console.error('[AUDIT LOGS UNEXPECTED ERROR]', err);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve system audit logs.' });
   }
 });
 
