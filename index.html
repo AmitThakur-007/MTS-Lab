@@ -4,6 +4,51 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
+    <!-- Immediate Theme Restoration Guard: Eliminates Flash of Light Mode on Browser Refresh -->
+    <script>
+      (function() {
+        try {
+          var raw = localStorage.getItem('mtslab-global-theme');
+          var pref = localStorage.getItem('mtslab-theme-preference');
+          var effective = 'neutral-default';
+          var isFestival = false;
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+              var theme = parsed.effectiveTheme || parsed.activeTheme;
+              if (['light', 'dark', 'night', 'neutral-default', 'dashain', 'tihar', 'holi', 'nepali-new-year'].indexOf(theme) !== -1) {
+                effective = theme;
+                isFestival = ['dashain', 'tihar', 'holi', 'nepali-new-year'].indexOf(theme) !== -1;
+              }
+            }
+          }
+          if (!isFestival && pref && pref !== 'global') {
+            if (pref === 'system') {
+              effective = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            } else if (['light', 'dark', 'night', 'neutral-default'].indexOf(pref) !== -1) {
+              effective = pref;
+            }
+          }
+          var root = document.documentElement;
+          root.classList.remove('dark', 'theme-light', 'theme-night', 'theme-neutral-default', 'theme-festival', 'theme-festival-dashain', 'theme-festival-tihar', 'theme-festival-holi', 'theme-festival-nepali-new-year');
+          if (effective === 'light') {
+            root.classList.add('theme-light');
+          } else if (effective === 'dark') {
+            root.classList.add('dark');
+          } else if (effective === 'night') {
+            root.classList.add('dark', 'theme-night');
+          } else if (effective === 'neutral-default') {
+            root.classList.add('theme-neutral-default');
+          } else if (['dashain', 'tihar', 'holi', 'nepali-new-year'].indexOf(effective) !== -1) {
+            root.classList.add('theme-festival', 'theme-festival-' + effective);
+            if (effective === 'tihar') {
+              root.classList.add('dark');
+            }
+          }
+        } catch (_) {}
+      })();
+    </script>
+    
     <!-- Primary Favicons & App Icons -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />

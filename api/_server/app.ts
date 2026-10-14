@@ -24,12 +24,16 @@ import uploadRoutes from './routes/upload';
 import eventsRoutes from './routes/events';
 import publicRoutes from './routes/public';
 import seoRoutes from './routes/seo';
+import { getSystemThemeConfigAsync } from './services/systemThemeService';
 
 export function createApp() {
   const app = express();
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   app.use(cookieParser());
+
+  // Asynchronously pre-hydrate system theme from persistent store
+  getSystemThemeConfigAsync().catch(() => {});
 
   // Static uploads directory
   const uploadsDir = path.join(process.cwd(), 'uploads');

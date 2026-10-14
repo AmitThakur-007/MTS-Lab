@@ -99,23 +99,82 @@ const DEFAULT_GLOBAL_THEME: GlobalThemeConfig = {
   updatedByName: null,
 };
 
+export const MTSLAB_GLOBAL_THEME_STORAGE_KEY = 'mtslab-global-theme';
+export const MTSLAB_THEME_PREFERENCE_STORAGE_KEY = 'mtslab-theme-preference';
+
+export const VALID_THEME_IDS: readonly ThemeId[] = [
+  'light',
+  'dark',
+  'night',
+  'neutral-default',
+  'dashain',
+  'tihar',
+  'holi',
+  'nepali-new-year',
+] as const;
+
+export const FESTIVAL_THEME_IDS: readonly ThemeId[] = [
+  'dashain',
+  'tihar',
+  'holi',
+  'nepali-new-year',
+] as const;
+
+function getCachedGlobalTheme(): GlobalThemeConfig {
+  if (typeof window === 'undefined') return DEFAULT_GLOBAL_THEME;
+  try {
+    const raw = localStorage.getItem(MTSLAB_GLOBAL_THEME_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        const activeTheme: ThemeId = parsed.activeTheme && VALID_THEME_IDS.includes(parsed.activeTheme)
+          ? parsed.activeTheme
+          : 'neutral-default';
+        const effectiveTheme: ThemeId = parsed.effectiveTheme && VALID_THEME_IDS.includes(parsed.effectiveTheme)
+          ? parsed.effectiveTheme
+          : activeTheme;
+        const isFestival = FESTIVAL_THEME_IDS.includes(effectiveTheme);
+
+        return {
+          activeTheme,
+          effectiveTheme,
+          festivalGreeting: parsed.festivalGreeting || DEFAULT_GLOBAL_THEME.festivalGreeting,
+          customMessage: parsed.customMessage || DEFAULT_GLOBAL_THEME.customMessage,
+          schedule: parsed.schedule || DEFAULT_GLOBAL_THEME.schedule,
+          isScheduledActive: Boolean(parsed.isScheduledActive),
+          festivalModeEnabled: isFestival,
+          activeFestival: (isFestival ? effectiveTheme : 'dashain') as FestivalType,
+          updatedAt: parsed.updatedAt || new Date().toISOString(),
+          updatedBy: parsed.updatedBy || null,
+          updatedByName: parsed.updatedByName || null,
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('[THEME HYDRATION PARSE WARN]', e);
+  }
+  return DEFAULT_GLOBAL_THEME;
+}
+
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 1. User's personal preference (stored locally per browser/profile)
   const [userPreference, setUserPreferenceState] = useState<ThemePreference>(() => {
     if (typeof window === 'undefined') return 'global';
-    const saved = localStorage.getItem('mtslab-theme-preference') as ThemePreference;
-    if (saved && [
-      'light', 'dark', 'night', 'neutral-default', 'dashain', 'tihar', 'holi', 'nepali-new-year', 'system', 'global'
-    ].includes(saved)) {
-      return saved;
-    }
+    try {
+      const saved = localStorage.getItem(MTSLAB_THEME_PREFERENCE_STORAGE_KEY) as ThemePreference;
+      if (saved && [
+        'light', 'dark', 'night', 'neutral-default', 'dashain', 'tihar', 'holi', 'nepali-new-year', 'system', 'global'
+      ].includes(saved)) {
+        return saved;
+      }
+    } catch (_) {}
     return 'global';
   });
 
-  // 2. Authoritative Global Theme Configuration from server
-  const [globalTheme, setGlobalTheme] = useState<GlobalThemeConfig>(DEFAULT_GLOBAL_THEME);
+  // 2. Authoritative Global Theme Configuration from server, pre-hydrated synchronously from localStorage cache to prevent flash of light mode
+  const [globalTheme, setGlobalTheme] = useState<GlobalThemeConfig>(() => getCachedGlobalTheme());
 
   // 3. Super Admin local preview state (does NOT persist or change other sessions until published)
   const [previewTheme, setPreviewTheme] = useState<ThemeId | null>(null);
@@ -125,11 +184,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const data = await api.get('/public/system-theme');
       if (data && typeof data === 'object') {
-        const activeTheme: ThemeId = data.activeTheme || (data.festivalModeEnabled && data.activeFestival) || 'neutral-default';
-        const effectiveTheme: ThemeId = data.effectiveTheme || activeTheme;
-        const isFestival = ['dashain', 'tihar', 'holi', 'nepali-new-year'].includes(effectiveTheme);
+        const activeTheme: ThemeId = (data.activeTheme && VALID_THEME_IDS.includes(data.activeTheme))
+          ? data.activeTheme
+          : ((data.festivalModeEnabled && data.activeFestival && VALID_THEME_IDS.includes(data.activeFestival)) ? data.activeFestival : 'neutral-default');
+        const effectiveTheme: ThemeId = (data.effectiveTheme && VALID_THEME_IDS.includes(data.effectiveTheme))
+          ? data.effectiveTheme
+          : activeTheme;
+        const isFestival = FESTIVAL_THEME_IDS.includes(effectiveTheme);
 
-        setGlobalTheme({
+        const newConfig: GlobalThemeConfig = {
           activeTheme,
           effectiveTheme,
           festivalGreeting: data.festivalGreeting || DEFAULT_GLOBAL_THEME.festivalGreeting,
@@ -141,10 +204,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           updatedAt: data.updatedAt || new Date().toISOString(),
           updatedBy: data.updatedBy || null,
           updatedByName: data.updatedByName || null,
-        });
+        };
+
+        setGlobalTheme(newConfig);
+        try {
+          localStorage.setItem(MTSLAB_GLOBAL_THEME_STORAGE_KEY, JSON.stringify(newConfig));
+        } catch (_) {}
       }
     } catch (err) {
-      // Fallback silently if offline or server restarting
+      // Fallback silently if offline or server restarting; preserve local festival cache without reverting to light mode
+      console.warn('[THEME HYDRATION NOTICE] Server unreachable; maintaining persisted local theme:', err);
     }
   }, []);
 
@@ -163,9 +232,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Determine effective theme with strict priority:
   // 1. Preview mode (Super Admin only, local testing in current tab)
-  // 2. Super Admin Authoritative Global Theme (default)
+  // 2. Super Admin Authoritative Global Theme (if festival theme is active or default)
   // 3. User's personal preference if explicitly opted-in (and not festival enforced)
-  const isFestivalEnforced = globalTheme.festivalModeEnabled;
+  const isFestivalEnforced = globalTheme.festivalModeEnabled || FESTIVAL_THEME_IDS.includes(globalTheme.effectiveTheme);
   const isScheduledActive = globalTheme.isScheduledActive;
 
   const effectiveTheme: ThemeId = useMemo(() => {
@@ -247,7 +316,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     setUserPreferenceState(preference);
     try {
-      localStorage.setItem('mtslab-theme-preference', preference);
+      localStorage.setItem(MTSLAB_THEME_PREFERENCE_STORAGE_KEY, preference);
     } catch (_) {}
   }, [isFestivalEnforced]);
 
@@ -260,6 +329,33 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       schedule?: FestivalSchedule;
     }
   ): Promise<boolean> => {
+    if (!VALID_THEME_IDS.includes(themeId)) {
+      toast.error(`Invalid theme identifier '${themeId}'.`);
+      return false;
+    }
+
+    const previousConfig = globalTheme;
+    const isFestival = FESTIVAL_THEME_IDS.includes(themeId);
+    const optimisticConfig: GlobalThemeConfig = {
+      activeTheme: themeId,
+      effectiveTheme: themeId,
+      festivalGreeting: options?.festivalGreeting || (isFestival ? DEFAULT_GLOBAL_THEME.festivalGreeting : 'Serving with Excellence & Precision at MTS Lab Kathmandu'),
+      customMessage: options?.customMessage || globalTheme.customMessage,
+      schedule: options?.schedule || globalTheme.schedule,
+      isScheduledActive: false,
+      festivalModeEnabled: isFestival,
+      activeFestival: (isFestival ? themeId : 'dashain') as FestivalType,
+      updatedAt: new Date().toISOString(),
+      updatedBy: globalTheme.updatedBy,
+      updatedByName: globalTheme.updatedByName,
+    };
+
+    // Optimistically update UI & localStorage cache immediately
+    setGlobalTheme(optimisticConfig);
+    try {
+      localStorage.setItem(MTSLAB_GLOBAL_THEME_STORAGE_KEY, JSON.stringify(optimisticConfig));
+    } catch (_) {}
+
     try {
       const payload: any = {
         activeTheme: themeId,
@@ -271,16 +367,25 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const res: any = await api.post('/admin/system-theme', payload);
       if (res && res.themeConfig) {
         setGlobalTheme(res.themeConfig);
+        try {
+          localStorage.setItem(MTSLAB_GLOBAL_THEME_STORAGE_KEY, JSON.stringify(res.themeConfig));
+        } catch (_) {}
         setPreviewTheme(null); // Clear preview upon global publish
         toast.success(res.message || 'Global theme updated and broadcasted across all devices!');
         return true;
       }
-      return false;
+      throw new Error(res?.error || 'Failed to update theme configuration.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to apply global theme configuration.');
+      // Revert optimistic update on failure to prevent false sense of persistence
+      console.error('[APPLY GLOBAL THEME ERROR]', err);
+      setGlobalTheme(previousConfig);
+      try {
+        localStorage.setItem(MTSLAB_GLOBAL_THEME_STORAGE_KEY, JSON.stringify(previousConfig));
+      } catch (_) {}
+      toast.error(err?.message || 'Failed to apply global theme configuration.');
       return false;
     }
-  }, []);
+  }, [globalTheme]);
 
   // Super Admin action to reset to default neutral theme
   const resetToDefault = useCallback(async (): Promise<boolean> => {
@@ -291,6 +396,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
       if (res && res.themeConfig) {
         setGlobalTheme(res.themeConfig);
+        try {
+          localStorage.setItem(MTSLAB_GLOBAL_THEME_STORAGE_KEY, JSON.stringify(res.themeConfig));
+        } catch (_) {}
         setPreviewTheme(null);
         toast.success('System theme successfully reset to Neutral Default!');
         return true;

@@ -6,7 +6,7 @@ import { getSlides, getSlideById } from '../services/slidesStorage';
 import { filterPubliclyTrackableRepairs } from '../services/trackingExpiration';
 import { createNotification } from '../services/notificationStorage';
 import { sendEmail, sendEmailDetailed } from '../services/emailService';
-import { getSystemThemeConfig } from '../services/systemThemeService';
+import { getSystemThemeConfig, getSystemThemeConfigAsync } from '../services/systemThemeService';
 import fs from 'fs';
 
 import path from 'path';
@@ -1029,10 +1029,10 @@ router.get('/dashboard/stats', authenticate, async (req: AuthRequest, res: Respo
 });
 
 // GET /api/public/system-theme and /api/system-theme
-const handleGetSystemTheme = (_req: Request, res: Response) => {
+const handleGetSystemTheme = async (_req: Request, res: Response) => {
   try {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-    const themeConfig = getSystemThemeConfig();
+    const themeConfig = await getSystemThemeConfigAsync();
     return res.json(themeConfig);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to read system theme configuration.' });

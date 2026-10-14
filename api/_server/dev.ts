@@ -7,7 +7,11 @@ dotenv.config();
 
 async function startDevServer() {
   const app = createApp();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const portArgIndex = process.argv.indexOf('--port');
+  const cliPort = portArgIndex !== -1 ? Number(process.argv[portArgIndex + 1]) : null;
+  const PORT = cliPort && !isNaN(cliPort)
+    ? cliPort
+    : (process.env.PORT && process.env.PORT !== '8080' ? parseInt(process.env.PORT, 10) : 3000);
 
   if (process.env.NODE_ENV !== 'production') {
     try {

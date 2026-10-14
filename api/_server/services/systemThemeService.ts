@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { broadcastServerChange } from './realtimeSync';
+import { supabaseAdmin } from '../config/supabase';
 
 export type GlobalThemeId = 
   | 'light' 
@@ -52,18 +53,6 @@ export interface SystemThemeConfig {
   updatedByName?: string | null;
 }
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const THEME_CONFIG_FILE = path.join(DATA_DIR, 'system_theme.json');
-
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  } catch (e) {
-    console.warn('[THEME STORAGE DIR WARN]', e);
-  }
-}
-
 export const DEFAULT_FESTIVAL_GREETINGS: Record<string, string> = {
   dashain: 'बडा दशैंको हार्दिक मंगलमय शुभकामना | Happy Dashain - Celebrating Prosperity & Renewal',
   tihar: 'शुभ दीपावली तथा तिहारको हार्दिक शुभकामना | Happy Tihar & Deepawali - Festival of Lights',
@@ -91,6 +80,49 @@ const DEFAULT_CONFIG: SystemThemeConfig = {
 };
 
 let cachedConfig: SystemThemeConfig | null = null;
+
+function getConfigCandidatePaths(): string[] {
+  const paths: string[] = [];
+  try {
+    paths.push(path.join(process.cwd(), 'data', 'system_theme.json'));
+  } catch (_) {}
+  try {
+    const tmpDir = process.env.TEMP || process.env.TMPDIR || '/tmp';
+    paths.push(path.join(tmpDir, 'system_theme.json'));
+  } catch (_) {}
+  return paths;
+}
+
+function persistToFile(config: SystemThemeConfig): void {
+  const candidates = getConfigCandidatePaths();
+  for (const filePath of candidates) {
+    try {
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(filePath, JSON.stringify(config, null, 2), 'utf-8');
+    } catch (_) {
+      // Continue to next candidate if directory is read-only (e.g., Vercel /var/task)
+    }
+  }
+}
+
+function readFromFile(): Partial<SystemThemeConfig> | null {
+  const candidates = getConfigCandidatePaths();
+  for (const filePath of candidates) {
+    try {
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          return parsed;
+        }
+      }
+    } catch (_) {}
+  }
+  return null;
+}
 
 /**
  * Checks if a schedule interval is currently active using Asia/Kathmandu authoritative time.
@@ -125,9 +157,70 @@ function resolveEffectiveTheme(
   return { effectiveTheme: baseTheme, isScheduledActive: false };
 }
 
+function normalizeThemeConfig(parsed: any): SystemThemeConfig {
+  let activeTheme: GlobalThemeId = 'neutral-default';
+  if (parsed.activeTheme && VALID_THEMES.includes(parsed.activeTheme)) {
+    activeTheme = parsed.activeTheme;
+  } else if (parsed.festivalModeEnabled && parsed.activeFestival && VALID_THEMES.includes(parsed.activeFestival)) {
+    activeTheme = parsed.activeFestival;
+  }
+
+  const schedule: FestivalSchedule = {
+    enabled: Boolean(parsed.schedule?.enabled),
+    themeId: parsed.schedule?.themeId && VALID_THEMES.includes(parsed.schedule.themeId)
+      ? parsed.schedule.themeId
+      : 'dashain',
+    startDate: parsed.schedule?.startDate ? String(parsed.schedule.startDate) : '',
+    endDate: parsed.schedule?.endDate ? String(parsed.schedule.endDate) : '',
+  };
+
+  const { effectiveTheme, isScheduledActive } = resolveEffectiveTheme(activeTheme, schedule);
+  const isFestival = FESTIVAL_THEMES.includes(effectiveTheme);
+
+  return {
+    activeTheme,
+    effectiveTheme,
+    festivalGreeting: parsed.festivalGreeting || (isFestival ? DEFAULT_FESTIVAL_GREETINGS[effectiveTheme] : DEFAULT_CONFIG.festivalGreeting),
+    customMessage: parsed.customMessage || DEFAULT_CONFIG.customMessage,
+    schedule,
+    isScheduledActive,
+    festivalModeEnabled: isFestival,
+    activeFestival: (isFestival ? effectiveTheme : 'dashain') as any,
+    updatedAt: parsed.updatedAt || new Date().toISOString(),
+    updatedBy: parsed.updatedBy || null,
+    updatedByName: parsed.updatedByName || null,
+  };
+}
+
+async function fetchLatestThemeFromSupabase(): Promise<SystemThemeConfig | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('AuditLog')
+      .select('details, createdAt, userName')
+      .eq('resource', 'SystemTheme')
+      .eq('action', 'SUPERADMIN_THEME_UPDATE')
+      .order('createdAt', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data?.details) {
+      const parsed = typeof data.details === 'string' ? JSON.parse(data.details) : data.details;
+      if (parsed && (parsed.activeTheme || parsed.effectiveTheme)) {
+        return normalizeThemeConfig({
+          ...parsed,
+          updatedAt: data.createdAt,
+          updatedByName: data.userName || parsed.updatedByName,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[SUPABASE THEME HYDRATION WARN]', err);
+  }
+  return null;
+}
+
 export function getSystemThemeConfig(): SystemThemeConfig {
   if (cachedConfig) {
-    // Re-evaluate schedule dynamically in case time crossed start/end boundaries
     const { effectiveTheme, isScheduledActive } = resolveEffectiveTheme(
       cachedConfig.activeTheme,
       cachedConfig.schedule
@@ -141,56 +234,39 @@ export function getSystemThemeConfig(): SystemThemeConfig {
     return cachedConfig;
   }
 
-  try {
-    if (fs.existsSync(THEME_CONFIG_FILE)) {
-      const raw = fs.readFileSync(THEME_CONFIG_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-
-      // Validate base theme
-      let activeTheme: GlobalThemeId = 'neutral-default';
-      if (parsed.activeTheme && VALID_THEMES.includes(parsed.activeTheme)) {
-        activeTheme = parsed.activeTheme;
-      } else if (parsed.festivalModeEnabled && parsed.activeFestival && VALID_THEMES.includes(parsed.activeFestival)) {
-        activeTheme = parsed.activeFestival;
-      }
-
-      const schedule: FestivalSchedule = {
-        enabled: Boolean(parsed.schedule?.enabled),
-        themeId: parsed.schedule?.themeId && VALID_THEMES.includes(parsed.schedule.themeId)
-          ? parsed.schedule.themeId
-          : 'dashain',
-        startDate: parsed.schedule?.startDate ? String(parsed.schedule.startDate) : '',
-        endDate: parsed.schedule?.endDate ? String(parsed.schedule.endDate) : '',
-      };
-
-      const { effectiveTheme, isScheduledActive } = resolveEffectiveTheme(activeTheme, schedule);
-      const isFestival = FESTIVAL_THEMES.includes(effectiveTheme);
-
-      cachedConfig = {
-        activeTheme,
-        effectiveTheme,
-        festivalGreeting: parsed.festivalGreeting || (isFestival ? DEFAULT_FESTIVAL_GREETINGS[effectiveTheme] : DEFAULT_CONFIG.festivalGreeting),
-        customMessage: parsed.customMessage || DEFAULT_CONFIG.customMessage,
-        schedule,
-        isScheduledActive,
-        festivalModeEnabled: isFestival,
-        activeFestival: (isFestival ? effectiveTheme : 'dashain') as any,
-        updatedAt: parsed.updatedAt || new Date().toISOString(),
-        updatedBy: parsed.updatedBy || null,
-        updatedByName: parsed.updatedByName || null,
-      };
-      return cachedConfig;
-    }
-  } catch (err) {
-    console.warn('[THEME CONFIG READ ERROR]', err);
+  const fileData = readFromFile();
+  if (fileData) {
+    cachedConfig = normalizeThemeConfig(fileData);
+    return cachedConfig;
   }
 
   cachedConfig = { ...DEFAULT_CONFIG };
-  try {
-    fs.writeFileSync(THEME_CONFIG_FILE, JSON.stringify(cachedConfig, null, 2), 'utf-8');
-  } catch (_) {}
-
+  persistToFile(cachedConfig);
   return cachedConfig;
+}
+
+export async function getSystemThemeConfigAsync(): Promise<SystemThemeConfig> {
+  // If in-memory cache has non-default or active configuration, return it
+  if (cachedConfig && cachedConfig.activeTheme !== 'neutral-default') {
+    return getSystemThemeConfig();
+  }
+
+  // Check file candidates
+  const fileData = readFromFile();
+  if (fileData && fileData.activeTheme && fileData.activeTheme !== 'neutral-default') {
+    cachedConfig = normalizeThemeConfig(fileData);
+    return cachedConfig;
+  }
+
+  // Authoritatively hydrate from Supabase AuditLog store
+  const supabaseTheme = await fetchLatestThemeFromSupabase();
+  if (supabaseTheme) {
+    cachedConfig = supabaseTheme;
+    persistToFile(cachedConfig);
+    return cachedConfig;
+  }
+
+  return getSystemThemeConfig();
 }
 
 export async function updateSystemThemeConfig(
@@ -199,7 +275,6 @@ export async function updateSystemThemeConfig(
     festivalGreeting?: string;
     customMessage?: string;
     schedule?: Partial<FestivalSchedule>;
-    // Legacy support:
     festivalModeEnabled?: boolean;
     activeFestival?: GlobalThemeId;
   },
@@ -207,18 +282,15 @@ export async function updateSystemThemeConfig(
 ): Promise<SystemThemeConfig> {
   const current = getSystemThemeConfig();
 
-  // Determine updated base activeTheme
   let activeTheme: GlobalThemeId = current.activeTheme;
   if (updates.activeTheme && VALID_THEMES.includes(updates.activeTheme)) {
     activeTheme = updates.activeTheme;
   } else if (updates.festivalModeEnabled === false) {
-    // If explicitly disabling festival mode via legacy toggle, revert to neutral-default or light
     activeTheme = 'neutral-default';
   } else if (updates.activeFestival && VALID_THEMES.includes(updates.activeFestival)) {
     activeTheme = updates.activeFestival;
   }
 
-  // Determine schedule
   let schedule: FestivalSchedule = { ...current.schedule! };
   if (updates.schedule) {
     schedule = {
@@ -256,12 +328,8 @@ export async function updateSystemThemeConfig(
     updatedByName: user?.name || null,
   };
 
-  try {
-    fs.writeFileSync(THEME_CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf-8');
-    cachedConfig = updated;
-  } catch (err) {
-    console.error('[THEME CONFIG WRITE ERROR]', err);
-  }
+  persistToFile(updated);
+  cachedConfig = updated;
 
   // Realtime broadcast to all clients via Supabase Realtime channel
   try {

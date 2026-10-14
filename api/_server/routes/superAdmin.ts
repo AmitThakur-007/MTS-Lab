@@ -8,7 +8,7 @@ import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { logAudit } from '../services/auditService';
-import { getSystemThemeConfig, updateSystemThemeConfig } from '../services/systemThemeService';
+import { getSystemThemeConfig, getSystemThemeConfigAsync, updateSystemThemeConfig } from '../services/systemThemeService';
 
 const router = Router();
 
@@ -443,7 +443,7 @@ router.post(
 // 8. GET /api/admin/system-theme
 router.get('/system-theme', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (_req: AuthRequest, res: Response) => {
   try {
-    const config = getSystemThemeConfig();
+    const config = await getSystemThemeConfigAsync();
     return res.json(config);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to retrieve system theme settings.' });

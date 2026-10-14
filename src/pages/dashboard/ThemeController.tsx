@@ -204,7 +204,7 @@ export default function ThemeController() {
 
   // Selected theme in the controller UI (either previewing or currently active)
   const [selectedThemeId, setSelectedThemeId] = useState<ThemeId>(() => {
-    return previewTheme || globalTheme.activeTheme || 'neutral-default';
+    return previewTheme || globalTheme.effectiveTheme || globalTheme.activeTheme || 'neutral-default';
   });
 
   const [customGreeting, setCustomGreeting] = useState<string>(globalTheme.festivalGreeting || '');
@@ -220,7 +220,7 @@ export default function ThemeController() {
   // Keep state synchronized with authoritative globalTheme updates from server
   useEffect(() => {
     if (!previewTheme) {
-      setSelectedThemeId(globalTheme.activeTheme || 'neutral-default');
+      setSelectedThemeId(globalTheme.effectiveTheme || globalTheme.activeTheme || 'neutral-default');
       setCustomGreeting(globalTheme.festivalGreeting || '');
       setScheduleEnabled(Boolean(globalTheme.schedule?.enabled));
       setScheduleThemeId(globalTheme.schedule?.themeId || 'dashain');
@@ -230,8 +230,9 @@ export default function ThemeController() {
   }, [globalTheme, previewTheme]);
 
   const hasUnsavedChanges = useMemo(() => {
-    if (previewTheme !== null && previewTheme !== globalTheme.activeTheme) return true;
-    if (selectedThemeId !== globalTheme.activeTheme) return true;
+    const currentActive = globalTheme.effectiveTheme || globalTheme.activeTheme || 'neutral-default';
+    if (previewTheme !== null && previewTheme !== currentActive) return true;
+    if (selectedThemeId !== currentActive) return true;
     if (customGreeting !== (globalTheme.festivalGreeting || '')) return true;
     if (scheduleEnabled !== Boolean(globalTheme.schedule?.enabled)) return true;
     if (scheduleEnabled) {
