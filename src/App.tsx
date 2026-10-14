@@ -23,8 +23,10 @@ import Privacy from './pages/Privacy';
 import Dashboard from './pages/Dashboard';
 import NotFound from './pages/NotFound';
 import { RouteSeo } from '@/components/Seo';
+import { ThemeProvider } from '@/context/ThemeContext';
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode, roles?: string[] }) {
+
   const { user, token } = useAuthStore();
   
   if (!token || !user) {
@@ -44,46 +46,49 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode, roles?
 
 export default function App() {
   return (
-    <TooltipProvider>
-      <Router>
-        <RouteSeo />
-        <ScrollToTop />
-        <div className="min-h-screen bg-background font-sans antialiased">
-          <ErrorBoundary>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<Home />} />
-              <Route path="/services" element={<Services />} />
-              <Route path="/services/:slug" element={<ServiceDetail />} />
-              <Route path="/price-finder" element={<Services />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/track" element={<Tracking />} />
-              <Route path="/shop" element={<Shop />} />
-              <Route path="/contact" element={<Contact />} />
-              <Route path="/terms" element={<Terms />} />
-              <Route path="/privacy" element={<Privacy />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/pending-approval" element={<PendingApproval />} />
-              <Route path="/rejected-access" element={<RejectedAccess />} />
+    <ThemeProvider>
+      <TooltipProvider>
+        <Router>
+          <RouteSeo />
+          <ScrollToTop />
+          <div className="min-h-screen bg-background text-foreground font-sans antialiased transition-colors">
+            <ErrorBoundary>
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/" element={<Home />} />
+                <Route path="/services" element={<Services />} />
+                <Route path="/services/:slug" element={<ServiceDetail />} />
+                <Route path="/price-finder" element={<Services />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/track" element={<Tracking />} />
+                <Route path="/shop" element={<Shop />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/pending-approval" element={<PendingApproval />} />
+                <Route path="/rejected-access" element={<RejectedAccess />} />
 
-              {/* Protected Dashboard Routes */}
-              <Route 
-                path="/dashboard/*" 
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                } 
-              />
+                {/* Protected Dashboard Routes */}
+                <Route 
+                  path="/dashboard/*" 
+                  element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  } 
+                />
 
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </ErrorBoundary>
-          <Toaster position="top-right" richColors />
-        </div>
-      </Router>
-    </TooltipProvider>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </ErrorBoundary>
+            <Toaster position="top-right" richColors />
+          </div>
+        </Router>
+      </TooltipProvider>
+    </ThemeProvider>
   );
 }
+

@@ -117,6 +117,9 @@ import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import ServiceSlipModal from '@/components/repair/ServiceSlipModal';
 import EditRepairModal from '@/components/repair/EditRepairModal';
 import SendSmsModal from '@/components/repair/SendSmsModal';
+import { Pagination } from '@/components/common/Pagination';
+import { REPAIRS_PER_PAGE } from '@/lib/pagination';
+
 
 // Status badge styling
 const statusConfig: Record<string, { label: string; badgeClass: string; bgSoft: string; textClass: string }> = {
@@ -152,6 +155,14 @@ export default function Repairs() {
   const [customEndDate, setCustomEndDate] = useState('');
   const [selectedTechnicianFilter, setSelectedTechnicianFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'updated' | 'repairNumber' | 'customerName' | 'status'>('newest');
+
+  // Authoritative 40-record page state
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset pagination to page 1 whenever any filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeStatusTab, selectedTechnicianFilter, dateFilterPreset, customStartDate, customEndDate, search, sortBy]);
 
   // Selection & Bulk Actions State
   const [selectedRepairIds, setSelectedRepairIds] = useState<Set<string>>(new Set());
@@ -533,8 +544,18 @@ export default function Repairs() {
     return result;
   }, [technicianFilteredRepairs, search, sortBy]);
 
-  // Visible / displayed repair IDs based on current filters
-  const visibleRepairIds = useMemo(() => finalFilteredRepairs.map(r => r.id), [finalFilteredRepairs]);
+  // Global 40-record page bounds calculation
+  const totalFilteredCount = finalFilteredRepairs.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredCount / REPAIRS_PER_PAGE));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const paginatedRepairs = useMemo(() => {
+    const start = (safeCurrentPage - 1) * REPAIRS_PER_PAGE;
+    return finalFilteredRepairs.slice(start, start + REPAIRS_PER_PAGE);
+  }, [finalFilteredRepairs, safeCurrentPage]);
+
+  // Visible / displayed repair IDs on the currently active page
+  const visibleRepairIds = useMemo(() => paginatedRepairs.map(r => r.id), [paginatedRepairs]);
   const isAllVisibleSelected = visibleRepairIds.length > 0 && visibleRepairIds.every(id => selectedRepairIds.has(id));
   const isSomeVisibleSelected = visibleRepairIds.some(id => selectedRepairIds.has(id));
 
@@ -542,6 +563,7 @@ export default function Repairs() {
   const selectedRepairsList = useMemo(() => {
     return repairs.filter(r => selectedRepairIds.has(r.id));
   }, [repairs, selectedRepairIds]);
+
 
   // Selection Handlers
   const handleToggleSelectRepair = (id: string, e?: React.MouseEvent) => {
@@ -1306,8 +1328,9 @@ export default function Repairs() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {finalFilteredRepairs.map((repair) => {
+                  {paginatedRepairs.map((repair) => {
                     const statusInfo = statusConfig[repair.status] || {
+
                       label: repair.status?.replace(/_/g, ' ') || 'Unknown',
                       badgeClass: 'bg-slate-100 text-slate-700',
                       bgSoft: 'bg-slate-50',
@@ -1667,8 +1690,9 @@ export default function Repairs() {
 
           {/* Mobile / Tablet Responsive Cards Layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:hidden gap-3">
-            {finalFilteredRepairs.map((repair) => {
+            {paginatedRepairs.map((repair) => {
               const statusInfo = statusConfig[repair.status] || {
+
                 label: repair.status?.replace(/_/g, ' ') || 'Unknown',
                 badgeClass: 'bg-slate-100 text-slate-700',
                 bgSoft: 'bg-slate-50',
@@ -1900,8 +1924,20 @@ export default function Repairs() {
               );
             })}
           </div>
+
+          {/* Global 40-item Repair Pagination Control */}
+          <Pagination
+            currentPage={safeCurrentPage}
+            totalItems={totalFilteredCount}
+            pageSize={REPAIRS_PER_PAGE}
+            onPageChange={setCurrentPage}
+            className="mt-6"
+            itemLabel="repair"
+            itemsLabel="repairs"
+          />
         </div>
       )}
+
 
       {/* ========================================================================= */}
       {/* MODAL 1: SINGLE DELETE CONFIRMATION (SUPER_ADMIN, ADMIN & RECEPTIONIST)   */}

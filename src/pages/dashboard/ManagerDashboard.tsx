@@ -86,6 +86,9 @@ import { cn } from '@/lib/utils';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import UserOverviewCards from '@/components/dashboard/UserOverviewCards';
 import { formatNPR } from '@/lib/format';
+import { Pagination } from '@/components/common/Pagination';
+import { REPAIRS_PER_PAGE } from '@/lib/pagination';
+
 
 const statusConfig: Record<string, { label: string; badge: string; bgSoft: string; textClass: string }> = {
   PENDING: { label: 'Pending', badge: 'bg-amber-100 text-amber-900 border-amber-300', bgSoft: 'bg-amber-50', textClass: 'text-amber-800' },
@@ -140,6 +143,14 @@ export default function ManagerDashboard() {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'repairNumber' | 'customer' | 'priority'>('newest');
+
+  // Authoritative 40-record page state
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset pagination to page 1 whenever any filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, techFilter, priorityFilter, dateFilter, customStartDate, customEndDate, sortBy]);
 
   // Modals & Action States
   const [selectedRepair, setSelectedRepair] = useState<any | null>(null);
@@ -368,6 +379,17 @@ export default function ManagerDashboard() {
       return 0;
     });
   }, [repairs, searchQuery, statusFilter, techFilter, priorityFilter, dateFilter, customStartDate, customEndDate, sortBy]);
+
+  // Global 40-record page bounds calculation
+  const totalFilteredCount = filteredRepairs.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredCount / REPAIRS_PER_PAGE));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const paginatedRepairs = useMemo(() => {
+    const start = (safeCurrentPage - 1) * REPAIRS_PER_PAGE;
+    return filteredRepairs.slice(start, start + REPAIRS_PER_PAGE);
+  }, [filteredRepairs, safeCurrentPage]);
+
 
   // Handlers for Manager Actions
   const handleOpenAssignModal = (repair: any) => {
@@ -1091,8 +1113,9 @@ export default function ManagerDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
-                    {filteredRepairs.map((repair) => {
+                    {paginatedRepairs.map((repair) => {
                       const statusInfo = statusConfig[repair.status] || {
+
                         label: repair.status?.replace(/_/g, ' ') || 'Unknown',
                         badge: 'bg-slate-100 text-slate-700 border-slate-200',
                         bgSoft: 'bg-slate-50',
@@ -1260,8 +1283,9 @@ export default function ManagerDashboard() {
 
             {/* Mobile / Tablet Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:hidden gap-3.5">
-              {filteredRepairs.map((repair) => {
+              {paginatedRepairs.map((repair) => {
                 const statusInfo = statusConfig[repair.status] || {
+
                   label: repair.status?.replace(/_/g, ' ') || 'Unknown',
                   badge: 'bg-slate-100 text-slate-700 border-slate-200',
                   bgSoft: 'bg-slate-50',
@@ -1383,8 +1407,20 @@ export default function ManagerDashboard() {
                 );
               })}
             </div>
+
+            {/* Global 40-record Pagination */}
+            <Pagination
+              currentPage={safeCurrentPage}
+              totalItems={totalFilteredCount}
+              pageSize={REPAIRS_PER_PAGE}
+              onPageChange={setCurrentPage}
+              className="mt-6"
+              itemLabel="repair job"
+              itemsLabel="repair jobs"
+            />
           </>
         )}
+
       </div>
 
       {/* ========================================================================= */}

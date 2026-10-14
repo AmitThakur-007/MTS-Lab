@@ -295,13 +295,19 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       scope,
       assignedToMeOnly,
       includeCompleted,
-      limit = '2000',
+      limit,
       page = '1',
+      paginate,
     } = req.query;
 
-    const pageNum = parseInt(page as string, 10) || 1;
-    const limitNum = Math.min(parseInt(limit as string, 10) || 2000, 5000);
+    const isPaginatedRequest = String(paginate).toLowerCase() === 'true' || req.query.format === 'paginated' || (req.query.page !== undefined && limit === undefined);
+    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+    const limitNum = Math.min(
+      Math.max(1, parseInt((limit as string) || (isPaginatedRequest ? '40' : '2000'), 10)),
+      5000
+    );
     const offset = (pageNum - 1) * limitNum;
+
 
     let query = supabaseAdmin
       .from('Repair')
@@ -398,12 +404,20 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     query = query.order('createdAt', { ascending: false }).range(offset, offset + limitNum - 1);
 
-    const { data: repairs, error } = await query;
+    const { data: repairs, count, error } = await query;
 
     if (error) {
       console.error('[REPAIRS GET ERROR]', error);
       return res.status(500).json({ error: 'Failed to retrieve repairs list.' });
     }
+
+    const totalCount = typeof count === 'number' ? count : (Array.isArray(repairs) ? (repairs as any[]).length : 0);
+    const totalPages = Math.max(1, Math.ceil(totalCount / limitNum));
+
+    res.setHeader('X-Total-Count', String(totalCount));
+    res.setHeader('X-Page', String(pageNum));
+    res.setHeader('X-Limit', String(limitNum));
+    res.setHeader('X-Total-Pages', String(totalPages));
 
     const smsSummaries = getAllRepairSmsSummaries();
     const repairsWithSms = (repairs || []).map((r: any) => ({
@@ -421,7 +435,19 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       },
     }));
 
+    if (isPaginatedRequest) {
+      return res.json({
+        data: repairsWithSms,
+        repairs: repairsWithSms,
+        total: totalCount,
+        page: pageNum,
+        limit: limitNum,
+        totalPages,
+      });
+    }
+
     return res.json(repairsWithSms);
+
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to load repair records.' });
   }

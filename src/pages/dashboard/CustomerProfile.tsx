@@ -48,6 +48,8 @@ import {
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
+import { REPAIRS_PER_PAGE } from '@/lib/pagination';
+
 import { toast } from 'sonner';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -166,8 +168,9 @@ export default function CustomerProfile() {
     try {
       const params = new URLSearchParams();
       params.set('page', String(page));
-      params.set('limit', '15');
+      params.set('limit', String(REPAIRS_PER_PAGE));
       if (status !== 'ALL') params.set('status', status);
+
 
       // Date filter
       if (dateRange === 'TODAY') {
@@ -190,8 +193,9 @@ export default function CustomerProfile() {
       }
 
       const data = await api.get(`/customers/${id}/repairs?${params.toString()}`);
-      setRepairs(data.repairs || []);
-      setPagination(data.pagination || {});
+      setRepairs(data.repairs || (Array.isArray(data) ? data : []));
+      setPagination(data.pagination || { page: 1, limit: REPAIRS_PER_PAGE, totalPages: 1, total: (data.repairs || data || []).length });
+
     } catch (err: any) {
       toast.error(err.message || 'Failed to load repair history');
     } finally {

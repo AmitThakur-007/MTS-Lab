@@ -117,6 +117,97 @@
     --sidebar-ring: #71717a;
 }
 
+/* ==========================================================================
+   MTS Lab — Global Nepal Festival Themes (Super Admin Controlled)
+   ========================================================================== */
+.theme-festival-dashain {
+    --background: #fcf9f4;
+    --foreground: #1c1917;
+    --card: #ffffff;
+    --card-foreground: #1c1917;
+    --popover: #ffffff;
+    --popover-foreground: #1c1917;
+    --primary: #991b1b;
+    --primary-foreground: #ffffff;
+    --secondary: #fef2f2;
+    --secondary-foreground: #991b1b;
+    --muted: #fbf5eb;
+    --muted-foreground: #78716c;
+    --accent: #fef3c7;
+    --accent-foreground: #92400e;
+    --destructive: #b91c1c;
+    --border: #ebd9c3;
+    --input: #ebd9c3;
+    --ring: #b91c1c;
+    --sidebar: #fcf6ee;
+    --sidebar-foreground: #1c1917;
+    --sidebar-primary: #991b1b;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #fbf0df;
+    --sidebar-accent-foreground: #991b1b;
+    --sidebar-border: #ebd9c3;
+    --sidebar-ring: #b91c1c;
+}
+
+.theme-festival-tihar {
+    --background: #0b0f17;
+    --foreground: #f8fafc;
+    --card: #131b26;
+    --card-foreground: #f8fafc;
+    --popover: #131b26;
+    --popover-foreground: #f8fafc;
+    --primary: #f59e0b;
+    --primary-foreground: #09090b;
+    --secondary: #1e293b;
+    --secondary-foreground: #f8fafc;
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --accent: #2b2314;
+    --accent-foreground: #fbbf24;
+    --destructive: #ef4444;
+    --border: #334155;
+    --input: #334155;
+    --ring: #f59e0b;
+    --sidebar: #0f1622;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-primary: #f59e0b;
+    --sidebar-primary-foreground: #09090b;
+    --sidebar-accent: #1e293b;
+    --sidebar-accent-foreground: #fbbf24;
+    --sidebar-border: #334155;
+    --sidebar-ring: #f59e0b;
+}
+
+.theme-festival-holi {
+    --background: #fdfafb;
+    --foreground: #1c1917;
+    --card: #ffffff;
+    --card-foreground: #1c1917;
+    --popover: #ffffff;
+    --popover-foreground: #1c1917;
+    --primary: #be185d;
+    --primary-foreground: #ffffff;
+    --secondary: #fdf2f8;
+    --secondary-foreground: #be185d;
+    --muted: #f5f5f4;
+    --muted-foreground: #78716c;
+    --accent: #fdf2f8;
+    --accent-foreground: #9d174d;
+    --destructive: #e11d48;
+    --border: #f2e1ea;
+    --input: #f2e1ea;
+    --ring: #be185d;
+    --sidebar: #fdf6fa;
+    --sidebar-foreground: #1c1917;
+    --sidebar-primary: #be185d;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #fae8f3;
+    --sidebar-accent-foreground: #be185d;
+    --sidebar-border: #f2e1ea;
+    --sidebar-ring: #be185d;
+}
+
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

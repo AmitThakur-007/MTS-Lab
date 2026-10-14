@@ -8,8 +8,10 @@ import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { logAudit } from '../services/auditService';
+import { getSystemThemeConfig, updateSystemThemeConfig } from '../services/systemThemeService';
 
 const router = Router();
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 // 1. GET /api/admin/audit-logs
@@ -331,4 +333,64 @@ router.post(
   }
 );
 
+// 8. GET /api/admin/system-theme
+router.get('/system-theme', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (_req: AuthRequest, res: Response) => {
+  try {
+    const config = getSystemThemeConfig();
+    return res.json(config);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to retrieve system theme settings.' });
+  }
+});
+
+// 9. POST /api/admin/system-theme — Strictly restricted to SUPER_ADMIN
+router.post('/system-theme', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { festivalModeEnabled, activeFestival, festivalGreeting, customMessage } = req.body;
+
+    if (activeFestival !== undefined && !['holi', 'dashain', 'tihar'].includes(activeFestival)) {
+      return res.status(400).json({ error: "Invalid festival. Allowed values: 'holi', 'dashain', 'tihar'." });
+    }
+
+    const updated = await updateSystemThemeConfig(
+      {
+        festivalModeEnabled: typeof festivalModeEnabled === 'boolean' ? festivalModeEnabled : undefined,
+        activeFestival: activeFestival || undefined,
+        festivalGreeting: festivalGreeting !== undefined ? String(festivalGreeting).trim() : undefined,
+        customMessage: customMessage !== undefined ? String(customMessage).trim() : undefined,
+      },
+      {
+        id: req.user?.id,
+        name: req.user?.name,
+        role: req.user?.role,
+      }
+    );
+
+    // Audit log
+    await logAudit({
+      userId: req.user?.id || 'system',
+      userEmail: req.user?.email || 'superadmin@mtslab.com',
+      action: 'SUPERADMIN_FESTIVAL_THEME_UPDATE',
+      resource: 'SystemTheme',
+      details: {
+        festivalModeEnabled: updated.festivalModeEnabled,
+        activeFestival: updated.activeFestival,
+        festivalGreeting: updated.festivalGreeting,
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: updated.festivalModeEnabled
+        ? `Festival Mode (${updated.activeFestival.toUpperCase()}) globally activated for all staff!`
+        : 'Festival Mode globally disabled. Normal Dark/Light preferences restored.',
+      themeConfig: updated,
+    });
+  } catch (err: any) {
+    console.error('[UPDATE SYSTEM THEME ERROR]', err);
+    return res.status(500).json({ error: 'Failed to update system theme settings.' });
+  }
+});
+
 export default router;
+

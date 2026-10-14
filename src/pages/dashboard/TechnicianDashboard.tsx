@@ -66,8 +66,11 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import UserOverviewCards from '@/components/dashboard/UserOverviewCards';
+import { Pagination } from '@/components/common/Pagination';
+import { REPAIRS_PER_PAGE } from '@/lib/pagination';
 
 export type DatePreset = 'ALL' | 'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'CUSTOM';
+
 
 export type StatusFilterTab =
   | 'ACTIVE'
@@ -195,6 +198,15 @@ export default function TechnicianDashboard() {
   const [activeTab, setActiveTab] = useState<StatusFilterTab>(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'dueDate' | 'priority'>('newest');
+
+  // Authoritative 40-record page state
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset pagination to page 1 whenever any filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, datePreset, customStartDate, customEndDate, searchQuery, sortBy]);
+
 
   // Core Data
   const [repairs, setRepairs] = useState<any[]>([]);
@@ -744,6 +756,17 @@ export default function TechnicianDashboard() {
     return list;
   }, [repairs, activeTab, searchQuery, sortBy]);
 
+  // Global 40-record page bounds calculation
+  const totalFilteredCount = filteredRepairs.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredCount / REPAIRS_PER_PAGE));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const paginatedRepairs = useMemo(() => {
+    const start = (safeCurrentPage - 1) * REPAIRS_PER_PAGE;
+    return filteredRepairs.slice(start, start + REPAIRS_PER_PAGE);
+  }, [filteredRepairs, safeCurrentPage]);
+
+
   if (loading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3">
@@ -1206,10 +1229,12 @@ export default function TechnicianDashboard() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
-          <AnimatePresence>
-            {filteredRepairs.map((repair) => {
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+            <AnimatePresence>
+            {paginatedRepairs.map((repair) => {
               const statusInfo = statusStyles[repair.status] || {
+
                 label: repair.status.replace(/_/g, ' '),
                 badge: 'bg-slate-100 text-slate-800 border-slate-300',
                 bgSoft: 'bg-slate-50',
@@ -1377,7 +1402,20 @@ export default function TechnicianDashboard() {
             })}
           </AnimatePresence>
         </div>
+
+        {/* Global 40-item Repair Pagination Control */}
+        <Pagination
+          currentPage={safeCurrentPage}
+          totalItems={totalFilteredCount}
+          pageSize={REPAIRS_PER_PAGE}
+          onPageChange={setCurrentPage}
+          className="mt-6"
+          itemLabel="assigned repair"
+          itemsLabel="assigned repairs"
+        />
+        </div>
       )}
+
 
       {/* 8. Update Progress Modal (With Restricted Statuses & Repaired Handover Note) */}
       <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>

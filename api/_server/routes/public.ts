@@ -6,7 +6,9 @@ import { getSlides, getSlideById } from '../services/slidesStorage';
 import { filterPubliclyTrackableRepairs } from '../services/trackingExpiration';
 import { createNotification } from '../services/notificationStorage';
 import { sendEmail, sendEmailDetailed } from '../services/emailService';
+import { getSystemThemeConfig } from '../services/systemThemeService';
 import fs from 'fs';
+
 import path from 'path';
 import crypto from 'crypto';
 
@@ -1025,5 +1027,19 @@ router.get('/dashboard/stats', authenticate, async (req: AuthRequest, res: Respo
     return res.status(500).json({ error: 'Failed to retrieve dashboard overview.' });
   }
 });
+
+// GET /api/public/system-theme and /api/system-theme
+const handleGetSystemTheme = (_req: Request, res: Response) => {
+  try {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    const themeConfig = getSystemThemeConfig();
+    return res.json(themeConfig);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to read system theme configuration.' });
+  }
+};
+
+router.get('/system-theme', handleGetSystemTheme);
+router.get('/public/system-theme', handleGetSystemTheme);
 
 export default router;

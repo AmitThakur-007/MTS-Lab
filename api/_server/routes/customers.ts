@@ -153,15 +153,53 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 router.get('/:id/repairs', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { data: repairs, error } = await supabaseAdmin
+    const { page, limit, status, dateFrom, dateTo } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+    const limitNum = Math.min(Math.max(1, parseInt((limit as string) || '40', 10)), 500);
+    const offset = (pageNum - 1) * limitNum;
+
+    let query = supabaseAdmin
       .from('Repair')
-      .select('*, technician:User!Repair_technicianId_fkey(id, name, role)')
-      .eq('customerId', id)
-      .order('createdAt', { ascending: false });
+      .select('*, technician:User!Repair_technicianId_fkey(id, name, role)', { count: 'exact' })
+      .eq('customerId', id);
+
+    if (status && status !== 'ALL') {
+      query = query.eq('status', String(status));
+    }
+    if (dateFrom) {
+      query = query.gte('createdAt', `${dateFrom}T00:00:00.000Z`);
+    }
+    if (dateTo) {
+      query = query.lte('createdAt', `${dateTo}T23:59:59.999Z`);
+    }
+
+    if (page || limit) {
+      query = query.order('createdAt', { ascending: false }).range(offset, offset + limitNum - 1);
+    } else {
+      query = query.order('createdAt', { ascending: false });
+    }
+
+    const { data: repairs, count, error } = await query;
 
     if (error) {
       console.error('[CUSTOMER REPAIRS ERROR]', error);
       return res.status(500).json({ error: 'Failed to fetch customer repair records.' });
+    }
+
+    const totalCount = typeof count === 'number' ? count : (Array.isArray(repairs) ? (repairs as any[]).length : 0);
+    const totalPages = Math.max(1, Math.ceil(totalCount / limitNum));
+
+    if (page || limit) {
+      return res.json({
+        repairs: repairs || [],
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: totalCount,
+          totalPages,
+        },
+      });
     }
 
     return res.json(repairs || []);
@@ -169,6 +207,7 @@ router.get('/:id/repairs', authenticate, async (req: AuthRequest, res: Response)
     return res.status(500).json({ error: 'Failed to retrieve customer repair history.' });
   }
 });
+
 
 // 6. POST /api/customers
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
