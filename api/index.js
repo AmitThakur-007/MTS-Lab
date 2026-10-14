@@ -1,8 +1,8 @@
 // api/_server/app.ts
 import express from "express";
 import cookieParser from "cookie-parser";
-import path11 from "path";
-import fs11 from "fs";
+import path12 from "path";
+import fs12 from "fs";
 
 // api/_server/routes/auth.ts
 import { Router } from "express";
@@ -315,6 +315,22 @@ async function broadcastServerChange(entityName, action, id, data) {
 }
 
 // api/_server/services/auditService.ts
+function sanitizePayload(obj) {
+  if (!obj || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizePayload);
+  const sanitized = {};
+  const sensitiveKeys = /* @__PURE__ */ new Set(["password", "passwordhash", "codehash", "refreshtoken", "token", "jwt", "secret", "authorization", "cookie"]);
+  for (const [key, value] of Object.entries(obj)) {
+    if (sensitiveKeys.has(key.toLowerCase())) {
+      sanitized[key] = "[REDACTED]";
+    } else if (typeof value === "object" && value !== null) {
+      sanitized[key] = sanitizePayload(value);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
 async function logAudit(entry) {
   try {
     let userEmail = entry.userEmail || null;
@@ -331,6 +347,10 @@ async function logAudit(entry) {
       } catch (_) {
       }
     }
+    const cleanDetails = sanitizePayload(entry.details);
+    const cleanPrev = sanitizePayload(entry.previousValue);
+    const cleanNext = sanitizePayload(entry.newValue);
+    const cleanMeta = sanitizePayload(entry.metadata);
     const payload = {
       id: uuidv4(),
       userId: entry.userId || null,
@@ -344,13 +364,16 @@ async function logAudit(entry) {
       ipAddress: entry.ipAddress || null,
       userAgent: entry.userAgent || null,
       deviceInfo: typeof entry.deviceInfo === "object" ? JSON.stringify(entry.deviceInfo) : entry.deviceInfo ? String(entry.deviceInfo) : null,
-      details: typeof entry.details === "object" ? JSON.stringify(entry.details) : entry.details ? String(entry.details) : null,
-      previousValue: typeof entry.previousValue === "object" ? JSON.stringify(entry.previousValue) : entry.previousValue ? String(entry.previousValue) : null,
-      newValue: typeof entry.newValue === "object" ? JSON.stringify(entry.newValue) : entry.newValue ? String(entry.newValue) : null,
-      metadata: typeof entry.metadata === "object" ? JSON.stringify(entry.metadata) : entry.metadata ? String(entry.metadata) : null,
+      details: typeof cleanDetails === "object" ? JSON.stringify(cleanDetails) : cleanDetails ? String(cleanDetails) : null,
+      previousValue: typeof cleanPrev === "object" ? JSON.stringify(cleanPrev) : cleanPrev ? String(cleanPrev) : null,
+      newValue: typeof cleanNext === "object" ? JSON.stringify(cleanNext) : cleanNext ? String(cleanNext) : null,
+      metadata: typeof cleanMeta === "object" ? JSON.stringify(cleanMeta) : cleanMeta ? String(cleanMeta) : null,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    const { data: inserted } = await supabaseAdmin.from("AuditLog").insert([payload]).select("*").maybeSingle();
+    const { data: inserted, error: insertErr } = await supabaseAdmin.from("AuditLog").insert([payload]).select("*").maybeSingle();
+    if (insertErr) {
+      console.warn("[AUDIT LOG ERROR] Failed to record audit log in Supabase:", insertErr);
+    }
     await broadcastServerChange("AuditLog", "CREATE", payload.id, inserted || payload);
   } catch (err) {
     console.warn("[AUDIT LOG WARNING] Failed to record audit log:", err);
@@ -745,6 +768,20 @@ router.post("/login", async (req, res) => {
           </div>
         `
       });
+      await logAudit({
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "OTP_REQUESTED",
+        resource: "Auth",
+        resourceId: mfaTicket,
+        status: "SUCCESS",
+        ipAddress: ipAddress || req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        deviceInfo: { deviceIdentifier, deviceName, deviceType, browser, os },
+        details: { email: user.email, purpose: "LOGIN_2FA" }
+      });
       return res.json({
         success: true,
         requires2FA: true,
@@ -760,7 +797,7 @@ router.post("/login", async (req, res) => {
       userEmail: user.email,
       userName: user.name,
       userRole: user.role,
-      action: "LOGIN",
+      action: "LOGIN_SUCCESS",
       resource: "User",
       resourceId: user.id,
       status: "SUCCESS",
@@ -810,11 +847,33 @@ router.post("/2fa/verify", async (req, res) => {
     }
     const otp = otps[0];
     if (new Date(otp.expiresAt) < /* @__PURE__ */ new Date()) {
+      await logAudit({
+        userId: otp.userId,
+        userEmail: otp.email,
+        action: "OTP_VERIFICATION_FAILED",
+        resource: "Auth",
+        resourceId: otp.id,
+        status: "FAILED",
+        ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        details: { reason: "Verification code expired", email: otp.email }
+      });
       return res.status(400).json({ error: "Verification code has expired. Please request a new code." });
     }
     if (otp.codeHash !== inputHash) {
       const attempts = (otp.attempts || 0) + 1;
       await supabaseAdmin.from("OTPVerification").update({ attempts }).eq("id", otp.id);
+      await logAudit({
+        userId: otp.userId,
+        userEmail: otp.email,
+        action: "OTP_VERIFICATION_FAILED",
+        resource: "Auth",
+        resourceId: otp.id,
+        status: "FAILED",
+        ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        details: { attemptNumber: attempts, reason: "Incorrect verification code", email: otp.email }
+      });
       return res.status(400).json({ error: "Incorrect verification code. Please try again." });
     }
     await supabaseAdmin.from("OTPVerification").update({ isUsed: true }).eq("id", otp.id);
@@ -826,10 +885,16 @@ router.post("/2fa/verify", async (req, res) => {
     const { token, refreshToken } = generateTokens(user);
     await logAudit({
       userId: user.id,
-      action: "2FA_VERIFIED",
-      resource: "User",
+      userEmail: user.email,
+      userName: user.name,
+      userRole: user.role,
+      action: "OTP_VERIFICATION_SUCCESS",
+      resource: "Auth",
       resourceId: user.id,
-      details: { email: user.email }
+      status: "SUCCESS",
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      userAgent: req.headers["user-agent"] || null,
+      details: { email: user.email, method: "2FA_OTP" }
     });
     return res.json({
       success: true,
@@ -1007,6 +1072,19 @@ router.post("/forgot-password", async (req, res) => {
         </div>
       `
     });
+    await logAudit({
+      userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+      userRole: user.role,
+      action: "OTP_REQUESTED",
+      resource: "Auth",
+      resourceId: otpId,
+      status: "SUCCESS",
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      userAgent: req.headers["user-agent"] || null,
+      details: { email: user.email, purpose: "PASSWORD_RESET" }
+    });
     return res.json({
       success: true,
       message: "Password reset code sent to your email.",
@@ -1086,10 +1164,16 @@ router.post("/reset-password", async (req, res) => {
     }
     await logAudit({
       userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+      userRole: user.role,
       action: "PASSWORD_RESET",
       resource: "User",
       resourceId: user.id,
-      details: { email: user.email }
+      status: "SUCCESS",
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      userAgent: req.headers["user-agent"] || null,
+      details: { email: user.email, method: "OTP_RESET" }
     });
     return res.json({ success: true, message: "Password updated successfully. Please log in with your new password." });
   } catch (err) {
@@ -1137,6 +1221,69 @@ router.get("/sessions", authenticate, async (req, res) => {
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     }
   ]);
+});
+router.post("/logout", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let token = "";
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7).trim();
+    } else if (req.cookies && req.cookies.token) {
+      token = req.cookies.token;
+    }
+    let user = null;
+    if (token) {
+      try {
+        const decoded = jwt2.verify(token, config.jwtSecret);
+        if (decoded?.id || decoded?.sub) {
+          user = decoded;
+        }
+      } catch (_) {
+      }
+    }
+    if (user) {
+      await logAudit({
+        userId: user.id || user.sub,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "LOGOUT",
+        resource: "Auth",
+        status: "SUCCESS",
+        ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        details: { message: "User logged out successfully" }
+      });
+    }
+    res.clearCookie("token");
+    res.clearCookie("refreshToken");
+    return res.json({ success: true, message: "Logged out successfully." });
+  } catch (err) {
+    return res.json({ success: true, message: "Logged out." });
+  }
+});
+router.post("/logout-all", authenticate, async (req, res) => {
+  try {
+    if (req.user) {
+      await logAudit({
+        userId: req.user.id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        userRole: req.user.role,
+        action: "LOGOUT",
+        resource: "Auth",
+        status: "SUCCESS",
+        ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        details: { message: "User terminated sessions on all devices" }
+      });
+    }
+    res.clearCookie("token");
+    res.clearCookie("refreshToken");
+    return res.json({ success: true, message: "Logged out from all devices." });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to logout from all devices." });
+  }
 });
 var auth_default = router;
 
@@ -2988,11 +3135,16 @@ router3.get("/", authenticate, async (req, res) => {
       scope,
       assignedToMeOnly,
       includeCompleted,
-      limit = "2000",
-      page = "1"
+      limit,
+      page = "1",
+      paginate
     } = req.query;
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = Math.min(parseInt(limit, 10) || 2e3, 5e3);
+    const isPaginatedRequest = String(paginate).toLowerCase() === "true" || req.query.format === "paginated" || req.query.page !== void 0 && limit === void 0;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(
+      Math.max(1, parseInt(limit || (isPaginatedRequest ? "40" : "2000"), 10)),
+      5e3
+    );
     const offset = (pageNum - 1) * limitNum;
     let query = supabaseAdmin.from("Repair").select("*, customer:Customer(*), technician:User!Repair_technicianId_fkey(id, name, role, email)", { count: "exact" });
     const role = normalizeRole(req.user.role);
@@ -3058,11 +3210,17 @@ router3.get("/", authenticate, async (req, res) => {
       query = query.or(`repairNumber.ilike.%${s}%,customerName.ilike.%${s}%,customerPhone.ilike.%${s}%,deviceModel.ilike.%${s}%,imeiNumber.ilike.%${s}%`);
     }
     query = query.order("createdAt", { ascending: false }).range(offset, offset + limitNum - 1);
-    const { data: repairs, error } = await query;
+    const { data: repairs, count, error } = await query;
     if (error) {
       console.error("[REPAIRS GET ERROR]", error);
       return res.status(500).json({ error: "Failed to retrieve repairs list." });
     }
+    const totalCount = typeof count === "number" ? count : Array.isArray(repairs) ? repairs.length : 0;
+    const totalPages = Math.max(1, Math.ceil(totalCount / limitNum));
+    res.setHeader("X-Total-Count", String(totalCount));
+    res.setHeader("X-Page", String(pageNum));
+    res.setHeader("X-Limit", String(limitNum));
+    res.setHeader("X-Total-Pages", String(totalPages));
     const smsSummaries = getAllRepairSmsSummaries();
     const repairsWithSms = (repairs || []).map((r) => ({
       ...r,
@@ -3078,6 +3236,16 @@ router3.get("/", authenticate, async (req, res) => {
         lastRecordId: null
       }
     }));
+    if (isPaginatedRequest) {
+      return res.json({
+        data: repairsWithSms,
+        repairs: repairsWithSms,
+        total: totalCount,
+        page: pageNum,
+        limit: limitNum,
+        totalPages
+      });
+    }
     return res.json(repairsWithSms);
   } catch (err) {
     return res.status(500).json({ error: "Failed to load repair records." });
@@ -5182,10 +5350,42 @@ router5.get("/:id", authenticate, async (req, res) => {
 router5.get("/:id/repairs", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { data: repairs, error } = await supabaseAdmin.from("Repair").select("*, technician:User!Repair_technicianId_fkey(id, name, role)").eq("customerId", id).order("createdAt", { ascending: false });
+    const { page, limit, status, dateFrom, dateTo } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(Math.max(1, parseInt(limit || "40", 10)), 500);
+    const offset = (pageNum - 1) * limitNum;
+    let query = supabaseAdmin.from("Repair").select("*, technician:User!Repair_technicianId_fkey(id, name, role)", { count: "exact" }).eq("customerId", id);
+    if (status && status !== "ALL") {
+      query = query.eq("status", String(status));
+    }
+    if (dateFrom) {
+      query = query.gte("createdAt", `${dateFrom}T00:00:00.000Z`);
+    }
+    if (dateTo) {
+      query = query.lte("createdAt", `${dateTo}T23:59:59.999Z`);
+    }
+    if (page || limit) {
+      query = query.order("createdAt", { ascending: false }).range(offset, offset + limitNum - 1);
+    } else {
+      query = query.order("createdAt", { ascending: false });
+    }
+    const { data: repairs, count, error } = await query;
     if (error) {
       console.error("[CUSTOMER REPAIRS ERROR]", error);
       return res.status(500).json({ error: "Failed to fetch customer repair records." });
+    }
+    const totalCount = typeof count === "number" ? count : Array.isArray(repairs) ? repairs.length : 0;
+    const totalPages = Math.max(1, Math.ceil(totalCount / limitNum));
+    if (page || limit) {
+      return res.json({
+        repairs: repairs || [],
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: totalCount,
+          totalPages
+        }
+      });
     }
     return res.json(repairs || []);
   } catch (err) {
@@ -12939,38 +13139,209 @@ var revenue_default = router16;
 
 // api/_server/routes/superAdmin.ts
 import { Router as Router17 } from "express";
-import path7 from "path";
-import fs7 from "fs";
+import path8 from "path";
+import fs8 from "fs";
 import multer4 from "multer";
 import { v4 as uuidv418 } from "uuid";
+
+// api/_server/services/systemThemeService.ts
+import fs7 from "fs";
+import path7 from "path";
+var DATA_DIR6 = path7.join(process.cwd(), "data");
+var THEME_CONFIG_FILE = path7.join(DATA_DIR6, "system_theme.json");
+if (!fs7.existsSync(DATA_DIR6)) {
+  try {
+    fs7.mkdirSync(DATA_DIR6, { recursive: true });
+  } catch (e) {
+    console.warn("[THEME STORAGE DIR WARN]", e);
+  }
+}
+var DEFAULT_CONFIG = {
+  festivalModeEnabled: false,
+  activeFestival: "dashain",
+  festivalGreeting: "Celebrating the festive spirit across MTS Lab Kathmandu",
+  customMessage: "Happy Festive Season from Mobile Technology Station",
+  updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+  updatedBy: null,
+  updatedByName: null
+};
+var cachedConfig = null;
+function getSystemThemeConfig() {
+  if (cachedConfig) {
+    return cachedConfig;
+  }
+  try {
+    if (fs7.existsSync(THEME_CONFIG_FILE)) {
+      const raw = fs7.readFileSync(THEME_CONFIG_FILE, "utf-8");
+      const parsed = JSON.parse(raw);
+      cachedConfig = {
+        festivalModeEnabled: Boolean(parsed.festivalModeEnabled),
+        activeFestival: ["holi", "dashain", "tihar"].includes(parsed.activeFestival) ? parsed.activeFestival : "dashain",
+        festivalGreeting: parsed.festivalGreeting || DEFAULT_CONFIG.festivalGreeting,
+        customMessage: parsed.customMessage || DEFAULT_CONFIG.customMessage,
+        updatedAt: parsed.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
+        updatedBy: parsed.updatedBy || null,
+        updatedByName: parsed.updatedByName || null
+      };
+      return cachedConfig;
+    }
+  } catch (err) {
+    console.warn("[THEME CONFIG READ ERROR]", err);
+  }
+  cachedConfig = { ...DEFAULT_CONFIG };
+  try {
+    fs7.writeFileSync(THEME_CONFIG_FILE, JSON.stringify(cachedConfig, null, 2), "utf-8");
+  } catch (_) {
+  }
+  return cachedConfig;
+}
+async function updateSystemThemeConfig(updates, user) {
+  const current = getSystemThemeConfig();
+  const activeFestival = updates.activeFestival && ["holi", "dashain", "tihar"].includes(updates.activeFestival) ? updates.activeFestival : current.activeFestival;
+  const festivalModeEnabled = typeof updates.festivalModeEnabled === "boolean" ? updates.festivalModeEnabled : current.festivalModeEnabled;
+  const updated = {
+    festivalModeEnabled,
+    activeFestival,
+    festivalGreeting: updates.festivalGreeting !== void 0 ? String(updates.festivalGreeting) : current.festivalGreeting,
+    customMessage: updates.customMessage !== void 0 ? String(updates.customMessage) : current.customMessage,
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: user?.id || null,
+    updatedByName: user?.name || null
+  };
+  try {
+    fs7.writeFileSync(THEME_CONFIG_FILE, JSON.stringify(updated, null, 2), "utf-8");
+    cachedConfig = updated;
+  } catch (err) {
+    console.error("[THEME CONFIG WRITE ERROR]", err);
+  }
+  try {
+    await broadcastServerChange("system_theme", "UPDATE", "global", updated);
+  } catch (_) {
+  }
+  return updated;
+}
+
+// api/_server/routes/superAdmin.ts
 var router17 = Router17();
 var upload4 = multer4({ storage: multer4.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 router17.get("/audit-logs", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
-    const { action, resource, userId, page = "1", limit = "50", startDate, endDate } = req.query;
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 50;
+    const { action, resource, userId, role, status, search, page = "1", limit = "15", startDate, endDate } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 15), 100);
     const offset = (pageNum - 1) * limitNum;
-    let query = supabaseAdmin.from("AuditLog").select("*", { count: "exact" });
-    if (action && action !== "ALL") query = query.eq("action", String(action));
-    if (resource && resource !== "ALL") query = query.eq("resource", String(resource));
-    if (userId && userId !== "ALL") query = query.eq("userId", String(userId));
-    if (startDate) query = query.gte("createdAt", String(startDate));
-    if (endDate) query = query.lte("createdAt", String(endDate));
+    let query = supabaseAdmin.from("AuditLog").select("*, user:User(id, name, email, role)", { count: "exact" });
+    if (userId && userId !== "ALL") {
+      query = query.eq("userId", String(userId));
+    }
+    if (status && status !== "ALL") {
+      const stat = String(status).toUpperCase().trim();
+      if (stat === "FAILED") {
+        query = query.in("status", ["FAILED", "DENIED", "BLOCKED", "ERROR"]);
+      } else {
+        query = query.eq("status", stat);
+      }
+    }
+    if (role && role !== "ALL") {
+      const normalizedRole = String(role).toUpperCase().trim();
+      if (normalizedRole === "SUPER_ADMIN") {
+        query = query.in("userRole", ["SUPER_ADMIN", "SUPERADMIN"]);
+      } else if (normalizedRole === "LEAD_TECHNICIAN") {
+        query = query.in("userRole", ["LEAD_TECHNICIAN", "HEAD_TECHNICIAN", "LEADTECHNICIAN"]);
+      } else {
+        query = query.eq("userRole", normalizedRole);
+      }
+    }
+    if (action && action !== "ALL") {
+      const act = String(action).toUpperCase().trim();
+      if (act === "LOGIN_SUCCESS") {
+        query = query.in("action", ["LOGIN_SUCCESS", "LOGIN", "2FA_VERIFIED", "OTP_VERIFICATION_SUCCESS"]);
+      } else if (act === "LOGIN_FAILED") {
+        query = query.in("action", ["LOGIN_FAILED", "FAILED_LOGIN", "LOGIN_BLOCKED_DEVICE", "LOGIN_DISABLED_ACCOUNT"]);
+      } else if (act === "OTP_REQUESTED") {
+        query = query.in("action", ["OTP_REQUESTED", "2FA_CHALLENGE"]);
+      } else if (act === "OTP_VERIFICATION_SUCCESS") {
+        query = query.in("action", ["OTP_VERIFICATION_SUCCESS", "2FA_VERIFIED", "2FA_ENABLED", "LOGIN_2FA_SUCCESS"]);
+      } else if (act === "OTP_VERIFICATION_FAILED") {
+        query = query.in("action", ["OTP_VERIFICATION_FAILED", "2FA_FAILED"]);
+      } else if (act === "PASSWORD_CHANGED") {
+        query = query.in("action", ["PASSWORD_CHANGED", "PASSWORD_UPDATED"]);
+      } else if (act === "PASSWORD_RESET") {
+        query = query.in("action", ["PASSWORD_RESET", "PASSWORD_RESET_COMPLETED", "PASSWORD_RESET_REQUESTED", "PASSWORD_RESET_OTP_VERIFIED"]);
+      } else if (act === "EMAIL_CHANGED") {
+        query = query.in("action", ["EMAIL_CHANGED", "STAFF_EMAIL_VERIFIED", "EMAIL_VERIFIED_BY_SUPER_ADMIN"]);
+      } else if (act === "USER_CREATED") {
+        query = query.in("action", ["USER_CREATED", "STAFF_CREATED", "CREATE"]);
+      } else if (act === "USER_UPDATED") {
+        query = query.in("action", ["USER_UPDATED", "STAFF_UPDATED", "UPDATE", "STAFF_ROLE_CHANGED", "USER_ENABLED", "USER_DISABLED"]);
+      } else if (act === "USER_DELETED") {
+        query = query.in("action", ["USER_DELETED", "STAFF_DELETED", "DELETE", "DELETE_REPAIR", "REPAIRS_DELETED"]);
+      } else if (act === "ROLE_CHANGED") {
+        query = query.in("action", ["ROLE_CHANGED", "STAFF_ROLE_CHANGED"]);
+      } else if (act === "REPAIR_CREATED") {
+        query = query.in("action", ["REPAIR_CREATED", "BATCH_REGISTER_REPAIRS"]);
+      } else if (act === "REPAIR_STATUS_CHANGED") {
+        query = query.in("action", ["REPAIR_STATUS_CHANGED", "UPDATE_STATUS", "ASSIGN_TECHNICIAN", "REPAIR_PRIORITY_UPDATED", "REPAIR_TRANSFERRED"]);
+      } else if (act === "LOGOUT") {
+        query = query.in("action", ["LOGOUT", "LOGOUT_ALL_DEVICES"]);
+      } else {
+        query = query.eq("action", act);
+      }
+    }
+    if (resource && resource !== "ALL") {
+      const resVal = String(resource).toUpperCase().trim();
+      if (resVal === "USER") {
+        query = query.or("resource.eq.USER,resource.eq.User,resource.ilike.%User%");
+      } else if (resVal === "REPAIR") {
+        query = query.or("resource.eq.REPAIR,resource.eq.Repair,resource.ilike.%Repair%");
+      } else if (resVal === "CUSTOMER") {
+        query = query.or("resource.eq.CUSTOMER,resource.eq.Customer,resource.ilike.%Customer%");
+      } else if (resVal === "INVENTORY") {
+        query = query.or("resource.ilike.%Inventory%,resource.ilike.%INVENTORY%");
+      } else if (resVal === "AUTH") {
+        query = query.or("resource.eq.AUTH,resource.eq.Auth,resource.ilike.%Auth%");
+      } else if (resVal === "PAYMENT") {
+        query = query.or("resource.ilike.%Payment%,resource.ilike.%PAYMENT%");
+      } else {
+        query = query.ilike("resource", `%${resVal}%`);
+      }
+    }
+    if (search && String(search).trim()) {
+      const s = String(search).trim().replace(/[%,]/g, "");
+      if (s) {
+        query = query.or(`userName.ilike.%${s}%,userEmail.ilike.%${s}%,action.ilike.%${s}%,resource.ilike.%${s}%,ipAddress.ilike.%${s}%,details.ilike.%${s}%`);
+      }
+    }
+    if (startDate) {
+      const startIso = String(startDate).includes("T") ? String(startDate) : `${String(startDate)}T00:00:00.000Z`;
+      query = query.gte("createdAt", startIso);
+    }
+    if (endDate) {
+      const endIso = String(endDate).includes("T") ? String(endDate) : `${String(endDate)}T23:59:59.999Z`;
+      query = query.lte("createdAt", endIso);
+    }
     const { data: logs, count, error } = await query.order("createdAt", { ascending: false }).range(offset, offset + limitNum - 1);
     if (error) {
       console.error("[AUDIT LOGS ERROR]", error);
-      return res.status(500).json({ error: "Failed to fetch audit logs." });
+      return res.status(500).json({ success: false, error: "Failed to fetch audit logs from database." });
     }
+    const enrichedLogs = (logs || []).map((l) => ({
+      ...l,
+      userName: l.userName || l.user?.name || (l.userId ? "Staff Member" : "System"),
+      userEmail: l.userEmail || l.user?.email || null,
+      userRole: l.userRole || l.user?.role || null
+    }));
     return res.json({
-      logs: logs || [],
+      success: true,
+      logs: enrichedLogs,
       total: count || 0,
       page: pageNum,
       limit: limitNum,
-      totalPages: Math.ceil((count || 0) / limitNum)
+      totalPages: Math.ceil((count || 0) / limitNum) || 1
     });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve system audit logs." });
+    console.error("[AUDIT LOGS UNEXPECTED ERROR]", err);
+    return res.status(500).json({ success: false, error: "Failed to retrieve system audit logs." });
   }
 });
 router17.get("/deletion-history", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
@@ -13102,48 +13473,48 @@ router17.post(
         });
       }
       const filename = targetConfig.filename;
-      const publicDir = path7.join(process.cwd(), "public", "images", "team");
-      if (!fs7.existsSync(publicDir)) {
-        fs7.mkdirSync(publicDir, { recursive: true });
+      const publicDir = path8.join(process.cwd(), "public", "images", "team");
+      if (!fs8.existsSync(publicDir)) {
+        fs8.mkdirSync(publicDir, { recursive: true });
       }
-      const publicFilePath = path7.join(publicDir, filename);
+      const publicFilePath = path8.join(publicDir, filename);
       const tempFilename = `.${filename}.${Date.now()}-${uuidv418().substring(0, 8)}.tmp`;
-      const tempFilePath = path7.join(publicDir, tempFilename);
+      const tempFilePath = path8.join(publicDir, tempFilename);
       try {
-        fs7.writeFileSync(tempFilePath, fileBuffer);
-        if (!fs7.existsSync(tempFilePath) || fs7.statSync(tempFilePath).size !== fileBuffer.length) {
+        fs8.writeFileSync(tempFilePath, fileBuffer);
+        if (!fs8.existsSync(tempFilePath) || fs8.statSync(tempFilePath).size !== fileBuffer.length) {
           throw new Error("Verification of written temporary image failed.");
         }
-        fs7.renameSync(tempFilePath, publicFilePath);
+        fs8.renameSync(tempFilePath, publicFilePath);
       } catch (writeErr) {
-        if (fs7.existsSync(tempFilePath)) {
+        if (fs8.existsSync(tempFilePath)) {
           try {
-            fs7.unlinkSync(tempFilePath);
+            fs8.unlinkSync(tempFilePath);
           } catch (_) {
           }
         }
         console.error("[LEADERSHIP PHOTO STORAGE ERROR]", writeErr?.message || writeErr);
         return res.status(500).json({ error: "Failed to safely store the new leadership photo." });
       }
-      const distRoot = path7.join(process.cwd(), "dist");
-      if (fs7.existsSync(distRoot)) {
+      const distRoot = path8.join(process.cwd(), "dist");
+      if (fs8.existsSync(distRoot)) {
         try {
-          const distDir = path7.join(distRoot, "images", "team");
-          if (!fs7.existsSync(distDir)) {
-            fs7.mkdirSync(distDir, { recursive: true });
+          const distDir = path8.join(distRoot, "images", "team");
+          if (!fs8.existsSync(distDir)) {
+            fs8.mkdirSync(distDir, { recursive: true });
           }
-          const distFilePath = path7.join(distDir, filename);
-          const distTemp = path7.join(distDir, tempFilename);
-          fs7.writeFileSync(distTemp, fileBuffer);
-          fs7.renameSync(distTemp, distFilePath);
+          const distFilePath = path8.join(distDir, filename);
+          const distTemp = path8.join(distDir, tempFilename);
+          fs8.writeFileSync(distTemp, fileBuffer);
+          fs8.renameSync(distTemp, distFilePath);
         } catch (_) {
         }
       }
-      const assetDir = path7.join(process.cwd(), "src", "assets", "team");
-      if (fs7.existsSync(assetDir)) {
+      const assetDir = path8.join(process.cwd(), "src", "assets", "team");
+      if (fs8.existsSync(assetDir)) {
         try {
-          const assetFilePath = path7.join(assetDir, filename);
-          fs7.writeFileSync(assetFilePath, fileBuffer);
+          const assetFilePath = path8.join(assetDir, filename);
+          fs8.writeFileSync(assetFilePath, fileBuffer);
         } catch (_) {
         }
       }
@@ -13176,6 +13547,54 @@ router17.post(
     }
   }
 );
+router17.get("/system-theme", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (_req, res) => {
+  try {
+    const config2 = getSystemThemeConfig();
+    return res.json(config2);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to retrieve system theme settings." });
+  }
+});
+router17.post("/system-theme", authenticate, authorize(["SUPER_ADMIN"]), async (req, res) => {
+  try {
+    const { festivalModeEnabled, activeFestival, festivalGreeting, customMessage } = req.body;
+    if (activeFestival !== void 0 && !["holi", "dashain", "tihar"].includes(activeFestival)) {
+      return res.status(400).json({ error: "Invalid festival. Allowed values: 'holi', 'dashain', 'tihar'." });
+    }
+    const updated = await updateSystemThemeConfig(
+      {
+        festivalModeEnabled: typeof festivalModeEnabled === "boolean" ? festivalModeEnabled : void 0,
+        activeFestival: activeFestival || void 0,
+        festivalGreeting: festivalGreeting !== void 0 ? String(festivalGreeting).trim() : void 0,
+        customMessage: customMessage !== void 0 ? String(customMessage).trim() : void 0
+      },
+      {
+        id: req.user?.id,
+        name: req.user?.name,
+        role: req.user?.role
+      }
+    );
+    await logAudit({
+      userId: req.user?.id || "system",
+      userEmail: req.user?.email || "superadmin@mtslab.com",
+      action: "SUPERADMIN_FESTIVAL_THEME_UPDATE",
+      resource: "SystemTheme",
+      details: {
+        festivalModeEnabled: updated.festivalModeEnabled,
+        activeFestival: updated.activeFestival,
+        festivalGreeting: updated.festivalGreeting
+      }
+    });
+    return res.json({
+      success: true,
+      message: updated.festivalModeEnabled ? `Festival Mode (${updated.activeFestival.toUpperCase()}) globally activated for all staff!` : "Festival Mode globally disabled. Normal Dark/Light preferences restored.",
+      themeConfig: updated
+    });
+  } catch (err) {
+    console.error("[UPDATE SYSTEM THEME ERROR]", err);
+    return res.status(500).json({ error: "Failed to update system theme settings." });
+  }
+});
 var superAdmin_default = router17;
 
 // api/_server/routes/security.ts
@@ -13436,33 +13855,64 @@ router18.get("/activity-timeline", async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 25, 100);
     const offset = (page - 1) * limit;
     const { userId, action, category, resource, status, search, startDate, endDate } = req.query;
-    let query = supabaseAdmin.from("AuditLog").select("*", { count: "exact" }).order("createdAt", { ascending: false });
+    let query = supabaseAdmin.from("AuditLog").select("*, user:User(id, name, email, role)", { count: "exact" }).order("createdAt", { ascending: false });
     if (userId && userId !== "ALL") {
       query = query.eq("userId", userId);
     }
     if (status && status !== "ALL") {
-      query = query.eq("status", status);
+      query = query.eq("status", status.toUpperCase());
     }
     if (resource && resource !== "ALL") {
-      query = query.eq("resource", resource);
+      const resVal = String(resource).toUpperCase().trim();
+      if (resVal === "USER") {
+        query = query.or("resource.eq.USER,resource.eq.User,resource.ilike.%User%");
+      } else if (resVal === "REPAIR") {
+        query = query.or("resource.eq.REPAIR,resource.eq.Repair,resource.ilike.%Repair%");
+      } else if (resVal === "CUSTOMER") {
+        query = query.or("resource.eq.CUSTOMER,resource.eq.Customer,resource.ilike.%Customer%");
+      } else if (resVal === "INVENTORY") {
+        query = query.or("resource.ilike.%Inventory%,resource.ilike.%INVENTORY%");
+      } else if (resVal === "AUTH") {
+        query = query.or("resource.eq.AUTH,resource.eq.Auth,resource.ilike.%Auth%");
+      } else {
+        query = query.ilike("resource", `%${resVal}%`);
+      }
     }
     if (action && action !== "ALL") {
       query = query.eq("action", action);
     } else if (category && category !== "ALL") {
       if (category === "AUTH") {
-        query = query.in("action", ["LOGIN", "LOGOUT", "2FA_VERIFY", "LOGIN_2FA", "PASSWORD_RESET", "FAILED_LOGIN"]);
+        query = query.in("action", [
+          "LOGIN",
+          "LOGIN_SUCCESS",
+          "LOGOUT",
+          "2FA_VERIFY",
+          "2FA_VERIFIED",
+          "OTP_VERIFICATION_SUCCESS",
+          "OTP_VERIFICATION_FAILED",
+          "OTP_REQUESTED",
+          "LOGIN_2FA",
+          "PASSWORD_RESET",
+          "FAILED_LOGIN",
+          "LOGIN_FAILED"
+        ]);
       } else if (category === "SECURITY") {
         query = query.in("action", [
           "FAILED_LOGIN",
+          "LOGIN_FAILED",
           "LOGIN_BLOCKED_DEVICE",
+          "LOGIN_DISABLED_ACCOUNT",
           "DEVICE_BLOCKED",
           "DEVICE_REVOKED",
           "DEVICE_UNBLOCKED",
+          "DEVICE_DELETED",
           "ACCESS_REQUEST_REJECTED",
           "ACCESS_REQUEST_APPROVED",
           "ACCOUNT_DISABLED",
           "USER_ROLE_CHANGED",
-          "DATA_PURGED"
+          "DATA_PURGED",
+          "UNAUTHORIZED_ACCESS_ATTEMPT",
+          "UNAUTHORIZED_USER_MUTATION"
         ]);
       } else if (category === "DATA_MUTATION") {
         query = query.or("action.ilike.%CREATE%,action.ilike.%UPDATE%,action.ilike.%DELETE%");
@@ -13476,20 +13926,28 @@ router18.get("/activity-timeline", async (req, res) => {
       end.setHours(23, 59, 59, 999);
       query = query.lte("createdAt", end.toISOString());
     }
-    if (search) {
-      const s = search;
-      query = query.or(`userName.ilike.%${s}%,userEmail.ilike.%${s}%,action.ilike.%${s}%,resource.ilike.%${s}%,ipAddress.ilike.%${s}%,details.ilike.%${s}%`);
+    if (search && String(search).trim()) {
+      const s = String(search).trim().replace(/[%,]/g, "");
+      if (s) {
+        query = query.or(`userName.ilike.%${s}%,userEmail.ilike.%${s}%,action.ilike.%${s}%,resource.ilike.%${s}%,ipAddress.ilike.%${s}%,details.ilike.%${s}%`);
+      }
     }
     query = query.range(offset, offset + limit - 1);
     const { data: logs, count, error } = await query;
     if (error) throw error;
+    const enrichedLogs = (logs || []).map((l) => ({
+      ...l,
+      userName: l.userName || l.user?.name || (l.userId ? "Staff Member" : "System"),
+      userEmail: l.userEmail || l.user?.email || null,
+      userRole: l.userRole || l.user?.role || null
+    }));
     return res.json({
       success: true,
-      logs: logs || [],
+      logs: enrichedLogs,
       total: count || 0,
       page,
       limit,
-      totalPages: Math.ceil((count || 0) / limit)
+      totalPages: Math.ceil((count || 0) / limit) || 1
     });
   } catch (err) {
     console.error("[ACTIVITY TIMELINE ERROR]", err);
@@ -13811,8 +14269,8 @@ var security_default = router18;
 // api/_server/routes/upload.ts
 import { Router as Router19 } from "express";
 import multer5 from "multer";
-import fs8 from "fs";
-import path8 from "path";
+import fs9 from "fs";
+import path9 from "path";
 import crypto2 from "crypto";
 var router19 = Router19();
 var ALLOWED_MIME_TYPES = /* @__PURE__ */ new Set([
@@ -13848,17 +14306,17 @@ var upload5 = multer5({
   }
 });
 function saveFileLocally(buffer, originalName, mimeType) {
-  const uploadsDir = path8.join(process.cwd(), "uploads");
-  if (!fs8.existsSync(uploadsDir)) {
+  const uploadsDir = path9.join(process.cwd(), "uploads");
+  if (!fs9.existsSync(uploadsDir)) {
     try {
-      fs8.mkdirSync(uploadsDir, { recursive: true });
+      fs9.mkdirSync(uploadsDir, { recursive: true });
     } catch (_) {
     }
   }
-  const ext = path8.extname(originalName) || (mimeType === "application/pdf" ? ".pdf" : ".jpg");
+  const ext = path9.extname(originalName) || (mimeType === "application/pdf" ? ".pdf" : ".jpg");
   const filename = `${Date.now()}-${crypto2.randomBytes(6).toString("hex")}${ext}`;
-  const filePath = path8.join(uploadsDir, filename);
-  fs8.writeFileSync(filePath, buffer);
+  const filePath = path9.join(uploadsDir, filename);
+  fs9.writeFileSync(filePath, buffer);
   return {
     url: `/uploads/${filename}`,
     secureUrl: `/uploads/${filename}`,
@@ -13869,10 +14327,10 @@ function saveFileLocally(buffer, originalName, mimeType) {
   };
 }
 function saveBase64Locally(base64Data) {
-  const uploadsDir = path8.join(process.cwd(), "uploads");
-  if (!fs8.existsSync(uploadsDir)) {
+  const uploadsDir = path9.join(process.cwd(), "uploads");
+  if (!fs9.existsSync(uploadsDir)) {
     try {
-      fs8.mkdirSync(uploadsDir, { recursive: true });
+      fs9.mkdirSync(uploadsDir, { recursive: true });
     } catch (_) {
     }
   }
@@ -13889,8 +14347,8 @@ function saveBase64Locally(base64Data) {
     buffer = Buffer.from(base64Data, "base64");
   }
   const filename = `${Date.now()}-${crypto2.randomBytes(6).toString("hex")}${ext}`;
-  const filePath = path8.join(uploadsDir, filename);
-  fs8.writeFileSync(filePath, buffer);
+  const filePath = path9.join(uploadsDir, filename);
+  fs9.writeFileSync(filePath, buffer);
   return {
     url: `/uploads/${filename}`,
     secureUrl: `/uploads/${filename}`,
@@ -14287,8 +14745,8 @@ function filterPubliclyTrackableRepairs(repairs, allLogs = [], referenceDate = /
 }
 
 // api/_server/routes/public.ts
-import fs9 from "fs";
-import path9 from "path";
+import fs10 from "fs";
+import path10 from "path";
 import crypto3 from "crypto";
 var router21 = Router21();
 var handlePublicSlides = async (req, res) => {
@@ -14736,24 +15194,24 @@ function checkInquiryRateLimit(ip, phone, messageHash) {
 function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
-var INQUIRIES_FILE = path9.join(process.cwd(), "data", "inquiries.json");
+var INQUIRIES_FILE = path10.join(process.cwd(), "data", "inquiries.json");
 function saveInquiryRecord(inquiry) {
   try {
-    const dataDir = path9.join(process.cwd(), "data");
-    if (!fs9.existsSync(dataDir)) {
-      fs9.mkdirSync(dataDir, { recursive: true });
+    const dataDir = path10.join(process.cwd(), "data");
+    if (!fs10.existsSync(dataDir)) {
+      fs10.mkdirSync(dataDir, { recursive: true });
     }
     let list = [];
-    if (fs9.existsSync(INQUIRIES_FILE)) {
+    if (fs10.existsSync(INQUIRIES_FILE)) {
       try {
-        list = JSON.parse(fs9.readFileSync(INQUIRIES_FILE, "utf8"));
+        list = JSON.parse(fs10.readFileSync(INQUIRIES_FILE, "utf8"));
       } catch {
         list = [];
       }
     }
     list.unshift(inquiry);
     if (list.length > 300) list = list.slice(0, 300);
-    fs9.writeFileSync(INQUIRIES_FILE, JSON.stringify(list, null, 2), "utf8");
+    fs10.writeFileSync(INQUIRIES_FILE, JSON.stringify(list, null, 2), "utf8");
   } catch (err) {
     console.warn("[INQUIRY STORAGE WARN]", err);
   }
@@ -15052,12 +15510,23 @@ router21.get("/dashboard/stats", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve dashboard overview." });
   }
 });
+var handleGetSystemTheme = (_req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
+    const themeConfig = getSystemThemeConfig();
+    return res.json(themeConfig);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to read system theme configuration." });
+  }
+};
+router21.get("/system-theme", handleGetSystemTheme);
+router21.get("/public/system-theme", handleGetSystemTheme);
 var public_default = router21;
 
 // api/_server/routes/seo.ts
 import { Router as Router22 } from "express";
-import fs10 from "fs";
-import path10 from "path";
+import fs11 from "fs";
+import path11 from "path";
 
 // src/lib/seo.ts
 var SITE_URL = "https://www.mobiletechnologystation.com.np";
@@ -15404,13 +15873,13 @@ async function getAuthoritativeActiveServices() {
   return parsed;
 }
 function getHtmlTemplate() {
-  const prodPath = path10.join(process.cwd(), "dist", "index.html");
-  if (fs10.existsSync(prodPath)) {
-    return fs10.readFileSync(prodPath, "utf8");
+  const prodPath = path11.join(process.cwd(), "dist", "index.html");
+  if (fs11.existsSync(prodPath)) {
+    return fs11.readFileSync(prodPath, "utf8");
   }
-  const devPath = path10.join(process.cwd(), "index.html");
-  if (fs10.existsSync(devPath)) {
-    return fs10.readFileSync(devPath, "utf8");
+  const devPath = path11.join(process.cwd(), "index.html");
+  if (fs11.existsSync(devPath)) {
+    return fs11.readFileSync(devPath, "utf8");
   }
   throw new Error("HTML template not found");
 }
@@ -15757,18 +16226,18 @@ function createApp() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
   app.use(cookieParser());
-  const uploadsDir = path11.join(process.cwd(), "uploads");
-  if (!fs11.existsSync(uploadsDir)) {
+  const uploadsDir = path12.join(process.cwd(), "uploads");
+  if (!fs12.existsSync(uploadsDir)) {
     try {
-      fs11.mkdirSync(uploadsDir, { recursive: true });
+      fs12.mkdirSync(uploadsDir, { recursive: true });
     } catch (_) {
     }
   }
   app.use("/uploads", express.static(uploadsDir));
-  const publicAssetsImagesDir = path11.join(process.cwd(), "public", "assets", "images");
-  if (!fs11.existsSync(publicAssetsImagesDir)) {
+  const publicAssetsImagesDir = path12.join(process.cwd(), "public", "assets", "images");
+  if (!fs12.existsSync(publicAssetsImagesDir)) {
     try {
-      fs11.mkdirSync(publicAssetsImagesDir, { recursive: true });
+      fs12.mkdirSync(publicAssetsImagesDir, { recursive: true });
     } catch (_) {
     }
   }

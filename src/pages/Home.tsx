@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import HeroSlider from '@/components/HeroSlider';
+import { FestivalDecorations } from '@/components/theme/FestivalDecorations';
 import {
   Search,
   Smartphone,
@@ -233,7 +234,8 @@ export default function Home() {
           {/* ========================================================= */}
           {/* 1. HERO SECTION & DYNAMIC SMARTPHONE REPAIR SLIDESHOW     */}
           {/* ========================================================= */}
-          <section className="space-y-8">
+          <section className="space-y-6">
+            <FestivalDecorations />
             <HeroSlider />
 
             {/* Quick Actions Bar below Hero: Price Finder & Track Repair */}

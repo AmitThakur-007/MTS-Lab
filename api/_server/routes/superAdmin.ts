@@ -453,18 +453,67 @@ router.get('/system-theme', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
 // 9. POST /api/admin/system-theme — Strictly restricted to SUPER_ADMIN
 router.post('/system-theme', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
-    const { festivalModeEnabled, activeFestival, festivalGreeting, customMessage } = req.body;
+    const { 
+      activeTheme, 
+      festivalGreeting, 
+      customMessage, 
+      schedule,
+      festivalModeEnabled, 
+      activeFestival 
+    } = req.body;
 
-    if (activeFestival !== undefined && !['holi', 'dashain', 'tihar'].includes(activeFestival)) {
-      return res.status(400).json({ error: "Invalid festival. Allowed values: 'holi', 'dashain', 'tihar'." });
+    const allowedThemes = [
+      'light',
+      'dark',
+      'night',
+      'neutral-default',
+      'dashain',
+      'tihar',
+      'holi',
+      'nepali-new-year'
+    ];
+
+    if (activeTheme !== undefined && !allowedThemes.includes(activeTheme)) {
+      return res.status(400).json({ 
+        error: `Invalid theme '${activeTheme}'. Allowed themes: ${allowedThemes.join(', ')}.` 
+      });
+    }
+
+    if (activeFestival !== undefined && !allowedThemes.includes(activeFestival)) {
+      return res.status(400).json({ 
+        error: `Invalid festival '${activeFestival}'. Allowed themes: ${allowedThemes.join(', ')}.` 
+      });
+    }
+
+    // Schedule validation
+    if (schedule && schedule.enabled) {
+      if (schedule.themeId && !allowedThemes.includes(schedule.themeId)) {
+        return res.status(400).json({ 
+          error: `Invalid schedule theme '${schedule.themeId}'. Must be one of: ${allowedThemes.join(', ')}.` 
+        });
+      }
+      if (!schedule.startDate || !schedule.endDate) {
+        return res.status(400).json({ 
+          error: 'Both startDate and endDate are required when festival scheduling is enabled.' 
+        });
+      }
+      const startMs = new Date(schedule.startDate).getTime();
+      const endMs = new Date(schedule.endDate).getTime();
+      if (isNaN(startMs) || isNaN(endMs) || startMs >= endMs) {
+        return res.status(400).json({ 
+          error: 'Invalid schedule timeframe. Start date must be earlier than end date.' 
+        });
+      }
     }
 
     const updated = await updateSystemThemeConfig(
       {
-        festivalModeEnabled: typeof festivalModeEnabled === 'boolean' ? festivalModeEnabled : undefined,
-        activeFestival: activeFestival || undefined,
+        activeTheme: activeTheme || undefined,
         festivalGreeting: festivalGreeting !== undefined ? String(festivalGreeting).trim() : undefined,
         customMessage: customMessage !== undefined ? String(customMessage).trim() : undefined,
+        schedule: schedule !== undefined ? schedule : undefined,
+        festivalModeEnabled: typeof festivalModeEnabled === 'boolean' ? festivalModeEnabled : undefined,
+        activeFestival: activeFestival || undefined,
       },
       {
         id: req.user?.id,
@@ -477,20 +526,33 @@ router.post('/system-theme', authenticate, authorize(['SUPER_ADMIN']), async (re
     await logAudit({
       userId: req.user?.id || 'system',
       userEmail: req.user?.email || 'superadmin@mtslab.com',
-      action: 'SUPERADMIN_FESTIVAL_THEME_UPDATE',
+      action: 'SUPERADMIN_THEME_UPDATE',
       resource: 'SystemTheme',
       details: {
-        festivalModeEnabled: updated.festivalModeEnabled,
-        activeFestival: updated.activeFestival,
+        activeTheme: updated.activeTheme,
+        effectiveTheme: updated.effectiveTheme,
         festivalGreeting: updated.festivalGreeting,
+        isScheduledActive: updated.isScheduledActive,
+        schedule: updated.schedule,
       },
     });
 
+    const themeNameMap: Record<string, string> = {
+      light: 'Light Mode',
+      dark: 'Dark Mode',
+      night: 'Night Mode',
+      'neutral-default': 'Neutral Default',
+      dashain: 'Dashain Festival',
+      tihar: 'Tihar Festival',
+      holi: 'Holi Festival',
+      'nepali-new-year': 'Nepali New Year'
+    };
+
+    const label = themeNameMap[updated.effectiveTheme] || updated.effectiveTheme;
+
     return res.json({
       success: true,
-      message: updated.festivalModeEnabled
-        ? `Festival Mode (${updated.activeFestival.toUpperCase()}) globally activated for all staff!`
-        : 'Festival Mode globally disabled. Normal Dark/Light preferences restored.',
+      message: `Global theme '${label}' successfully applied across all staff workspaces & public pages!`,
       themeConfig: updated,
     });
   } catch (err: any) {

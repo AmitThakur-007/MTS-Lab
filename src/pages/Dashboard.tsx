@@ -21,6 +21,7 @@ import ManagerDashboard from './dashboard/ManagerDashboard';
 import Attendance from './dashboard/Attendance';
 import CourierManagement from './dashboard/CourierManagement';
 import RepairRelatedDamage from './dashboard/RepairRelatedDamage';
+import ThemeController from './dashboard/ThemeController';
 import { useAuthStore } from '@/store/authStore';
 
 export default function Dashboard() {
@@ -98,6 +99,7 @@ export default function Dashboard() {
               <Route path="access-requests" element={<SecuritySurveillance />} />
               <Route path="security-surveillance" element={<SecuritySurveillance />} />
               <Route path="security" element={<SecuritySurveillance />} />
+              <Route path="theme-controller" element={<ThemeController />} />
             </>
           )}
 

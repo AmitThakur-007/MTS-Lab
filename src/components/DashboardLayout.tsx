@@ -30,7 +30,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
-  Sparkles,
+  Palette,
   PanelLeftClose,
   PanelLeftOpen,
   Laptop,
@@ -40,6 +40,7 @@ import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { FestivalDecorations } from '@/components/theme/FestivalDecorations';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -309,6 +310,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Security & Surveillance', path: '/dashboard/security-surveillance', icon: ShieldCheck, roles: ['SUPER_ADMIN'] },
     { name: 'Revenue Hub', path: '/dashboard/revenue', icon: BarChart3, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'ACCOUNTANT', 'LEAD_TECHNICIAN'] },
     { name: 'Super Admin', path: '/dashboard/super-admin', icon: ShieldAlert, roles: ['SUPER_ADMIN'] },
+    { name: 'Theme Controller', path: '/dashboard/theme-controller', icon: Palette, roles: ['SUPER_ADMIN'] },
     { name: 'Settings', path: '/dashboard/settings', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'ACCOUNTANT'] },
   ].filter(item => item.roles.includes(user?.role || ''));
 
@@ -620,19 +622,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {isFestivalEnforced && (
               <div 
                 className={cn(
-                  "hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black shadow-2xs border transition-all select-none animate-pulse",
+                  "hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black shadow-2xs border transition-all select-none",
                   globalTheme.activeFestival === 'holi' && "bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800",
                   globalTheme.activeFestival === 'dashain' && "bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800",
-                  globalTheme.activeFestival === 'tihar' && "bg-yellow-50 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800"
+                  globalTheme.activeFestival === 'tihar' && "bg-yellow-50 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800",
+                  globalTheme.activeFestival === 'nepali-new-year' && "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
                 )}
                 title={`Super Admin globally enabled ${globalTheme.activeFestival.toUpperCase()} theme for all staff`}
               >
-                <span>{globalTheme.activeFestival === 'holi' ? '🎨' : globalTheme.activeFestival === 'dashain' ? '🌾' : '🪔'}</span>
-                <span className="uppercase tracking-wider font-extrabold text-[11px]">{globalTheme.activeFestival} Festival</span>
+                <span>
+                  {globalTheme.activeFestival === 'holi' ? '🎨' : 
+                   globalTheme.activeFestival === 'dashain' ? '🌾' : 
+                   globalTheme.activeFestival === 'tihar' ? '🪔' : '🌸'}
+                </span>
+                <span className="uppercase tracking-wider font-extrabold text-[11px]">
+                  {globalTheme.activeFestival === 'nepali-new-year' ? 'New Year' : globalTheme.activeFestival} Festival
+                </span>
               </div>
             )}
 
-            {/* Local Festival Preview Active Indicator (Super Admin) */}
+            {/* Local Preview Active Indicator (Super Admin) */}
             {previewFestival && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-300 shadow-xs">
                 <span>👁️ Preview: {previewFestival.toUpperCase()}</span>
@@ -651,11 +660,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <DropdownMenuTrigger
                 aria-label="Select Color Theme"
                 className="outline-none relative rounded-xl h-9 w-9 sm:h-10 sm:w-10 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 active:bg-slate-200 border border-slate-200/80 dark:border-slate-700 flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                title={isFestivalEnforced ? "Festival Theme active (Super Admin Enforced)" : "Choose Theme: Light / Dark"}
+                title={isFestivalEnforced ? "Festival Theme active (Super Admin Enforced)" : "Choose Theme"}
               >
                 {isFestivalEnforced ? (
-                  <Sparkles className="h-4 w-4 text-amber-500 animate-spin-slow" />
-                ) : effectiveTheme === 'dark' ? (
+                  <Palette className="h-4 w-4 text-amber-500" />
+                ) : (effectiveTheme === 'dark' || effectiveTheme === 'night') ? (
                   <Moon className="h-4 w-4 text-indigo-400" />
                 ) : (
                   <Sun className="h-4 w-4 text-amber-500" />
@@ -675,11 +684,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                 {isFestivalEnforced && (
                   <div className="p-2 mb-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 font-medium leading-relaxed">
-                    🎉 <strong>{globalTheme.activeFestival.toUpperCase()} Festival Mode</strong> is currently enforced by Super Admin for all staff.
+                    <strong>{globalTheme.activeFestival.toUpperCase()} Mode</strong> is currently active across all staff workstations.
                   </div>
                 )}
 
                 <DropdownMenuGroup className="space-y-0.5">
+                  <DropdownMenuItem
+                    onClick={() => setUserPreference('global')}
+                    className={cn(
+                      "rounded-xl h-9 px-2.5 font-bold text-xs gap-2.5 cursor-pointer",
+                      userPreference === 'global' && "bg-slate-100 dark:bg-slate-800 text-slate-950 dark:text-white"
+                    )}
+                  >
+                    <Palette className="h-4 w-4 text-slate-500" />
+                    <span className="flex-1">Follow Global (Default)</span>
+                    {userPreference === 'global' && <Check className="h-3.5 w-3.5 text-slate-900 dark:text-white" />}
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    onClick={() => setUserPreference('neutral-default')}
+                    className={cn(
+                      "rounded-xl h-9 px-2.5 font-bold text-xs gap-2.5 cursor-pointer",
+                      userPreference === 'neutral-default' && !isFestivalEnforced && "bg-slate-100 dark:bg-slate-800 text-slate-950 dark:text-white"
+                    )}
+                  >
+                    <Sun className="h-4 w-4 text-slate-600" />
+                    <span className="flex-1">Neutral Default</span>
+                    {userPreference === 'neutral-default' && !isFestivalEnforced && <Check className="h-3.5 w-3.5 text-slate-900 dark:text-white" />}
+                  </DropdownMenuItem>
+
                   <DropdownMenuItem
                     onClick={() => setUserPreference('light')}
                     className={cn(
@@ -705,15 +738,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </DropdownMenuItem>
 
                   <DropdownMenuItem
-                    onClick={() => setUserPreference('system')}
+                    onClick={() => setUserPreference('night')}
                     className={cn(
                       "rounded-xl h-9 px-2.5 font-bold text-xs gap-2.5 cursor-pointer",
-                      userPreference === 'system' && !isFestivalEnforced && "bg-slate-100 dark:bg-slate-800 text-slate-950 dark:text-white"
+                      userPreference === 'night' && !isFestivalEnforced && "bg-slate-100 dark:bg-slate-800 text-slate-950 dark:text-white"
                     )}
                   >
-                    <Laptop className="h-4 w-4 text-slate-500" />
-                    <span className="flex-1">System Default</span>
-                    {userPreference === 'system' && !isFestivalEnforced && <Check className="h-3.5 w-3.5 text-slate-900 dark:text-white" />}
+                    <Moon className="h-4 w-4 text-sky-400" />
+                    <span className="flex-1">Night Mode (OLED)</span>
+                    {userPreference === 'night' && !isFestivalEnforced && <Check className="h-3.5 w-3.5 text-slate-900 dark:text-white" />}
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
 
@@ -721,11 +754,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      onClick={() => navigate('/dashboard/super-admin')}
+                      onClick={() => navigate('/dashboard/theme-controller')}
                       className="rounded-xl h-9 px-2.5 font-bold text-xs gap-2 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
                     >
-                      <Sparkles className="h-3.5 w-3.5" />
-                      <span>Manage Festival Themes</span>
+                      <Palette className="h-3.5 w-3.5" />
+                      <span>Theme Controller Hub</span>
                     </DropdownMenuItem>
                   </>
                 )}
@@ -944,6 +977,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Viewport Content Area */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-7 xl:p-8 min-w-0 w-full transition-colors">
           <div className="max-w-7xl mx-auto w-full min-w-0">
+            <FestivalDecorations />
             {children}
           </div>
         </div>

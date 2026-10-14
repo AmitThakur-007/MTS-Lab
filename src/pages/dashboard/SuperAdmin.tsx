@@ -26,7 +26,8 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Palette
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -56,6 +57,7 @@ import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { useRealtimeSync } from '@/services/realtime';
 import StaffManagement from './Staff';
 import PermanentDeletionHub from '@/components/admin/PermanentDeletionHub';
+import ThemeController from './ThemeController';
 
 export default function SuperAdmin() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -345,6 +347,10 @@ export default function SuperAdmin() {
             <span>Activity & Security Logs</span>
             <span className="ml-1.5 text-[10px] font-mono font-black bg-slate-200/80 text-slate-700 px-1.5 py-0.5 rounded-md">{auditTotal}</span>
           </TabsTrigger>
+          <TabsTrigger value="theme-controller" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
+            <Palette className="h-4 w-4 mr-1.5 text-pink-600 shrink-0" />
+            <span>Theme Controller</span>
+          </TabsTrigger>
           <TabsTrigger value="permanent-deletion" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
             <Trash2 className="h-4 w-4 mr-1.5 text-rose-600 shrink-0" />
             <span>Permanent Deletion</span>
@@ -362,6 +368,11 @@ export default function SuperAdmin() {
             <span>Federation & Sharing</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* Tab: Global Theme Controller */}
+        <TabsContent value="theme-controller" className="space-y-6">
+          <ThemeController />
+        </TabsContent>
 
         {/* Tab: Permanent Deletion Controls Hub */}
         <TabsContent value="permanent-deletion" className="space-y-6">

@@ -3,37 +3,97 @@ import { api } from '@/services/api';
 import { useRealtimeSync } from '@/services/realtime';
 import { toast } from 'sonner';
 
-export type ThemePreference = 'light' | 'dark' | 'system';
-export type FestivalType = 'holi' | 'dashain' | 'tihar';
-export type ActiveTheme = 'light' | 'dark' | 'festival-holi' | 'festival-dashain' | 'festival-tihar';
+export type ThemeId = 
+  | 'light' 
+  | 'dark' 
+  | 'night' 
+  | 'neutral-default' 
+  | 'dashain' 
+  | 'tihar' 
+  | 'holi' 
+  | 'nepali-new-year';
+
+export type ThemePreference = ThemeId | 'system' | 'global';
+
+export type FestivalType = 'dashain' | 'tihar' | 'holi' | 'nepali-new-year';
+
+export interface FestivalSchedule {
+  enabled: boolean;
+  themeId: ThemeId;
+  startDate: string;
+  endDate: string;
+}
 
 export interface GlobalThemeConfig {
-  festivalModeEnabled: boolean;
-  activeFestival: FestivalType;
+  activeTheme: ThemeId;
+  effectiveTheme: ThemeId;
   festivalGreeting: string;
   customMessage?: string;
+  schedule?: FestivalSchedule;
+  isScheduledActive: boolean;
+  // Backward compatibility fields:
+  festivalModeEnabled: boolean;
+  activeFestival: FestivalType;
   updatedAt: string;
   updatedBy?: string | null;
   updatedByName?: string | null;
 }
 
+// ActiveTheme for backward compatibility with existing components
+export type ActiveTheme = 
+  | 'light' 
+  | 'dark' 
+  | 'night' 
+  | 'neutral-default' 
+  | 'dashain' 
+  | 'tihar' 
+  | 'holi' 
+  | 'nepali-new-year'
+  | 'festival-holi' 
+  | 'festival-dashain' 
+  | 'festival-tihar' 
+  | 'festival-nepali-new-year';
+
 interface ThemeContextType {
   userPreference: ThemePreference;
   globalTheme: GlobalThemeConfig;
-  effectiveTheme: ActiveTheme;
+  effectiveTheme: ThemeId;
   isFestivalEnforced: boolean;
+  isScheduledActive: boolean;
+  previewTheme: ThemeId | null;
+  setPreviewTheme: (t: ThemeId | null) => void;
+  // Legacy alias for compatibility:
   previewFestival: FestivalType | null;
   setPreviewFestival: (f: FestivalType | null) => void;
   setUserPreference: (preference: ThemePreference) => void;
+  applyGlobalTheme: (
+    themeId: ThemeId, 
+    options?: { 
+      festivalGreeting?: string; 
+      customMessage?: string; 
+      schedule?: FestivalSchedule 
+    }
+  ) => Promise<boolean>;
+  resetToDefault: () => Promise<boolean>;
+  cancelPreview: () => void;
   setGlobalFestival: (updates: Partial<GlobalThemeConfig>) => Promise<boolean>;
   refreshGlobalTheme: () => Promise<void>;
 }
 
 const DEFAULT_GLOBAL_THEME: GlobalThemeConfig = {
+  activeTheme: 'neutral-default',
+  effectiveTheme: 'neutral-default',
+  festivalGreeting: 'Serving with Excellence & Precision at MTS Lab Kathmandu',
+  customMessage: 'Mobile Technology Station — Chip-Level Smartphone Hardware Lab',
+  schedule: {
+    enabled: false,
+    themeId: 'dashain',
+    startDate: '',
+    endDate: '',
+  },
+  isScheduledActive: false,
   festivalModeEnabled: false,
   activeFestival: 'dashain',
-  festivalGreeting: 'Celebrating the festive spirit across MTS Lab Kathmandu',
-  customMessage: 'Happy Festive Season from Mobile Technology Station',
   updatedAt: new Date().toISOString(),
   updatedBy: null,
   updatedByName: null,
@@ -44,103 +104,145 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 1. User's personal preference (stored locally per browser/profile)
   const [userPreference, setUserPreferenceState] = useState<ThemePreference>(() => {
-    if (typeof window === 'undefined') return 'light';
-    const saved = localStorage.getItem('mtslab-theme-preference');
-    if (saved === 'dark' || saved === 'light' || saved === 'system') return saved;
-    return 'light';
+    if (typeof window === 'undefined') return 'global';
+    const saved = localStorage.getItem('mtslab-theme-preference') as ThemePreference;
+    if (saved && [
+      'light', 'dark', 'night', 'neutral-default', 'dashain', 'tihar', 'holi', 'nepali-new-year', 'system', 'global'
+    ].includes(saved)) {
+      return saved;
+    }
+    return 'global';
   });
 
-  // 2. Global Festival Configuration (authoritatively fetched from server)
+  // 2. Authoritative Global Theme Configuration from server
   const [globalTheme, setGlobalTheme] = useState<GlobalThemeConfig>(DEFAULT_GLOBAL_THEME);
 
-  // 3. Super Admin local preview state (does not affect other users until published)
-  const [previewFestival, setPreviewFestival] = useState<FestivalType | null>(null);
+  // 3. Super Admin local preview state (does NOT persist or change other sessions until published)
+  const [previewTheme, setPreviewTheme] = useState<ThemeId | null>(null);
 
   // Fetch authoritative global theme config from server
   const refreshGlobalTheme = useCallback(async () => {
     try {
       const data = await api.get('/public/system-theme');
       if (data && typeof data === 'object') {
+        const activeTheme: ThemeId = data.activeTheme || (data.festivalModeEnabled && data.activeFestival) || 'neutral-default';
+        const effectiveTheme: ThemeId = data.effectiveTheme || activeTheme;
+        const isFestival = ['dashain', 'tihar', 'holi', 'nepali-new-year'].includes(effectiveTheme);
+
         setGlobalTheme({
-          festivalModeEnabled: Boolean(data.festivalModeEnabled),
-          activeFestival: ['holi', 'dashain', 'tihar'].includes(data.activeFestival) ? data.activeFestival : 'dashain',
+          activeTheme,
+          effectiveTheme,
           festivalGreeting: data.festivalGreeting || DEFAULT_GLOBAL_THEME.festivalGreeting,
           customMessage: data.customMessage || DEFAULT_GLOBAL_THEME.customMessage,
+          schedule: data.schedule || DEFAULT_GLOBAL_THEME.schedule,
+          isScheduledActive: Boolean(data.isScheduledActive),
+          festivalModeEnabled: isFestival,
+          activeFestival: (isFestival ? effectiveTheme : 'dashain') as FestivalType,
           updatedAt: data.updatedAt || new Date().toISOString(),
           updatedBy: data.updatedBy || null,
           updatedByName: data.updatedByName || null,
         });
       }
     } catch (err) {
-      // Fallback silently if offline or initializing
+      // Fallback silently if offline or server restarting
     }
   }, []);
 
   useEffect(() => {
     refreshGlobalTheme();
 
-    // Periodic safety check every 45s to ensure synchronized festival themes across staff
+    // Periodic safety check every 45s to ensure synchronized themes across staff workstations
     const interval = setInterval(refreshGlobalTheme, 45000);
     return () => clearInterval(interval);
   }, [refreshGlobalTheme]);
 
-  // Real-time synchronization: when Super Admin updates festival theme, all connected clients update immediately
+  // Real-time synchronization: when Super Admin updates theme, all connected clients update immediately
   useRealtimeSync(['system_theme', 'systemtheme', 'appsetting'], () => {
     refreshGlobalTheme();
   });
 
   // Determine effective theme with strict priority:
-  // 1. Preview mode (Super Admin only, local testing)
-  // 2. Global Festival Mode (if enabled by Super Admin)
-  // 3. User's personal Dark / Light / System preference
-  const effectiveTheme: ActiveTheme = useMemo(() => {
-    if (previewFestival) {
-      return `festival-${previewFestival}` as ActiveTheme;
+  // 1. Preview mode (Super Admin only, local testing in current tab)
+  // 2. Super Admin Authoritative Global Theme (default)
+  // 3. User's personal preference if explicitly opted-in (and not festival enforced)
+  const isFestivalEnforced = globalTheme.festivalModeEnabled;
+  const isScheduledActive = globalTheme.isScheduledActive;
+
+  const effectiveTheme: ThemeId = useMemo(() => {
+    // 1. Super Admin local preview overrides everything in current tab
+    if (previewTheme) {
+      return previewTheme;
     }
 
-    if (globalTheme.festivalModeEnabled) {
-      return `festival-${globalTheme.activeFestival}` as ActiveTheme;
+    // 2. If user selected a personal override AND festival is not actively enforced
+    if (userPreference !== 'global' && !isFestivalEnforced) {
+      if (userPreference === 'system' && typeof window !== 'undefined') {
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        return systemDark ? 'dark' : 'light';
+      }
+      if (['light', 'dark', 'night', 'neutral-default'].includes(userPreference)) {
+        return userPreference as ThemeId;
+      }
     }
 
-    if (userPreference === 'system' && typeof window !== 'undefined') {
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      return systemDark ? 'dark' : 'light';
-    }
-
-    return userPreference === 'dark' ? 'dark' : 'light';
-  }, [previewFestival, globalTheme, userPreference]);
-
-  const isFestivalEnforced = globalTheme.festivalModeEnabled && !previewFestival;
+    // 3. Default: authoritatively follow global theme configured by Super Admin
+    return globalTheme.effectiveTheme || globalTheme.activeTheme || 'neutral-default';
+  }, [previewTheme, globalTheme, userPreference, isFestivalEnforced]);
 
   // Apply theme classes to <html> root element
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
 
-    // Remove all previous theme-related classes
+    // Remove all previous theme classes
     root.classList.remove(
       'dark',
+      'theme-light',
+      'theme-night',
+      'theme-neutral-default',
       'theme-festival',
-      'theme-festival-holi',
       'theme-festival-dashain',
-      'theme-festival-tihar'
+      'theme-festival-tihar',
+      'theme-festival-holi',
+      'theme-festival-nepali-new-year'
     );
 
-    if (effectiveTheme === 'dark') {
-      root.classList.add('dark');
-    } else if (effectiveTheme.startsWith('festival-')) {
-      root.classList.add('theme-festival', `theme-${effectiveTheme}`);
-      if (effectiveTheme === 'festival-tihar') {
-        // Tihar uses dark celebratory background
+    switch (effectiveTheme) {
+      case 'light':
+        root.classList.add('theme-light');
+        break;
+      case 'dark':
         root.classList.add('dark');
-      }
+        break;
+      case 'night':
+        root.classList.add('dark', 'theme-night');
+        break;
+      case 'neutral-default':
+        root.classList.add('theme-neutral-default');
+        break;
+      case 'dashain':
+        root.classList.add('theme-festival', 'theme-festival-dashain');
+        break;
+      case 'tihar':
+        // Tihar is a night-sky festival with glowing golden lamps
+        root.classList.add('dark', 'theme-festival', 'theme-festival-tihar');
+        break;
+      case 'holi':
+        root.classList.add('theme-festival', 'theme-festival-holi');
+        break;
+      case 'nepali-new-year':
+        root.classList.add('theme-festival', 'theme-festival-nepali-new-year');
+        break;
+      default:
+        root.classList.add('theme-neutral-default');
+        break;
     }
   }, [effectiveTheme]);
 
   // User preference setter with persistent storage
   const setUserPreference = useCallback((preference: ThemePreference) => {
-    if (isFestivalEnforced) {
-      toast.info('Festival Mode is globally active. Personal theme settings will resume when Festival Mode ends.');
+    if (isFestivalEnforced && preference !== 'global') {
+      toast.info('Festival Mode is currently active globally. Personal overrides resume when the festival period concludes.');
       return;
     }
     setUserPreferenceState(preference);
@@ -149,21 +251,85 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (_) {}
   }, [isFestivalEnforced]);
 
-  // Super Admin action to publish global festival settings to the backend
-  const setGlobalFestival = useCallback(async (updates: Partial<GlobalThemeConfig>): Promise<boolean> => {
+  // Super Admin action to apply and publish global theme configuration
+  const applyGlobalTheme = useCallback(async (
+    themeId: ThemeId,
+    options?: {
+      festivalGreeting?: string;
+      customMessage?: string;
+      schedule?: FestivalSchedule;
+    }
+  ): Promise<boolean> => {
     try {
-      const res: any = await api.post('/admin/system-theme', updates);
+      const payload: any = {
+        activeTheme: themeId,
+        festivalGreeting: options?.festivalGreeting,
+        customMessage: options?.customMessage,
+        schedule: options?.schedule,
+      };
+
+      const res: any = await api.post('/admin/system-theme', payload);
       if (res && res.themeConfig) {
         setGlobalTheme(res.themeConfig);
-        setPreviewFestival(null); // Clear preview upon global publish
-        toast.success(res.message || 'Global festival theme updated successfully!');
+        setPreviewTheme(null); // Clear preview upon global publish
+        toast.success(res.message || 'Global theme updated and broadcasted across all devices!');
         return true;
       }
       return false;
     } catch (err: any) {
-      toast.error(err.message || 'Failed to update global festival settings.');
+      toast.error(err.message || 'Failed to apply global theme configuration.');
       return false;
     }
+  }, []);
+
+  // Super Admin action to reset to default neutral theme
+  const resetToDefault = useCallback(async (): Promise<boolean> => {
+    try {
+      const res: any = await api.post('/admin/system-theme', {
+        activeTheme: 'neutral-default',
+        schedule: { enabled: false, themeId: 'dashain', startDate: '', endDate: '' },
+      });
+      if (res && res.themeConfig) {
+        setGlobalTheme(res.themeConfig);
+        setPreviewTheme(null);
+        toast.success('System theme successfully reset to Neutral Default!');
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reset theme.');
+      return false;
+    }
+  }, []);
+
+  // Cancel local preview without affecting server state
+  const cancelPreview = useCallback(() => {
+    setPreviewTheme(null);
+    toast.info('Preview discarded. Reverted to currently active global theme.');
+  }, []);
+
+  // Legacy setGlobalFestival adapter
+  const setGlobalFestival = useCallback(async (updates: Partial<GlobalThemeConfig>): Promise<boolean> => {
+    return applyGlobalTheme(
+      updates.activeTheme || (updates.festivalModeEnabled && updates.activeFestival ? updates.activeFestival : 'neutral-default'),
+      {
+        festivalGreeting: updates.festivalGreeting,
+        customMessage: updates.customMessage,
+        schedule: updates.schedule,
+      }
+    );
+  }, [applyGlobalTheme]);
+
+  // Legacy previewFestival adapter
+  const previewFestival = useMemo<FestivalType | null>(() => {
+    if (previewTheme && ['dashain', 'tihar', 'holi', 'nepali-new-year'].includes(previewTheme)) {
+      return previewTheme as FestivalType;
+    }
+    return null;
+  }, [previewTheme]);
+
+  const setPreviewFestival = useCallback((f: FestivalType | null) => {
+    setPreviewTheme(f as ThemeId | null);
   }, []);
 
   return (
@@ -173,9 +339,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         globalTheme,
         effectiveTheme,
         isFestivalEnforced,
+        isScheduledActive,
+        previewTheme,
+        setPreviewTheme,
         previewFestival,
         setPreviewFestival,
         setUserPreference,
+        applyGlobalTheme,
+        resetToDefault,
+        cancelPreview,
         setGlobalFestival,
         refreshGlobalTheme,
       }}
@@ -192,3 +364,4 @@ export function useAppTheme() {
   }
   return context;
 }
+
