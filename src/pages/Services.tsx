@@ -1216,7 +1216,7 @@ export default function Services() {
                         setIsSuggestionsOpen(false);
                       }
                     }}
-                    className="w-full h-full border-0 focus:outline-none text-xs sm:text-sm md:text-base font-semibold px-3 bg-transparent placeholder:text-slate-400 placeholder:font-normal text-slate-950"
+                    className="w-full h-full border-0 focus:outline-none text-base md:text-sm font-semibold px-3 bg-transparent placeholder:text-slate-400 placeholder:font-normal text-slate-950"
                     aria-label="Search repair catalog"
                   />
 
@@ -1489,7 +1489,7 @@ export default function Services() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-transparent border-0 font-bold text-slate-800 focus:outline-none cursor-pointer pr-1 text-xs"
+                  className="bg-transparent border-0 font-bold text-slate-800 focus:outline-none cursor-pointer pr-1 text-base md:text-xs"
                 >
                   <option value="recommended">Recommended</option>
                   <option value="priceLow">Price: Low to High</option>

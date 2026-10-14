@@ -677,7 +677,7 @@ export default function Tracking() {
                       placeholder="Enter repair number"
                       value={repairNumber}
                       onChange={(e) => setRepairNumber(e.target.value)}
-                      className="h-11 rounded-xl bg-slate-50 border-slate-200 font-mono text-xs sm:text-sm pl-3.5 focus-visible:ring-slate-900"
+                      className="h-11 rounded-xl bg-slate-50 border-slate-200 font-mono text-base md:text-sm pl-3.5 focus-visible:ring-slate-900"
                     />
                   </div>
 
@@ -690,7 +690,7 @@ export default function Tracking() {
                       placeholder="Enter phone number"
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
-                      className="h-11 rounded-xl bg-slate-50 border-slate-200 text-xs sm:text-sm pl-3.5 focus-visible:ring-slate-900"
+                      className="h-11 rounded-xl bg-slate-50 border-slate-200 text-base md:text-sm pl-3.5 focus-visible:ring-slate-900"
                     />
                   </div>
                 </div>

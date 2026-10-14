@@ -1775,7 +1775,7 @@ export default function RepairPrices() {
                   value={serviceFormData.brand}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, brand: e.target.value })}
                   placeholder="e.g. Samsung, Apple"
-                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold focus:bg-white focus:outline-none"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-base md:text-xs font-semibold focus:bg-white focus:outline-none"
                 />
                 <datalist id="brand-suggestions">
                   {allBrands.map(b => <option key={b} value={b} />)}
@@ -1816,7 +1816,7 @@ export default function RepairPrices() {
                   value={serviceFormData.category}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, category: e.target.value })}
                   placeholder="e.g. Display, Battery"
-                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold focus:bg-white focus:outline-none"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-base md:text-xs font-semibold focus:bg-white focus:outline-none"
                 />
                 <datalist id="category-suggestions">
                   {DEFAULT_POPULAR_CATEGORIES.map(c => <option key={c} value={c} />)}
@@ -2129,7 +2129,7 @@ export default function RepairPrices() {
                 value={moveTargetInfo.brand}
                 onChange={(e) => setMoveTargetInfo({ ...moveTargetInfo, brand: e.target.value })}
                 placeholder="e.g. Samsung"
-                className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold focus:outline-none"
+                className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-base md:text-xs font-semibold focus:outline-none"
               />
               <datalist id="target-brand-suggestions">
                 {allBrands.map(b => <option key={b} value={b} />)}

@@ -498,7 +498,7 @@ export default function Login() {
                           placeholder="Work Email"
                           value={identity}
                           onChange={(e) => setIdentity(e.target.value)}
-                          className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
+                          className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-base md:text-sm font-medium"
                           required
                           autoFocus
                           autoComplete="email"
@@ -524,7 +524,7 @@ export default function Login() {
                           placeholder="Password"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
+                          className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-base md:text-sm font-medium"
                           required
                           autoComplete="current-password"
                         />

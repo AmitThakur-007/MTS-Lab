@@ -124,7 +124,7 @@ export default function ResetPassword() {
                       setNewPassword(e.target.value);
                       if (errorMsg) setErrorMsg(null);
                     }}
-                    className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
+                    className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-base md:text-sm font-medium"
                     required
                     autoFocus
                   />
@@ -152,7 +152,7 @@ export default function ResetPassword() {
                       setConfirmPassword(e.target.value);
                       if (errorMsg) setErrorMsg(null);
                     }}
-                    className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
+                    className="pl-10 pr-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-base md:text-sm font-medium"
                     required
                   />
                   <button

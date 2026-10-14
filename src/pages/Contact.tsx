@@ -578,7 +578,7 @@ export default function Contact() {
                       value={formData.name}
                       onChange={handleInputChange}
                       placeholder="e.g. Aashish Sharma"
-                      className={`w-full text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                      className={`w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
                         formErrors.name 
                           ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
                           : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'
@@ -602,7 +602,7 @@ export default function Contact() {
                       value={formData.phone}
                       onChange={handleInputChange}
                       placeholder="e.g. 98XXXXXXXX"
-                      className={`w-full text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                      className={`w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
                         formErrors.phone 
                           ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
                           : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'
@@ -630,7 +630,7 @@ export default function Contact() {
                       value={formData.email}
                       onChange={handleInputChange}
                       placeholder="name@example.com"
-                      className={`w-full text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                      className={`w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
                         formErrors.email 
                           ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
                           : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'
@@ -651,7 +651,7 @@ export default function Contact() {
                       name="subject"
                       value={formData.subject}
                       onChange={handleInputChange}
-                      className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900 transition-all cursor-pointer"
+                      className="w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900 transition-all cursor-pointer"
                     >
                       <option value="Screen & Glass Refurbishing">Screen & Glass Refurbishing</option>
                       <option value="Motherboard & Micro-Soldering">Motherboard & Micro-Soldering</option>
@@ -683,7 +683,7 @@ export default function Contact() {
                     value={formData.message}
                     onChange={handleInputChange}
                     placeholder="Describe your device brand, model, and the issue you are experiencing (e.g. Samsung S23 display flickering after fall)..."
-                    className={`w-full text-sm p-3.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all resize-y min-h-[100px] ${
+                    className={`w-full text-base md:text-sm p-3.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all resize-y min-h-[100px] ${
                       formErrors.message 
                         ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
                         : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'

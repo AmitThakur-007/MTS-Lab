@@ -1,8 +1,8 @@
 // api/_server/app.ts
 import express from "express";
 import cookieParser from "cookie-parser";
-import path9 from "path";
-import fs9 from "fs";
+import path11 from "path";
+import fs11 from "fs";
 
 // api/_server/routes/auth.ts
 import { Router } from "express";
@@ -124,17 +124,24 @@ function getCloudinaryCredentials() {
   }
   return { cloudName, apiKey, apiSecret, cldUrl };
 }
-var cldCreds = getCloudinaryCredentials();
 var config = {
   supabaseUrl: SUPABASE_URL,
   supabaseAnonKey: SUPABASE_ANON_KEY,
   jwtSecret: process.env.JWT_SECRET || "mts-lab-super-secret-key-2026",
   refreshSecret: process.env.REFRESH_SECRET || "mts-lab-refresh-secret-key-2026",
   appUrl: process.env.APP_URL || "http://localhost:3000",
-  cloudinaryCloudName: cldCreds.cloudName,
-  cloudinaryApiKey: cldCreds.apiKey,
-  cloudinaryApiSecret: cldCreds.apiSecret,
-  cloudinaryUrl: cldCreds.cldUrl,
+  get cloudinaryCloudName() {
+    return getCloudinaryCredentials().cloudName;
+  },
+  get cloudinaryApiKey() {
+    return getCloudinaryCredentials().apiKey;
+  },
+  get cloudinaryApiSecret() {
+    return getCloudinaryCredentials().apiSecret;
+  },
+  get cloudinaryUrl() {
+    return getCloudinaryCredentials().cldUrl;
+  },
   getCloudinaryCredentials
 };
 
@@ -349,39 +356,147 @@ async function logAudit(entry) {
     console.warn("[AUDIT LOG WARNING] Failed to record audit log:", err);
   }
 }
+async function logAuditFromRequest(req, entry) {
+  const user = req?.user;
+  const ipAddress = req?.ip || (req?.headers ? req.headers["x-forwarded-for"] : null) || null;
+  const userAgent = req?.headers ? req.headers["user-agent"] : null;
+  return logAudit({
+    userId: entry.userId ?? user?.id ?? null,
+    userEmail: entry.userEmail ?? user?.email ?? null,
+    userName: entry.userName ?? user?.name ?? null,
+    userRole: entry.userRole ?? user?.role ?? null,
+    ipAddress,
+    userAgent,
+    ...entry
+  });
+}
 
 // api/_server/services/emailService.ts
 import { Resend } from "resend";
-var resendApiKey = process.env.RESEND_API_KEY;
-var resend = resendApiKey ? new Resend(resendApiKey) : null;
-async function sendEmail(options) {
-  if (!resend) {
-    console.warn(`[EMAIL NOTICE] RESEND_API_KEY is not configured. Email to ${options.to} not sent.`);
-    return true;
+import nodemailer from "nodemailer";
+var cachedTestTransporter = null;
+async function sendEmailDetailed(options) {
+  const fromAddress = process.env.SMTP_FROM || "MTS Lab Support <support@mobiletechnologystation.com.np>";
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (resendApiKey && resendApiKey.trim().length > 0) {
+    try {
+      const resend = new Resend(resendApiKey.trim());
+      const { data, error } = await resend.emails.send({
+        from: fromAddress,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        attachments: options.attachments?.map((att) => ({
+          filename: att.filename,
+          content: att.content
+        }))
+      });
+      if (error) {
+        console.error("[RESEND ERROR] Failed to send email:", error);
+        return { success: false, status: "failed", provider: "resend", error: error.message };
+      }
+      console.log(`[EMAIL SUCCESS via Resend] Sent to ${options.to}, id: ${data?.id}`);
+      return { success: true, status: "sent", provider: "resend", messageId: data?.id };
+    } catch (err) {
+      console.error("[RESEND EXCEPTION]", err);
+      return { success: false, status: "failed", provider: "resend", error: err?.message || "Resend error" };
+    }
+  }
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port,
+        secure: process.env.SMTP_SECURE === "true" || port === 465,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS
+        }
+      });
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        attachments: options.attachments
+      });
+      console.log(`[EMAIL SUCCESS via SMTP] Sent to ${options.to}, id: ${info.messageId}`);
+      return { success: true, status: "sent", provider: "smtp", messageId: info.messageId };
+    } catch (err) {
+      console.error("[SMTP EXCEPTION]", err);
+      return { success: false, status: "failed", provider: "smtp", error: err?.message || "SMTP error" };
+    }
+  }
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    try {
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD
+        }
+      });
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        attachments: options.attachments
+      });
+      console.log(`[EMAIL SUCCESS via Gmail] Sent to ${options.to}, id: ${info.messageId}`);
+      return { success: true, status: "sent", provider: "gmail", messageId: info.messageId };
+    } catch (err) {
+      console.error("[GMAIL EXCEPTION]", err);
+      return { success: false, status: "failed", provider: "gmail", error: err?.message || "Gmail error" };
+    }
   }
   try {
-    const fromAddress = process.env.SMTP_FROM || "MTS Lab Security <noreply@mobiletechnologystation.com.np>";
-    const { error } = await resend.emails.send({
+    if (!cachedTestTransporter) {
+      const testAccount = await nodemailer.createTestAccount();
+      cachedTestTransporter = nodemailer.createTransport({
+        host: testAccount.smtp.host,
+        port: testAccount.smtp.port,
+        secure: testAccount.smtp.secure,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass
+        }
+      });
+    }
+    const info = await cachedTestTransporter.sendMail({
       from: fromAddress,
       to: options.to,
       subject: options.subject,
       html: options.html,
       text: options.text,
-      attachments: options.attachments?.map((att) => ({
-        filename: att.filename,
-        content: att.content
-      }))
+      attachments: options.attachments
     });
-    if (error) {
-      console.error("[RESEND ERROR] Failed to send email:", error);
-      return false;
-    }
-    console.log(`[EMAIL SUCCESS] Sent email to ${options.to}`);
-    return true;
+    const preview = nodemailer.getTestMessageUrl(info) || void 0;
+    console.log(`[EMAIL DISPATCHED via Ethereal SMTP] Message ID: ${info.messageId} | Preview: ${preview}`);
+    return {
+      success: true,
+      status: "sent",
+      provider: "ethereal",
+      messageId: info.messageId,
+      previewUrl: preview
+    };
   } catch (err) {
-    console.error("[EMAIL ERROR] Exception sending email via Resend:", err);
-    return false;
+    console.error("[TEST EMAIL DISPATCH ERROR]", err);
+    return {
+      success: false,
+      status: "failed",
+      provider: "none",
+      error: "No email service configured and test dispatch failed."
+    };
   }
+}
+async function sendEmail(options) {
+  const result = await sendEmailDetailed(options);
+  return result.success;
 }
 
 // api/_server/routes/auth.ts
@@ -430,10 +545,34 @@ router.post("/login", async (req, res) => {
       }
     }
     if (userErr || !users || users.length === 0) {
+      await logAudit({
+        userEmail: normalizedIdentifier,
+        action: "FAILED_LOGIN",
+        resource: "Auth",
+        status: "FAILED",
+        ipAddress: ipAddress || req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        deviceInfo: { deviceIdentifier, deviceName, browser, os },
+        details: { reason: "User account not found", enteredIdentifier: normalizedIdentifier }
+      });
       return res.status(401).json({ error: "Invalid email or password." });
     }
     const user = users[0];
     if (user.accountStatus === "REJECTED" || user.accountStatus === "DISABLED" || user.isActive === false) {
+      await logAudit({
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: "LOGIN_DISABLED_ACCOUNT",
+        resource: "User",
+        resourceId: user.id,
+        status: "DENIED",
+        ipAddress: ipAddress || req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        deviceInfo: { deviceIdentifier, deviceName, browser, os },
+        details: { accountStatus: user.accountStatus, isActive: user.isActive, reason: "Account disabled or pending approval" }
+      });
       return res.status(403).json({
         error: "Forbidden",
         message: "Your account is currently disabled or pending approval. Contact the administrator."
@@ -1030,6 +1169,19 @@ function authorize(allowedRoles) {
     if (normalizedAllowed.includes(userRole)) {
       return next();
     }
+    logAuditFromRequest(req, {
+      action: "UNAUTHORIZED_ACCESS_ATTEMPT",
+      resource: req.baseUrl || req.path || "API",
+      status: "DENIED",
+      details: {
+        method: req.method,
+        path: req.originalUrl || req.path,
+        userRole: req.user.role,
+        requiredRoles: allowedRoles,
+        reason: `Role '${req.user.role}' is not in authorized roles [${allowedRoles.join(", ")}]`
+      }
+    }).catch(() => {
+    });
     return res.status(403).json({
       error: "Forbidden",
       message: `Access denied. Requires one of roles: [${allowedRoles.join(", ")}]. Current role: ${req.user.role}`
@@ -1118,12 +1270,24 @@ router2.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req,
       console.error("[STAFF INSERT ERROR]", insertErr);
       return res.status(500).json({ error: "Failed to create staff member profile." });
     }
-    await logAudit({
-      userId: req.user.id,
+    await logAuditFromRequest(req, {
       action: "STAFF_CREATED",
       resource: "User",
       resourceId: insertedUser.id,
-      details: { email: insertedUser.email, role: insertedUser.role, createdBy: req.user.name }
+      status: "SUCCESS",
+      details: {
+        email: insertedUser.email,
+        name: insertedUser.name,
+        role: insertedUser.role,
+        department: insertedUser.department
+      },
+      newValue: {
+        email: insertedUser.email,
+        name: insertedUser.name,
+        role: insertedUser.role,
+        accountStatus: insertedUser.accountStatus,
+        isActive: insertedUser.isActive
+      }
     });
     await broadcastServerChange("User", "CREATE", insertedUser.id, insertedUser);
     return res.status(201).json(insertedUser);
@@ -1152,8 +1316,17 @@ router2.patch("/:id", authenticate, async (req, res) => {
     const isSelf = req.user.id === id;
     const isSuperAdminOrAdmin = callerRole === "SUPER_ADMIN" || callerRole === "ADMIN";
     if (!isSelf && !isSuperAdminOrAdmin) {
+      logAuditFromRequest(req, {
+        action: "UNAUTHORIZED_USER_MUTATION",
+        resource: "User",
+        resourceId: id,
+        status: "DENIED",
+        details: { reason: "Caller is neither the user nor an administrator.", targetUserId: id }
+      }).catch(() => {
+      });
       return res.status(403).json({ error: "You are not authorized to modify this user account." });
     }
+    const { data: existingUser } = await supabaseAdmin.from("User").select("*").eq("id", id).maybeSingle();
     const updatePayload = {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
@@ -1182,12 +1355,36 @@ router2.patch("/:id", authenticate, async (req, res) => {
       console.error("[USER UPDATE ERROR]", updateErr);
       return res.status(500).json({ error: "Failed to update user profile." });
     }
-    await logAudit({
-      userId: req.user.id,
+    if (updatePayload.role && existingUser && updatePayload.role !== existingUser.role) {
+      await logAuditFromRequest(req, {
+        action: "STAFF_ROLE_CHANGED",
+        resource: "User",
+        resourceId: id,
+        status: "SUCCESS",
+        details: { targetEmail: existingUser.email, targetName: existingUser.name, oldRole: existingUser.role, newRole: updatePayload.role },
+        previousValue: { role: existingUser.role },
+        newValue: { role: updatePayload.role }
+      });
+    }
+    if (updatePayload.accountStatus && existingUser && updatePayload.accountStatus !== existingUser.accountStatus || updatePayload.isActive !== void 0 && existingUser && updatePayload.isActive !== existingUser.isActive) {
+      await logAuditFromRequest(req, {
+        action: "STAFF_STATUS_CHANGED",
+        resource: "User",
+        resourceId: id,
+        status: "SUCCESS",
+        details: { targetEmail: existingUser.email, oldStatus: existingUser.accountStatus, newStatus: updatePayload.accountStatus, oldActive: existingUser.isActive, newActive: updatePayload.isActive },
+        previousValue: { accountStatus: existingUser.accountStatus, isActive: existingUser.isActive },
+        newValue: { accountStatus: updated.accountStatus, isActive: updated.isActive }
+      });
+    }
+    await logAuditFromRequest(req, {
       action: "STAFF_UPDATED",
       resource: "User",
       resourceId: id,
-      details: updatePayload
+      status: "SUCCESS",
+      details: { targetEmail: existingUser?.email, changedFields: Object.keys(updatePayload).filter((k) => k !== "updatedAt") },
+      previousValue: existingUser ? { name: existingUser.name, role: existingUser.role, department: existingUser.department, phoneNumber: existingUser.phoneNumber } : void 0,
+      newValue: { name: updated.name, role: updated.role, department: updated.department, phoneNumber: updated.phoneNumber }
     });
     await broadcastServerChange("User", "UPDATE", id, updated);
     return res.json(updated);
@@ -1209,6 +1406,15 @@ var handle2FAToggle = async (req, res) => {
       return res.status(500).json({ error: "Failed to update 2FA configuration." });
     }
     await broadcastServerChange("User", "UPDATE", id, updated);
+    await logAuditFromRequest(req, {
+      action: "STAFF_2FA_TOGGLED",
+      resource: "User",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { email: updated.email, twoFactorEnabled: isEnabled },
+      previousValue: { twoFactorEnabled: !isEnabled },
+      newValue: { twoFactorEnabled: isEnabled }
+    });
     return res.json({ success: true, message: `2FA ${isEnabled ? "enabled" : "disabled"} successfully.`, user: updated });
   } catch (err) {
     return res.status(500).json({ error: "Failed to toggle 2FA." });
@@ -1230,6 +1436,14 @@ var handleDirectVerifyEmail = async (req, res) => {
       return res.status(500).json({ error: "Failed to verify staff email." });
     }
     await broadcastServerChange("User", "UPDATE", id, updated);
+    await logAuditFromRequest(req, {
+      action: "STAFF_EMAIL_VERIFIED",
+      resource: "User",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { email: updated.email },
+      newValue: { emailVerified: true, accountStatus: "ACTIVE" }
+    });
     return res.json({ success: true, message: "Email directly verified successfully.", user: updated });
   } catch (err) {
     return res.status(500).json({ error: "Failed to verify email." });
@@ -1247,6 +1461,14 @@ router2.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async 
     }
     const { data: user } = await supabaseAdmin.from("User").select("role, email").eq("id", id).single();
     if (user && normalizeRole(user.role) === "SUPER_ADMIN" && normalizeRole(req.user.role) !== "SUPER_ADMIN") {
+      logAuditFromRequest(req, {
+        action: "UNAUTHORIZED_USER_MUTATION",
+        resource: "User",
+        resourceId: id,
+        status: "DENIED",
+        details: { reason: "Only a Super Admin can delete another Super Admin.", targetRole: user.role }
+      }).catch(() => {
+      });
       return res.status(403).json({ error: "Only a Super Admin can delete another Super Admin." });
     }
     const { error } = await supabaseAdmin.from("User").update({
@@ -1257,12 +1479,14 @@ router2.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async 
     if (error) {
       return res.status(500).json({ error: "Failed to remove staff member." });
     }
-    await logAudit({
-      userId: req.user.id,
+    await logAuditFromRequest(req, {
       action: "STAFF_DELETED",
       resource: "User",
       resourceId: id,
-      details: { deletedEmail: user?.email }
+      status: "SUCCESS",
+      details: { deletedEmail: user?.email, deletedRole: user?.role },
+      previousValue: { email: user?.email, role: user?.role, isActive: true, accountStatus: "ACTIVE" },
+      newValue: { isActive: false, accountStatus: "DISABLED" }
     });
     await broadcastServerChange("User", "DELETE", id);
     return res.json({ success: true, message: "Staff member account safely deactivated." });
@@ -1713,6 +1937,25 @@ async function createRepairTransferRequest(params) {
     console.warn("[REPAIR LOG NON FATAL]", logErr);
   }
   await broadcastServerChange("RepairTransfer", "CREATE", transferId, newTransfer);
+  await logAudit({
+    userId: senderId,
+    userName: senderName,
+    userRole: senderRole,
+    action: "TRANSFER_REQUEST_CREATED",
+    resource: "Repair",
+    resourceId: repair.id,
+    status: "SUCCESS",
+    details: {
+      repairNumber: repair.repairNumber,
+      senderTechnicianId: senderId,
+      senderTechnicianName: senderName,
+      targetTechnicianId: targetTech.id,
+      targetTechnicianName: targetTech.name,
+      reason: reason.trim()
+    },
+    previousValue: { technicianId: senderId, technicianName: senderName },
+    newValue: { targetTechnicianId: targetTech.id, targetTechnicianName: targetTech.name, transferStatus: "PENDING" }
+  });
   return { success: true, data: newTransfer };
 }
 async function respondToTransferRequest(params) {
@@ -1805,6 +2048,23 @@ async function respondToTransferRequest(params) {
     if (updatedRepair) {
       await broadcastServerChange("Repair", "UPDATE", transfer.repairId, updatedRepair);
     }
+    await logAudit({
+      userId: responderId,
+      userName: responderName,
+      userRole: responderRole,
+      action: "TRANSFER_REQUEST_ACCEPTED",
+      resource: "Repair",
+      resourceId: transfer.repairId,
+      status: "SUCCESS",
+      details: {
+        repairNumber: transfer.repairNumber,
+        fromTechnician: transfer.senderTechnicianName,
+        toTechnician: responderName,
+        responseNote: transfer.responseNote
+      },
+      previousValue: { technicianId: transfer.senderTechnicianId, technicianName: transfer.senderTechnicianName },
+      newValue: { technicianId: transfer.targetTechnicianId, technicianName: responderName }
+    });
     return {
       success: true,
       data: {
@@ -1861,6 +2121,20 @@ async function respondToTransferRequest(params) {
       console.warn("[REJECT LOG NON FATAL]", logErr);
     }
     await broadcastServerChange("RepairTransfer", "UPDATE", transfer.id, transfer);
+    await logAudit({
+      userId: responderId,
+      userName: responderName,
+      userRole: responderRole,
+      action: "TRANSFER_REQUEST_REJECTED",
+      resource: "Repair",
+      resourceId: transfer.repairId,
+      status: "SUCCESS",
+      details: {
+        repairNumber: transfer.repairNumber,
+        rejectedBy: responderName,
+        responseNote: transfer.responseNote
+      }
+    });
     return {
       success: true,
       data: {
@@ -1903,6 +2177,19 @@ async function cancelTransferRequest(params) {
     console.warn("[CANCEL TRANSFER DB NON FATAL]", e);
   }
   await broadcastServerChange("RepairTransfer", "UPDATE", transfer.id, transfer);
+  await logAudit({
+    userId,
+    userRole,
+    action: "TRANSFER_REQUEST_CANCELLED",
+    resource: "Repair",
+    resourceId: transfer.repairId,
+    status: "SUCCESS",
+    details: {
+      repairNumber: transfer.repairNumber,
+      transferId: transfer.id,
+      cancelledBy: userId
+    }
+  });
   return { success: true, data: transfer };
 }
 async function directTransferRepair(params) {
@@ -1977,6 +2264,24 @@ async function directTransferRepair(params) {
     console.warn("[DIRECT TRANSFER LOG NON FATAL]", logErr);
   }
   await broadcastServerChange("Repair", "UPDATE", repair.id, updatedRepair);
+  await logAudit({
+    userId: actorId,
+    userName: actorName,
+    userRole: params.actorRole,
+    action: "REPAIR_DIRECT_TRANSFERRED",
+    resource: "Repair",
+    resourceId: repair.id,
+    status: "SUCCESS",
+    details: {
+      repairNumber: repair.repairNumber,
+      targetTechnicianId: targetTech.id,
+      targetTechnicianName: targetTech.name,
+      reason: reason.trim(),
+      priority: priority || null
+    },
+    previousValue: { technicianId: repair.technicianId || null },
+    newValue: { technicianId: targetTech.id, technicianName: targetTech.name }
+  });
   return {
     success: true,
     data: {
@@ -2281,13 +2586,28 @@ function validateAndNormalizeNepalPhone(rawPhone) {
   };
 }
 function generateRepairCompletedSmsMessage(params) {
-  const cleanCustomer = (params.customerName || "Customer").trim();
-  const cleanModel = (params.deviceModel || "device").trim();
+  let cleanCustomer = (params.customerName || "Customer").trim();
+  let cleanModel = (params.deviceModel || "device").trim();
   const cleanNumber = (params.repairNumber || "N/A").trim();
-  return `Dear ${cleanCustomer}, your ${cleanModel} repair (Repair No: ${cleanNumber}) has been completed and is ready for pickup at MTS Lab. For assistance, please contact MTS Lab. Thank you.`;
+  let msg = `Dear ${cleanCustomer}, your ${cleanModel} (Repair #${cleanNumber}) is repaired & ready for pickup at MTS Lab. Thank you.`;
+  if (msg.length > 160 && cleanCustomer.length > 20) {
+    cleanCustomer = cleanCustomer.slice(0, 18).trim() + "\u2026";
+    msg = `Dear ${cleanCustomer}, your ${cleanModel} (Repair #${cleanNumber}) is repaired & ready for pickup at MTS Lab. Thank you.`;
+  }
+  if (msg.length > 160 && cleanModel.length > 25) {
+    cleanModel = cleanModel.slice(0, 22).trim() + "\u2026";
+    msg = `Dear ${cleanCustomer}, your ${cleanModel} (Repair #${cleanNumber}) is repaired & ready for pickup at MTS Lab. Thank you.`;
+  }
+  if (msg.length > 160) {
+    msg = msg.slice(0, 160);
+  }
+  return msg;
 }
 async function recordSmsNotification(data) {
   initializeSmsStorage();
+  if (data.messageContent && data.messageContent.length > 160) {
+    throw new Error("Message must not exceed 160 characters. Exactly one SMS is permitted per send action.");
+  }
   const id = uuidv46();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const record = {
@@ -2326,6 +2646,9 @@ async function recordSmsNotification(data) {
 }
 async function updateSmsNotification(id, updates) {
   initializeSmsStorage();
+  if (updates.messageContent && updates.messageContent.length > 160) {
+    throw new Error("Message must not exceed 160 characters. Exactly one SMS is permitted per send action.");
+  }
   const existing = smsCache.get(id);
   if (!existing) return null;
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -2349,17 +2672,90 @@ async function updateSmsNotification(id, updates) {
   await broadcastServerChange("SmsNotification", "UPDATE", id, updated);
   return updated;
 }
-function getSmsNotificationsForRepair(repairId) {
+function getSmsNotificationsForRepair(repairIdOrNumber) {
   initializeSmsStorage();
   const results = [];
+  const searchKey = String(repairIdOrNumber || "").trim().toLowerCase();
+  if (!searchKey) return results;
   for (const record of smsCache.values()) {
-    if (record.repairId === repairId) {
+    const rId = String(record.repairId || "").trim().toLowerCase();
+    const rNum = String(record.repairNumber || "").trim().toLowerCase();
+    if (rId === searchKey || rNum === searchKey) {
       results.push(record);
     }
   }
   return results.sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
+}
+function getRepairSmsSummary(repairIdOrNumber) {
+  initializeSmsStorage();
+  const history = getSmsNotificationsForRepair(repairIdOrNumber);
+  if (!history || history.length === 0) {
+    return {
+      repairId: repairIdOrNumber,
+      status: "NOT_SENT",
+      count: 0,
+      totalAttempts: 0,
+      lastSentAt: null,
+      lastChannel: null,
+      lastStaffName: null,
+      lastRecordId: null
+    };
+  }
+  const sentRecords = history.filter((h) => h.status === "SENT");
+  const initiatedRecords = history.filter((h) => h.status === "INITIATED");
+  const latestRecord = history[0];
+  const hasSent = sentRecords.length > 0;
+  const status = hasSent ? "SENT" : initiatedRecords.length > 0 ? "INITIATED" : "NOT_SENT";
+  const mostRecentSent = sentRecords[0] || latestRecord;
+  return {
+    repairId: latestRecord?.repairId || repairIdOrNumber,
+    repairNumber: latestRecord?.repairNumber,
+    status,
+    count: sentRecords.length,
+    totalAttempts: history.length,
+    lastSentAt: mostRecentSent?.sentAt || mostRecentSent?.confirmedAt || mostRecentSent?.createdAt || null,
+    lastChannel: mostRecentSent?.channel || null,
+    lastStaffName: mostRecentSent?.senderStaffName || null,
+    lastRecordId: latestRecord?.id || null
+  };
+}
+function getAllRepairSmsSummaries() {
+  initializeSmsStorage();
+  const map = {};
+  const grouped = {};
+  for (const record of smsCache.values()) {
+    if (record.repairId) {
+      if (!grouped[record.repairId]) grouped[record.repairId] = [];
+      grouped[record.repairId].push(record);
+    }
+  }
+  for (const [repId, records] of Object.entries(grouped)) {
+    const sorted = records.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    const sent = sorted.filter((h) => h.status === "SENT");
+    const initiated = sorted.filter((h) => h.status === "INITIATED");
+    const latest = sorted[0];
+    const mostRecentSent = sent[0] || latest;
+    const summary = {
+      repairId: repId,
+      repairNumber: latest?.repairNumber,
+      status: sent.length > 0 ? "SENT" : initiated.length > 0 ? "INITIATED" : "NOT_SENT",
+      count: sent.length,
+      totalAttempts: sorted.length,
+      lastSentAt: mostRecentSent?.sentAt || mostRecentSent?.confirmedAt || mostRecentSent?.createdAt || null,
+      lastChannel: mostRecentSent?.channel || null,
+      lastStaffName: mostRecentSent?.senderStaffName || null,
+      lastRecordId: latest?.id || null
+    };
+    map[repId] = summary;
+    if (latest?.repairNumber) {
+      map[latest.repairNumber] = summary;
+    }
+  }
+  return map;
 }
 function hasRecentSmsNotification(repairId) {
   const history = getSmsNotificationsForRepair(repairId);
@@ -2378,6 +2774,7 @@ function hasRecentSmsNotification(repairId) {
 // api/_server/routes/repairs.ts
 var router3 = Router3();
 var upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+var ALLOWED_SMS_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGER", "RECEPTIONIST"];
 var ALLOWED_REPAIR_COLUMNS = /* @__PURE__ */ new Set([
   "customerId",
   "customerName",
@@ -2666,7 +3063,22 @@ router3.get("/", authenticate, async (req, res) => {
       console.error("[REPAIRS GET ERROR]", error);
       return res.status(500).json({ error: "Failed to retrieve repairs list." });
     }
-    return res.json(repairs || []);
+    const smsSummaries = getAllRepairSmsSummaries();
+    const repairsWithSms = (repairs || []).map((r) => ({
+      ...r,
+      smsSummary: smsSummaries[r.id] || (r.repairNumber ? smsSummaries[r.repairNumber] : null) || {
+        repairId: r.id,
+        repairNumber: r.repairNumber,
+        status: "NOT_SENT",
+        count: 0,
+        totalAttempts: 0,
+        lastSentAt: null,
+        lastChannel: null,
+        lastStaffName: null,
+        lastRecordId: null
+      }
+    }));
+    return res.json(repairsWithSms);
   } catch (err) {
     return res.status(500).json({ error: "Failed to load repair records." });
   }
@@ -2837,6 +3249,15 @@ router3.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), 
     return res.status(500).json({ error: "Failed to bulk delete repairs." });
   }
 });
+router3.get("/sms-summaries", authenticate, authorize(ALLOWED_SMS_ROLES), async (req, res) => {
+  try {
+    const summaries = getAllRepairSmsSummaries();
+    return res.json(summaries);
+  } catch (err) {
+    console.error("[GET SMS SUMMARIES ERROR]", err);
+    return res.status(500).json({ error: "Failed to retrieve SMS summaries." });
+  }
+});
 router3.get("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2854,7 +3275,10 @@ router3.get("/:id", authenticate, async (req, res) => {
             return res.status(404).json({ error: "Repair ticket not found or has been cancelled." });
           }
         }
-        return res.json(byNum);
+        return res.json({
+          ...byNum,
+          smsSummary: getRepairSmsSummary(byNum.id)
+        });
       }
       return res.status(404).json({ error: "Repair ticket not found." });
     }
@@ -2865,7 +3289,10 @@ router3.get("/:id", authenticate, async (req, res) => {
         return res.status(404).json({ error: "Repair ticket not found or has been cancelled." });
       }
     }
-    return res.json(repair);
+    return res.json({
+      ...repair,
+      smsSummary: getRepairSmsSummary(repair.id)
+    });
   } catch (err) {
     return res.status(500).json({ error: "Failed to load repair record." });
   }
@@ -3054,12 +3481,31 @@ router3.post("/", authenticate, async (req, res) => {
       }
     ]);
     await broadcastServerChange("RepairLog", "CREATE", logId);
-    await logAudit({
-      userId: req.user.id,
+    await logAuditFromRequest(req, {
       action: "REPAIR_CREATED",
       resource: "Repair",
       resourceId: created.id,
-      details: { repairNumber: created.repairNumber, customerName: created.customerName }
+      status: "SUCCESS",
+      details: {
+        repairNumber: created.repairNumber,
+        customerName: created.customerName,
+        customerPhone: created.customerPhone,
+        deviceBrand: created.deviceBrand,
+        deviceModel: created.deviceModel,
+        status: created.status,
+        priority: created.priority,
+        technicianId: created.technicianId,
+        technicianName: assignedTechName,
+        estimatedCost: created.estimatedCost
+      },
+      newValue: {
+        repairNumber: created.repairNumber,
+        status: created.status,
+        priority: created.priority,
+        technicianId: created.technicianId,
+        technicianName: assignedTechName,
+        estimatedCost: created.estimatedCost
+      }
     });
     if (created.technicianId) {
       try {
@@ -3349,16 +3795,40 @@ var handleRepairUpdate = async (req, res) => {
     const existingStatus = String(existingRepair.status || "").toUpperCase().trim();
     if (existingStatus === "CANCELLED") {
       if (["TECHNICIAN", "HEAD_TECHNICIAN", "LEAD_TECHNICIAN", "TECHNICAL_ASSISTANT", "TECH"].includes(role)) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: "Cancelled repairs cannot be modified by technicians.", attemptedStatus: rawBody.status, existingStatus }
+        }).catch(() => {
+        });
         return res.status(403).json({ error: "Access denied: Cancelled repairs cannot be modified by technicians." });
       }
       if (rawBody.status && String(rawBody.status).toUpperCase().trim() !== "CANCELLED") {
         if (!["SUPER_ADMIN", "ADMIN", "MANAGER"].includes(role)) {
+          logAuditFromRequest(req, {
+            action: "UNAUTHORIZED_REPAIR_UPDATE",
+            resource: "Repair",
+            resourceId: id,
+            status: "DENIED",
+            details: { reason: "Only Administrators and Managers can re-open or restore a cancelled repair.", attemptedStatus: rawBody.status, existingStatus }
+          }).catch(() => {
+          });
           return res.status(403).json({ error: "Access denied: Only Administrators and Managers can re-open or restore a cancelled repair." });
         }
       }
     }
     if (role === "TECHNICIAN") {
       if (existingRepair.technicianId !== req.user.id) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: "Technicians can only modify repairs assigned to them.", assignedTechnicianId: existingRepair.technicianId, attemptTechnicianId: req.user.id }
+        }).catch(() => {
+        });
         return res.status(403).json({ error: "Access denied: You can only modify repairs assigned to you." });
       }
       const FORBIDDEN_TECHNICIAN_STATUSES = [
@@ -3371,6 +3841,14 @@ var handleRepairUpdate = async (req, res) => {
         "CANCELLED"
       ];
       if (rawBody.status && FORBIDDEN_TECHNICIAN_STATUSES.includes(String(rawBody.status).toUpperCase().trim())) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: `Technicians cannot set status "${rawBody.status}".`, attemptedStatus: rawBody.status }
+        }).catch(() => {
+        });
         return res.status(403).json({
           error: `Access denied: Technicians cannot set status "${rawBody.status}". Only Managers, Admins, and Receptionists can mark repairs as Delivered, Ready for Pickup, Re-Problem, or Cancelled.`
         });
@@ -3378,6 +3856,14 @@ var handleRepairUpdate = async (req, res) => {
     }
     if (rawBody.status && String(rawBody.status).toUpperCase().trim() === "CANCELLED") {
       if (!["SUPER_ADMIN", "ADMIN", "MANAGER", "RECEPTIONIST"].includes(role)) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: "Only Super Admins, Admins, Managers, and Receptionists can cancel repairs.", attemptedStatus: "CANCELLED" }
+        }).catch(() => {
+        });
         return res.status(403).json({
           error: "Access denied: Only Super Admins, Admins, Managers, and Receptionists can cancel repairs."
         });
@@ -3409,7 +3895,8 @@ var handleRepairUpdate = async (req, res) => {
     if (rawBody.hasBatteryWarranty !== void 0 || updated.hasBatteryWarranty !== void 0) {
       await syncBatteryWarrantyFromRepair({ ...updated, ...rawBody, id, repairNumber: updated.repairNumber }, req.user);
     }
-    if (rawBody.status) {
+    const newStatusStr = rawBody.status ? String(rawBody.status).toUpperCase().trim() : void 0;
+    if (newStatusStr && newStatusStr !== existingStatus) {
       const logId = uuidv47();
       try {
         await supabaseAdmin.from("RepairLog").insert([
@@ -3454,6 +3941,88 @@ var handleRepairUpdate = async (req, res) => {
         }
       }
     }
+    const diffPrevious = {};
+    const diffNext = {};
+    for (const key of Object.keys(updateData)) {
+      if (key === "updatedAt") continue;
+      if (existingRepair[key] !== updated[key]) {
+        diffPrevious[key] = existingRepair[key];
+        diffNext[key] = updated[key];
+      }
+    }
+    const statusChanged = rawBody.status && String(rawBody.status).trim() !== String(existingRepair.status || "").trim();
+    const priorityChanged = newPriority && newPriority !== oldPriority;
+    const paymentChanged = updateData.estimatedCost !== void 0 && updateData.estimatedCost !== existingRepair.estimatedCost || updateData.advancePaid !== void 0 && updateData.advancePaid !== existingRepair.advancePaid || updateData.totalPaid !== void 0 && updateData.totalPaid !== existingRepair.totalPaid;
+    if (statusChanged) {
+      await logAuditFromRequest(req, {
+        action: "REPAIR_STATUS_CHANGED",
+        resource: "Repair",
+        resourceId: id,
+        status: "SUCCESS",
+        details: {
+          repairNumber: updated.repairNumber,
+          customerName: updated.customerName,
+          oldStatus: existingRepair.status,
+          newStatus: updated.status,
+          remarks: rawBody.remarks || null
+        },
+        previousValue: { status: existingRepair.status },
+        newValue: { status: updated.status }
+      });
+    }
+    if (priorityChanged) {
+      await logAuditFromRequest(req, {
+        action: "REPAIR_PRIORITY_CHANGED",
+        resource: "Repair",
+        resourceId: id,
+        status: "SUCCESS",
+        details: {
+          repairNumber: updated.repairNumber,
+          oldPriority,
+          newPriority
+        },
+        previousValue: { priority: oldPriority },
+        newValue: { priority: newPriority }
+      });
+    }
+    if (paymentChanged) {
+      await logAuditFromRequest(req, {
+        action: "REPAIR_PAYMENT_UPDATED",
+        resource: "Repair",
+        resourceId: id,
+        status: "SUCCESS",
+        details: {
+          repairNumber: updated.repairNumber,
+          estimatedCost: updated.estimatedCost,
+          advancePaid: updated.advancePaid,
+          totalPaid: updated.totalPaid
+        },
+        previousValue: {
+          estimatedCost: existingRepair.estimatedCost,
+          advancePaid: existingRepair.advancePaid,
+          totalPaid: existingRepair.totalPaid
+        },
+        newValue: {
+          estimatedCost: updated.estimatedCost,
+          advancePaid: updated.advancePaid,
+          totalPaid: updated.totalPaid
+        }
+      });
+    }
+    if (Object.keys(diffNext).length > 0 && !statusChanged && !priorityChanged && !paymentChanged) {
+      await logAuditFromRequest(req, {
+        action: "REPAIR_UPDATED",
+        resource: "Repair",
+        resourceId: id,
+        status: "SUCCESS",
+        details: {
+          repairNumber: updated.repairNumber,
+          changedFields: Object.keys(diffNext)
+        },
+        previousValue: diffPrevious,
+        newValue: diffNext
+      });
+    }
     await broadcastServerChange("Repair", "UPDATE", id, updated);
     return res.json(updated);
   } catch (err) {
@@ -3487,6 +4056,14 @@ router3.patch("/:id/technician-update", authenticate, async (req, res) => {
     const role = normalizeRole(req.user.role);
     if (role === "TECHNICIAN") {
       if (existingRepair.technicianId !== req.user.id) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: "Technicians can only update repairs assigned to them.", assignedTechnicianId: existingRepair.technicianId, attemptTechnicianId: req.user.id }
+        }).catch(() => {
+        });
         return res.status(403).json({ error: "Access denied: You can only update repairs assigned to you." });
       }
       const FORBIDDEN_TECHNICIAN_STATUSES = [
@@ -3499,6 +4076,14 @@ router3.patch("/:id/technician-update", authenticate, async (req, res) => {
         "CANCELLED"
       ];
       if (status && FORBIDDEN_TECHNICIAN_STATUSES.includes(String(status).toUpperCase().trim())) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_REPAIR_UPDATE",
+          resource: "Repair",
+          resourceId: id,
+          status: "DENIED",
+          details: { reason: `Technicians cannot set status "${status}".`, attemptedStatus: status }
+        }).catch(() => {
+        });
         return res.status(403).json({
           error: `Access denied: Technicians cannot set status "${status}". Only Managers, Admins, and Receptionists can mark repairs as Delivered, Ready for Pickup, Re-Problem, or Cancelled.`
         });
@@ -3554,6 +4139,29 @@ router3.patch("/:id/technician-update", authenticate, async (req, res) => {
     } catch (notifErr) {
       console.warn("[NOTIFICATION DISPATCH WARN - NON FATAL]", notifErr);
     }
+    await logAuditFromRequest(req, {
+      action: status && status !== existingRepair.status ? "REPAIR_STATUS_CHANGED" : "REPAIR_PROGRESS_UPDATED",
+      resource: "Repair",
+      resourceId: id,
+      status: "SUCCESS",
+      details: {
+        repairNumber: updatedRepair.repairNumber,
+        oldStatus: existingRepair.status,
+        newStatus: updatedRepair.status,
+        partsUsed: resolvedParts,
+        remarks: resolvedRemarks
+      },
+      previousValue: {
+        status: existingRepair.status,
+        partsUsed: existingRepair.partsUsed,
+        remarks: existingRepair.remarks
+      },
+      newValue: {
+        status: updatedRepair.status,
+        partsUsed: updatedRepair.partsUsed,
+        remarks: updatedRepair.remarks
+      }
+    });
     await broadcastServerChange("Repair", "UPDATE", id, updatedRepair);
     return res.json({
       success: true,
@@ -3793,6 +4401,7 @@ router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MA
       const { data: tech } = await supabaseAdmin.from("User").select("name").eq("id", normalizedTechId).single();
       techName = tech?.name || null;
     }
+    const { data: existingRepair } = await supabaseAdmin.from("Repair").select("technicianId, assignedByName, repairNumber").eq("id", id).maybeSingle();
     const { data: updated, error } = await supabaseAdmin.from("Repair").update({
       technicianId: normalizedTechId,
       assignedAt: normalizedTechId ? (/* @__PURE__ */ new Date()).toISOString() : null,
@@ -3818,6 +4427,26 @@ router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MA
     } catch (logErr) {
       console.warn("[REPAIR LOG NON FATAL]", logErr);
     }
+    await logAuditFromRequest(req, {
+      action: normalizedTechId ? "REPAIR_ASSIGNED" : "REPAIR_UNASSIGNED",
+      resource: "Repair",
+      resourceId: id,
+      status: "SUCCESS",
+      details: {
+        repairNumber: updated.repairNumber,
+        assignedTechnicianId: normalizedTechId,
+        assignedTechnicianName: techName,
+        previousTechnicianName: existingRepair?.assignedByName || null
+      },
+      previousValue: {
+        technicianId: existingRepair?.technicianId || null,
+        assignedByName: existingRepair?.assignedByName || null
+      },
+      newValue: {
+        technicianId: normalizedTechId,
+        assignedByName: techName
+      }
+    });
     if (normalizedTechId) {
       try {
         const isUrgent = updated.priority === "URGENT";
@@ -4056,7 +4685,6 @@ router3.post("/:id/transfer", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "
     return res.status(500).json({ error: err.message || "Failed to transfer repair." });
   }
 });
-var ALLOWED_SMS_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGER", "RECEPTIONIST"];
 function isRepairedStatusEligible(status) {
   if (!status) return false;
   const s = status.toUpperCase().trim();
@@ -4091,6 +4719,7 @@ router3.get("/:id/sms-status", authenticate, authorize(ALLOWED_SMS_ROLES), async
       phoneValidation,
       defaultMessage,
       history,
+      smsSummary: getRepairSmsSummary(repair.id),
       hasRecentSent: recentCheck.hasSent,
       lastNotification: recentCheck.lastNotification,
       googleMessagesUrl,
@@ -4105,6 +4734,7 @@ router3.post("/:id/send-sms", authenticate, authorize(ALLOWED_SMS_ROLES), async 
   try {
     const { id } = req.params;
     const {
+      smsRecordId,
       customMessage,
       channel = "GOOGLE_MESSAGES_WEB",
       action = "INITIATED",
@@ -4128,35 +4758,83 @@ router3.post("/:id/send-sms", authenticate, authorize(ALLOWED_SMS_ROLES), async 
       });
     }
     const deviceModelFull = `${repair.deviceBrand ? `${repair.deviceBrand} ` : ""}${repair.deviceModel || ""}`.trim();
+    if (customMessage && typeof customMessage === "string" && customMessage.length > 160) {
+      return res.status(400).json({
+        error: "Message must not exceed 160 characters. Exactly one SMS (max 160 characters) is permitted per send action."
+      });
+    }
     const finalMessage = customMessage && typeof customMessage === "string" && customMessage.trim() ? customMessage.trim() : generateRepairCompletedSmsMessage({
       customerName: repair.customerName,
       deviceModel: deviceModelFull,
       repairNumber: repair.repairNumber
     });
+    if (!finalMessage || finalMessage.length > 160) {
+      return res.status(400).json({
+        error: "Message must not exceed 160 characters. Exactly one SMS (max 160 characters) is permitted per send action."
+      });
+    }
     const isDirectSent = action === "SENT";
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-    const record = await recordSmsNotification({
-      repairId: repair.id,
-      repairNumber: repair.repairNumber,
-      customerId: repair.customerId || null,
-      customerName: repair.customerName,
-      customerPhoneRaw: repair.customerPhone,
-      customerPhoneNormalized: phoneValidation.normalized,
-      customerPhoneInternational: phoneValidation.international,
-      deviceModel: deviceModelFull,
-      deviceBrand: repair.deviceBrand || null,
-      messageType: "REPAIR_COMPLETED_SMS",
-      messageContent: finalMessage,
-      status: isDirectSent ? "SENT" : "INITIATED",
-      channel: channel === "SMS_PROTOCOL" ? "SMS_PROTOCOL" : "GOOGLE_MESSAGES_WEB",
-      senderStaffId: req.user.id,
-      senderStaffName: req.user.name || "Staff",
-      senderStaffRole: req.user.role,
-      notes: notes || null,
-      initiatedAt: nowIso,
-      sentAt: isDirectSent ? nowIso : null,
-      confirmedAt: isDirectSent ? nowIso : null
-    });
+    let record = null;
+    if (smsRecordId) {
+      record = await updateSmsNotification(smsRecordId, {
+        status: isDirectSent ? "SENT" : "INITIATED",
+        sentAt: isDirectSent ? nowIso : void 0,
+        confirmedAt: isDirectSent ? nowIso : void 0,
+        notes: notes || void 0,
+        messageContent: finalMessage
+      });
+    }
+    if (!record) {
+      const recentHistory = getSmsNotificationsForRepair(repair.id);
+      if (recentHistory.length > 0) {
+        const last = recentHistory[0];
+        const timeDiff = Date.now() - new Date(last.createdAt).getTime();
+        if (timeDiff < 2500 && last.messageContent === finalMessage) {
+          if (last.status === "INITIATED" && isDirectSent) {
+            record = await updateSmsNotification(last.id, {
+              status: "SENT",
+              sentAt: nowIso,
+              confirmedAt: nowIso,
+              notes: notes || "Upgraded initiated SMS to SENT"
+            });
+          } else {
+            return res.status(200).json({
+              success: true,
+              message: last.status === "SENT" ? "SMS already sent." : "SMS workflow already prepared.",
+              record: last,
+              smsSummary: getRepairSmsSummary(repair.id),
+              googleMessagesUrl: "https://messages.google.com/web/",
+              smsProtocolUrl: `sms:${phoneValidation.international}?body=${encodeURIComponent(finalMessage)}`
+            });
+          }
+        }
+      }
+    }
+    if (!record) {
+      record = await recordSmsNotification({
+        repairId: repair.id,
+        repairNumber: repair.repairNumber,
+        customerId: repair.customerId || null,
+        customerName: repair.customerName,
+        customerPhoneRaw: repair.customerPhone,
+        customerPhoneNormalized: phoneValidation.normalized,
+        customerPhoneInternational: phoneValidation.international,
+        deviceModel: deviceModelFull,
+        deviceBrand: repair.deviceBrand || null,
+        messageType: "REPAIR_COMPLETED_SMS",
+        messageContent: finalMessage,
+        status: isDirectSent ? "SENT" : "INITIATED",
+        channel: channel === "SMS_PROTOCOL" ? "SMS_PROTOCOL" : "GOOGLE_MESSAGES_WEB",
+        senderStaffId: req.user.id,
+        senderStaffName: req.user.name || "Staff",
+        senderStaffRole: req.user.role,
+        notes: notes || null,
+        initiatedAt: nowIso,
+        sentAt: isDirectSent ? nowIso : null,
+        confirmedAt: isDirectSent ? nowIso : null
+      });
+    }
     const logId = uuidv47();
     try {
       await supabaseAdmin.from("RepairLog").insert([
@@ -4185,12 +4863,14 @@ router3.post("/:id/send-sms", authenticate, authorize(ALLOWED_SMS_ROLES), async 
         channel: record.channel
       }
     });
+    await broadcastServerChange("Repair", "UPDATE", repair.id);
     const googleMessagesUrl = "https://messages.google.com/web/";
     const smsProtocolUrl = `sms:${phoneValidation.international}?body=${encodeURIComponent(finalMessage)}`;
     return res.status(201).json({
       success: true,
       message: isDirectSent ? "SMS sent successfully." : "SMS workflow prepared for Google Messages.",
       record,
+      smsSummary: getRepairSmsSummary(repair.id),
       googleMessagesUrl,
       smsProtocolUrl
     });
@@ -4202,19 +4882,52 @@ router3.post("/:id/send-sms", authenticate, authorize(ALLOWED_SMS_ROLES), async 
 router3.post("/:id/confirm-sms", authenticate, authorize(ALLOWED_SMS_ROLES), async (req, res) => {
   try {
     const { id } = req.params;
-    const { smsRecordId, notes } = req.body || {};
+    let { smsRecordId, notes } = req.body || {};
     const { data: repair } = await supabaseAdmin.from("Repair").select("id, repairNumber, customerName, customerPhone").or(`id.eq.${id},repairNumber.eq.${id}`).single();
     if (!repair) {
       return res.status(404).json({ error: "Repair ticket not found." });
     }
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
     let updatedRecord = null;
+    if (!smsRecordId) {
+      const history = getSmsNotificationsForRepair(repair.id);
+      const pending = history.find((h) => h.status === "INITIATED");
+      if (pending) {
+        smsRecordId = pending.id;
+      }
+    }
     if (smsRecordId) {
       updatedRecord = await updateSmsNotification(smsRecordId, {
         status: "SENT",
         sentAt: nowIso,
         confirmedAt: nowIso,
         notes: notes || void 0
+      });
+    } else {
+      const phoneValidation = validateAndNormalizeNepalPhone(repair.customerPhone);
+      updatedRecord = await recordSmsNotification({
+        repairId: repair.id,
+        repairNumber: repair.repairNumber,
+        customerName: repair.customerName,
+        customerPhoneRaw: repair.customerPhone,
+        customerPhoneNormalized: phoneValidation.normalized || repair.customerPhone,
+        customerPhoneInternational: phoneValidation.international || repair.customerPhone,
+        deviceModel: "Device",
+        messageType: "REPAIR_COMPLETED_SMS",
+        messageContent: generateRepairCompletedSmsMessage({
+          customerName: repair.customerName,
+          deviceModel: "Device",
+          repairNumber: repair.repairNumber
+        }),
+        status: "SENT",
+        channel: "GOOGLE_MESSAGES_WEB",
+        senderStaffId: req.user.id,
+        senderStaffName: req.user.name || "Staff",
+        senderStaffRole: req.user.role,
+        notes: notes || "Confirmed sent in Google Messages",
+        initiatedAt: nowIso,
+        sentAt: nowIso,
+        confirmedAt: nowIso
       });
     }
     const logId = uuidv47();
@@ -4231,10 +4944,12 @@ router3.post("/:id/confirm-sms", authenticate, authorize(ALLOWED_SMS_ROLES), asy
       await broadcastServerChange("RepairLog", "CREATE", logId);
     } catch (_) {
     }
+    await broadcastServerChange("Repair", "UPDATE", repair.id);
     return res.json({
       success: true,
       message: "SMS send confirmed successfully.",
-      record: updatedRecord
+      record: updatedRecord,
+      smsSummary: getRepairSmsSummary(repair.id)
     });
   } catch (err) {
     console.error("[CONFIRM SMS ERROR]", err);
@@ -4619,11 +5334,64 @@ var customers_default = router5;
 import { Router as Router6 } from "express";
 import { v4 as uuidv49 } from "uuid";
 var router6 = Router6();
-var INVENTORY_MANAGERS = ["SUPER_ADMIN", "ADMIN", "MANAGER", "INVENTORY_MANAGER", "RECEPTIONIST"];
+var INVENTORY_MANAGERS = ["SUPER_ADMIN", "ADMIN", "MANAGER", "INVENTORY_MANAGER", "LEAD_TECHNICIAN", "TECHNICIAN", "RECEPTIONIST"];
 var INVENTORY_STOCK_OUT_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGER", "INVENTORY_MANAGER", "LEAD_TECHNICIAN", "TECHNICIAN", "RECEPTIONIST"];
 var customFoldersRegistry = /* @__PURE__ */ new Map();
 function getFolderKey(brand, model, category) {
   return `${(brand || "").trim().toLowerCase()}|${(model || "").trim().toLowerCase()}|${(category || "").trim().toLowerCase()}`;
+}
+async function ensureFolderMetadataInDatabase(brand, model, category, userId) {
+  const trimmedBrand = (brand || "").trim();
+  const trimmedModel = model && typeof model === "string" && model.trim() ? model.trim() : null;
+  const trimmedCategory = category && typeof category === "string" && category.trim() ? category.trim() : null;
+  if (!trimmedBrand) {
+    throw new Error("Brand name is required for folder metadata.");
+  }
+  let checkQuery = supabaseAdmin.from("InventoryItem").select("id, status, name, brand, model, category").eq("name", ".folder_metadata").ilike("brand", trimmedBrand);
+  if (trimmedModel) {
+    checkQuery = checkQuery.ilike("model", trimmedModel);
+  } else {
+    checkQuery = checkQuery.is("model", null);
+  }
+  if (trimmedCategory) {
+    checkQuery = checkQuery.ilike("category", trimmedCategory);
+  } else {
+    checkQuery = checkQuery.is("category", null);
+  }
+  const { data: existing, error: checkErr } = await checkQuery.limit(1);
+  if (checkErr) {
+    console.warn("[INVENTORY FOLDER CHECK DB WARN]", checkErr);
+  }
+  if (existing && existing.length > 0) {
+    const row = existing[0];
+    if (row.status === "ARCHIVED") {
+      await supabaseAdmin.from("InventoryItem").update({ status: "FOLDER_METADATA", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", row.id);
+    }
+    return row.id;
+  }
+  const newId = uuidv49();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const { data: inserted, error: insertErr } = await supabaseAdmin.from("InventoryItem").insert([
+    {
+      id: newId,
+      name: ".folder_metadata",
+      brand: trimmedBrand,
+      model: trimmedModel,
+      category: trimmedCategory,
+      status: "FOLDER_METADATA",
+      currentStock: 0,
+      minStockLevel: 0,
+      unit: "Piece",
+      createdById: userId,
+      createdAt: now,
+      updatedAt: now
+    }
+  ]).select("id").single();
+  if (insertErr) {
+    console.error("[INVENTORY FOLDER DB INSERT ERROR]", insertErr);
+    throw new Error("Failed to save folder record in database: " + insertErr.message);
+  }
+  return inserted?.id || newId;
 }
 function getDeviceType(item) {
   if (item.subcategory) {
@@ -4644,8 +5412,8 @@ function getDeviceType(item) {
 }
 router6.get("/folders", authenticate, async (req, res) => {
   try {
-    const { status = "ACTIVE" } = req.query;
-    let query = supabaseAdmin.from("InventoryItem").select("brand, model, category, subcategory, status").not("brand", "is", null).neq("status", "INVENTORY_FILE");
+    const { status = "ALL" } = req.query;
+    let query = supabaseAdmin.from("InventoryItem").select("id, name, brand, model, category, subcategory, status, createdAt").not("brand", "is", null).neq("status", "INVENTORY_FILE").limit(5e3);
     if (status && status !== "ALL") {
       if (status === "ACTIVE") {
         query = query.in("status", ["ACTIVE", "FOLDER_METADATA"]);
@@ -4658,26 +5426,82 @@ router6.get("/folders", authenticate, async (req, res) => {
       console.warn("[INVENTORY GET FOLDERS DB WARN]", error);
     }
     const folderMap = /* @__PURE__ */ new Map();
-    customFoldersRegistry.forEach((folder, key) => {
-      const folderStatus = folder.status || "ACTIVE";
-      if (status === "ALL" || status === "ACTIVE" && folderStatus === "ACTIVE" || status === "ARCHIVED" && folderStatus === "ARCHIVED") {
-        folderMap.set(key, folder);
-      }
+    const sortedItems = [...items || []].sort((a, b) => {
+      const aIsMeta = a.name === ".folder_metadata";
+      const bIsMeta = b.name === ".folder_metadata";
+      if (aIsMeta && !bIsMeta) return -1;
+      if (!aIsMeta && bIsMeta) return 1;
+      return 0;
     });
-    (items || []).forEach((item) => {
+    sortedItems.forEach((item) => {
       const b = (item.brand || "").trim();
       const m = (item.model || "").trim();
       const c = (item.category || "").trim();
-      if (b) {
-        const key = getFolderKey(b, m, c);
-        if (!folderMap.has(key)) {
-          folderMap.set(key, {
+      if (!b) return;
+      const isArchived = item.status === "ARCHIVED";
+      const branchStatus = isArchived ? "ARCHIVED" : "ACTIVE";
+      const isMeta = item.name === ".folder_metadata";
+      const brandKey = getFolderKey(b, null, null);
+      if (!folderMap.has(brandKey)) {
+        folderMap.set(brandKey, {
+          id: isMeta && !m && !c ? item.id : void 0,
+          brand: b,
+          model: null,
+          category: null,
+          subcategory: item.subcategory || null,
+          status: branchStatus,
+          createdAt: item.createdAt
+        });
+      } else if (isMeta && !m && !c) {
+        const entry = folderMap.get(brandKey);
+        entry.id = item.id;
+        entry.status = branchStatus;
+        entry.createdAt = item.createdAt;
+      }
+      if (m) {
+        const modelKey = getFolderKey(b, m, null);
+        if (!folderMap.has(modelKey)) {
+          folderMap.set(modelKey, {
+            id: isMeta && m && !c ? item.id : void 0,
+            brand: b,
+            model: m,
+            category: null,
+            subcategory: item.subcategory || null,
+            status: branchStatus,
+            createdAt: item.createdAt
+          });
+        } else if (isMeta && m && !c) {
+          const entry = folderMap.get(modelKey);
+          entry.id = item.id;
+          entry.status = branchStatus;
+          entry.createdAt = item.createdAt;
+        }
+      }
+      if (c) {
+        const catKey = getFolderKey(b, m || null, c);
+        if (!folderMap.has(catKey)) {
+          folderMap.set(catKey, {
+            id: isMeta && c ? item.id : void 0,
             brand: b,
             model: m || null,
-            category: c || null,
+            category: c,
             subcategory: item.subcategory || null,
-            status: item.status || "ACTIVE"
+            status: branchStatus,
+            createdAt: item.createdAt
           });
+        } else if (isMeta && c) {
+          const entry = folderMap.get(catKey);
+          entry.id = item.id;
+          entry.status = branchStatus;
+          entry.createdAt = item.createdAt;
+        }
+      }
+    });
+    customFoldersRegistry.forEach((folder, key) => {
+      const folderStatus = folder.status || "ACTIVE";
+      if (status === "ALL" || status === "ACTIVE" && folderStatus === "ACTIVE" || status === "ARCHIVED" && folderStatus === "ARCHIVED") {
+        if (!folderMap.has(key)) {
+          folderMap.set(key, folder);
         }
       }
     });
@@ -4685,7 +5509,7 @@ router6.get("/folders", authenticate, async (req, res) => {
     return res.json(foldersArray);
   } catch (err) {
     console.error("[INVENTORY GET FOLDERS ERROR]", err);
-    return res.json(Array.from(customFoldersRegistry.values()));
+    return res.status(500).json({ error: "Failed to retrieve inventory folders." });
   }
 });
 router6.post("/folders", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
@@ -4695,44 +5519,47 @@ router6.post("/folders", authenticate, authorize(INVENTORY_MANAGERS), async (req
       return res.status(400).json({ error: "Brand name is required." });
     }
     const trimmedBrand = brand.trim();
-    const trimmedModel = model && typeof model === "string" && model.trim() ? model.trim() : null;
+    let trimmedModel = model && typeof model === "string" && model.trim() ? model.trim() : null;
     const trimmedCategory = category && typeof category === "string" && category.trim() ? category.trim() : null;
+    if (trimmedCategory && !trimmedModel) {
+      trimmedModel = "Universal / All";
+    }
+    const brandFolderId = await ensureFolderMetadataInDatabase(trimmedBrand, null, null, req.user.id);
+    let modelFolderId = null;
+    if (trimmedModel) {
+      modelFolderId = await ensureFolderMetadataInDatabase(trimmedBrand, trimmedModel, null, req.user.id);
+    }
+    let categoryFolderId = null;
+    if (trimmedCategory) {
+      categoryFolderId = await ensureFolderMetadataInDatabase(trimmedBrand, trimmedModel, trimmedCategory, req.user.id);
+    }
     const key = getFolderKey(trimmedBrand, trimmedModel, trimmedCategory);
     const entry = {
+      id: categoryFolderId || modelFolderId || brandFolderId,
       brand: trimmedBrand,
       model: trimmedModel,
-      category: trimmedCategory
+      category: trimmedCategory,
+      status: "ACTIVE",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     customFoldersRegistry.set(key, entry);
-    try {
-      let checkQuery = supabaseAdmin.from("InventoryItem").select("id").eq("brand", trimmedBrand);
-      if (trimmedModel) {
-        checkQuery = checkQuery.eq("model", trimmedModel);
-      }
-      if (trimmedCategory) {
-        checkQuery = checkQuery.eq("category", trimmedCategory);
-      }
-      const { data: existing } = await checkQuery.limit(1);
-      if (!existing || existing.length === 0) {
-        await supabaseAdmin.from("InventoryItem").insert([
-          {
-            id: uuidv49(),
-            name: ".folder_metadata",
-            brand: trimmedBrand,
-            model: trimmedModel,
-            category: trimmedCategory,
-            status: "FOLDER_METADATA",
-            currentStock: 0,
-            minStockLevel: 0,
-            unit: "Piece",
-            createdById: req.user.id,
-            createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-          }
-        ]);
-      }
-    } catch (dbErr) {
-      console.warn("[INVENTORY DB FOLDER PERSIST WARN]", dbErr);
+    if (!customFoldersRegistry.has(getFolderKey(trimmedBrand, null, null))) {
+      customFoldersRegistry.set(getFolderKey(trimmedBrand, null, null), {
+        id: brandFolderId,
+        brand: trimmedBrand,
+        model: null,
+        category: null,
+        status: "ACTIVE"
+      });
+    }
+    if (trimmedModel && !customFoldersRegistry.has(getFolderKey(trimmedBrand, trimmedModel, null))) {
+      customFoldersRegistry.set(getFolderKey(trimmedBrand, trimmedModel, null), {
+        id: modelFolderId || void 0,
+        brand: trimmedBrand,
+        model: trimmedModel,
+        category: null,
+        status: "ACTIVE"
+      });
     }
     await logAudit({
       userId: req.user.id,
@@ -4740,7 +5567,8 @@ router6.post("/folders", authenticate, authorize(INVENTORY_MANAGERS), async (req
       resource: "InventoryFolder",
       details: { brand: trimmedBrand, model: trimmedModel, category: trimmedCategory }
     });
-    await broadcastServerChange("InventoryFolder", "CREATE", `${trimmedBrand}-${trimmedModel || ""}-${trimmedCategory || ""}`, entry);
+    await broadcastServerChange("inventory", "CREATE", entry.id || `${trimmedBrand}-${trimmedModel || ""}-${trimmedCategory || ""}`, entry);
+    await broadcastServerChange("inventoryfolder", "CREATE", entry.id || `${trimmedBrand}-${trimmedModel || ""}-${trimmedCategory || ""}`, entry);
     return res.status(201).json({
       success: true,
       folder: entry,
@@ -4750,7 +5578,7 @@ router6.post("/folders", authenticate, authorize(INVENTORY_MANAGERS), async (req
     });
   } catch (err) {
     console.error("[INVENTORY POST FOLDERS ERROR]", err);
-    return res.status(500).json({ error: "Failed to create folder branch." });
+    return res.status(500).json({ error: err.message || "Failed to create folder branch in database." });
   }
 });
 router6.post("/rename-folder", authenticate, authorize(INVENTORY_MANAGERS), async (req, res) => {
@@ -4765,14 +5593,14 @@ router6.post("/rename-folder", authenticate, authorize(INVENTORY_MANAGERS), asyn
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
     if (level === "brand") {
-      query = query.eq("brand", oldName);
+      query = query.ilike("brand", oldName);
     } else if (level === "model") {
-      query = query.eq("model", oldName);
-      if (parentBrand) query = query.eq("brand", parentBrand);
+      query = query.ilike("model", oldName);
+      if (parentBrand) query = query.ilike("brand", parentBrand);
     } else if (level === "category") {
-      query = query.eq("category", oldName);
-      if (parentBrand) query = query.eq("brand", parentBrand);
-      if (parentModel) query = query.eq("model", parentModel);
+      query = query.ilike("category", oldName);
+      if (parentBrand) query = query.ilike("brand", parentBrand);
+      if (parentModel) query = query.ilike("model", parentModel);
     }
     const { data: updatedItems, error } = await query.select("id, name, brand, model, category");
     if (error) {
@@ -4809,12 +5637,8 @@ router6.post("/rename-folder", authenticate, authorize(INVENTORY_MANAGERS), asyn
       resource: "InventoryFolder",
       details: { level, oldName, newName: trimmedNew, parentBrand, parentModel, affected: updatedItems?.length || 0 }
     });
-    if (updatedItems && updatedItems.length > 0) {
-      for (const it of updatedItems) {
-        await broadcastServerChange("InventoryItem", "UPDATE", it.id, it);
-      }
-    }
-    await broadcastServerChange("InventoryFolder", "UPDATE", `${level}-${oldName}`, { level, oldName, newName: trimmedNew });
+    await broadcastServerChange("inventory", "UPDATE", `${level}-${oldName}`, { level, oldName, newName: trimmedNew });
+    await broadcastServerChange("inventoryfolder", "UPDATE", `${level}-${oldName}`, { level, oldName, newName: trimmedNew });
     return res.json({ success: true, count: updatedItems?.length || 0 });
   } catch (err) {
     console.error("[INVENTORY RENAME EXCEPTION]", err);
@@ -4842,14 +5666,8 @@ router6.post("/move", authenticate, authorize(INVENTORY_MANAGERS), async (req, r
       console.error("[INVENTORY MOVE ERROR]", error);
       return res.status(500).json({ error: "Failed to move items." });
     }
-    const targetKey = getFolderKey(updatePayload.brand, updatePayload.model, updatePayload.category);
-    if (!customFoldersRegistry.has(targetKey)) {
-      customFoldersRegistry.set(targetKey, {
-        brand: updatePayload.brand,
-        model: updatePayload.model || null,
-        category: updatePayload.category || null
-      });
-    }
+    await ensureFolderMetadataInDatabase(updatePayload.brand, updatePayload.model || null, updatePayload.category || null, req.user.id).catch(() => {
+    });
     await logAudit({
       userId: req.user.id,
       action: "INVENTORY_ITEMS_MOVED",
@@ -4858,7 +5676,7 @@ router6.post("/move", authenticate, authorize(INVENTORY_MANAGERS), async (req, r
     });
     if (updated && updated.length > 0) {
       for (const it of updated) {
-        await broadcastServerChange("InventoryItem", "UPDATE", it.id, it);
+        await broadcastServerChange("inventory", "UPDATE", it.id, it);
       }
     }
     return res.json({ success: true, count: updated?.length || 0 });
@@ -4894,12 +5712,12 @@ router6.post("/delete-folder", authenticate, authorize(INVENTORY_MANAGERS), asyn
         await supabaseAdmin.from("InventoryTransaction").delete().in("itemId", itemIds);
         await supabaseAdmin.from("InventoryItem").delete().in("id", itemIds);
         for (const id of itemIds) {
-          await broadcastServerChange("InventoryItem", "DELETE", id);
+          await broadcastServerChange("inventory", "DELETE", id);
         }
       } else {
         await supabaseAdmin.from("InventoryItem").update({ status: "ARCHIVED", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).in("id", itemIds);
         for (const id of itemIds) {
-          await broadcastServerChange("InventoryItem", "UPDATE", id, { id, status: "ARCHIVED" });
+          await broadcastServerChange("inventory", "UPDATE", id, { id, status: "ARCHIVED" });
         }
       }
     }
@@ -4933,7 +5751,13 @@ router6.post("/delete-folder", authenticate, authorize(INVENTORY_MANAGERS), asyn
       resource: "InventoryFolder",
       details: { brand: trimmedBrand, model: trimmedModel, category: trimmedCategory, permanent, affectedCount: itemIds.length }
     });
-    await broadcastServerChange("InventoryFolder", permanent ? "DELETE" : "UPDATE", `${trimmedBrand}-${trimmedModel || ""}-${trimmedCategory || ""}`, {
+    await broadcastServerChange("inventory", permanent ? "DELETE" : "UPDATE", `${trimmedBrand}-${trimmedModel || ""}-${trimmedCategory || ""}`, {
+      brand: trimmedBrand,
+      model: trimmedModel,
+      category: trimmedCategory,
+      status: permanent ? "DELETED" : "ARCHIVED"
+    });
+    await broadcastServerChange("inventoryfolder", permanent ? "DELETE" : "UPDATE", `${trimmedBrand}-${trimmedModel || ""}-${trimmedCategory || ""}`, {
       brand: trimmedBrand,
       model: trimmedModel,
       category: trimmedCategory,
@@ -4966,17 +5790,24 @@ router6.post("/restore-folder", authenticate, authorize(INVENTORY_MANAGERS), asy
       console.error("[INVENTORY RESTORE-FOLDER FIND ERROR]", findError);
       return res.status(500).json({ error: "Failed to find archived items in folder." });
     }
-    const itemIds = (itemsToRestore || []).map((i) => i.id);
-    if (itemIds.length > 0) {
-      const { error: restoreErr } = await supabaseAdmin.from("InventoryItem").update({ status: "ACTIVE", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).in("id", itemIds);
-      if (restoreErr) {
-        console.error("[INVENTORY RESTORE ITEMS ERROR]", restoreErr);
+    const allItems = itemsToRestore || [];
+    const metadataIds = allItems.filter((i) => i.name === ".folder_metadata").map((i) => i.id);
+    const realItemIds = allItems.filter((i) => i.name !== ".folder_metadata").map((i) => i.id);
+    if (realItemIds.length > 0) {
+      const { error: restoreRealErr } = await supabaseAdmin.from("InventoryItem").update({ status: "ACTIVE", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).in("id", realItemIds);
+      if (restoreRealErr) {
+        console.error("[INVENTORY RESTORE ITEMS ERROR]", restoreRealErr);
         return res.status(500).json({ error: "Failed to restore archived items." });
       }
-      for (const id of itemIds) {
-        await broadcastServerChange("InventoryItem", "UPDATE", id, { id, status: "ACTIVE" });
+      for (const id of realItemIds) {
+        await broadcastServerChange("inventory", "UPDATE", id, { id, status: "ACTIVE" });
       }
     }
+    if (metadataIds.length > 0) {
+      await supabaseAdmin.from("InventoryItem").update({ status: "FOLDER_METADATA", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).in("id", metadataIds);
+    }
+    await ensureFolderMetadataInDatabase(trimmedBrand, trimmedModel || null, trimmedCategory || null, req.user.id).catch(() => {
+    });
     const registryEntries = Array.from(customFoldersRegistry.entries());
     registryEntries.forEach(([k, entry]) => {
       let matches = false;
@@ -4997,22 +5828,19 @@ router6.post("/restore-folder", authenticate, authorize(INVENTORY_MANAGERS), asy
         customFoldersRegistry.set(k, { ...entry, status: "ACTIVE" });
       }
     });
-    const fKey = getFolderKey(trimmedBrand, trimmedModel || null, trimmedCategory || null);
-    if (!customFoldersRegistry.has(fKey)) {
-      customFoldersRegistry.set(fKey, {
-        brand: trimmedBrand,
-        model: trimmedModel || null,
-        category: trimmedCategory || null,
-        status: "ACTIVE"
-      });
-    }
     await logAudit({
       userId: req.user.id,
       action: "INVENTORY_FOLDER_RESTORED",
       resource: "InventoryFolder",
-      details: { brand: trimmedBrand, model: trimmedModel, category: trimmedCategory, restoredCount: itemIds.length }
+      details: { brand: trimmedBrand, model: trimmedModel, category: trimmedCategory, restoredCount: realItemIds.length }
     });
-    await broadcastServerChange("InventoryFolder", "UPDATE", `${trimmedBrand}-${trimmedModel || ""}-${trimmedCategory || ""}`, {
+    await broadcastServerChange("inventory", "UPDATE", `${trimmedBrand}-${trimmedModel || ""}-${trimmedCategory || ""}`, {
+      brand: trimmedBrand,
+      model: trimmedModel,
+      category: trimmedCategory,
+      status: "ACTIVE"
+    });
+    await broadcastServerChange("inventoryfolder", "UPDATE", `${trimmedBrand}-${trimmedModel || ""}-${trimmedCategory || ""}`, {
       brand: trimmedBrand,
       model: trimmedModel,
       category: trimmedCategory,
@@ -5020,7 +5848,7 @@ router6.post("/restore-folder", authenticate, authorize(INVENTORY_MANAGERS), asy
     });
     return res.json({
       success: true,
-      restoredCount: itemIds.length,
+      restoredCount: realItemIds.length,
       brand: trimmedBrand,
       model: trimmedModel,
       category: trimmedCategory
@@ -6282,6 +7110,7 @@ router7.patch("/:id/status", authenticate, async (req, res) => {
       updatePayload.courierOutStatus = status;
       if (status === "DELIVERED") {
         updatePayload.status = "DELIVERED";
+        updatePayload.courierOutDeliveredDate = now;
       }
     }
     const { data: updated, error } = await supabaseAdmin.from("Repair").update(updatePayload).eq("id", id).select("*").single();
@@ -7763,6 +8592,20 @@ router9.post("/pending-requests/:id/approve", authenticate, authorize(ATTENDANCE
     } catch (notifErr) {
       console.warn("[ATTENDANCE APPROVE NOTIF WARN]", notifErr);
     }
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_REQUEST_APPROVED",
+      resource: "Attendance",
+      resourceId: updated.id,
+      status: "SUCCESS",
+      details: {
+        staffUserId: existing.userId,
+        date: existing.date,
+        approvedStatus: status,
+        notes
+      },
+      previousValue: { status: existing.status, requestStatus: existing.requestStatus },
+      newValue: { status: updated.status, requestStatus: updated.requestStatus }
+    });
     return res.json({ success: true, message: "Attendance request approved.", record: updated });
   } catch (err) {
     console.error("[APPROVE ATTENDANCE ERROR]", err);
@@ -7809,6 +8652,19 @@ router9.post("/pending-requests/:id/reject", authenticate, authorize(ATTENDANCE_
     } catch (notifErr) {
       console.warn("[ATTENDANCE REJECT NOTIF WARN]", notifErr);
     }
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_REQUEST_REJECTED",
+      resource: "Attendance",
+      resourceId: updated.id,
+      status: "SUCCESS",
+      details: {
+        staffUserId: existing.userId,
+        date: existing.date,
+        rejectionReason: reason
+      },
+      previousValue: { status: existing.status, requestStatus: existing.requestStatus },
+      newValue: { status: updated.status, requestStatus: updated.requestStatus }
+    });
     return res.json({ success: true, message: "Attendance request rejected.", record: updated });
   } catch (err) {
     console.error("[REJECT ATTENDANCE ERROR]", err);
@@ -8056,12 +8912,26 @@ router9.post("/mark", authenticate, async (req, res) => {
     if (isSuperAdmin || isAdmin) {
     } else if (isManager) {
       if (targetUserId === currentUser.id) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_ATTENDANCE_ATTEMPT",
+          resource: "Attendance",
+          status: "DENIED",
+          details: { reason: "Managers cannot take their own attendance.", attemptedUserId: targetUserId }
+        }).catch(() => {
+        });
         return res.status(403).json({
           error: "Managers cannot take their own attendance. Manager attendance must be verified and recorded by an Administrator or Super Administrator.",
           code: "MANAGER_SELF_ATTENDANCE_PROHIBITED"
         });
       }
       if (!time.isWithinWindow) {
+        logAuditFromRequest(req, {
+          action: "UNAUTHORIZED_ATTENDANCE_ATTEMPT",
+          resource: "Attendance",
+          status: "DENIED",
+          details: { reason: "Outside manager attendance window.", serverTime: time.timeString, window: "10:00 AM - 10:45 AM NPT" }
+        }).catch(() => {
+        });
         return res.status(403).json({
           error: `Manager can only record staff attendance between 10:00 AM and 10:45 AM Nepal Time (Asia/Kathmandu). Current NPT time: ${time.timeString}`,
           code: "OUTSIDE_ATTENDANCE_WINDOW",
@@ -8070,6 +8940,13 @@ router9.post("/mark", authenticate, async (req, res) => {
         });
       }
     } else {
+      logAuditFromRequest(req, {
+        action: "UNAUTHORIZED_ATTENDANCE_ATTEMPT",
+        resource: "Attendance",
+        status: "DENIED",
+        details: { reason: "Staff role cannot record attendance directly.", userRole: currentUser.role }
+      }).catch(() => {
+      });
       return res.status(403).json({
         error: "Access denied: Staff members (Technicians, Receptionists, etc.) cannot record attendance. Attendance is recorded and verified authoritatively by Lab Management.",
         code: "UNAUTHORIZED_ROLE"
@@ -8098,6 +8975,28 @@ router9.post("/mark", authenticate, async (req, res) => {
         role: currentUser.role
       }
     );
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_RECORDED",
+      resource: "Attendance",
+      resourceId: saved.id,
+      status: "SUCCESS",
+      details: {
+        targetUserId,
+        targetUserName: targetUser?.name || "Staff Member",
+        date: targetDate,
+        status: saved.status,
+        checkInTime,
+        checkOutTime,
+        notes
+      },
+      newValue: {
+        userId: targetUserId,
+        date: targetDate,
+        status: saved.status,
+        checkInTime,
+        checkOutTime
+      }
+    });
     return res.status(200).json({
       success: true,
       message: `Attendance marked as ${saved.status} for ${targetUser?.name || "employee"}.`,
@@ -8259,12 +9158,28 @@ router9.patch("/:id", authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), asyn
     const isAdmin = currentUser.role === "ADMIN";
     const isManager = currentUser.role === "MANAGER";
     if (isManager && existing.userId === currentUser.id) {
+      logAuditFromRequest(req, {
+        action: "UNAUTHORIZED_ATTENDANCE_ATTEMPT",
+        resource: "Attendance",
+        resourceId: id,
+        status: "DENIED",
+        details: { reason: "Managers cannot modify their own attendance records." }
+      }).catch(() => {
+      });
       return res.status(403).json({
         error: "Managers cannot modify their own attendance records. Only an Administrator or Super Administrator can update Manager attendance.",
         code: "MANAGER_SELF_UPDATE_PROHIBITED"
       });
     }
     if (isManager && !time.isWithinWindow) {
+      logAuditFromRequest(req, {
+        action: "UNAUTHORIZED_ATTENDANCE_ATTEMPT",
+        resource: "Attendance",
+        resourceId: id,
+        status: "DENIED",
+        details: { reason: "Outside manager attendance window for update.", serverTime: time.timeString }
+      }).catch(() => {
+      });
       return res.status(403).json({
         error: `Manager can only update attendance during 10:00 AM \u2013 10:45 AM NPT. (Current NPT: ${time.timeString})`,
         code: "OUTSIDE_ATTENDANCE_WINDOW"
@@ -8286,6 +9201,29 @@ router9.patch("/:id", authenticate, authorize(ATTENDANCE_MANAGEMENT_ROLES), asyn
         role: currentUser.role
       }
     );
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_RECORD_UPDATED",
+      resource: "Attendance",
+      resourceId: updated.id,
+      status: "SUCCESS",
+      details: {
+        staffUserId: existing.userId,
+        date: existing.date,
+        correctionReason: correctionReason || "Administrative correction"
+      },
+      previousValue: {
+        status: existing.status,
+        checkInTime: existing.checkInTime,
+        checkOutTime: existing.checkOutTime,
+        notes: existing.notes
+      },
+      newValue: {
+        status: updated.status,
+        checkInTime: updated.checkInTime,
+        checkOutTime: updated.checkOutTime,
+        notes: updated.notes
+      }
+    });
     return res.json({
       success: true,
       message: "Attendance record successfully updated.",
@@ -8299,6 +9237,7 @@ router9.delete("/:id", authenticate, authorize(ATTENDANCE_ADMIN_ROLES), async (r
   try {
     const currentUser = req.user;
     const { id } = req.params;
+    const existing = await getAttendanceRecordById(id);
     const success = await deleteAttendanceRecord(id, {
       id: currentUser.id,
       name: currentUser.name || "Admin",
@@ -8307,6 +9246,18 @@ router9.delete("/:id", authenticate, authorize(ATTENDANCE_ADMIN_ROLES), async (r
     if (!success) {
       return res.status(404).json({ error: "Attendance record not found." });
     }
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_RECORD_DELETED",
+      resource: "Attendance",
+      resourceId: id,
+      status: "SUCCESS",
+      details: {
+        staffUserId: existing?.userId,
+        date: existing?.date,
+        previousStatus: existing?.status
+      },
+      previousValue: existing || void 0
+    });
     return res.json({
       success: true,
       message: "Attendance record deleted successfully."
@@ -8372,6 +9323,16 @@ router9.delete("/staff/:userId", authenticate, authorize(["SUPER_ADMIN"]), async
       id: currentUser.id,
       name: currentUser.name || "Super Admin",
       role: currentUser.role
+    });
+    await logAuditFromRequest(req, {
+      action: "ATTENDANCE_PURGED",
+      resource: "Attendance",
+      resourceId: userId,
+      status: "SUCCESS",
+      details: {
+        staffUserId: userId,
+        recordsDeleted: count
+      }
     });
     return res.json({
       success: true,
@@ -9191,6 +10152,18 @@ var deletedPriceIds = /* @__PURE__ */ new Set();
 function getFolderKey2(brand, model, category) {
   return `${(brand || "").trim().toLowerCase()}|${(model || "").trim().toLowerCase()}|${(category || "").trim().toLowerCase()}`;
 }
+var priceChangeListeners = [];
+function onRepairPricesChanged(fn) {
+  priceChangeListeners.push(fn);
+}
+function notifyRepairPricesChanged() {
+  priceChangeListeners.forEach((fn) => {
+    try {
+      fn();
+    } catch (_) {
+    }
+  });
+}
 function parseServiceItem(item, isPublic = false) {
   if (!item) return item;
   let originalPrice = null;
@@ -9379,6 +10352,7 @@ router11.post("/rename-folder", authenticate, authorize(["SUPER_ADMIN", "ADMIN",
       customRepairFoldersRegistry.set(getFolderKey2(entry.brand, entry.model, entry.category), entry);
     });
     await broadcastServerChange("RepairPrice", "UPDATE", "folders");
+    notifyRepairPricesChanged();
     return res.json({ success: true, message: `Folder renamed to "${newClean}".` });
   } catch (err) {
     console.error("[RENAME REPAIR FOLDER ERROR]", err);
@@ -9408,6 +10382,7 @@ router11.post("/delete-folder", authenticate, authorize(["SUPER_ADMIN", "ADMIN",
     });
     toDelete.forEach((k) => customRepairFoldersRegistry.delete(k));
     await broadcastServerChange("RepairPrice", "DELETE", "folder");
+    notifyRepairPricesChanged();
     return res.json({ success: true, message: "Folder deleted.", deletedCount });
   } catch (err) {
     console.error("[DELETE REPAIR FOLDER ERROR]", err);
@@ -9438,6 +10413,7 @@ router11.post("/move", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER
       await query;
     }
     await broadcastServerChange("RepairPrice", "UPDATE", "relocate");
+    notifyRepairPricesChanged();
     return res.json({ success: true, message: "Services relocated successfully." });
   } catch (err) {
     console.error("[MOVE REPAIR SERVICES ERROR]", err);
@@ -9564,6 +10540,7 @@ router11.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "RECEPTIONIS
     deletedPriceIds.delete(finalItem.id);
     const parsedCreated = parseServiceItem(finalItem, false);
     await broadcastServerChange("RepairPrice", "CREATE", finalItem.id, parsedCreated);
+    notifyRepairPricesChanged();
     return res.status(201).json(parsedCreated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to save repair price." });
@@ -9623,6 +10600,7 @@ var handleUpdatePrice = async (req, res) => {
     inMemoryPricesOverlay.set(id, finalItem);
     const parsedUpdated = parseServiceItem(finalItem, false);
     await broadcastServerChange("RepairPrice", "UPDATE", id, parsedUpdated);
+    notifyRepairPricesChanged();
     return res.json(parsedUpdated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to update price item." });
@@ -9653,6 +10631,7 @@ router11.patch("/:id/toggle-status", authenticate, authorize(["SUPER_ADMIN", "AD
     inMemoryPricesOverlay.set(id, finalItem);
     const parsedUpdated = parseServiceItem(finalItem, false);
     await broadcastServerChange("RepairPrice", "UPDATE", id, parsedUpdated);
+    notifyRepairPricesChanged();
     return res.json(parsedUpdated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to toggle status." });
@@ -9668,6 +10647,7 @@ router11.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "RECEPT
     } catch (_) {
     }
     await broadcastServerChange("RepairPrice", "DELETE", id);
+    notifyRepairPricesChanged();
     return res.json({ success: true, message: "Repair price deleted." });
   } catch (err) {
     return res.status(500).json({ error: "Failed to delete price record." });
@@ -9688,6 +10668,7 @@ router11.post("/bulk-delete", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "
     for (const id of ids) {
       await broadcastServerChange("RepairPrice", "DELETE", id);
     }
+    notifyRepairPricesChanged();
     return res.json({ success: true, message: `Deleted ${ids.length} price items.` });
   } catch (err) {
     return res.status(500).json({ error: "Failed to process bulk delete." });
@@ -9705,13 +10686,7 @@ import path6 from "path";
 import { v2 as cloudinary } from "cloudinary";
 var isConfigured = false;
 function ensureCloudinaryConfigured() {
-  if (isConfigured) return true;
   const creds = config.getCloudinaryCredentials();
-  if (creds.cldUrl) {
-    cloudinary.config(true);
-    isConfigured = true;
-    return true;
-  }
   if (creds.cloudName && creds.apiKey && creds.apiSecret) {
     cloudinary.config({
       cloud_name: creds.cloudName,
@@ -9722,6 +10697,15 @@ function ensureCloudinaryConfigured() {
     isConfigured = true;
     return true;
   }
+  if (creds.cldUrl) {
+    cloudinary.config({
+      url: creds.cldUrl,
+      secure: true
+    });
+    isConfigured = true;
+    return true;
+  }
+  isConfigured = false;
   return false;
 }
 ensureCloudinaryConfigured();
@@ -9730,9 +10714,10 @@ function isCloudinaryConfigured() {
 }
 async function pingCloudinary() {
   if (!ensureCloudinaryConfigured()) {
+    const creds = config.getCloudinaryCredentials();
     return {
       connected: false,
-      cloudName: "",
+      cloudName: creds.cloudName || "",
       status: "NOT_CONFIGURED",
       error: "Cloudinary credentials (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET or CLOUDINARY_URL) are not set."
     };
@@ -9742,7 +10727,7 @@ async function pingCloudinary() {
     const creds = config.getCloudinaryCredentials();
     return {
       connected: true,
-      cloudName: creds.cloudName,
+      cloudName: creds.cloudName || cloudinary.config().cloud_name || "",
       status: pingResult.status || "ok",
       rateLimit: {
         allowed: pingResult.rate_limit_allowed,
@@ -9751,11 +10736,48 @@ async function pingCloudinary() {
       }
     };
   } catch (err) {
+    const creds = config.getCloudinaryCredentials();
     return {
       connected: false,
-      cloudName: config.getCloudinaryCredentials().cloudName,
+      cloudName: creds.cloudName || cloudinary.config().cloud_name || "",
       status: "ERROR",
       error: err.message || "Failed to ping Cloudinary API."
+    };
+  }
+}
+async function testCloudinaryUpload() {
+  if (!ensureCloudinaryConfigured()) {
+    return {
+      success: false,
+      error: "Cloudinary is not configured. Missing credentials."
+    };
+  }
+  const start = Date.now();
+  const testPixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  const testPublicId = `mts_lab/test/test_ping_${Date.now()}`;
+  try {
+    const uploadResult = await cloudinary.uploader.upload(testPixel, {
+      folder: "mts_lab/test",
+      public_id: testPublicId,
+      overwrite: true,
+      tags: ["mts_lab", "test", "health_check"]
+    });
+    const latencyMs = Date.now() - start;
+    try {
+      await cloudinary.uploader.destroy(uploadResult.public_id);
+    } catch (_) {
+    }
+    return {
+      success: true,
+      url: uploadResult.secure_url,
+      publicId: uploadResult.public_id,
+      latencyMs
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message || "Upload test failed.",
+      latencyMs: Date.now() - start
     };
   }
 }
@@ -9903,7 +10925,7 @@ var INITIAL_PRESET_SLIDES = [
     displayOrder: 1,
     status: "ACTIVE",
     createdAt: "2026-08-18T11:06:14.238Z",
-    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    updatedAt: "2026-10-04T07:27:11.774Z"
   },
   {
     id: "fd9650d0-7ecf-4268-972a-205164cddbe4",
@@ -9915,7 +10937,7 @@ var INITIAL_PRESET_SLIDES = [
     displayOrder: 2,
     status: "ACTIVE",
     createdAt: "2026-08-18T11:06:14.242Z",
-    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    updatedAt: "2026-10-04T07:27:11.774Z"
   },
   {
     id: "f7b4fc3d-1648-45c0-8bc7-88ce85c13289",
@@ -9927,7 +10949,7 @@ var INITIAL_PRESET_SLIDES = [
     displayOrder: 3,
     status: "ACTIVE",
     createdAt: "2026-08-18T11:06:14.245Z",
-    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    updatedAt: "2026-10-04T07:27:11.774Z"
   },
   {
     id: "b4439128-6477-421e-9492-f8c7478ad7e6",
@@ -9939,11 +10961,14 @@ var INITIAL_PRESET_SLIDES = [
     displayOrder: 4,
     status: "ACTIVE",
     createdAt: "2026-08-18T11:06:14.247Z",
-    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    updatedAt: "2026-10-04T07:27:11.774Z"
   }
 ];
 var slidesCache = /* @__PURE__ */ new Map();
-var isInitialized5 = false;
+function isPresetAsset(url) {
+  if (!url) return false;
+  return url.startsWith("/assets/") || url.includes("/assets/images/") || !url.includes("cloudinary.com") && !url.startsWith("http");
+}
 function loadLocalFile5() {
   try {
     if (fs5.existsSync(SLIDES_FILE)) {
@@ -9968,40 +10993,92 @@ function saveLocalFile5(data) {
   }
 }
 async function initializeSlidesStorage() {
-  if (isInitialized5) return;
-  const localSlides = loadLocalFile5();
-  localSlides.forEach((s) => slidesCache.set(s.id, s));
-  try {
-    const { data: supaSlides, error } = await supabaseAdmin.from("HomeSlide").select("*").order("displayOrder", { ascending: true });
-    if (!error && supaSlides && supaSlides.length > 0) {
-      supaSlides.forEach((s) => {
-        const existing = slidesCache.get(s.id);
-        if (!existing || new Date(s.updatedAt || 0) >= new Date(existing.updatedAt || 0)) {
-          slidesCache.set(s.id, {
-            ...s,
-            status: s.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
-            displayOrder: Number(s.displayOrder) || 1
-          });
-        }
-      });
-      saveLocalFile5(Array.from(slidesCache.values()));
-    } else if (slidesCache.size === 0) {
-      INITIAL_PRESET_SLIDES.forEach((s) => slidesCache.set(s.id, s));
-      saveLocalFile5(INITIAL_PRESET_SLIDES);
-    }
-  } catch (err) {
-    console.warn("[SUPABASE SLIDES SYNC WARN - USING LOCAL CACHE]", err);
+  if (slidesCache.size === 0) {
+    const local = loadLocalFile5();
+    local.forEach((s) => slidesCache.set(s.id, s));
   }
-  isInitialized5 = true;
 }
 async function getSlides(onlyActive = false) {
   await initializeSlidesStorage();
+  try {
+    let query = supabaseAdmin.from("HomeSlide").select("*").order("displayOrder", { ascending: true });
+    if (onlyActive) {
+      query = query.eq("status", "ACTIVE");
+    }
+    const { data: supaSlides, error } = await query;
+    if (!error && Array.isArray(supaSlides)) {
+      const normalized = supaSlides.map((s) => ({
+        id: String(s.id),
+        title: String(s.title || ""),
+        description: s.description ? String(s.description) : null,
+        imageUrl: String(s.imageUrl || ""),
+        buttonText: s.buttonText ? String(s.buttonText) : "Check Repair Price",
+        buttonLink: s.buttonLink ? String(s.buttonLink) : "/services?focus=search",
+        displayOrder: Number(s.displayOrder) || 1,
+        status: s.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+        createdBy: s.createdBy || null,
+        updatedBy: s.updatedBy || null,
+        createdAt: s.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: s.updatedAt || (/* @__PURE__ */ new Date()).toISOString()
+      }));
+      if (!onlyActive) {
+        slidesCache.clear();
+        normalized.forEach((s) => slidesCache.set(s.id, s));
+        saveLocalFile5(normalized);
+      }
+      return normalized;
+    } else if (error) {
+      console.warn("[SUPABASE GET SLIDES NOTICE - FALLING BACK TO CACHE]", error.message || error);
+    }
+  } catch (err) {
+    console.warn("[SUPABASE GET SLIDES EXCEPTION - FALLING BACK TO CACHE]", err?.message || err);
+  }
   let list = Array.from(slidesCache.values());
+  if (list.length === 0) {
+    list = loadLocalFile5();
+    list.forEach((s) => slidesCache.set(s.id, s));
+  }
   if (onlyActive) {
     list = list.filter((s) => s.status === "ACTIVE");
   }
   list.sort((a, b) => a.displayOrder - b.displayOrder);
   return list;
+}
+async function getSlideById(id) {
+  if (!id) return null;
+  await initializeSlidesStorage();
+  try {
+    const { data, error } = await supabaseAdmin.from("HomeSlide").select("*").eq("id", id).maybeSingle();
+    if (!error && data) {
+      const record = {
+        id: String(data.id),
+        title: String(data.title || ""),
+        description: data.description ? String(data.description) : null,
+        imageUrl: String(data.imageUrl || ""),
+        buttonText: data.buttonText ? String(data.buttonText) : "Check Repair Price",
+        buttonLink: data.buttonLink ? String(data.buttonLink) : "/services?focus=search",
+        displayOrder: Number(data.displayOrder) || 1,
+        status: data.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+        createdBy: data.createdBy || null,
+        updatedBy: data.updatedBy || null,
+        createdAt: data.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: data.updatedAt || (/* @__PURE__ */ new Date()).toISOString()
+      };
+      slidesCache.set(id, record);
+      return record;
+    }
+  } catch (err) {
+    console.warn(`[SUPABASE GET SLIDE BY ID NOTICE: ${id}]`, err?.message || err);
+  }
+  const cached = slidesCache.get(id);
+  if (cached) return cached;
+  const localList = loadLocalFile5();
+  const found = localList.find((s) => s.id === id);
+  if (found) {
+    slidesCache.set(found.id, found);
+    return found;
+  }
+  return null;
 }
 async function createSlide(slideData, userId) {
   await initializeSlidesStorage();
@@ -10021,52 +11098,78 @@ async function createSlide(slideData, userId) {
     createdAt: now,
     updatedAt: now
   };
+  try {
+    const { error } = await supabaseAdmin.from("HomeSlide").upsert([newSlide]);
+    if (error) {
+      console.error("[SUPABASE SLIDE CREATE ERROR]", error);
+    }
+  } catch (err) {
+    console.warn("[SUPABASE SLIDE CREATE EXCEPTION]", err?.message || err);
+  }
   slidesCache.set(id, newSlide);
   saveLocalFile5(Array.from(slidesCache.values()));
-  try {
-    await supabaseAdmin.from("HomeSlide").upsert([newSlide]);
-  } catch (err) {
-    console.warn("[SUPABASE SLIDE CREATE WARN]", err);
-  }
   await broadcastServerChange("HomeSlide", "CREATE", id, newSlide);
   return newSlide;
 }
 async function updateSlide(id, updates, userId) {
   await initializeSlidesStorage();
-  const existing = slidesCache.get(id);
+  let existing = await getSlideById(id);
   if (!existing) {
-    throw new Error("Slide not found");
+    throw new Error(`Slide with ID '${id}' not found`);
   }
-  if (updates.imageUrl && existing.imageUrl && updates.imageUrl !== existing.imageUrl && existing.imageUrl.includes("cloudinary.com")) {
-    try {
-      await deleteFromCloudinary(existing.imageUrl);
-    } catch (cleanErr) {
-      console.warn("[CLOUDINARY OLD SLIDE ASSET CLEANUP WARN]", cleanErr);
-    }
-  }
+  const oldImageUrl = existing.imageUrl;
   const now = (/* @__PURE__ */ new Date()).toISOString();
+  const sanitizedUpdates = {};
+  if (updates.title !== void 0) sanitizedUpdates.title = String(updates.title).trim();
+  if (updates.description !== void 0) sanitizedUpdates.description = updates.description ? String(updates.description).trim() : null;
+  if (updates.imageUrl !== void 0) sanitizedUpdates.imageUrl = String(updates.imageUrl).trim();
+  if (updates.buttonText !== void 0) sanitizedUpdates.buttonText = updates.buttonText ? String(updates.buttonText).trim() : "Check Repair Price";
+  if (updates.buttonLink !== void 0) sanitizedUpdates.buttonLink = updates.buttonLink ? String(updates.buttonLink).trim() : "/services?focus=search";
+  if (updates.displayOrder !== void 0) sanitizedUpdates.displayOrder = parseInt(String(updates.displayOrder), 10) || 1;
+  if (updates.status !== void 0) sanitizedUpdates.status = updates.status === "INACTIVE" ? "INACTIVE" : "ACTIVE";
   const updated = {
     ...existing,
-    ...updates,
+    ...sanitizedUpdates,
     id,
     updatedAt: now,
     updatedBy: userId || existing.updatedBy || null
   };
+  try {
+    const { error } = await supabaseAdmin.from("HomeSlide").update({
+      title: updated.title,
+      description: updated.description,
+      imageUrl: updated.imageUrl,
+      buttonText: updated.buttonText,
+      buttonLink: updated.buttonLink,
+      displayOrder: updated.displayOrder,
+      status: updated.status,
+      updatedBy: updated.updatedBy,
+      updatedAt: updated.updatedAt
+    }).eq("id", id);
+    if (error) {
+      console.error("[SUPABASE SLIDE UPDATE ERROR]", error);
+    }
+  } catch (err) {
+    console.warn("[SUPABASE SLIDE UPDATE EXCEPTION]", err?.message || err);
+  }
   slidesCache.set(id, updated);
   saveLocalFile5(Array.from(slidesCache.values()));
-  try {
-    await supabaseAdmin.from("HomeSlide").update(updated).eq("id", id);
-  } catch (err) {
-    console.warn("[SUPABASE SLIDE UPDATE WARN]", err);
+  if (updates.imageUrl && oldImageUrl && updates.imageUrl !== oldImageUrl && oldImageUrl.includes("cloudinary.com") && !isPresetAsset(oldImageUrl)) {
+    if (isCloudinaryConfigured()) {
+      try {
+        await deleteFromCloudinary(oldImageUrl);
+      } catch (cleanErr) {
+        console.warn("[CLOUDINARY OLD SLIDE ASSET CLEANUP NOTICE]", cleanErr?.message || cleanErr);
+      }
+    }
   }
   await broadcastServerChange("HomeSlide", "UPDATE", id, updated);
   return updated;
 }
 async function toggleSlideStatus(id, userId) {
-  await initializeSlidesStorage();
-  const existing = slidesCache.get(id);
+  const existing = await getSlideById(id);
   if (!existing) {
-    throw new Error("Slide not found");
+    throw new Error(`Slide with ID '${id}' not found`);
   }
   const targetStatus = existing.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
   return updateSlide(id, { status: targetStatus }, userId);
@@ -10080,10 +11183,10 @@ async function reorderSlides(items) {
       existing.displayOrder = item.displayOrder;
       existing.updatedAt = now;
       slidesCache.set(item.id, existing);
-      try {
-        await supabaseAdmin.from("HomeSlide").update({ displayOrder: item.displayOrder, updatedAt: now }).eq("id", item.id);
-      } catch (err) {
-      }
+    }
+    try {
+      await supabaseAdmin.from("HomeSlide").update({ displayOrder: item.displayOrder, updatedAt: now }).eq("id", item.id);
+    } catch (_) {
     }
   }
   saveLocalFile5(Array.from(slidesCache.values()));
@@ -10091,27 +11194,39 @@ async function reorderSlides(items) {
 }
 async function deleteSlide(id) {
   await initializeSlidesStorage();
-  const existing = slidesCache.get(id);
-  if (existing && existing.imageUrl && existing.imageUrl.includes("cloudinary.com")) {
-    try {
-      await deleteFromCloudinary(existing.imageUrl);
-    } catch (cleanErr) {
-      console.warn("[CLOUDINARY DELETE SLIDE ASSET CLEANUP WARN]", cleanErr);
+  const existing = await getSlideById(id);
+  if (!existing) {
+    return;
+  }
+  try {
+    const { error } = await supabaseAdmin.from("HomeSlide").delete().eq("id", id);
+    if (error) {
+      console.error("[SUPABASE SLIDE DELETE ERROR]", error);
     }
+  } catch (err) {
+    console.warn("[SUPABASE SLIDE DELETE EXCEPTION]", err?.message || err);
   }
   slidesCache.delete(id);
   saveLocalFile5(Array.from(slidesCache.values()));
-  try {
-    await supabaseAdmin.from("HomeSlide").delete().eq("id", id);
-  } catch (err) {
-    console.warn("[SUPABASE SLIDE DELETE WARN]", err);
+  if (existing.imageUrl && existing.imageUrl.includes("cloudinary.com") && !isPresetAsset(existing.imageUrl)) {
+    if (isCloudinaryConfigured()) {
+      try {
+        await deleteFromCloudinary(existing.imageUrl);
+      } catch (cleanErr) {
+        console.warn("[CLOUDINARY DELETE SLIDE ASSET NOTICE]", cleanErr?.message || cleanErr);
+      }
+    }
   }
   await broadcastServerChange("HomeSlide", "DELETE", id);
 }
 
 // api/_server/routes/slides.ts
 var router12 = Router12();
-var upload3 = multer3({ storage: multer3.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+var upload3 = multer3({
+  storage: multer3.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
+  // 25MB
+});
 var getSlidesHandler = async (req, res) => {
   try {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
@@ -10128,73 +11243,132 @@ var getSlidesHandler = async (req, res) => {
 router12.get("/", getSlidesHandler);
 router12.get("/public", getSlidesHandler);
 router12.get("/home-slides", getSlidesHandler);
-router12.post("/upload-image", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), upload3.single("image"), async (req, res) => {
+router12.get("/:id", async (req, res) => {
   try {
-    if (req.file) {
-      if (isCloudinaryConfigured()) {
-        const result = await uploadToCloudinary(req.file.buffer, {
-          folder: "mts_lab/slides",
-          resourceType: "image"
-        });
-        return res.json({ success: true, url: result.secure_url, publicId: result.public_id });
-      }
-      const uploadDir = path6.join(process.cwd(), "public", "assets", "images");
-      if (!fs6.existsSync(uploadDir)) {
-        fs6.mkdirSync(uploadDir, { recursive: true });
-      }
-      const safeOriginalName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_");
-      const fileName = `slide_${Date.now()}_${safeOriginalName}`;
-      const filePath = path6.join(uploadDir, fileName);
-      fs6.writeFileSync(filePath, req.file.buffer);
-      return res.json({
-        success: true,
-        url: `/assets/images/${fileName}`
-      });
+    const { id } = req.params;
+    if (!id || id === "undefined" || id === "null") {
+      return res.status(400).json({ error: "Valid slide ID is required." });
     }
-    if (req.body?.base64Image || req.body?.image) {
-      const base64Data = req.body.base64Image || req.body.image;
-      if (isCloudinaryConfigured()) {
-        const result = await uploadBase64ToCloudinary(base64Data, {
-          folder: "mts_lab/slides",
-          resourceType: "image"
-        });
-        return res.json({ success: true, url: result.secure_url, publicId: result.public_id });
-      }
-      const uploadDir = path6.join(process.cwd(), "public", "assets", "images");
-      if (!fs6.existsSync(uploadDir)) {
-        fs6.mkdirSync(uploadDir, { recursive: true });
-      }
-      const matches = String(base64Data).match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      let ext = "jpg";
-      let buffer;
-      if (matches && matches.length === 3) {
-        const mime = matches[1];
-        if (mime.includes("png")) ext = "png";
-        else if (mime.includes("webp")) ext = "webp";
-        else if (mime.includes("gif")) ext = "gif";
-        buffer = Buffer.from(matches[2], "base64");
-      } else {
-        buffer = Buffer.from(base64Data, "base64");
-      }
-      const fileName = `slide_${Date.now()}.${ext}`;
-      const filePath = path6.join(uploadDir, fileName);
-      fs6.writeFileSync(filePath, buffer);
-      return res.json({
-        success: true,
-        url: `/assets/images/${fileName}`
-      });
+    const slide = await getSlideById(id);
+    if (!slide) {
+      return res.status(404).json({ error: `Slide with ID '${id}' not found.` });
     }
-    return res.status(400).json({ error: "No image file or base64 data provided." });
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
+    return res.json(slide);
   } catch (err) {
-    console.error("[SLIDE IMAGE UPLOAD ERROR]", err);
-    return res.status(500).json({ error: "Failed to upload slide image." });
+    console.error(`[GET SLIDE BY ID EXCEPTION: ${req.params.id}]`, err);
+    return res.status(500).json({ error: "Failed to retrieve slide." });
   }
 });
+router12.post(
+  "/upload-image",
+  authenticate,
+  authorize(["SUPER_ADMIN", "ADMIN"]),
+  upload3.fields([
+    { name: "image", maxCount: 1 },
+    { name: "file", maxCount: 1 }
+  ]),
+  async (req, res) => {
+    try {
+      const files = req.files;
+      const uploadedFile = files?.image?.[0] || files?.file?.[0] || req.file;
+      if (uploadedFile) {
+        if (isCloudinaryConfigured()) {
+          const result = await uploadToCloudinary(uploadedFile.buffer, {
+            folder: "mts_lab/slides",
+            resourceType: "image"
+          });
+          return res.json({
+            success: true,
+            storageProvider: "CLOUDINARY",
+            url: result.secure_url,
+            publicId: result.public_id
+          });
+        }
+        const uploadDir = path6.join(process.cwd(), "public", "assets", "images");
+        if (!fs6.existsSync(uploadDir)) {
+          fs6.mkdirSync(uploadDir, { recursive: true });
+        }
+        const safeOriginalName = uploadedFile.originalname.replace(/[^a-zA-Z0-9.-]/g, "_");
+        const fileName = `slide_${Date.now()}_${safeOriginalName}`;
+        const filePath = path6.join(uploadDir, fileName);
+        fs6.writeFileSync(filePath, uploadedFile.buffer);
+        try {
+          const generalUploadsDir = path6.join(process.cwd(), "uploads");
+          if (fs6.existsSync(generalUploadsDir)) {
+            fs6.writeFileSync(path6.join(generalUploadsDir, fileName), uploadedFile.buffer);
+          }
+        } catch (_) {
+        }
+        return res.json({
+          success: true,
+          storageProvider: "LOCAL_STORAGE",
+          url: `/assets/images/${fileName}`,
+          publicId: fileName
+        });
+      }
+      const base64Data = req.body?.base64Image || req.body?.image || req.body?.file;
+      if (base64Data && typeof base64Data === "string") {
+        if (isCloudinaryConfigured()) {
+          const result = await uploadBase64ToCloudinary(base64Data, {
+            folder: "mts_lab/slides",
+            resourceType: "image"
+          });
+          return res.json({
+            success: true,
+            storageProvider: "CLOUDINARY",
+            url: result.secure_url,
+            publicId: result.public_id
+          });
+        }
+        const uploadDir = path6.join(process.cwd(), "public", "assets", "images");
+        if (!fs6.existsSync(uploadDir)) {
+          fs6.mkdirSync(uploadDir, { recursive: true });
+        }
+        const matches = String(base64Data).match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        let ext = "jpg";
+        let buffer;
+        if (matches && matches.length === 3) {
+          const mime = matches[1];
+          if (mime.includes("png")) ext = "png";
+          else if (mime.includes("webp")) ext = "webp";
+          else if (mime.includes("gif")) ext = "gif";
+          buffer = Buffer.from(matches[2], "base64");
+        } else {
+          buffer = Buffer.from(base64Data, "base64");
+        }
+        const fileName = `slide_${Date.now()}.${ext}`;
+        const filePath = path6.join(uploadDir, fileName);
+        fs6.writeFileSync(filePath, buffer);
+        try {
+          const generalUploadsDir = path6.join(process.cwd(), "uploads");
+          if (fs6.existsSync(generalUploadsDir)) {
+            fs6.writeFileSync(path6.join(generalUploadsDir, fileName), buffer);
+          }
+        } catch (_) {
+        }
+        return res.json({
+          success: true,
+          storageProvider: "LOCAL_STORAGE",
+          url: `/assets/images/${fileName}`,
+          publicId: fileName
+        });
+      }
+      return res.status(400).json({ error: "No image file or base64 data provided in request." });
+    } catch (err) {
+      console.error("[SLIDE IMAGE UPLOAD ERROR]", err);
+      return res.status(500).json({ error: err?.message || "Failed to upload slide image." });
+    }
+  }
+);
 router12.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { title, description, imageUrl, buttonText, buttonLink, displayOrder = 1, status = "ACTIVE" } = req.body;
-    if (!title || !imageUrl) {
-      return res.status(400).json({ error: "Title and image URL are required." });
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ error: "Slide title is required." });
+    }
+    if (!imageUrl || !String(imageUrl).trim()) {
+      return res.status(400).json({ error: "Slide image URL is required." });
     }
     const created = await createSlide(
       {
@@ -10211,7 +11385,7 @@ router12.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req
     return res.status(201).json(created);
   } catch (err) {
     console.error("[CREATE SLIDE EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to save slide." });
+    return res.status(500).json({ error: err?.message || "Failed to save slide." });
   }
 });
 router12.put("/reorder", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
@@ -10219,9 +11393,9 @@ router12.put("/reorder", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), asyn
     const { slides, slideIds } = req.body;
     let itemsToReorder = [];
     if (Array.isArray(slides)) {
-      itemsToReorder = slides.map((s) => ({ id: s.id, displayOrder: s.displayOrder }));
+      itemsToReorder = slides.map((s) => ({ id: String(s.id), displayOrder: Number(s.displayOrder) || 1 }));
     } else if (Array.isArray(slideIds)) {
-      itemsToReorder = slideIds.map((id, index) => ({ id, displayOrder: index + 1 }));
+      itemsToReorder = slideIds.map((id, index) => ({ id: String(id), displayOrder: index + 1 }));
     }
     if (itemsToReorder.length > 0) {
       await reorderSlides(itemsToReorder);
@@ -10232,24 +11406,34 @@ router12.put("/reorder", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), asyn
     return res.status(500).json({ error: "Failed to reorder slides." });
   }
 });
-router12.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
+var handleUpdateSlide = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!id || id === "undefined" || id === "null") {
+      return res.status(400).json({ error: "Valid slide ID is required." });
+    }
     const updated = await updateSlide(id, req.body, req.user?.id);
     return res.json(updated);
   } catch (err) {
-    console.error("[UPDATE SLIDE EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to update slide." });
+    console.error(`[UPDATE SLIDE EXCEPTION: ${req.params.id}]`, err);
+    const statusCode = err?.message?.includes("not found") ? 404 : 500;
+    return res.status(statusCode).json({ error: err?.message || "Failed to update slide." });
   }
-});
+};
+router12.put("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), handleUpdateSlide);
+router12.patch("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), handleUpdateSlide);
 router12.patch("/:id/toggle-status", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { id } = req.params;
+    if (!id || id === "undefined" || id === "null") {
+      return res.status(400).json({ error: "Valid slide ID is required." });
+    }
     const updated = await toggleSlideStatus(id, req.user?.id);
     return res.json(updated);
   } catch (err) {
-    console.error("[TOGGLE STATUS EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to toggle status." });
+    console.error(`[TOGGLE STATUS EXCEPTION: ${req.params.id}]`, err);
+    const statusCode = err?.message?.includes("not found") ? 404 : 500;
+    return res.status(statusCode).json({ error: err?.message || "Failed to toggle slide status." });
   }
 });
 router12.patch("/:id/status", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
@@ -10260,18 +11444,22 @@ router12.patch("/:id/status", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]),
     const updated = await updateSlide(id, { status: targetStatus }, req.user?.id);
     return res.json(updated);
   } catch (err) {
-    console.error("[SET STATUS EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to set slide status." });
+    console.error(`[SET STATUS EXCEPTION: ${req.params.id}]`, err);
+    const statusCode = err?.message?.includes("not found") ? 404 : 500;
+    return res.status(statusCode).json({ error: err?.message || "Failed to set slide status." });
   }
 });
 router12.delete("/:id", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req, res) => {
   try {
     const { id } = req.params;
+    if (!id || id === "undefined" || id === "null") {
+      return res.status(400).json({ error: "Valid slide ID is required." });
+    }
     await deleteSlide(id);
     return res.json({ success: true, message: "Slide deleted successfully." });
   } catch (err) {
-    console.error("[DELETE SLIDE EXCEPTION]", err);
-    return res.status(500).json({ error: "Failed to delete slide." });
+    console.error(`[DELETE SLIDE EXCEPTION: ${req.params.id}]`, err);
+    return res.status(500).json({ error: err?.message || "Failed to delete slide." });
   }
 });
 var slides_default = router12;
@@ -12729,6 +13917,74 @@ router19.get("/status", async (req, res) => {
     });
   }
 });
+router19.post("/test", authenticate, async (req, res) => {
+  try {
+    const isConfigured2 = isCloudinaryConfigured();
+    if (!isConfigured2) {
+      return res.json({
+        success: false,
+        storage: "LOCAL_STORAGE",
+        connected: false,
+        message: "Cloudinary is not configured in this environment. Falling back to local storage."
+      });
+    }
+    const testResult = await testCloudinaryUpload();
+    return res.json({
+      success: testResult.success,
+      storage: "CLOUDINARY",
+      connected: testResult.success,
+      latencyMs: testResult.latencyMs,
+      testUrl: testResult.url,
+      error: testResult.error
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Cloudinary test upload failed."
+    });
+  }
+});
+router19.get("/documents", authenticate, async (req, res) => {
+  try {
+    const referenceNumber = (req.query.referenceNumber || "").trim();
+    const docType = (req.query.docType || "").trim().toUpperCase();
+    let query = supabaseAdmin.from("AuditLog").select("*").eq("action", "DOCUMENT_UPLOAD").order("createdAt", { ascending: false });
+    if (referenceNumber) {
+      query = query.eq("resourceId", referenceNumber);
+    }
+    if (docType) {
+      query = query.eq("resource", docType);
+    }
+    const { data: logs, error } = await query.limit(50);
+    if (error) {
+      console.warn("[QUERY DOCUMENTS WARN]", error);
+      return res.json({ success: true, documents: [] });
+    }
+    const documents = (logs || []).map((l) => {
+      let meta = {};
+      try {
+        meta = typeof l.metadata === "string" ? JSON.parse(l.metadata) : l.metadata || {};
+      } catch (_) {
+      }
+      return {
+        id: l.id,
+        docType: l.resource,
+        referenceNumber: l.resourceId,
+        url: meta.url || meta.secureUrl,
+        secureUrl: meta.secureUrl || meta.url,
+        publicId: meta.publicId,
+        storageProvider: meta.storageProvider || "UNKNOWN",
+        bytes: meta.bytes,
+        format: meta.format,
+        uploadedAt: l.createdAt,
+        uploadedByName: l.userName || "System"
+      };
+    });
+    return res.json({ success: true, documents });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to retrieve documents." });
+  }
+});
 router19.post("/", authenticate, upload5.single("file"), async (req, res) => {
   try {
     const useCloudinary = isCloudinaryConfigured();
@@ -12746,6 +14002,7 @@ router19.post("/", authenticate, upload5.single("file"), async (req, res) => {
         });
         return res.json({
           success: true,
+          storageProvider: "CLOUDINARY",
           url: result.secure_url,
           secureUrl: result.secure_url,
           publicId: result.public_id,
@@ -12760,6 +14017,7 @@ router19.post("/", authenticate, upload5.single("file"), async (req, res) => {
         const local = saveFileLocally(req.file.buffer, req.file.originalname, req.file.mimetype);
         return res.json({
           success: true,
+          storageProvider: "LOCAL_STORAGE",
           ...local,
           folder
         });
@@ -12776,6 +14034,7 @@ router19.post("/", authenticate, upload5.single("file"), async (req, res) => {
         });
         return res.json({
           success: true,
+          storageProvider: "CLOUDINARY",
           url: result.secure_url,
           secureUrl: result.secure_url,
           publicId: result.public_id,
@@ -12790,6 +14049,7 @@ router19.post("/", authenticate, upload5.single("file"), async (req, res) => {
         const local = saveBase64Locally(base64Data);
         return res.json({
           success: true,
+          storageProvider: "LOCAL_STORAGE",
           ...local,
           folder
         });
@@ -12808,6 +14068,7 @@ router19.post("/pdf", authenticate, upload5.single("file"), async (req, res) => 
     const useCloudinary = isCloudinaryConfigured();
     const docType = (req.body?.docType || req.query.docType || "GENERAL").toUpperCase();
     const referenceNumber = (req.body?.referenceNumber || req.query.referenceNumber || "doc").trim();
+    let uploadedDoc;
     if (useCloudinary) {
       let result;
       if (req.file) {
@@ -12826,17 +14087,15 @@ router19.post("/pdf", authenticate, upload5.single("file"), async (req, res) => 
       } else {
         return res.status(400).json({ error: "No PDF file or base64 data provided." });
       }
-      return res.json({
-        success: true,
+      uploadedDoc = {
         url: result.secure_url,
         secureUrl: result.secure_url,
         publicId: result.public_id,
         format: result.format || "pdf",
         bytes: result.bytes,
         resourceType: result.resource_type,
-        docType,
-        referenceNumber
-      });
+        storageProvider: "CLOUDINARY"
+      };
     } else {
       let local;
       if (req.file) {
@@ -12847,13 +14106,45 @@ router19.post("/pdf", authenticate, upload5.single("file"), async (req, res) => 
       } else {
         return res.status(400).json({ error: "No PDF file or base64 data provided." });
       }
-      return res.json({
-        success: true,
-        ...local,
-        referenceNumber,
-        docType
-      });
+      uploadedDoc = {
+        url: local.url,
+        secureUrl: local.secureUrl,
+        publicId: local.publicId,
+        format: local.format || "pdf",
+        bytes: local.bytes,
+        resourceType: local.resourceType,
+        storageProvider: "LOCAL_STORAGE"
+      };
     }
+    try {
+      await supabaseAdmin.from("AuditLog").insert({
+        userId: req.user?.id || "system",
+        userEmail: req.user?.email || null,
+        userName: req.user?.name || null,
+        userRole: req.user?.role || null,
+        action: "DOCUMENT_UPLOAD",
+        resource: docType,
+        resourceId: referenceNumber,
+        status: "SUCCESS",
+        details: `Uploaded ${docType} PDF (${referenceNumber}) via ${uploadedDoc.storageProvider}`,
+        metadata: JSON.stringify({
+          ...uploadedDoc,
+          docType,
+          referenceNumber,
+          uploadedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          uploadedById: req.user?.id,
+          uploadedByName: req.user?.name
+        })
+      });
+    } catch (auditErr) {
+      console.warn("[DOC AUDIT LOG INSERT WARN]", auditErr);
+    }
+    return res.json({
+      success: true,
+      ...uploadedDoc,
+      docType,
+      referenceNumber
+    });
   } catch (err) {
     console.error("[PDF UPLOAD ERROR]", err);
     return res.status(500).json({
@@ -12909,6 +14200,96 @@ var events_default = router20;
 
 // api/_server/routes/public.ts
 import { Router as Router21 } from "express";
+
+// api/_server/services/trackingExpiration.ts
+var NEPAL_TIMEZONE2 = "Asia/Kathmandu";
+function toNepalDateString3(val) {
+  if (!val) return "";
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: NEPAL_TIMEZONE2,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(d);
+  } catch {
+    return "";
+  }
+}
+function getAuthoritativeDeliveryDate(repair, logsForRepair) {
+  if (!repair) return null;
+  if (repair.deliveredAt) {
+    return repair.deliveredAt;
+  }
+  if (repair.courierOutDeliveredDate) {
+    return repair.courierOutDeliveredDate;
+  }
+  if (logsForRepair && logsForRepair.length > 0) {
+    const deliveredLog = logsForRepair.find((l) => {
+      const s = String(l.status || "").toUpperCase().trim();
+      return s === "DELIVERED" || s === "COMPLETED";
+    });
+    if (deliveredLog && deliveredLog.createdAt) {
+      return deliveredLog.createdAt;
+    }
+  }
+  const st = String(repair.status || "").toUpperCase().trim();
+  if (st === "DELIVERED" || st === "COMPLETED") {
+    return repair.updatedAt || repair.createdAt || null;
+  }
+  return null;
+}
+function isRepairPubliclyTrackable(repair, logsForRepair, referenceDate = /* @__PURE__ */ new Date()) {
+  if (!repair) return false;
+  const st = String(repair.status || "").toUpperCase().trim();
+  const isDelivered = st === "DELIVERED" || st === "COMPLETED";
+  if (!isDelivered) {
+    return true;
+  }
+  const deliveryIso = getAuthoritativeDeliveryDate(repair, logsForRepair);
+  if (!deliveryIso) {
+    return true;
+  }
+  const deliveryNepalDate = toNepalDateString3(deliveryIso);
+  const currentNepalDate = toNepalDateString3(referenceDate);
+  if (!deliveryNepalDate || !currentNepalDate) {
+    return true;
+  }
+  return currentNepalDate <= deliveryNepalDate;
+}
+function filterPubliclyTrackableRepairs(repairs, allLogs = [], referenceDate = /* @__PURE__ */ new Date()) {
+  if (!repairs || !Array.isArray(repairs)) return [];
+  const logsByRepairId = {};
+  for (const log of allLogs) {
+    if (log && log.repairId) {
+      if (!logsByRepairId[log.repairId]) {
+        logsByRepairId[log.repairId] = [];
+      }
+      logsByRepairId[log.repairId].push(log);
+    }
+  }
+  return repairs.filter((rep) => {
+    const logs = logsByRepairId[rep.id] || [];
+    return isRepairPubliclyTrackable(rep, logs, referenceDate);
+  }).map((rep) => {
+    const logs = logsByRepairId[rep.id] || [];
+    const delDate = getAuthoritativeDeliveryDate(rep, logs);
+    if (delDate) {
+      return {
+        ...rep,
+        deliveredAt: delDate
+      };
+    }
+    return rep;
+  });
+}
+
+// api/_server/routes/public.ts
+import fs9 from "fs";
+import path9 from "path";
+import crypto3 from "crypto";
 var router21 = Router21();
 var handlePublicSlides = async (req, res) => {
   try {
@@ -12924,6 +14305,25 @@ var handlePublicSlides = async (req, res) => {
 };
 router21.get("/slides", handlePublicSlides);
 router21.get("/home-slides", handlePublicSlides);
+var handlePublicSlideById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || id === "undefined" || id === "null") {
+      return res.status(400).json({ error: "Valid slide ID is required." });
+    }
+    const slide = await getSlideById(id);
+    if (!slide) {
+      return res.status(404).json({ error: `Slide with ID '${id}' not found.` });
+    }
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
+    return res.json(slide);
+  } catch (err) {
+    console.error("[PUBLIC SLIDE BY ID EXCEPTION]", err);
+    return res.status(500).json({ error: "Failed to retrieve slide." });
+  }
+};
+router21.get("/slides/:id", handlePublicSlideById);
+router21.get("/home-slides/:id", handlePublicSlideById);
 function normalizePhoneDigits(phone) {
   if (!phone) return "";
   return String(phone).replace(/\D/g, "");
@@ -12935,8 +14335,8 @@ function isPhoneMatching(providedPhoneDigits, recordPhone) {
   if (providedPhoneDigits === dbDigits) return true;
   const p10 = providedPhoneDigits.length >= 10 ? providedPhoneDigits.slice(-10) : providedPhoneDigits;
   const db10 = dbDigits.length >= 10 ? dbDigits.slice(-10) : dbDigits;
-  if (p10 === db10) return true;
-  if (providedPhoneDigits.length >= 7 && dbDigits.length >= 7) {
+  if (p10.length === 10 && db10.length === 10 && p10 === db10) return true;
+  if (providedPhoneDigits.length < 10 && dbDigits.length < 10 && providedPhoneDigits.length >= 7 && dbDigits.length >= 7) {
     if (providedPhoneDigits.slice(-7) === dbDigits.slice(-7)) return true;
   }
   return false;
@@ -12952,7 +14352,10 @@ var handlePublicTrack = async (req, res) => {
     const cleanPhone = normalizePhoneDigits(String(rawPhone));
     const phone10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
     if (!cleanRepairNumber && !cleanPhone) {
-      return res.status(400).json({ error: "Please enter your Repair Number or Registered Phone Number." });
+      return res.status(400).json({ success: false, error: "Please enter your Repair Number or Registered Phone Number." });
+    }
+    if (!cleanRepairNumber && cleanPhone.length < 7) {
+      return res.status(400).json({ success: false, error: "Please enter a valid Phone Number (minimum 7 digits) or Repair Number." });
     }
     const selectFields = `
       id,
@@ -13045,11 +14448,27 @@ var handlePublicTrack = async (req, res) => {
       }
     }
     if (!allMatchingRepairs || allMatchingRepairs.length === 0) {
-      return res.status(404).json({ error: "No repair records found matching your tracking information." });
+      return res.status(200).json({
+        success: true,
+        repair: null,
+        repairs: [],
+        devices: [],
+        message: "No repair records found matching your tracking information."
+      });
     }
-    const primaryRepair = allMatchingRepairs[0];
     const allRepairIds = allMatchingRepairs.map((r) => r.id);
     const { data: allExplicitLogs } = await supabaseAdmin.from("RepairLog").select("id, repairId, status, message, createdAt").in("repairId", allRepairIds).order("createdAt", { ascending: false });
+    const trackableRepairs = filterPubliclyTrackableRepairs(allMatchingRepairs, allExplicitLogs || []);
+    if (!trackableRepairs || trackableRepairs.length === 0) {
+      return res.status(200).json({
+        success: true,
+        repair: null,
+        repairs: [],
+        devices: [],
+        message: "No active repair records found matching your tracking information."
+      });
+    }
+    const primaryRepair = trackableRepairs[0];
     const getCustomerLogDesc = (logStatus, currentOverallStatus) => {
       const st = (logStatus || currentOverallStatus || "RECEIVED").toUpperCase().trim();
       const currentSt = (currentOverallStatus || "RECEIVED").toUpperCase().trim();
@@ -13273,7 +14692,7 @@ var handlePublicTrack = async (req, res) => {
       };
     };
     const sanitizedPrimary = sanitizePublicRepairObj(primaryRepair);
-    const sanitizedAll = allMatchingRepairs.map((rep) => sanitizePublicRepairObj(rep));
+    const sanitizedAll = trackableRepairs.map((rep) => sanitizePublicRepairObj(rep));
     return res.json({
       success: true,
       repair: sanitizedPrimary,
@@ -13290,6 +14709,230 @@ router21.get("/track", handlePublicTrack);
 router21.post("/track", handlePublicTrack);
 router21.get("/public/track", handlePublicTrack);
 router21.post("/public/track", handlePublicTrack);
+var inquiryRateMap = /* @__PURE__ */ new Map();
+var INQUIRY_MAX_PER_WINDOW = 5;
+var INQUIRY_WINDOW_MS = 10 * 60 * 1e3;
+var INQUIRY_DUPLICATE_WINDOW_MS = 60 * 1e3;
+function checkInquiryRateLimit(ip, phone, messageHash) {
+  const now = Date.now();
+  const key = `${ip}_${phone}`;
+  const record = inquiryRateMap.get(key) || { timestamps: [] };
+  record.timestamps = record.timestamps.filter((ts) => now - ts < INQUIRY_WINDOW_MS);
+  if (record.lastHash === messageHash && record.lastSubmitTime && now - record.lastSubmitTime < INQUIRY_DUPLICATE_WINDOW_MS) {
+    return { allowed: false, isDuplicate: true };
+  }
+  if (record.timestamps.length >= INQUIRY_MAX_PER_WINDOW) {
+    return {
+      allowed: false,
+      reason: "Too many inquiries submitted from your connection. Please contact our reception desk directly via phone (+977 9869276668) or WhatsApp."
+    };
+  }
+  record.timestamps.push(now);
+  record.lastHash = messageHash;
+  record.lastSubmitTime = now;
+  inquiryRateMap.set(key, record);
+  return { allowed: true };
+}
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+var INQUIRIES_FILE = path9.join(process.cwd(), "data", "inquiries.json");
+function saveInquiryRecord(inquiry) {
+  try {
+    const dataDir = path9.join(process.cwd(), "data");
+    if (!fs9.existsSync(dataDir)) {
+      fs9.mkdirSync(dataDir, { recursive: true });
+    }
+    let list = [];
+    if (fs9.existsSync(INQUIRIES_FILE)) {
+      try {
+        list = JSON.parse(fs9.readFileSync(INQUIRIES_FILE, "utf8"));
+      } catch {
+        list = [];
+      }
+    }
+    list.unshift(inquiry);
+    if (list.length > 300) list = list.slice(0, 300);
+    fs9.writeFileSync(INQUIRIES_FILE, JSON.stringify(list, null, 2), "utf8");
+  } catch (err) {
+    console.warn("[INQUIRY STORAGE WARN]", err);
+  }
+}
+var handlePublicContact = async (req, res) => {
+  try {
+    const { name, phone, email, subject, message, botTrap, website, companyAddress } = req.body || {};
+    if (botTrap || website || companyAddress) {
+      console.warn("[BOT DETECTED ON CONTACT FORM]");
+      return res.status(400).json({ error: "Invalid submission parameter." });
+    }
+    if (!name || typeof name !== "string" || name.trim().length < 2) {
+      return res.status(400).json({ error: "Please enter your full name (minimum 2 characters)." });
+    }
+    if (!phone || typeof phone !== "string") {
+      return res.status(400).json({ error: "Please enter your contact phone number." });
+    }
+    const cleanPhone = phone.trim().replace(/[^\d+-\s]/g, "").slice(0, 25);
+    const digitsOnly = cleanPhone.replace(/\D/g, "");
+    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+      return res.status(400).json({ error: "Please enter a valid phone number (at least 7 digits)." });
+    }
+    let cleanEmail = "";
+    if (email && typeof email === "string" && email.trim().length > 0) {
+      cleanEmail = email.trim().slice(0, 100);
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        return res.status(400).json({ error: "Please enter a valid email address format (or leave blank)." });
+      }
+    }
+    if (!message || typeof message !== "string" || message.trim().length < 10) {
+      return res.status(400).json({ error: "Please enter a message of at least 10 characters describing your device inquiry." });
+    }
+    const cleanName = name.trim().slice(0, 100);
+    const cleanSubject = typeof subject === "string" && subject.trim().length > 0 ? subject.trim().slice(0, 150) : "General Inquiry";
+    const cleanMessage = message.trim().slice(0, 3e3);
+    const clientIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || "unknown";
+    const messageHash = crypto3.createHash("md5").update(`${cleanPhone}_${cleanSubject}_${cleanMessage}`).digest("hex");
+    const rateCheck = checkInquiryRateLimit(clientIp, cleanPhone, messageHash);
+    if (!rateCheck.allowed) {
+      if (rateCheck.isDuplicate) {
+        return res.json({
+          success: true,
+          message: "Your inquiry has already been received. Our support team will get back to you shortly.",
+          inquiry: {
+            name: cleanName,
+            phone: cleanPhone,
+            email: cleanEmail,
+            subject: cleanSubject,
+            message: cleanMessage,
+            submittedAt: (/* @__PURE__ */ new Date()).toISOString()
+          }
+        });
+      }
+      return res.status(429).json({ error: rateCheck.reason || "Too many submissions. Please wait before submitting again." });
+    }
+    const inquiryId = `inq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const submissionTime = (/* @__PURE__ */ new Date()).toISOString();
+    try {
+      await createNotification({
+        title: `Web Inquiry: ${cleanSubject}`,
+        message: `From ${cleanName} (${cleanPhone}${cleanEmail ? `, ${cleanEmail}` : ""}): "${cleanMessage.slice(0, 150)}${cleanMessage.length > 150 ? "..." : ""}"`,
+        type: "GENERAL",
+        priority: "NORMAL",
+        targetRole: "RECEPTIONIST",
+        metadata: {
+          inquiryId,
+          customerName: cleanName,
+          customerPhone: cleanPhone,
+          customerEmail: cleanEmail,
+          subject: cleanSubject,
+          fullMessage: cleanMessage,
+          source: "CONTACT_PAGE",
+          receivedAt: submissionTime
+        }
+      });
+    } catch (notifErr) {
+      console.warn("[CONTACT NOTIFICATION WARN]", notifErr);
+    }
+    const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@mobiletechnologystation.com.np";
+    const safeEmailSubject = `[MTS Lab Inquiry] ${cleanSubject} - ${cleanName}`.replace(/[\r\n]+/g, " ");
+    const nepalTimestamp = (/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Kathmandu" });
+    const emailText = [
+      `New Customer Inquiry \u2014 MTS Lab`,
+      ``,
+      `Customer Name: ${cleanName}`,
+      `Phone: ${cleanPhone}`,
+      `Email: ${cleanEmail || "Not provided"}`,
+      `Subject: ${cleanSubject}`,
+      ``,
+      `Message:`,
+      `${cleanMessage}`,
+      ``,
+      `Submitted:`,
+      `${nepalTimestamp} (Nepal Time)`
+    ].join("\n");
+    const emailHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+        <div style="border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 20px; color: #0f172a;">New Customer Inquiry \u2014 MTS Lab</h2>
+          <p style="margin: 4px 0 0; font-size: 13px; color: #64748b;">Central Diagnostic & Screen Refurbishment Facility</p>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; width: 130px; font-weight: 600;">Customer Name:</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: bold;">${escapeHtml(cleanName)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Phone Number:</td>
+            <td style="padding: 8px 0; color: #0f172a;"><a href="tel:${escapeHtml(cleanPhone)}" style="color: #059669; text-decoration: none; font-weight: bold;">${escapeHtml(cleanPhone)}</a></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Email Address:</td>
+            <td style="padding: 8px 0; color: #0f172a;">${cleanEmail ? `<a href="mailto:${escapeHtml(cleanEmail)}" style="color: #4f46e5; text-decoration: none;">${escapeHtml(cleanEmail)}</a>` : '<span style="color: #94a3b8;">Not provided</span>'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Inquiry Subject:</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${escapeHtml(cleanSubject)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Submitted Time:</td>
+            <td style="padding: 8px 0; color: #64748b; font-size: 12px;">${nepalTimestamp} (Nepal Time)</td>
+          </tr>
+        </table>
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 10px; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Customer Message</h4>
+          <div style="font-size: 14px; line-height: 1.6; color: #1e293b; white-space: pre-wrap;">${escapeHtml(cleanMessage)}</div>
+        </div>
+
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; font-size: 12px; color: #94a3b8;">
+          This customer inquiry was submitted through the official MTS Lab Contact Page at <a href="https://mobiletechnologystation.com.np" style="color: #64748b;">mobiletechnologystation.com.np</a>.
+        </div>
+      </div>
+    `;
+    const emailResult = await sendEmailDetailed({
+      to: SUPPORT_EMAIL,
+      subject: safeEmailSubject,
+      text: emailText,
+      html: emailHtml
+    });
+    saveInquiryRecord({
+      id: inquiryId,
+      name: cleanName,
+      phone: cleanPhone,
+      email: cleanEmail,
+      subject: cleanSubject,
+      message: cleanMessage,
+      submittedAt: submissionTime,
+      emailStatus: emailResult.success ? "sent" : "failed",
+      emailProvider: emailResult.provider,
+      clientIp
+    });
+    if (!emailResult.success) {
+      console.error("[PUBLIC CONTACT EMAIL FAILURE]", emailResult.error);
+      return res.status(502).json({
+        error: "We couldn't submit your inquiry right now. Please try again or contact us directly via WhatsApp or phone."
+      });
+    }
+    return res.json({
+      success: true,
+      message: "Your inquiry has been submitted successfully. Our support team will get back to you.",
+      inquiry: {
+        name: cleanName,
+        phone: cleanPhone,
+        email: cleanEmail,
+        subject: cleanSubject,
+        message: cleanMessage,
+        submittedAt: submissionTime
+      }
+    });
+  } catch (err) {
+    console.error("[PUBLIC CONTACT EXCEPTION]", err);
+    return res.status(500).json({ error: "Failed to submit inquiry. Please call our hotline directly." });
+  }
+};
+router21.post("/contact", handlePublicContact);
+router21.post("/public/contact", handlePublicContact);
 router21.get("/manager/stats", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MANAGER"]), async (req, res) => {
   try {
     const { data: repairs } = await supabaseAdmin.from("Repair").select("technicianId, status, priority, estimatedCost, advancePaid, totalPaid");
@@ -13411,20 +15054,726 @@ router21.get("/dashboard/stats", authenticate, async (req, res) => {
 });
 var public_default = router21;
 
+// api/_server/routes/seo.ts
+import { Router as Router22 } from "express";
+import fs10 from "fs";
+import path10 from "path";
+
+// src/lib/seo.ts
+var SITE_URL = "https://www.mobiletechnologystation.com.np";
+var BUSINESS_NAME = "MTS Lab";
+var BUSINESS_LEGAL_NAME = "Mobile Technology Station (MTS Lab)";
+var BUSINESS_PHONE = "9869276668";
+var BUSINESS_PHONE_INTL = "+977-9869276668";
+var BUSINESS_LANDLINE = "015364307";
+var BUSINESS_EMAIL = "support@mobiletechnologystation.com.np";
+var BUSINESS_ADDRESS = {
+  streetAddress: "Pakosadak, New Road (Opposite People's Plaza back gate)",
+  addressLocality: "Kathmandu",
+  addressRegion: "Bagmati Province",
+  postalCode: "44600",
+  addressCountry: "NP"
+};
+var BUSINESS_GEO = {
+  latitude: 27.7029,
+  longitude: 85.3123
+};
+function escapeHtml2(str) {
+  if (!str) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function safeJsonLdString(obj) {
+  return JSON.stringify(obj).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+}
+function formatNprPrice(price, priceType) {
+  if (priceType === "ON_INSPECTION" || priceType === "CONTACT_FOR_PRICE" || !price || price <= 0) {
+    return "Price on Inspection";
+  }
+  const formatted = `NPR ${price.toLocaleString("en-US")}`;
+  if (priceType === "STARTING_FROM") {
+    return `Starting from ${formatted}`;
+  }
+  return formatted;
+}
+function deduplicateTokens(tokens) {
+  const result = [];
+  for (const token of tokens) {
+    if (!token) continue;
+    if (result.length > 0 && result[result.length - 1] === token) {
+      continue;
+    }
+    const isNum = /^\d+$/.test(token);
+    if (!isNum && result.includes(token)) {
+      continue;
+    }
+    result.push(token);
+  }
+  return result;
+}
+function generateBaseSlug(service) {
+  const brand = (service.brand || "").trim().toLowerCase();
+  const model = (service.model || "").trim().toLowerCase();
+  const variant = (service.variant || "").trim().toLowerCase();
+  const serviceName = (service.serviceName || "").trim().toLowerCase();
+  const rawCombined = `${brand} ${model} ${variant} ${serviceName}`.replace(/[+/&]/g, " and ").replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
+  const words = rawCombined.split(" ").filter(Boolean);
+  const deduped = deduplicateTokens(words);
+  const slug = deduped.join("-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return slug || "service";
+}
+function buildSlugMap(services) {
+  const slugToService = /* @__PURE__ */ new Map();
+  const serviceIdToSlug = /* @__PURE__ */ new Map();
+  const slugCounts = /* @__PURE__ */ new Map();
+  const sorted = [...services].sort((a, b) => {
+    const brandCmp = (a.brand || "").localeCompare(b.brand || "");
+    if (brandCmp !== 0) return brandCmp;
+    const modelCmp = (a.model || "").localeCompare(b.model || "");
+    if (modelCmp !== 0) return modelCmp;
+    const nameCmp = (a.serviceName || "").localeCompare(b.serviceName || "");
+    if (nameCmp !== 0) return nameCmp;
+    return (a.id || "").localeCompare(b.id || "");
+  });
+  for (const service of sorted) {
+    const base = generateBaseSlug(service);
+    const count = (slugCounts.get(base) || 0) + 1;
+    slugCounts.set(base, count);
+    let finalSlug = base;
+    if (count > 1) {
+      if (service.variant && service.variant.trim()) {
+        const vSlug = service.variant.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        finalSlug = `${base}-${vSlug}`;
+      } else {
+        const shortId = (service.id || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toLowerCase();
+        finalSlug = `${base}-${shortId || count}`;
+      }
+    }
+    let collisionCounter = 2;
+    while (slugToService.has(finalSlug)) {
+      finalSlug = `${base}-${collisionCounter}`;
+      collisionCounter++;
+    }
+    slugToService.set(finalSlug, service);
+    serviceIdToSlug.set(service.id, finalSlug);
+  }
+  return {
+    slugToService,
+    serviceIdToSlug,
+    allSlugs: Array.from(slugToService.keys())
+  };
+}
+function getServiceSeoTitle(service) {
+  const device = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ""}`.trim();
+  const title = `${service.serviceName} for ${device} | MTS Lab Kathmandu`;
+  if (title.length <= 65) return title;
+  return `${service.serviceName} - ${device} | MTS Lab`;
+}
+function getServiceSeoDescription(service) {
+  const device = `${service.brand} ${service.model}`.trim();
+  const priceStr = formatNprPrice(service.price, service.priceType);
+  const timeStr = service.estimatedTime ? ` Time: ${service.estimatedTime}.` : "";
+  let desc = `Professional ${service.serviceName} for ${device} at MTS Lab Kathmandu.${timeStr} Cost: ${priceStr}. Certified repair in New Road. Call 9869276668.`;
+  if (desc.length > 158) {
+    desc = `${service.serviceName} for ${device} at MTS Lab Kathmandu. Cost: ${priceStr}. New Road lab. Call 9869276668.`;
+  }
+  if (desc.length > 158) {
+    desc = `${service.serviceName} for ${device} at MTS Lab Kathmandu. ${priceStr}. Call 9869276668.`;
+  }
+  return desc.slice(0, 158);
+}
+function getServiceDirectAnswer(service) {
+  const device = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ""}`.trim();
+  const priceStr = formatNprPrice(service.price, service.priceType);
+  const timeStr = service.estimatedTime ? ` Estimated turnaround time is ${service.estimatedTime}.` : "";
+  const problem = service.problem ? ` Solves: ${service.problem}.` : "";
+  return `${service.serviceName} for ${device} is performed at MTS Lab in Pakosadak, New Road, Kathmandu. The verified cost is ${priceStr}.${timeStr}${problem} Genuine quality parts, laser calibration, and warranty coverage are provided.`;
+}
+function getServiceFaqs(service) {
+  const device = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ""}`.trim();
+  const priceStr = formatNprPrice(service.price, service.priceType);
+  const estTime = service.estimatedTime || "1 to 2 hours";
+  return [
+    {
+      question: `How much does ${service.serviceName} for ${device} cost at MTS Lab?`,
+      answer: `The verified laboratory fee for ${service.serviceName} on ${device} at MTS Lab Kathmandu is ${priceStr}. Free multi-point diagnostic inspection is included.`
+    },
+    {
+      question: `How long does ${service.serviceName} for ${device} take?`,
+      answer: `Estimated service turnaround time is ${estTime} at our New Road Kathmandu laboratory under standard queue conditions.`
+    },
+    {
+      question: `Where is MTS Lab located for ${device} hardware repairs?`,
+      answer: `MTS Lab is located at Pakosadak, New Road (directly opposite the back gate of People's Plaza), Kathmandu 44600, Nepal. Call 9869276668 or 015364307 for directions.`
+    },
+    {
+      question: `Does MTS Lab provide testing and warranty for ${service.serviceName}?`,
+      answer: `Yes, all repairs undergo pre- and post-repair quality diagnostics, display calibration, and component testing with dedicated warranty coverage.`
+    }
+  ];
+}
+function getLocalBusinessJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "@id": `${SITE_URL}/#localbusiness`,
+    name: BUSINESS_NAME,
+    legalName: BUSINESS_LEGAL_NAME,
+    url: SITE_URL,
+    logo: `${SITE_URL}/mts-logo.jpg`,
+    image: `${SITE_URL}/mts-logo.jpg`,
+    telephone: BUSINESS_PHONE_INTL,
+    email: BUSINESS_EMAIL,
+    priceRange: "NPR",
+    currenciesAccepted: "NPR",
+    paymentAccepted: "Cash, Fonepay, Bank Transfer",
+    address: {
+      "@type": "PostalAddress",
+      ...BUSINESS_ADDRESS
+    },
+    geo: {
+      "@type": "GeoCoordinates",
+      ...BUSINESS_GEO
+    },
+    openingHoursSpecification: [
+      {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        opens: "10:00",
+        closes: "19:00"
+      },
+      {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: ["Saturday"],
+        opens: "10:00",
+        closes: "18:00"
+      }
+    ],
+    sameAs: ["https://www.facebook.com/mtslabnepal"]
+  };
+}
+function getServicePageJsonLd(service, slug) {
+  const serviceUrl = `${SITE_URL}/services/${slug}`;
+  const device = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ""}`.trim();
+  const faqs = getServiceFaqs(service);
+  const breadcrumbsJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: SITE_URL
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Repair Services",
+        item: `${SITE_URL}/services`
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: `${service.serviceName} (${device})`,
+        item: serviceUrl
+      }
+    ]
+  };
+  const serviceJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "@id": `${serviceUrl}#service`,
+    name: `${service.serviceName} for ${device}`,
+    serviceType: service.category || "Smartphone Hardware Repair",
+    description: getServiceSeoDescription(service),
+    provider: {
+      "@type": "LocalBusiness",
+      name: BUSINESS_NAME,
+      telephone: BUSINESS_PHONE_INTL,
+      address: {
+        "@type": "PostalAddress",
+        ...BUSINESS_ADDRESS
+      }
+    },
+    areaServed: {
+      "@type": "City",
+      name: "Kathmandu"
+    }
+  };
+  if (service.price && service.price > 0 && service.priceType !== "ON_INSPECTION" && service.priceType !== "CONTACT_FOR_PRICE") {
+    serviceJsonLd.offers = {
+      "@type": "Offer",
+      price: String(service.price),
+      priceCurrency: "NPR",
+      priceValidUntil: "2026-12-31",
+      availability: "https://schema.org/InStock",
+      url: serviceUrl
+    };
+  }
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map((f) => ({
+      "@type": "Question",
+      name: f.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: f.answer
+      }
+    }))
+  };
+  return [breadcrumbsJsonLd, serviceJsonLd, faqJsonLd];
+}
+var STATIC_PAGES_SEO = {
+  "/": {
+    title: "MTS Lab \u2013 Smartphone Hardware & Chip-Level Repair Lab Kathmandu",
+    description: "Premier mobile repair laboratory in New Road, Kathmandu. Laser screen repair, OCA glass replacement, motherboard IC microsoldering, battery replacement & tracking.",
+    canonical: `${SITE_URL}/`
+  },
+  "/services": {
+    title: "Repair Price Finder & Services Catalog | MTS Lab Kathmandu",
+    description: "Explore verified repair prices for Apple, Samsung, OnePlus, Xiaomi & more. Laser line fix, display replacement, glass change & IC repairs in New Road.",
+    canonical: `${SITE_URL}/services`
+  },
+  "/price-finder": {
+    title: "Repair Price Finder & Services Catalog | MTS Lab Kathmandu",
+    description: "Explore verified repair prices for Apple, Samsung, OnePlus, Xiaomi & more. Laser line fix, display replacement, glass change & IC repairs in New Road.",
+    canonical: `${SITE_URL}/services`
+    // Canonicalizes to /services
+  },
+  "/about": {
+    title: "About MTS Lab \u2013 Advanced Mobile Hardware Technology Station",
+    description: "Learn about MTS Lab Kathmandu, our cleanroom hardware facility, master technician team, advanced laser machines, and chip-level repair expertise.",
+    canonical: `${SITE_URL}/about`
+  },
+  "/contact": {
+    title: "Contact MTS Lab Kathmandu \u2013 Hotline, Location & Support",
+    description: "Visit MTS Lab at Pakosadak, New Road (Opposite People's Plaza back gate), Kathmandu. Hotline: 9869276668, Landline: 015364307. Directions & inquiry.",
+    canonical: `${SITE_URL}/contact`
+  },
+  "/track": {
+    title: "Track Repair Status Online | MTS Lab Kathmandu",
+    description: "Enter your Repair Tracking ID to monitor live repair progress, diagnostic results, technician notes, and delivery status in real-time.",
+    canonical: `${SITE_URL}/track`
+  },
+  "/shop": {
+    title: "Hardware & Accessories Shop | MTS Lab Kathmandu",
+    description: "Shop genuine smartphone accessories, displays, batteries, cables, and certified replacement parts at MTS Lab New Road, Kathmandu.",
+    canonical: `${SITE_URL}/shop`
+  },
+  "/terms": {
+    title: "Terms of Service | MTS Lab Kathmandu",
+    description: "Terms of service, repair warranty policies, diagnostic assessment terms, and customer rights at MTS Lab Kathmandu.",
+    canonical: `${SITE_URL}/terms`
+  },
+  "/privacy": {
+    title: "Privacy Policy | MTS Lab Kathmandu",
+    description: "Privacy policy and data protection commitments for repair tracking and customer communications at MTS Lab Kathmandu.",
+    canonical: `${SITE_URL}/privacy`
+  }
+};
+
+// api/_server/routes/seo.ts
+var router22 = Router22();
+var cachedActiveServices = null;
+var lastCacheFetchTime = 0;
+var CACHE_TTL_MS = 60 * 1e3;
+function invalidateSeoServicesCache() {
+  cachedActiveServices = null;
+  lastCacheFetchTime = 0;
+}
+onRepairPricesChanged(() => {
+  invalidateSeoServicesCache();
+});
+async function getAuthoritativeActiveServices() {
+  const now = Date.now();
+  if (cachedActiveServices && now - lastCacheFetchTime < CACHE_TTL_MS) {
+    return cachedActiveServices;
+  }
+  const { data, error } = await supabaseAdmin.from("RepairPrice").select("*").eq("status", "ACTIVE").order("brand", { ascending: true }).order("model", { ascending: true });
+  if (error) {
+    console.error("[SEO ROUTER SUPABASE QUERY ERROR]", error);
+    if (cachedActiveServices) {
+      return cachedActiveServices;
+    }
+    throw new Error("Database service retrieval failed");
+  }
+  const parsed = (data || []).map((item) => parseServiceItem(item, true));
+  cachedActiveServices = parsed;
+  lastCacheFetchTime = now;
+  return parsed;
+}
+function getHtmlTemplate() {
+  const prodPath = path10.join(process.cwd(), "dist", "index.html");
+  if (fs10.existsSync(prodPath)) {
+    return fs10.readFileSync(prodPath, "utf8");
+  }
+  const devPath = path10.join(process.cwd(), "index.html");
+  if (fs10.existsSync(devPath)) {
+    return fs10.readFileSync(devPath, "utf8");
+  }
+  throw new Error("HTML template not found");
+}
+function injectSeoIntoTemplate(template, options) {
+  const { title, description, canonicalUrl, noindex = false, jsonLd, bodyHtml } = options;
+  let html = template;
+  const escapedTitle = escapeHtml2(title);
+  if (html.includes("<title>")) {
+    html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${escapedTitle}</title>`);
+  } else {
+    html = html.replace("</head>", `  <title>${escapedTitle}</title>
+</head>`);
+  }
+  const robotsValue = noindex ? "noindex, nofollow" : "index, follow, max-snippet:-1, max-image-preview:large";
+  const metaTags = [
+    `<meta name="description" content="${escapeHtml2(description)}" />`,
+    `<meta name="robots" content="${robotsValue}" />`,
+    `<link rel="canonical" href="${escapeHtml2(canonicalUrl)}" />`,
+    `<meta property="og:title" content="${escapedTitle}" />`,
+    `<meta property="og:description" content="${escapeHtml2(description)}" />`,
+    `<meta property="og:url" content="${escapeHtml2(canonicalUrl)}" />`,
+    `<meta property="og:type" content="website" />`,
+    `<meta property="og:image" content="${SITE_URL}/mts-logo.jpg" />`,
+    `<meta property="og:site_name" content="${escapeHtml2(BUSINESS_NAME)}" />`,
+    `<meta name="twitter:card" content="summary_large_image" />`,
+    `<meta name="twitter:title" content="${escapedTitle}" />`,
+    `<meta name="twitter:description" content="${escapeHtml2(description)}" />`,
+    `<meta name="twitter:image" content="${SITE_URL}/mts-logo.jpg" />`
+  ];
+  if (jsonLd) {
+    metaTags.push(`<script type="application/ld+json">${safeJsonLdString(jsonLd)}</script>`);
+  }
+  const metaString = metaTags.join("\n    ");
+  html = html.replace(/<meta name="description"[^>]*>/gi, "");
+  html = html.replace(/<meta name="robots"[^>]*>/gi, "");
+  html = html.replace(/<link rel="canonical"[^>]*>/gi, "");
+  html = html.replace(/<meta property="og:title"[^>]*>/gi, "");
+  html = html.replace(/<meta property="og:description"[^>]*>/gi, "");
+  html = html.replace(/<meta property="og:url"[^>]*>/gi, "");
+  html = html.replace(/<meta name="twitter:[^>]*>/gi, "");
+  html = html.replace("</head>", `    ${metaString}
+  </head>`);
+  if (html.includes('<div id="root"></div>')) {
+    html = html.replace('<div id="root"></div>', `<div id="root">${bodyHtml}</div>`);
+  } else if (html.includes('<div id="root">')) {
+    html = html.replace(/<div id="root">[\s\S]*?<\/div>/, `<div id="root">${bodyHtml}</div>`);
+  }
+  return html;
+}
+router22.get("/sitemap.xml", async (req, res) => {
+  try {
+    const services = await getAuthoritativeActiveServices();
+    const { slugToService } = buildSlugMap(services);
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const staticUrls = [
+      { loc: `${SITE_URL}/`, priority: "1.0", changefreq: "weekly" },
+      { loc: `${SITE_URL}/services`, priority: "0.9", changefreq: "daily" },
+      { loc: `${SITE_URL}/about`, priority: "0.8", changefreq: "monthly" },
+      { loc: `${SITE_URL}/contact`, priority: "0.8", changefreq: "monthly" },
+      { loc: `${SITE_URL}/track`, priority: "0.7", changefreq: "monthly" },
+      { loc: `${SITE_URL}/shop`, priority: "0.7", changefreq: "weekly" },
+      { loc: `${SITE_URL}/terms`, priority: "0.4", changefreq: "yearly" },
+      { loc: `${SITE_URL}/privacy`, priority: "0.4", changefreq: "yearly" }
+    ];
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>
+`;
+    xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+`;
+    for (const item of staticUrls) {
+      xml += `  <url>
+`;
+      xml += `    <loc>${escapeHtml2(item.loc)}</loc>
+`;
+      xml += `    <lastmod>${nowIso}</lastmod>
+`;
+      xml += `    <changefreq>${item.changefreq}</changefreq>
+`;
+      xml += `    <priority>${item.priority}</priority>
+`;
+      xml += `  </url>
+`;
+    }
+    slugToService.forEach((svc, slug) => {
+      const lastmod = svc.updatedAt ? new Date(svc.updatedAt).toISOString().split("T")[0] : nowIso;
+      xml += `  <url>
+`;
+      xml += `    <loc>${escapeHtml2(`${SITE_URL}/services/${slug}`)}</loc>
+`;
+      xml += `    <lastmod>${lastmod}</lastmod>
+`;
+      xml += `    <changefreq>weekly</changefreq>
+`;
+      xml += `    <priority>0.8</priority>
+`;
+      xml += `  </url>
+`;
+    });
+    xml += `</urlset>`;
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600");
+    return res.status(200).send(xml);
+  } catch (err) {
+    console.error("[SITEMAP GENERATION ERROR]", err);
+    return res.status(500).type("text/plain").send("Failed to generate sitemap.xml");
+  }
+});
+router22.get("/services", async (req, res) => {
+  try {
+    const services = await getAuthoritativeActiveServices();
+    const { slugToService } = buildSlugMap(services);
+    const seoConfig = STATIC_PAGES_SEO["/services"];
+    const template = getHtmlTemplate();
+    let serviceItemsHtml = "";
+    slugToService.forEach((service, slug) => {
+      const priceStr = formatNprPrice(service.price, service.priceType);
+      const device = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ""}`;
+      serviceItemsHtml += `
+        <article style="border:1px solid #e2e8f0; border-radius:12px; padding:16px; margin-bottom:12px;">
+          <h2 style="font-size:18px; margin:0 0 6px 0;">
+            <a href="/services/${escapeHtml2(slug)}" style="color:#0f172a; text-decoration:underline;">
+              ${escapeHtml2(service.serviceName)} - ${escapeHtml2(device)}
+            </a>
+          </h2>
+          <p style="margin:4px 0; color:#475569; font-size:14px;">Brand: <strong>${escapeHtml2(service.brand)}</strong> | Category: <strong>${escapeHtml2(service.category || "Repair")}</strong></p>
+          <p style="margin:4px 0; color:#059669; font-weight:bold; font-size:16px;">Cost: ${escapeHtml2(priceStr)}</p>
+          ${service.estimatedTime ? `<p style="margin:4px 0; color:#64748b; font-size:13px;">Estimated Turnaround: ${escapeHtml2(service.estimatedTime)}</p>` : ""}
+          ${service.problem ? `<p style="margin:4px 0; color:#334155; font-size:13px;">${escapeHtml2(service.problem)}</p>` : ""}
+          <p style="margin:6px 0 0 0;"><a href="/services/${escapeHtml2(slug)}" style="color:#2563eb; font-weight:600;">View full service details &rarr;</a></p>
+        </article>
+      `;
+    });
+    const bodyHtml = `
+      <main style="max-width:960px; margin:0 auto; padding:24px 16px; font-family:system-ui,-apple-system,sans-serif;">
+        <nav aria-label="Breadcrumb" style="font-size:14px; color:#64748b; margin-bottom:16px;">
+          <a href="/" style="color:#64748b; text-decoration:none;">Home</a> &gt; 
+          <span style="color:#0f172a; font-weight:600;">Repair Services</span>
+        </nav>
+        <header style="margin-bottom:24px;">
+          <h1 style="font-size:28px; font-weight:800; color:#0f172a;">${escapeHtml2(seoConfig.title)}</h1>
+          <p style="font-size:16px; color:#475569; margin-top:8px;">${escapeHtml2(seoConfig.description)}</p>
+          <div style="margin-top:12px; font-size:14px; color:#334155;">
+            <strong>Location:</strong> ${escapeHtml2(BUSINESS_ADDRESS.streetAddress)}, ${escapeHtml2(BUSINESS_ADDRESS.addressLocality)} | 
+            <strong>Hotline:</strong> <a href="tel:${BUSINESS_PHONE}" style="color:#059669; font-weight:bold;">${BUSINESS_PHONE}</a> | 
+            <strong>Landline:</strong> ${BUSINESS_LANDLINE}
+          </div>
+        </header>
+        <section>
+          ${serviceItemsHtml}
+        </section>
+      </main>
+    `;
+    const html = injectSeoIntoTemplate(template, {
+      title: seoConfig.title,
+      description: seoConfig.description,
+      canonicalUrl: seoConfig.canonical,
+      jsonLd: getLocalBusinessJsonLd(),
+      bodyHtml
+    });
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=300, s-maxage=600");
+    return res.status(200).send(html);
+  } catch (err) {
+    console.error("[SEO /services ERROR]", err);
+    return res.status(503).send("Authoritative repair service directory is temporarily unavailable.");
+  }
+});
+router22.get("/services/:slug", async (req, res) => {
+  const reqSlug = (req.params.slug || "").trim().toLowerCase();
+  try {
+    const services = await getAuthoritativeActiveServices();
+    const { slugToService } = buildSlugMap(services);
+    const service = slugToService.get(reqSlug);
+    const template = getHtmlTemplate();
+    if (!service) {
+      const notFoundBody = `
+        <main style="max-width:640px; margin:40px auto; padding:24px; text-align:center; font-family:system-ui,-apple-system,sans-serif;">
+          <h1 style="font-size:24px; color:#0f172a;">Repair Service Not Found</h1>
+          <p style="color:#64748b; margin:12px 0 24px;">The repair service slug "${escapeHtml2(reqSlug)}" does not exist in our active database.</p>
+          <p><a href="/services" style="display:inline-block; padding:10px 20px; background:#0f172a; color:#fff; text-decoration:none; border-radius:8px; font-weight:bold;">Browse All Services</a></p>
+        </main>
+      `;
+      const notFoundHtml = injectSeoIntoTemplate(template, {
+        title: `Service Not Found | ${BUSINESS_NAME}`,
+        description: "The requested smartphone repair service could not be found.",
+        canonicalUrl: `${SITE_URL}/services`,
+        noindex: true,
+        bodyHtml: notFoundBody
+      });
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.status(404).send(notFoundHtml);
+    }
+    const title = getServiceSeoTitle(service);
+    const description = getServiceSeoDescription(service);
+    const canonicalUrl = `${SITE_URL}/services/${reqSlug}`;
+    const directAnswer = getServiceDirectAnswer(service);
+    const faqs = getServiceFaqs(service);
+    const pageJsonLd = getServicePageJsonLd(service, reqSlug);
+    const priceDisplay = formatNprPrice(service.price, service.priceType);
+    const fullDeviceName = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ""}`.trim();
+    let faqHtml = "";
+    for (const faq of faqs) {
+      faqHtml += `
+        <div style="margin-top:16px;">
+          <h3 style="font-size:16px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">${escapeHtml2(faq.question)}</h3>
+          <p style="color:#475569; font-size:14px; margin:0; line-height:1.5;">${escapeHtml2(faq.answer)}</p>
+        </div>
+      `;
+    }
+    const bodyHtml = `
+      <main style="max-width:800px; margin:0 auto; padding:32px 16px; font-family:system-ui,-apple-system,sans-serif;">
+        <nav style="font-size:14px; color:#64748b; margin-bottom:16px;">
+          <a href="/" style="color:#64748b; text-decoration:none;">Home</a> &gt; 
+          <a href="/services" style="color:#64748b; text-decoration:none;">Repair Services</a> &gt; 
+          <span style="color:#0f172a; font-weight:600;">${escapeHtml2(service.serviceName)}</span>
+        </nav>
+
+        <article style="background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:24px; margin-bottom:24px;">
+          <div style="display:inline-block; padding:4px 10px; background:#f1f5f9; border-radius:100px; font-size:12px; font-weight:700; color:#334155; margin-bottom:12px;">
+            ${escapeHtml2(service.brand)} &bull; ${escapeHtml2(service.category || "Repair")}
+          </div>
+          <h1 style="font-size:28px; font-weight:800; color:#0f172a; margin:0 0 8px 0; line-height:1.3;">
+            ${escapeHtml2(service.serviceName)} for ${escapeHtml2(fullDeviceName)}
+          </h1>
+          <p style="font-size:16px; color:#475569; margin:0 0 16px 0;">Hardware Device: <strong>${escapeHtml2(fullDeviceName)}</strong></p>
+
+          <div style="background:#0f172a; color:#fff; border-radius:12px; padding:20px; margin:16px 0;">
+            <div style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:#94a3b8;">Verified Laboratory Cost</div>
+            <div style="font-size:28px; font-weight:900; color:#34d399; margin:4px 0;">${escapeHtml2(priceDisplay)}</div>
+            ${service.estimatedTime ? `<div style="font-size:13px; color:#cbd5e1; margin-top:6px;">Estimated Turnaround: <strong>${escapeHtml2(service.estimatedTime)}</strong></div>` : ""}
+          </div>
+
+          <div style="margin:20px 0; padding:16px; background:#eff6ff; border-left:4px solid #3b82f6; border-radius:8px;">
+            <strong style="color:#1e40af; font-size:14px; display:block; margin-bottom:4px;">Diagnostic Overview:</strong>
+            <p style="margin:0; font-size:14px; color:#1e293b; line-height:1.5;">${escapeHtml2(directAnswer)}</p>
+          </div>
+
+          ${service.problem ? `
+            <div style="margin:20px 0;">
+              <h2 style="font-size:18px; font-weight:700; color:#0f172a; margin:0 0 6px 0;">Problem Addressed</h2>
+              <p style="font-size:14px; color:#334155; margin:0; line-height:1.5;">${escapeHtml2(service.problem)}</p>
+            </div>
+          ` : ""}
+
+          <div style="margin:24px 0; padding-top:16px; border-top:1px solid #e2e8f0;">
+            <h2 style="font-size:20px; font-weight:800; color:#0f172a; margin:0 0 12px 0;">Frequently Asked Questions</h2>
+            ${faqHtml}
+          </div>
+
+          <div style="margin-top:24px; padding:16px; background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0; font-size:14px; color:#334155;">
+            <p style="margin:0 0 6px 0;"><strong>Laboratory Location:</strong> ${escapeHtml2(BUSINESS_ADDRESS.streetAddress)}, ${escapeHtml2(BUSINESS_ADDRESS.addressLocality)}, Nepal.</p>
+            <p style="margin:0;"><strong>Hotline Call:</strong> <a href="tel:${BUSINESS_PHONE}" style="color:#059669; font-weight:700;">${BUSINESS_PHONE}</a> | <strong>Landline:</strong> ${BUSINESS_LANDLINE}</p>
+          </div>
+        </article>
+      </main>
+    `;
+    const html = injectSeoIntoTemplate(template, {
+      title,
+      description,
+      canonicalUrl,
+      jsonLd: pageJsonLd,
+      bodyHtml
+    });
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=300, s-maxage=600");
+    return res.status(200).send(html);
+  } catch (err) {
+    console.error(`[SEO /services/${reqSlug} ERROR]`, err);
+    return res.status(503).send("Authoritative repair service details are temporarily unavailable.");
+  }
+});
+router22.get("/about", (req, res) => {
+  try {
+    const seoConfig = STATIC_PAGES_SEO["/about"];
+    const template = getHtmlTemplate();
+    const bodyHtml = `
+      <main style="max-width:800px; margin:0 auto; padding:32px 16px; font-family:system-ui,-apple-system,sans-serif;">
+        <h1 style="font-size:28px; font-weight:800; color:#0f172a; margin:0 0 12px 0;">${escapeHtml2(seoConfig.title)}</h1>
+        <p style="font-size:16px; color:#475569; line-height:1.6;">${escapeHtml2(seoConfig.description)}</p>
+        <section style="margin-top:24px; line-height:1.6; color:#334155; font-size:15px;">
+          <h2 style="font-size:20px; font-weight:700; color:#0f172a; margin:16px 0 8px;">Cleanroom Hardware Repair Facility</h2>
+          <p>MTS Lab is Kathmandu's advanced mobile hardware station specializing in laser screen line repairs, OCA laminations, motherboard IC micro-soldering, and certified hardware restoration.</p>
+          <h2 style="font-size:20px; font-weight:700; color:#0f172a; margin:16px 0 8px;">Address & Contact</h2>
+          <p>${escapeHtml2(BUSINESS_ADDRESS.streetAddress)}, ${escapeHtml2(BUSINESS_ADDRESS.addressLocality)}, Nepal.</p>
+          <p>Phone: <a href="tel:${BUSINESS_PHONE}" style="color:#059669; font-weight:700;">${BUSINESS_PHONE}</a> | Landline: ${BUSINESS_LANDLINE}</p>
+        </section>
+      </main>
+    `;
+    const html = injectSeoIntoTemplate(template, {
+      title: seoConfig.title,
+      description: seoConfig.description,
+      canonicalUrl: seoConfig.canonical,
+      jsonLd: getLocalBusinessJsonLd(),
+      bodyHtml
+    });
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600");
+    return res.status(200).send(html);
+  } catch (err) {
+    console.error("[SEO /about ERROR]", err);
+    return res.status(500).send("Unable to render page");
+  }
+});
+router22.get("/contact", (req, res) => {
+  try {
+    const seoConfig = STATIC_PAGES_SEO["/contact"];
+    const template = getHtmlTemplate();
+    const bodyHtml = `
+      <main style="max-width:800px; margin:0 auto; padding:32px 16px; font-family:system-ui,-apple-system,sans-serif;">
+        <h1 style="font-size:28px; font-weight:800; color:#0f172a; margin:0 0 12px 0;">${escapeHtml2(seoConfig.title)}</h1>
+        <p style="font-size:16px; color:#475569; line-height:1.6;">${escapeHtml2(seoConfig.description)}</p>
+        <section style="margin-top:24px; line-height:1.6; color:#334155; font-size:15px; background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:24px;">
+          <h2 style="font-size:20px; font-weight:700; color:#0f172a; margin:0 0 12px;">Kathmandu Laboratory Hub</h2>
+          <p style="margin:4px 0;"><strong>Address:</strong> ${escapeHtml2(BUSINESS_ADDRESS.streetAddress)}, ${escapeHtml2(BUSINESS_ADDRESS.addressLocality)} 44600, Nepal.</p>
+          <p style="margin:4px 0;"><strong>Hotline Phone:</strong> <a href="tel:${BUSINESS_PHONE}" style="color:#059669; font-weight:700;">${BUSINESS_PHONE}</a></p>
+          <p style="margin:4px 0;"><strong>Landline:</strong> ${BUSINESS_LANDLINE}</p>
+          <p style="margin:4px 0;"><strong>Email:</strong> <a href="mailto:${BUSINESS_EMAIL}" style="color:#2563eb;">${BUSINESS_EMAIL}</a></p>
+          <div style="margin-top:16px; padding-top:12px; border-top:1px solid #e2e8f0;">
+            <p style="margin:2px 0;"><strong>Hours:</strong> Sunday &ndash; Friday: 10:00 AM &ndash; 7:00 PM</p>
+            <p style="margin:2px 0;">Saturday: 10:00 AM &ndash; 6:00 PM</p>
+          </div>
+        </section>
+      </main>
+    `;
+    const html = injectSeoIntoTemplate(template, {
+      title: seoConfig.title,
+      description: seoConfig.description,
+      canonicalUrl: seoConfig.canonical,
+      jsonLd: getLocalBusinessJsonLd(),
+      bodyHtml
+    });
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600");
+    return res.status(200).send(html);
+  } catch (err) {
+    console.error("[SEO /contact ERROR]", err);
+    return res.status(500).send("Unable to render page");
+  }
+});
+var seo_default = router22;
+
 // api/_server/app.ts
 function createApp() {
   const app = express();
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
   app.use(cookieParser());
-  const uploadsDir = path9.join(process.cwd(), "uploads");
-  if (!fs9.existsSync(uploadsDir)) {
+  const uploadsDir = path11.join(process.cwd(), "uploads");
+  if (!fs11.existsSync(uploadsDir)) {
     try {
-      fs9.mkdirSync(uploadsDir, { recursive: true });
+      fs11.mkdirSync(uploadsDir, { recursive: true });
     } catch (_) {
     }
   }
   app.use("/uploads", express.static(uploadsDir));
+  const publicAssetsImagesDir = path11.join(process.cwd(), "public", "assets", "images");
+  if (!fs11.existsSync(publicAssetsImagesDir)) {
+    try {
+      fs11.mkdirSync(publicAssetsImagesDir, { recursive: true });
+    } catch (_) {
+    }
+  }
+  app.use("/assets/images", express.static(publicAssetsImagesDir));
+  app.use("/public/assets/images", express.static(publicAssetsImagesDir));
   app.use("/api/auth", auth_default);
   app.use("/api/users", users_default);
   app.use("/api/user", users_default);
@@ -13465,6 +15814,7 @@ function createApp() {
   app.use("/api/events", events_default);
   app.use("/api/public", public_default);
   app.use("/api", public_default);
+  app.use("/", seo_default);
   app.get("/api/health", (req, res) => {
     res.json({ status: "healthy", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   });

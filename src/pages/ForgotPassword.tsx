@@ -292,7 +292,7 @@ export default function ForgotPassword() {
                             setEmail(e.target.value);
                             if (errorMessage) setErrorMessage(null);
                           }}
-                          className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-xs sm:text-sm font-medium"
+                          className="pl-10 h-12 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all text-base md:text-sm font-medium"
                           required
                           autoFocus
                           autoComplete="email"

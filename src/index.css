@@ -128,3 +128,41 @@
     @apply font-sans;
     }
 }
+
+/* ==========================================================================
+   MTS Lab — iOS Safari & Mobile Viewport Auto-Zoom Prevention
+   ==========================================================================
+   iOS Safari, Chrome for iOS, Edge for iOS, and all WebKit-based mobile
+   browsers automatically trigger an unwanted viewport zoom when an interactive
+   form control is focused IF its computed font-size is below 16px.
+
+   The following rules enforce an authoritative minimum 16px (1rem) computed
+   font size on all text-entry controls on mobile screen widths (< 768px) and
+   iOS touch devices, permanently eliminating unwanted auto-zoom while:
+   1. Preserving normal user-controlled pinch-to-zoom accessibility.
+   2. Preserving compact desktop typography (>= 768px).
+   3. Leaving non-text-entry controls (checkboxes, radios, range sliders, buttons)
+      untouched.
+   ========================================================================== */
+@media screen and (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="hidden"]):not([type="image"]):not([type="file"]),
+  textarea,
+  select,
+  [contenteditable="true"],
+  [contenteditable=""] {
+    font-size: 16px !important;
+  }
+}
+
+/* Extended protection for iOS devices in landscape or tablet touch viewports */
+@supports (-webkit-touch-callout: none) {
+  @media screen and (max-width: 1024px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="hidden"]):not([type="image"]):not([type="file"]),
+    textarea,
+    select,
+    [contenteditable="true"],
+    [contenteditable=""] {
+      font-size: 16px !important;
+    }
+  }
+}

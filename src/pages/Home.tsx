@@ -264,7 +264,7 @@ export default function Home() {
                         placeholder="Device or repair (e.g. S23 Display)..."
                         value={quickSearch}
                         onChange={(e) => setQuickSearch(e.target.value)}
-                        className="h-11 sm:h-12 pl-10 pr-4 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white text-sm font-medium transition-all"
+                        className="h-11 sm:h-12 pl-10 pr-4 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white text-base md:text-sm font-medium transition-all"
                       />
                     </div>
                     <Button
