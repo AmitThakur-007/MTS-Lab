@@ -413,22 +413,22 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-3xl max-h-[88vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl border-slate-200 shadow-2xl p-4 sm:p-7 bg-white">
-        <DialogHeader className="border-b border-slate-100 pb-4">
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-3xl max-h-[88vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl border-slate-200 dark:border-slate-800 shadow-2xl p-4 sm:p-7 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+        <DialogHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center font-bold shrink-0">
+            <div className="w-10 h-10 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center font-bold shrink-0">
               <Edit3 className="h-5 w-5" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <DialogTitle className="text-xl font-black text-slate-900">
+                <DialogTitle className="text-xl font-black text-slate-900 dark:text-slate-100">
                   Edit Repair — #{repair?.repairNumber}
                 </DialogTitle>
-                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                   {repair?.status?.replace(/_/g, ' ')}
                 </span>
               </div>
-              <DialogDescription className="text-xs text-slate-500 mt-0.5">
+              <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Update customer details, physical condition, accessories, and financial estimation.
               </DialogDescription>
             </div>
@@ -438,144 +438,144 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-6 pt-2">
           
           {/* Section 1: Customer Details */}
-          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 bg-slate-50/60">
-            <div className="flex items-center gap-2 text-xs font-black text-slate-900 uppercase tracking-wider">
-              <User className="w-4 h-4 text-blue-600" />
+          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
+            <div className="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+              <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               <span>Customer Identification</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">Full Name *</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Full Name *</Label>
                 <Input
                   value={formData.customerName}
                   onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
                   placeholder="e.g. Ram Sharma"
-                  className="h-10 rounded-xl bg-white border-slate-200 text-xs font-semibold"
+                  className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-semibold"
                   required
                 />
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">Phone Number *</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Phone Number *</Label>
                 <Input
                   value={formData.customerPhone}
                   onChange={(e) => setFormData({ ...formData, customerPhone: formatNepalPhone(e.target.value) })}
                   placeholder="e.g. 9869276668"
-                  className="h-10 rounded-xl bg-white border-slate-200 text-xs font-mono font-bold"
+                  className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-mono font-bold"
                   required
                 />
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">Email Address</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Email Address</Label>
                 <Input
                   type="email"
                   value={formData.customerEmail}
                   onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
                   placeholder="customer@example.com"
-                  className="h-10 rounded-xl bg-white border-slate-200 text-xs"
+                  className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs"
                 />
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">Address / City</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Address / City</Label>
                 <Input
                   value={formData.customerAddress}
                   onChange={(e) => setFormData({ ...formData, customerAddress: e.target.value })}
                   placeholder="e.g. New Road, Kathmandu"
-                  className="h-10 rounded-xl bg-white border-slate-200 text-xs"
+                  className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs"
                 />
               </div>
             </div>
           </div>
 
           {/* Section 2: Device Specification */}
-          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 bg-slate-50/60">
-            <div className="flex items-center gap-2 text-xs font-black text-slate-900 uppercase tracking-wider">
-              <Smartphone className="w-4 h-4 text-indigo-600" />
+          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
+            <div className="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+              <Smartphone className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span>Device Specifications</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">Brand</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Brand</Label>
                 <Select
                   value={formData.deviceBrand}
                   onValueChange={(v) => setFormData({ ...formData, deviceBrand: v })}
                 >
-                  <SelectTrigger className="h-10 rounded-xl bg-white border-slate-200 text-xs font-semibold">
+                  <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-semibold">
                     <SelectValue placeholder="Brand" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    <SelectItem value="apple">Apple iPhone</SelectItem>
-                    <SelectItem value="samsung">Samsung Galaxy</SelectItem>
-                    <SelectItem value="xiaomi">Xiaomi / Redmi / Poco</SelectItem>
-                    <SelectItem value="oneplus">OnePlus</SelectItem>
-                    <SelectItem value="google">Google Pixel</SelectItem>
-                    <SelectItem value="nothing">Nothing Phone</SelectItem>
-                    <SelectItem value="oppo">Oppo</SelectItem>
-                    <SelectItem value="vivo">Vivo</SelectItem>
-                    <SelectItem value="realme">Realme</SelectItem>
-                    <SelectItem value="other">Other Brand</SelectItem>
+                  <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <SelectItem value="apple" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Apple iPhone</SelectItem>
+                    <SelectItem value="samsung" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Samsung Galaxy</SelectItem>
+                    <SelectItem value="xiaomi" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Xiaomi / Redmi / Poco</SelectItem>
+                    <SelectItem value="oneplus" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">OnePlus</SelectItem>
+                    <SelectItem value="google" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Google Pixel</SelectItem>
+                    <SelectItem value="nothing" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Nothing Phone</SelectItem>
+                    <SelectItem value="oppo" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Oppo</SelectItem>
+                    <SelectItem value="vivo" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Vivo</SelectItem>
+                    <SelectItem value="realme" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Realme</SelectItem>
+                    <SelectItem value="other" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Other Brand</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs font-bold text-slate-700">Model Name *</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Model Name *</Label>
                 <Input
                   value={formData.deviceModel}
                   onChange={(e) => setFormData({ ...formData, deviceModel: e.target.value })}
                   placeholder="e.g. iPhone 15 Pro Max"
-                  className="h-10 rounded-xl bg-white border-slate-200 text-xs font-semibold"
+                  className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-semibold"
                   required
                 />
               </div>
 
               <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs font-bold text-slate-700">IMEI / Serial (Optional)</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">IMEI / Serial (Optional)</Label>
                 <Input
                   value={formData.imeiNumber}
                   onChange={(e) => setFormData({ ...formData, imeiNumber: e.target.value })}
                   placeholder="15-digit IMEI"
-                  className="h-10 rounded-xl bg-white border-slate-200 text-xs font-mono"
+                  className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-mono"
                 />
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">Device Color</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Device Color</Label>
                 <Input
                   value={formData.deviceColor}
                   onChange={(e) => setFormData({ ...formData, deviceColor: e.target.value })}
                   placeholder="e.g. Black Titanium"
-                  className="h-10 rounded-xl bg-white border-slate-200 text-xs"
+                  className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs"
                 />
               </div>
             </div>
 
             {/* Problem Description */}
             <div className="space-y-1 pt-1">
-              <Label className="text-xs font-bold text-slate-700">Problem Description *</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Problem Description *</Label>
               <Textarea
                 rows={2}
                 value={formData.problemDescription}
                 onChange={(e) => setFormData({ ...formData, problemDescription: e.target.value })}
                 placeholder="Describe fault..."
-                className="rounded-xl bg-white border-slate-200 text-xs font-medium"
+                className="rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-medium"
                 required
               />
             </div>
           </div>
 
           {/* Section 3: Device Physical Condition Checklist */}
-          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 bg-slate-50/60">
+          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-              <div className="flex items-center gap-2 text-xs font-black text-slate-900 uppercase tracking-wider">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <div className="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Device Physical Condition Upon Intake</span>
               </div>
-              <span className="text-[10px] text-slate-500 font-medium">Select all observed conditions (Good is exclusive)</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Select all observed conditions (Good is exclusive)</span>
             </div>
 
             <div className="flex flex-wrap gap-2 pt-1">
@@ -593,14 +593,14 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
                     className={cn(
                       "inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all duration-150 cursor-pointer select-none active:scale-[0.98]",
                       isSelected 
-                        ? "bg-slate-900 text-white border-slate-900 shadow-sm ring-2 ring-slate-900/10" 
-                        : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/80 shadow-2xs"
+                        ? "bg-slate-900 dark:bg-indigo-600 text-white border-slate-900 dark:border-indigo-600 shadow-sm ring-2 ring-slate-900/10 dark:ring-indigo-600/20" 
+                        : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100/80 dark:hover:bg-slate-800 shadow-2xs"
                     )}
                   >
                     {isSelected ? (
                       <Check className="w-3.5 h-3.5 text-white shrink-0 stroke-[2.5] pointer-events-none" />
                     ) : (
-                      <Circle className="w-3.5 h-3.5 text-slate-300 shrink-0 stroke-[2] pointer-events-none" />
+                      <Circle className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 shrink-0 stroke-[2] pointer-events-none" />
                     )}
                     <span className="pointer-events-none">{c}</span>
                   </button>
@@ -613,7 +613,7 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
                 placeholder="Specify other physical damage..."
                 value={otherConditionText}
                 onChange={(e) => setOtherConditionText(e.target.value)}
-                className="h-10 rounded-xl bg-white border-slate-300 text-xs mt-2"
+                className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs mt-2"
               />
             )}
 
@@ -622,19 +622,19 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
                 placeholder="Additional Condition Notes (e.g. back camera lens scratched)"
                 value={formData.conditionNotes}
                 onChange={(e) => setFormData({ ...formData, conditionNotes: e.target.value })}
-                className="h-10 rounded-xl bg-white border-slate-200 text-xs"
+                className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs"
               />
             </div>
           </div>
 
           {/* Section 4: Accessories Received Checklist */}
-          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 bg-slate-50/60">
+          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-              <div className="flex items-center gap-2 text-xs font-black text-slate-900 uppercase tracking-wider">
-                <Zap className="w-4 h-4 text-amber-600" />
+              <div className="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                <Zap className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                 <span>Accessories Received with Device</span>
               </div>
-              <span className="text-[10px] text-slate-500 font-medium">Recorded for accountability (No Accessories is exclusive)</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Recorded for accountability (No Accessories is exclusive)</span>
             </div>
 
             <div className="flex flex-wrap gap-2 pt-1">
@@ -653,13 +653,13 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
                       "inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all duration-150 cursor-pointer select-none active:scale-[0.98]",
                       isSelected 
                         ? "bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-600/10" 
-                        : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/80 shadow-2xs"
+                        : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100/80 dark:hover:bg-slate-800 shadow-2xs"
                     )}
                   >
                     {isSelected ? (
                       <Check className="w-3.5 h-3.5 text-white shrink-0 stroke-[2.5] pointer-events-none" />
                     ) : (
-                      <Circle className="w-3.5 h-3.5 text-slate-300 shrink-0 stroke-[2] pointer-events-none" />
+                      <Circle className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 shrink-0 stroke-[2] pointer-events-none" />
                     )}
                     <span className="pointer-events-none">{acc}</span>
                   </button>
@@ -672,78 +672,78 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
                 placeholder="Specify other accessory received (e.g. Stylus pen, MagSafe wallet)..."
                 value={otherAccessoryText}
                 onChange={(e) => setOtherAccessoryText(e.target.value)}
-                className="h-10 rounded-xl bg-white border-slate-300 text-xs mt-2"
+                className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs mt-2"
               />
             )}
           </div>
 
           {/* Section 5: Financials & Delivery Date */}
-          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 bg-slate-50/60">
-            <div className="flex items-center gap-2 text-xs font-black text-slate-900 uppercase tracking-wider">
-              <Banknote className="w-4 h-4 text-emerald-600" />
+          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
+            <div className="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+              <Banknote className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span>Repair Pricing & Financials</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">Estimated Cost (Rs.)</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Estimated Cost (Rs.)</Label>
                 <Input
                   type="number"
                   placeholder="Leave blank if pending"
                   value={formData.estimatedCost}
                   onChange={(e) => setFormData({ ...formData, estimatedCost: e.target.value })}
-                  className="h-10 rounded-xl bg-white border-slate-200 font-mono font-bold text-xs"
+                  className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono font-bold text-xs"
                 />
-                <span className="text-[10px] text-slate-400 block">Blank = Unspecified</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 block">Blank = Unspecified</span>
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">Advance Deposit (Rs.)</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Advance Deposit (Rs.)</Label>
                 <Input
                   type="number"
                   placeholder="0"
                   value={formData.advancePaid}
                   onChange={(e) => setFormData({ ...formData, advancePaid: e.target.value })}
-                  className="h-10 rounded-xl bg-white border-slate-200 font-mono font-bold text-xs text-emerald-700"
+                  className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 font-mono font-bold text-xs text-emerald-700 dark:text-emerald-400"
                 />
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">Payment Status</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payment Status</Label>
                 <Select
                   value={formData.paymentStatus}
                   onValueChange={(v) => setFormData({ ...formData, paymentStatus: v })}
                 >
-                  <SelectTrigger className="h-10 rounded-xl bg-white border-slate-200 text-xs font-semibold">
+                  <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-semibold">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    <SelectItem value="UNPAID">UNPAID</SelectItem>
-                    <SelectItem value="PARTIAL">PARTIAL</SelectItem>
-                    <SelectItem value="PAID">PAID</SelectItem>
+                  <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <SelectItem value="UNPAID" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">UNPAID</SelectItem>
+                    <SelectItem value="PARTIAL" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">PARTIAL</SelectItem>
+                    <SelectItem value="PAID" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">PAID</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">Est. Ready Date</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Est. Ready Date</Label>
                 <Input
                   type="date"
                   value={formData.expectedCompletionDate}
                   onChange={(e) => setFormData({ ...formData, expectedCompletionDate: e.target.value })}
-                  className="h-10 rounded-xl bg-white border-slate-200 text-xs"
+                  className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs"
                 />
               </div>
             </div>
 
-            <div className="space-y-2 pt-2 border-t border-slate-200/80">
-              <Label className="text-xs font-black text-slate-800 uppercase tracking-wider">Queue Priority Level</Label>
+            <div className="space-y-2 pt-2 border-t border-slate-200/80 dark:border-slate-700/80">
+              <Label className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">Queue Priority Level</Label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
-                  { value: 'NORMAL', label: 'Normal', emoji: '⚪', color: 'border-slate-300 bg-slate-50 text-slate-700' },
-                  { value: 'MEDIUM', label: 'Medium', emoji: '🟡', color: 'border-yellow-300 bg-yellow-50 text-yellow-900' },
-                  { value: 'HIGH', label: 'High', emoji: '🟠', color: 'border-amber-300 bg-amber-50 text-amber-900' },
-                  { value: 'URGENT', label: 'Urgent', emoji: '🔴', color: 'border-rose-300 bg-rose-50 text-rose-900' },
+                  { value: 'NORMAL', label: 'Normal', emoji: '⚪', color: 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300' },
+                  { value: 'MEDIUM', label: 'Medium', emoji: '🟡', color: 'border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-950/40 text-yellow-900 dark:text-yellow-300' },
+                  { value: 'HIGH', label: 'High', emoji: '🟠', color: 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300' },
+                  { value: 'URGENT', label: 'Urgent', emoji: '🔴', color: 'border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-950/40 text-rose-900 dark:text-rose-300' },
                 ].map((p) => {
                   const isSel = (formData.priority || 'NORMAL') === p.value;
                   return (
@@ -757,7 +757,7 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
                         isSel && p.value === 'URGENT' && "bg-rose-600 text-white border-rose-600 shadow-sm ring-2 ring-rose-600/20",
                         isSel && p.value === 'HIGH' && "bg-amber-500 text-slate-950 font-extrabold border-amber-500 shadow-sm ring-2 ring-amber-500/20",
                         isSel && p.value === 'MEDIUM' && "bg-yellow-500 text-slate-950 font-extrabold border-yellow-500 shadow-sm ring-2 ring-yellow-500/20",
-                        isSel && p.value === 'NORMAL' && "bg-slate-900 text-white border-slate-900 shadow-sm ring-2 ring-slate-900/20"
+                        isSel && p.value === 'NORMAL' && "bg-slate-900 dark:bg-indigo-600 text-white border-slate-900 dark:border-indigo-600 shadow-sm ring-2 ring-slate-900/20 dark:ring-indigo-600/20"
                       )}
                     >
                       <span>{p.emoji}</span>
@@ -769,24 +769,24 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
             </div>
 
             <div className="space-y-1 pt-1">
-              <Label className="text-xs font-bold text-slate-700">Internal Lab Remarks</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Internal Lab Remarks</Label>
               <Input
                 placeholder="Optional internal remarks"
                 value={formData.remarks}
                 onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-                className="h-10 rounded-xl bg-white border-slate-200 text-xs"
+                className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs"
               />
             </div>
           </div>
 
           {/* Section 6: Battery Warranty Option */}
-          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 bg-slate-50/60">
+          <div className="space-y-3 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-              <div className="flex items-center gap-2 text-xs font-black text-slate-900 uppercase tracking-wider">
-                <BatteryCharging className="w-4 h-4 text-emerald-600" />
+              <div className="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                <BatteryCharging className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Battery Warranty</span>
               </div>
-              <span className="text-[10px] text-slate-500 font-medium">Does this repair service include a warranted battery replacement?</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Does this repair service include a warranted battery replacement?</span>
             </div>
 
             <div className="flex flex-wrap gap-2.5 pt-1">
@@ -800,14 +800,14 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
                 className={cn(
                   "inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition-all duration-150 cursor-pointer select-none active:scale-[0.98]",
                   !hasBatteryWarranty 
-                    ? "bg-slate-900 text-white border-slate-900 shadow-sm ring-2 ring-slate-900/10" 
-                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/80 shadow-2xs"
+                    ? "bg-slate-900 dark:bg-indigo-600 text-white border-slate-900 dark:border-indigo-600 shadow-sm ring-2 ring-slate-900/10 dark:ring-indigo-600/20" 
+                    : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100/80 dark:hover:bg-slate-800 shadow-2xs"
                 )}
               >
                 {!hasBatteryWarranty ? (
                   <Check className="w-3.5 h-3.5 text-white shrink-0 stroke-[2.5] pointer-events-none" />
                 ) : (
-                  <Circle className="w-3.5 h-3.5 text-slate-300 shrink-0 stroke-[2] pointer-events-none" />
+                  <Circle className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 shrink-0 stroke-[2] pointer-events-none" />
                 )}
                 <span className="pointer-events-none">No Battery Warranty</span>
               </button>
@@ -823,13 +823,13 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
                   "inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition-all duration-150 cursor-pointer select-none active:scale-[0.98]",
                   hasBatteryWarranty 
                     ? "bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-600/10" 
-                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/80 shadow-2xs"
+                    : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100/80 dark:hover:bg-slate-800 shadow-2xs"
                 )}
               >
                 {hasBatteryWarranty ? (
                   <Check className="w-3.5 h-3.5 text-white shrink-0 stroke-[2.5] pointer-events-none" />
                 ) : (
-                  <Circle className="w-3.5 h-3.5 text-slate-300 shrink-0 stroke-[2] pointer-events-none" />
+                  <Circle className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 shrink-0 stroke-[2] pointer-events-none" />
                 )}
                 <span className="pointer-events-none">Battery Replacement Warranty</span>
               </button>
@@ -838,49 +838,49 @@ export const EditRepairModal: React.FC<EditRepairModalProps> = ({
             {hasBatteryWarranty && (
               <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in duration-200">
                 <div className="space-y-1">
-                  <Label className="text-[11px] font-bold text-slate-700">Warranty Duration</Label>
+                  <Label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Warranty Duration</Label>
                   <Select
                     value={batteryWarrantyPeriod}
                     onValueChange={(v) => setBatteryWarrantyPeriod(v)}
                   >
-                    <SelectTrigger className="h-10 rounded-xl bg-white border-slate-200 text-xs font-semibold">
+                    <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-semibold">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="6_MONTHS">6 Months Replacement Warranty</SelectItem>
-                      <SelectItem value="1_YEAR">1 Year (12 Months) Extended Warranty</SelectItem>
-                      <SelectItem value="2_YEARS">2 Years (24 Months) Extended Warranty</SelectItem>
+                    <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                      <SelectItem value="6_MONTHS" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">6 Months Replacement Warranty</SelectItem>
+                      <SelectItem value="1_YEAR" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">1 Year (12 Months) Extended Warranty</SelectItem>
+                      <SelectItem value="2_YEARS" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">2 Years (24 Months) Extended Warranty</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-[11px] font-bold text-slate-700">Battery Type</Label>
+                  <Label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Battery Type</Label>
                   <Input
                     value={batteryType}
                     onChange={(e) => setBatteryType(e.target.value)}
                     placeholder="e.g. Original Replacement Battery"
-                    className="h-10 rounded-xl bg-white border-slate-200 text-xs font-medium"
+                    className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-medium"
                   />
                 </div>
               </div>
             )}
           </div>
 
-          <DialogFooter className="border-t border-slate-100 pt-4 gap-2 sm:gap-0">
+          <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4 gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={loading}
-              className="rounded-xl h-10 text-xs font-bold border-slate-200"
+              className="rounded-xl h-10 text-xs font-bold border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={loading}
-              className="rounded-xl h-10 text-xs font-bold bg-slate-900 hover:bg-black text-white px-6 shadow-sm"
+              className="rounded-xl h-10 text-xs font-bold bg-slate-900 hover:bg-black dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white px-6 shadow-sm"
             >
               {loading ? (
                 <>

@@ -94,23 +94,23 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-indigo-600" />
+          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             Edit / Correct Attendance Record
           </DialogTitle>
-          <DialogDescription className="text-xs text-slate-500">
+          <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
             Authoritative update for{' '}
-            <strong className="text-slate-800">{record.name || record.user?.name || 'Staff Member'}</strong>{' '}
-            on <strong className="text-slate-800">{record.date}</strong>.
+            <strong className="text-slate-800 dark:text-slate-200">{record.name || record.user?.name || 'Staff Member'}</strong>{' '}
+            on <strong className="text-slate-800 dark:text-slate-200">{record.date}</strong>.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           {/* Status Selector */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-slate-700">Attendance Status</Label>
+            <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Attendance Status</Label>
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="h-9 text-xs bg-slate-50 border-slate-200 rounded-xl">
+              <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl">
                 <SelectValue placeholder="Select Status" />
               </SelectTrigger>
               <SelectContent>
@@ -124,36 +124,36 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
 
           {/* Check-In Time */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-slate-700">Check-In Time (NPT)</Label>
+            <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Check-In Time (NPT)</Label>
             <Input
               type="text"
               value={checkInTime}
               onChange={(e) => setCheckInTime(e.target.value)}
               placeholder="e.g. 10:12:00 or 10:15 AM"
-              className="h-9 text-xs bg-slate-50 border-slate-200 rounded-xl font-mono"
+              className="h-9 text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl font-mono"
             />
           </div>
 
           {/* Notes / Remarks */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-slate-700">Internal Notes (Optional)</Label>
+            <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Internal Notes (Optional)</Label>
             <Input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Approved remote diagnostic shift"
-              className="h-9 text-xs bg-slate-50 border-slate-200 rounded-xl"
+              className="h-9 text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl"
             />
           </div>
 
           {/* Correction Reason */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-slate-700">Correction Reason (For Audit Log)</Label>
+            <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Correction Reason (For Audit Log)</Label>
             <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Explain why this record is being updated..."
               rows={2}
-              className="text-xs bg-slate-50 border-slate-200 rounded-xl resize-none"
+              className="text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl resize-none"
             />
           </div>
 
@@ -163,7 +163,7 @@ export const EditRecordModal: React.FC<EditRecordModalProps> = ({
               variant="outline"
               size="sm"
               onClick={onClose}
-              className="h-9 rounded-xl border-slate-200 text-xs font-bold"
+              className="h-9 rounded-xl border-slate-200 dark:border-slate-700 text-xs font-bold dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Cancel
             </Button>
@@ -219,14 +219,14 @@ export const StaffHistoryModal: React.FC<StaffHistoryModalProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col rounded-3xl p-0 overflow-hidden">
-        <DialogHeader className="p-6 border-b border-slate-100 bg-slate-50/50">
+        <DialogHeader className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <DialogTitle className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <User className="w-5 h-5 text-indigo-600" />
+              <DialogTitle className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <User className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                 {staffName} — Monthly Attendance
               </DialogTitle>
-              <DialogDescription className="text-xs text-slate-500 mt-0.5">
+              <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Complete daily breakdown for {selectedMonth}.
               </DialogDescription>
             </div>
@@ -235,34 +235,34 @@ export const StaffHistoryModal: React.FC<StaffHistoryModalProps> = ({
               type="month"
               value={selectedMonth}
               onChange={(e) => onMonthChange(e.target.value)}
-              className="h-8 px-2 text-xs font-bold bg-white border border-slate-200 rounded-lg shadow-2xs"
+              className="h-8 px-2 text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg shadow-2xs"
             />
           </div>
         </DialogHeader>
 
         {/* Quick KPI Bar */}
-        <div className="grid grid-cols-3 gap-3 p-4 bg-white border-b border-slate-100 text-center">
-          <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-100">
-            <div className="text-[10px] font-bold text-emerald-800 uppercase">Days Present</div>
-            <div className="text-lg font-black text-emerald-950">{stats.presentCount}</div>
+        <div className="grid grid-cols-3 gap-3 p-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 text-center">
+          <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-100 dark:border-emerald-800">
+            <div className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase">Days Present</div>
+            <div className="text-lg font-black text-emerald-950 dark:text-emerald-100">{stats.presentCount}</div>
           </div>
-          <div className="p-2 bg-rose-50 rounded-xl border border-rose-100">
-            <div className="text-[10px] font-bold text-rose-800 uppercase">Days Absent</div>
-            <div className="text-lg font-black text-rose-950">{stats.absentCount}</div>
+          <div className="p-2 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-100 dark:border-rose-800">
+            <div className="text-[10px] font-bold text-rose-800 dark:text-rose-300 uppercase">Days Absent</div>
+            <div className="text-lg font-black text-rose-950 dark:text-rose-100">{stats.absentCount}</div>
           </div>
-          <div className="p-2 bg-indigo-50 rounded-xl border border-indigo-100">
-            <div className="text-[10px] font-bold text-indigo-800 uppercase">Monthly Rate</div>
-            <div className="text-lg font-black text-indigo-950">
+          <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-800">
+            <div className="text-[10px] font-bold text-indigo-800 dark:text-indigo-300 uppercase">Monthly Rate</div>
+            <div className="text-lg font-black text-indigo-950 dark:text-indigo-100">
               {stats.attendanceRate !== null ? `${stats.attendanceRate}%` : '100%'}
             </div>
           </div>
         </div>
 
         {/* Log List */}
-        <div className="flex-1 overflow-y-auto p-4 divide-y divide-slate-100">
+        <div className="flex-1 overflow-y-auto p-4 divide-y divide-slate-100 dark:divide-slate-800">
           {isLoading ? (
             <div className="p-8 text-center text-slate-400 text-xs font-medium">
-              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
+              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600 dark:text-indigo-400" />
               Loading staff calendar...
             </div>
           ) : dailyLogs.length === 0 ? (
@@ -278,14 +278,14 @@ export const StaffHistoryModal: React.FC<StaffHistoryModalProps> = ({
                     <span
                       className={cn(
                         'w-8 h-8 rounded-lg flex flex-col items-center justify-center font-mono font-bold text-[10px]',
-                        isSat ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-700'
+                        isSat ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                       )}
                     >
                       <span>{log.dayOfWeek}</span>
                       <span>{log.date.split('-')[2]}</span>
                     </span>
                     <div>
-                      <div className="font-bold text-slate-800">{log.date}</div>
+                      <div className="font-bold text-slate-800 dark:text-slate-100">{log.date}</div>
                       {log.record?.formattedCheckInTime && (
                         <div className="text-[10px] text-slate-400 font-mono">
                           Check-in: {log.record.formattedCheckInTime}
@@ -296,27 +296,27 @@ export const StaffHistoryModal: React.FC<StaffHistoryModalProps> = ({
 
                   <div>
                     {log.status === 'PRESENT' && (
-                      <Badge className="bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 text-[11px] font-bold">
+                      <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-bold">
                         PRESENT
                       </Badge>
                     )}
                     {log.status === 'LATE' && (
-                      <Badge className="bg-amber-500/10 text-amber-700 border border-amber-500/20 text-[11px] font-bold">
+                      <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 text-[11px] font-bold">
                         LATE
                       </Badge>
                     )}
                     {log.status === 'HALF_DAY' && (
-                      <Badge className="bg-sky-500/10 text-sky-700 border border-sky-500/20 text-[11px] font-bold">
+                      <Badge className="bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20 text-[11px] font-bold">
                         HALF DAY
                       </Badge>
                     )}
                     {log.status === 'ABSENT' && (
-                      <Badge className="bg-rose-500/10 text-rose-700 border border-rose-500/20 text-[11px] font-bold">
+                      <Badge className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20 text-[11px] font-bold">
                         ABSENT
                       </Badge>
                     )}
                     {log.status === 'NOT_MARKED' && !log.isFuture && (
-                      <Badge className="bg-slate-100 text-slate-500 border border-slate-200 text-[11px] font-bold">
+                      <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 text-[11px] font-bold">
                         NOT MARKED
                       </Badge>
                     )}
@@ -330,13 +330,13 @@ export const StaffHistoryModal: React.FC<StaffHistoryModalProps> = ({
           )}
         </div>
 
-        <DialogFooter className="p-4 border-t border-slate-100 bg-slate-50/50">
+        <DialogFooter className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={onClose}
-            className="h-9 px-4 rounded-xl border-slate-200 text-xs font-bold"
+            className="h-9 px-4 rounded-xl border-slate-200 dark:border-slate-700 text-xs font-bold dark:text-slate-200 dark:hover:bg-slate-800"
           >
             Close
           </Button>
@@ -368,23 +368,23 @@ export const BulkMarkModal: React.FC<BulkMarkModalProps> = ({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+          <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             Mark All Staff Present
           </DialogTitle>
-          <DialogDescription className="text-xs text-slate-500">
-            This will record attendance as <strong className="text-emerald-700">PRESENT</strong> for all{' '}
-            <strong className="text-slate-800">{totalStaff} active staff members</strong> for{' '}
-            <strong className="text-slate-800">{targetDate}</strong>.
+          <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
+            This will record attendance as <strong className="text-emerald-700 dark:text-emerald-400">PRESENT</strong> for all{' '}
+            <strong className="text-slate-800 dark:text-slate-200">{totalStaff} active staff members</strong> for{' '}
+            <strong className="text-slate-800 dark:text-slate-200">{targetDate}</strong>.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 space-y-1">
+        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 space-y-1">
           <div className="font-bold flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             Instant Batch Attendance Confirmation
           </div>
-          <p className="text-[11px] leading-relaxed">
+          <p className="text-[11px] leading-relaxed text-emerald-700 dark:text-emerald-400">
             Existing records for today will be updated to PRESENT. Individual exceptions (Late/Absent) can still be adjusted individually afterwards.
           </p>
         </div>
@@ -395,7 +395,7 @@ export const BulkMarkModal: React.FC<BulkMarkModalProps> = ({
             variant="outline"
             size="sm"
             onClick={onClose}
-            className="h-9 rounded-xl border-slate-200 text-xs font-bold"
+            className="h-9 rounded-xl border-slate-200 dark:border-slate-700 text-xs font-bold dark:text-slate-200 dark:hover:bg-slate-800"
           >
             Cancel
           </Button>
@@ -440,23 +440,23 @@ export const PurgeStaffModal: React.FC<PurgeStaffModalProps> = ({
 }) => {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md rounded-2xl border-rose-200">
+      <DialogContent className="sm:max-w-md rounded-2xl border-rose-200 dark:border-rose-900">
         <DialogHeader>
-          <DialogTitle className="text-base font-bold text-rose-900 flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-rose-600" />
+          <DialogTitle className="text-base font-bold text-rose-900 dark:text-rose-200 flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-rose-600 dark:text-rose-400" />
             Permanent Staff Removal (Super Admin)
           </DialogTitle>
-          <DialogDescription className="text-xs text-slate-500">
-            Permanently delete <strong className="text-slate-800">{staffName}</strong> and all associated attendance history records.
+          <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
+            Permanently delete <strong className="text-slate-800 dark:text-slate-200">{staffName}</strong> and all associated attendance history records.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1">
+        <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-800 dark:text-rose-300 space-y-1">
           <div className="font-bold flex items-center gap-1.5">
-            <AlertTriangle className="w-4 h-4 text-rose-600" />
+            <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
             Irreversible Action
           </div>
-          <p className="text-[11px] leading-relaxed">
+          <p className="text-[11px] leading-relaxed text-rose-700 dark:text-rose-400">
             This operation completely cleanses the employee from Staff rosters and all historical attendance databases.
           </p>
         </div>
@@ -467,7 +467,7 @@ export const PurgeStaffModal: React.FC<PurgeStaffModalProps> = ({
             variant="outline"
             size="sm"
             onClick={onClose}
-            className="h-9 rounded-xl border-slate-200 text-xs font-bold"
+            className="h-9 rounded-xl border-slate-200 dark:border-slate-700 text-xs font-bold dark:text-slate-200 dark:hover:bg-slate-800"
           >
             Cancel
           </Button>

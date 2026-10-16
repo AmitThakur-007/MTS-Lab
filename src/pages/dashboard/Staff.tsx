@@ -310,13 +310,13 @@ export function StaffManagementContent() {
   if (currentUser && !isSuperAdmin) {
     return (
       <div className="p-6 max-w-2xl mx-auto my-8">
-        <Card className="p-8 rounded-3xl border border-amber-200 bg-white shadow-xl text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center mx-auto text-amber-600 shadow-sm">
+        <Card className="p-8 rounded-3xl border border-amber-200 dark:border-amber-800/60 bg-white dark:bg-slate-900 shadow-xl text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-100 dark:border-amber-800/60 flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400 shadow-sm">
             <ShieldAlert className="h-8 w-8" />
           </div>
           <div className="space-y-1.5">
-            <h2 className="text-2xl font-black text-slate-900">Access Restricted</h2>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-md mx-auto">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100">Access Restricted</h2>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium max-w-md mx-auto">
               Staff Management and role clearance administration are restricted to Super Administrators. Your current role is <b>{currentUser?.role?.replace(/_/g, ' ')}</b>.
             </p>
           </div>
@@ -324,7 +324,7 @@ export function StaffManagementContent() {
             <Button
               type="button"
               onClick={() => { window.location.href = '/dashboard'; }}
-              className="h-11 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm gap-2 shadow-md shadow-slate-900/10 cursor-pointer"
+              className="h-11 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs sm:text-sm gap-2 shadow-md shadow-slate-900/10 cursor-pointer"
             >
               <ArrowLeft className="h-4 w-4" />
               Return to Overview
@@ -694,17 +694,17 @@ export function StaffManagementContent() {
       )}
 
       {/* Top Header & Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
         <div className="space-y-1">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-md shadow-slate-900/10">
-              <Users className="h-5 w-5 text-indigo-400" />
+            <div className="w-10 h-10 rounded-xl bg-slate-900 dark:bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-slate-900/10">
+              <Users className="h-5 w-5 text-indigo-400 dark:text-white" />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
                 Staff Management
               </h1>
-              <p className="text-xs sm:text-sm font-medium text-slate-500">
+              <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
                 Manage accounts, assign operational roles, and enforce security policies
               </p>
             </div>
@@ -720,9 +720,9 @@ export function StaffManagementContent() {
           <Button 
             type="button"
             onClick={handleOpenAdd}
-            className="h-11 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md shadow-slate-900/10 transition-all active:scale-95 cursor-pointer"
+            className="h-11 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-bold text-sm shadow-md shadow-slate-900/10 transition-all active:scale-95 cursor-pointer"
           >
-            <UserPlus className="mr-2 h-4 w-4 text-indigo-400" />
+            <UserPlus className="mr-2 h-4 w-4 text-indigo-400 dark:text-white" />
             Add Staff Member
           </Button>
         </div>
@@ -730,56 +730,56 @@ export function StaffManagementContent() {
 
       {/* Metric Counters Banner */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
             <Users className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{counts.total}</div>
-            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Staff</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100">{counts.total}</div>
+            <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Staff</div>
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100 dark:border-emerald-800/60">
             <UserCheck className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{counts.active}</div>
-            <div className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Active Staff</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100">{counts.active}</div>
+            <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Active Staff</div>
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
+        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-100 dark:border-rose-800/60">
             <UserX className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{counts.disabled}</div>
-            <div className="text-[11px] font-semibold text-rose-600 uppercase tracking-wider">Deactivated</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100">{counts.disabled}</div>
+            <div className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Deactivated</div>
           </div>
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 border border-purple-100">
+        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-100 dark:border-purple-800/60">
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{counts.admins}</div>
-            <div className="text-[11px] font-semibold text-purple-600 uppercase tracking-wider">Administrators</div>
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100">{counts.admins}</div>
+            <div className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Administrators</div>
           </div>
         </div>
       </div>
 
       {/* Search & Filter Controls */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
         <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
           {/* Search Input */}
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input 
               placeholder="Search by name, email, username, phone, or department..." 
-              className="h-11 pl-10 pr-9 rounded-xl border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white transition-all placeholder:text-slate-400"
+              className="h-11 pl-10 pr-9 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-sm font-medium focus:bg-white dark:focus:bg-slate-900 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -787,7 +787,7 @@ export function StaffManagementContent() {
               <button 
                 type="button"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 cursor-pointer"
                 aria-label="Clear search"
               >
                 <X className="h-3.5 w-3.5" />
@@ -797,13 +797,13 @@ export function StaffManagementContent() {
 
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
             {/* Status Tabs */}
-            <div className="flex items-center p-1 bg-slate-100 rounded-xl text-xs font-bold shrink-0">
+            <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-bold shrink-0">
               <button
                 type="button"
                 onClick={() => setStatusFilter('ALL')}
                 className={cn(
                   "px-3 py-1.5 rounded-lg transition-all cursor-pointer",
-                  statusFilter === 'ALL' ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                  statusFilter === 'ALL' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
                 All ({counts.total})
@@ -813,7 +813,7 @@ export function StaffManagementContent() {
                 onClick={() => setStatusFilter('ACTIVE')}
                 className={cn(
                   "px-3 py-1.5 rounded-lg transition-all cursor-pointer",
-                  statusFilter === 'ACTIVE' ? "bg-white text-emerald-700 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                  statusFilter === 'ACTIVE' ? "bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
                 Active ({counts.active})
@@ -823,7 +823,7 @@ export function StaffManagementContent() {
                 onClick={() => setStatusFilter('DISABLED')}
                 className={cn(
                   "px-3 py-1.5 rounded-lg transition-all cursor-pointer",
-                  statusFilter === 'DISABLED' ? "bg-white text-rose-700 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                  statusFilter === 'DISABLED' ? "bg-white dark:bg-slate-700 text-rose-700 dark:text-rose-400 shadow-xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
                 Deactivated ({counts.disabled})
@@ -833,7 +833,7 @@ export function StaffManagementContent() {
             {/* Role Filter */}
             <div className="w-full sm:w-48 shrink-0">
               <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50/50 text-xs font-bold">
+                <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-slate-100">
                   <SelectValue placeholder="All Roles" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl shadow-xl">
@@ -846,13 +846,13 @@ export function StaffManagementContent() {
             </div>
 
             {/* Desktop View Switcher */}
-            <div className="hidden md:flex items-center p-1 bg-slate-100 rounded-xl text-xs font-bold shrink-0">
+            <div className="hidden md:flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-bold shrink-0">
               <button
                 type="button"
                 onClick={() => setViewMode('table')}
                 className={cn(
                   "p-2 rounded-lg transition-all cursor-pointer",
-                  viewMode === 'table' || viewMode === 'auto' ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                  viewMode === 'table' || viewMode === 'auto' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 )}
                 title="Table View"
               >
@@ -863,7 +863,7 @@ export function StaffManagementContent() {
                 onClick={() => setViewMode('grid')}
                 className={cn(
                   "p-2 rounded-lg transition-all cursor-pointer",
-                  viewMode === 'grid' ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                  viewMode === 'grid' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 )}
                 title="Card Grid View"
               >
@@ -876,13 +876,13 @@ export function StaffManagementContent() {
 
       {/* Main Staff Content */}
       {filteredUsers.length === 0 ? (
-        <Card className="rounded-3xl border border-slate-200/80 bg-white p-12 text-center shadow-sm">
+        <Card className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-12 text-center shadow-sm">
           <div className="flex flex-col items-center justify-center space-y-3 max-w-sm mx-auto">
-            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
               <Users className="h-7 w-7" />
             </div>
-            <h3 className="text-lg font-bold text-slate-900">No Staff Members Found</h3>
-            <p className="text-xs text-slate-500">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">No Staff Members Found</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               {searchTerm || roleFilter !== 'ALL' || statusFilter !== 'ALL'
                 ? "Try adjusting your search criteria or clearing filters to view other team members."
                 : "No personnel accounts are currently registered in the system."}
@@ -897,7 +897,7 @@ export function StaffManagementContent() {
                   setRoleFilter('ALL');
                   setStatusFilter('ALL');
                 }}
-                className="mt-2 text-xs font-bold rounded-xl cursor-pointer"
+                className="mt-2 text-xs font-bold rounded-xl border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
               >
                 Reset Filters
               </Button>
@@ -922,7 +922,7 @@ export function StaffManagementContent() {
               return (
                 <div
                   key={u.id}
-                  className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-sm hover:shadow-md transition-all space-y-3.5 min-w-0 overflow-hidden flex flex-col justify-between"
+                  className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-sm hover:shadow-md transition-all space-y-3.5 min-w-0 overflow-hidden flex flex-col justify-between"
                 >
                   <div className="space-y-3.5 min-w-0">
                     <div className="flex items-start justify-between gap-2.5 sm:gap-3 min-w-0">
@@ -939,10 +939,10 @@ export function StaffManagementContent() {
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h4 className="font-extrabold text-slate-900 text-sm sm:text-base leading-tight truncate" title={displayName}>
+                          <h4 className="font-extrabold text-slate-900 dark:text-slate-100 text-sm sm:text-base leading-tight truncate" title={displayName}>
                             {displayName}
                           </h4>
-                          <div className="flex items-center gap-1 text-xs text-slate-500 font-medium mt-0.5 min-w-0">
+                          <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5 min-w-0">
                             <AtSign className="h-3 w-3 text-slate-400 shrink-0" />
                             <span className="truncate flex-1 min-w-0" title={`@${displayUsername}`}>{displayUsername}</span>
                           </div>
@@ -955,9 +955,9 @@ export function StaffManagementContent() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => handleOpenOperations(u)}
-                        className="h-8 px-2.5 rounded-lg text-slate-700 hover:text-slate-900 hover:bg-slate-100 text-xs font-bold border-slate-200 gap-1 cursor-pointer shrink-0 whitespace-nowrap shadow-2xs"
+                        className="h-8 px-2.5 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold border-slate-200 dark:border-slate-700 gap-1 cursor-pointer shrink-0 whitespace-nowrap shadow-2xs"
                       >
-                        <MoreVertical className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                        <MoreVertical className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
                         <span className="hidden sm:inline">Actions</span>
                       </Button>
                     </div>
@@ -973,36 +973,36 @@ export function StaffManagementContent() {
                         className={cn(
                           "text-[10px] font-extrabold px-2 py-0.5 rounded-lg uppercase tracking-wider border shrink-0",
                           isUserActive 
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                            : "bg-rose-50 text-rose-700 border-rose-200"
+                            ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800" 
+                            : "bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800"
                         )}
                       >
                         {isUserActive ? "Active" : "Locked"}
                       </Badge>
                       {is2FAActive(u) ? (
-                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 shadow-2xs shrink-0">
+                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 flex items-center gap-1 shadow-2xs shrink-0">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                           <span>2FA On</span>
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-slate-100 text-slate-600 border-slate-300 flex items-center gap-1 shrink-0">
+                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 flex items-center gap-1 shrink-0">
                           <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
                           <span>2FA Off</span>
                         </Badge>
                       )}
                       {Boolean(u?.emailVerified) ? (
-                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 shadow-2xs shrink-0">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
+                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 flex items-center gap-1 shadow-2xs shrink-0">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
                           <span>Verified</span>
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1 shrink-0">
-                          <AlertCircle className="h-3 w-3 text-amber-600 shrink-0" />
+                        <Badge variant="outline" className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg border bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 flex items-center gap-1 shrink-0">
+                          <AlertCircle className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
                           <span>Unverified</span>
                         </Badge>
                       )}
                       {u?.department && (
-                        <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1 min-w-0 max-w-full">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1 min-w-0 max-w-full">
                           <Building2 className="h-3 w-3 text-slate-400 shrink-0" />
                           <span className="truncate">{u.department}</span>
                         </span>
@@ -1010,7 +1010,7 @@ export function StaffManagementContent() {
                     </div>
 
                     {/* Contact Info */}
-                    <div className="space-y-1.5 text-xs text-slate-600 pt-1 border-t border-slate-100 min-w-0">
+                    <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300 pt-1 border-t border-slate-100 dark:border-slate-800 min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
                         <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                         <span className="truncate flex-1 min-w-0" title={u?.email || 'No email registered'}>
@@ -1033,7 +1033,7 @@ export function StaffManagementContent() {
                       variant="outline"
                       size="sm"
                       onClick={() => handleOpenView(u)}
-                      className="h-9 px-2 sm:px-3 text-xs font-bold rounded-xl text-slate-700 hover:text-slate-900 border-slate-200 cursor-pointer min-w-0 overflow-hidden"
+                      className="h-9 px-2 sm:px-3 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer min-w-0 overflow-hidden"
                     >
                       <Eye className="mr-1.5 h-3.5 w-3.5 text-indigo-500 shrink-0" />
                       <span className="truncate">View Profile</span>
@@ -1043,7 +1043,7 @@ export function StaffManagementContent() {
                       variant="outline"
                       size="sm"
                       onClick={() => handleOpenEdit(u)}
-                      className="h-9 px-2 sm:px-3 text-xs font-bold rounded-xl text-slate-700 hover:text-slate-900 border-slate-200 cursor-pointer min-w-0 overflow-hidden"
+                      className="h-9 px-2 sm:px-3 text-xs font-bold rounded-xl text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer min-w-0 overflow-hidden"
                     >
                       <Edit3 className="mr-1.5 h-3.5 w-3.5 text-slate-500 shrink-0" />
                       <span className="truncate">Edit Profile</span>
@@ -1056,29 +1056,29 @@ export function StaffManagementContent() {
 
           {/* 2. DESKTOP RESPONSIVE TABLE */}
           <div className={cn(
-            "bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden",
+            "bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden",
             viewMode === 'grid' ? "hidden" : "hidden md:block"
           )}>
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="bg-slate-50/80 border-b border-slate-200">
+                <TableHeader className="bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4">
+                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 px-6 py-4">
                       Staff Personnel
                     </TableHead>
-                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4">
+                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 px-6 py-4">
                       Role & Clearance
                     </TableHead>
-                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4">
+                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 px-6 py-4">
                       Contact & Verification
                     </TableHead>
-                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4 text-center">
+                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 px-6 py-4 text-center">
                       Account Status
                     </TableHead>
-                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4 text-center">
+                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 px-6 py-4 text-center">
                       2FA Security
                     </TableHead>
-                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 px-6 py-4 text-right">
+                    <TableHead className="font-extrabold text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 px-6 py-4 text-right">
                       Operations
                     </TableHead>
                   </TableRow>
@@ -1094,7 +1094,7 @@ export function StaffManagementContent() {
                     return (
                       <TableRow 
                         key={u.id} 
-                        className="hover:bg-slate-50/70 transition-colors border-b border-slate-100 last:border-none"
+                        className="hover:bg-slate-50/70 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-100 dark:border-slate-800 last:border-none"
                       >
                         {/* Personnel */}
                         <TableCell className="px-4 lg:px-6 py-3.5">
@@ -1111,10 +1111,10 @@ export function StaffManagementContent() {
                               )}
                             </div>
                             <div className="min-w-0">
-                              <span className="font-bold text-slate-900 block text-sm leading-snug">
+                              <span className="font-bold text-slate-900 dark:text-slate-100 block text-sm leading-snug">
                                 {displayName}
                               </span>
-                              <span className="text-xs text-slate-400 font-medium flex items-center gap-1 mt-0.5">
+                              <span className="text-xs text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1 mt-0.5">
                                 <AtSign className="h-3 w-3" />
                                 {displayUsername}
                               </span>
@@ -1130,7 +1130,7 @@ export function StaffManagementContent() {
                               {roleConfig.label}
                             </Badge>
                             {u?.department && (
-                              <div className="text-[11px] font-semibold text-slate-400 flex items-center gap-1 pl-0.5 truncate max-w-[120px] lg:max-w-[160px]">
+                              <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 flex items-center gap-1 pl-0.5 truncate max-w-[120px] lg:max-w-[160px]">
                                 <Building2 className="h-3 w-3 shrink-0" /> {u.department}
                               </div>
                             )}
@@ -1139,20 +1139,20 @@ export function StaffManagementContent() {
 
                         {/* Contact & Verification */}
                         <TableCell className="px-4 lg:px-6 py-3.5">
-                          <div className="space-y-1 text-xs text-slate-600 font-medium">
+                          <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300 font-medium">
                             <div className="flex items-center gap-2 flex-wrap">
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                 <span className="truncate max-w-[130px] lg:max-w-[170px]">{u?.email || 'No email'}</span>
                               </div>
                               {Boolean(u?.emailVerified) ? (
-                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] font-extrabold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 shadow-2xs">
-                                  <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" />
+                                <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 shadow-2xs">
+                                  <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400" />
                                   Verified
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[9px] font-extrabold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5">
-                                  <AlertCircle className="h-2.5 w-2.5 text-amber-600" />
+                                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5">
+                                  <AlertCircle className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" />
                                   Unverified
                                 </Badge>
                               )}
@@ -1163,7 +1163,7 @@ export function StaffManagementContent() {
                                 <span>{u.phoneNumber}</span>
                               </div>
                             ) : (
-                              <div className="text-slate-400 text-[11px] italic">No phone added</div>
+                              <div className="text-slate-400 dark:text-slate-500 text-[11px] italic">No phone added</div>
                             )}
                           </div>
                         </TableCell>
@@ -1175,8 +1175,8 @@ export function StaffManagementContent() {
                             className={cn(
                               "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider border inline-flex items-center gap-1.5",
                               isUserActive 
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                                : "bg-rose-50 text-rose-700 border-rose-200"
+                                ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800" 
+                                : "bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800"
                             )}
                           >
                             <span className={cn("w-1.5 h-1.5 rounded-full", isUserActive ? "bg-emerald-500" : "bg-rose-500")} />
@@ -1189,7 +1189,7 @@ export function StaffManagementContent() {
                           {is2FAActive(u) ? (
                             <Badge 
                               variant="outline" 
-                              className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
+                              className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                               Enabled
@@ -1197,7 +1197,7 @@ export function StaffManagementContent() {
                           ) : (
                             <Badge 
                               variant="outline" 
-                              className="bg-slate-100 text-slate-600 border-slate-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 whitespace-nowrap"
+                              className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 whitespace-nowrap"
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                               Disabled
@@ -1213,7 +1213,7 @@ export function StaffManagementContent() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleOpenView(u)}
-                              className="h-8 px-2 lg:px-2.5 rounded-lg text-slate-700 hover:bg-slate-100 text-xs font-bold cursor-pointer"
+                              className="h-8 px-2 lg:px-2.5 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold cursor-pointer"
                             >
                               <Eye className="h-3.5 w-3.5 lg:mr-1 text-indigo-500" /><span className="hidden lg:inline">View</span>
                             </Button>
@@ -1222,7 +1222,7 @@ export function StaffManagementContent() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleOpenEdit(u)}
-                              className="h-8 px-2 lg:px-2.5 rounded-lg text-slate-700 hover:bg-slate-100 text-xs font-bold cursor-pointer"
+                              className="h-8 px-2 lg:px-2.5 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold cursor-pointer"
                             >
                               <Edit3 className="h-3.5 w-3.5 lg:mr-1 text-slate-500" /><span className="hidden lg:inline">Edit</span>
                             </Button>
@@ -1231,7 +1231,7 @@ export function StaffManagementContent() {
                               variant="outline" 
                               size="sm" 
                               onClick={() => handleOpenOperations(u)}
-                              className="h-8 px-2.5 rounded-lg text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-bold text-xs border-slate-200 gap-1 shadow-2xs cursor-pointer"
+                              className="h-8 px-2.5 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs border-slate-200 dark:border-slate-700 gap-1 shadow-2xs cursor-pointer"
                             >
                               <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
                               <span className="hidden xl:inline">Operations</span>
@@ -1252,7 +1252,7 @@ export function StaffManagementContent() {
       {/* 1. MASTER OPERATIONS ACTION MODAL (HORIZONTAL 2-COLUMN LAYOUT) */}
       {/* ========================================================================= */}
       <Dialog open={isOperationsModalOpen} onOpenChange={setIsOperationsModalOpen}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-3xl lg:max-w-4xl rounded-3xl p-0 border border-slate-200/90 shadow-2xl overflow-hidden bg-white max-h-[90vh] flex flex-col">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-3xl lg:max-w-4xl rounded-3xl p-0 border border-slate-200/90 dark:border-slate-800 shadow-2xl overflow-hidden bg-white dark:bg-slate-900 max-h-[90vh] flex flex-col">
           {/* Header */}
           <DialogHeader className="p-5 sm:p-6 bg-slate-900 text-white shrink-0 overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1303,10 +1303,10 @@ export function StaffManagementContent() {
           {/* Modal Body with Horizontal 2-Column Grid */}
           <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-4">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                 Select Staff Operation
               </span>
-              <span className="text-xs text-slate-400 font-medium">
+              <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
                 Choose an action below to manage this account
               </span>
             </div>
@@ -1320,16 +1320,16 @@ export function StaffManagementContent() {
                   setIsOperationsModalOpen(false);
                   handleOpenView(selectedUser);
                 }}
-                className="w-full p-3.5 rounded-2xl bg-slate-50/80 hover:bg-indigo-50/60 border border-slate-200/80 hover:border-indigo-300 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
+                className="w-full p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/40 border border-slate-200/80 dark:border-slate-700/80 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors shadow-2xs">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors shadow-2xs">
                   <Eye className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-900 group-hover:text-indigo-700 transition-colors">
+                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">
                     View Full Profile
                   </div>
-                  <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5 leading-snug">
                     Inspect credentials, timestamps, activity log & repair records
                   </div>
                 </div>
@@ -1342,16 +1342,16 @@ export function StaffManagementContent() {
                   setIsOperationsModalOpen(false);
                   handleOpenEdit(selectedUser);
                 }}
-                className="w-full p-3.5 rounded-2xl bg-slate-50/80 hover:bg-blue-50/60 border border-slate-200/80 hover:border-blue-300 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
+                className="w-full p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-blue-50/60 dark:hover:bg-blue-950/40 border border-slate-200/80 dark:border-slate-700/80 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-2xs">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-2xs">
                   <Edit3 className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">
                     Edit Profile & Details
                   </div>
-                  <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5 leading-snug">
                     Update name, email, phone number, address & department
                   </div>
                 </div>
@@ -1364,16 +1364,16 @@ export function StaffManagementContent() {
                   setIsOperationsModalOpen(false);
                   handleOpenChangeRole(selectedUser);
                 }}
-                className="w-full p-3.5 rounded-2xl bg-slate-50/80 hover:bg-purple-50/60 border border-slate-200/80 hover:border-purple-300 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
+                className="w-full p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-purple-50/60 dark:hover:bg-purple-950/40 border border-slate-200/80 dark:border-slate-700/80 hover:border-purple-300 dark:hover:border-purple-600 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 group-hover:bg-purple-600 group-hover:text-white transition-colors shadow-2xs">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-400 flex items-center justify-center shrink-0 group-hover:bg-purple-600 group-hover:text-white transition-colors shadow-2xs">
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-900 group-hover:text-purple-700 transition-colors">
+                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-purple-700 dark:group-hover:text-purple-400 transition-colors">
                     Change Role Clearance
                   </div>
-                  <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5 leading-snug">
                     Elevate or reassign system administrative permissions
                   </div>
                 </div>
@@ -1386,16 +1386,16 @@ export function StaffManagementContent() {
                   setIsOperationsModalOpen(false);
                   handleOpenResetPassword(selectedUser);
                 }}
-                className="w-full p-3.5 rounded-2xl bg-slate-50/80 hover:bg-amber-50/60 border border-slate-200/80 hover:border-amber-300 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
+                className="w-full p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-amber-50/60 dark:hover:bg-amber-950/40 border border-slate-200/80 dark:border-slate-700/80 hover:border-amber-300 dark:hover:border-amber-600 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 group-hover:bg-amber-600 group-hover:text-white transition-colors shadow-2xs">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 group-hover:bg-amber-600 group-hover:text-white transition-colors shadow-2xs">
                   <KeyRound className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-900 group-hover:text-amber-700 transition-colors">
+                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors">
                     Reset Staff Password
                   </div>
-                  <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5 leading-snug">
                     Assign a new secure login authentication password
                   </div>
                 </div>
@@ -1411,28 +1411,28 @@ export function StaffManagementContent() {
                 className={cn(
                   "w-full p-3.5 rounded-2xl border hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer",
                   is2FAActive(selectedUser) 
-                    ? "bg-slate-50/80 hover:bg-slate-100/90 border-slate-200/80" 
-                    : "bg-emerald-50/40 hover:bg-emerald-50/80 border-emerald-200/80"
+                    ? "bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100/90 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700/80" 
+                    : "bg-emerald-50/40 dark:bg-emerald-950/30 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/60 border-emerald-200/80 dark:border-emerald-800/80"
                 )}
               >
                 <div className={cn(
                   "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-2xs",
                   is2FAActive(selectedUser) 
-                    ? "bg-slate-200 text-slate-700 group-hover:bg-slate-700 group-hover:text-white" 
-                    : "bg-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white"
+                    ? "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 group-hover:bg-slate-700 dark:group-hover:bg-slate-600 group-hover:text-white" 
+                    : "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 group-hover:bg-emerald-600 group-hover:text-white"
                 )}>
                   <Fingerprint className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 flex-wrap">
                     <span>Two-Factor Auth (2FA)</span>
                     {is2FAActive(selectedUser) ? (
-                      <span className="text-[9px] font-extrabold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-md">● Enabled</span>
+                      <span className="text-[9px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.2 rounded-md">● Enabled</span>
                     ) : (
-                      <span className="text-[9px] font-extrabold bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-md">○ Disabled</span>
+                      <span className="text-[9px] font-extrabold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1.5 py-0.2 rounded-md">○ Disabled</span>
                     )}
                   </div>
-                  <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5 leading-snug">
                     {is2FAActive(selectedUser) 
                       ? 'OTP verification required on login — Click to Disable' 
                       : 'Direct login enabled — Click to require 6-digit OTP'}
@@ -1447,30 +1447,30 @@ export function StaffManagementContent() {
                   handleCheckUserVerification(selectedUser);
                 }}
                 disabled={checkingVerification}
-                className="w-full p-3.5 rounded-2xl bg-slate-50/80 hover:bg-emerald-50/60 border border-slate-200/80 hover:border-emerald-300 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
+                className="w-full p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/40 border border-slate-200/80 dark:border-slate-700/80 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
               >
                 <div className={cn(
                   "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-2xs",
                   selectedUser?.emailVerified 
-                    ? "bg-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white" 
-                    : "bg-amber-100 text-amber-700 group-hover:bg-amber-600 group-hover:text-white"
+                    ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white" 
+                    : "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 group-hover:bg-amber-600 group-hover:text-white"
                 )}>
                   {checkingVerification ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 flex-wrap">
                     <span>Email Verification</span>
                     {selectedUser?.emailVerified ? (
-                      <span className="text-[9px] font-extrabold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
+                      <span className="text-[9px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
                         <CheckCircle2 className="h-2.5 w-2.5" /> Verified
                       </span>
                     ) : (
-                      <span className="text-[9px] font-extrabold bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
+                      <span className="text-[9px] font-extrabold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
                         <AlertCircle className="h-2.5 w-2.5" /> Unverified
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5 leading-snug">
                     {selectedUser?.emailVerified 
                       ? 'Confirmed in central database — Click to re-check' 
                       : 'Not verified yet — Click to query live status'}
@@ -1486,17 +1486,17 @@ export function StaffManagementContent() {
                     setIsOperationsModalOpen(false);
                     setUserToDirectVerify(selectedUser);
                   }}
-                  className="w-full p-3.5 rounded-2xl bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-300 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer shadow-xs"
+                  className="w-full p-3.5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100/90 dark:hover:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer shadow-xs"
                 >
                   <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                     <UserCheck className="h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5 flex-wrap">
+                    <div className="text-xs font-bold text-emerald-950 dark:text-emerald-100 flex items-center gap-1.5 flex-wrap">
                       <span>Verify Email Address</span>
-                      <span className="text-[9px] bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded font-extrabold">SUPER ADMIN</span>
+                      <span className="text-[9px] bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100 px-1.5 py-0.2 rounded font-extrabold">SUPER ADMIN</span>
                     </div>
-                    <div className="text-[11px] text-emerald-800 line-clamp-2 mt-0.5 leading-snug">
+                    <div className="text-[11px] text-emerald-800 dark:text-emerald-300 line-clamp-2 mt-0.5 leading-snug">
                       Directly verify this staff member's email in central database
                     </div>
                   </div>
@@ -1511,16 +1511,16 @@ export function StaffManagementContent() {
                     handleResendUserVerification(selectedUser);
                   }}
                   disabled={resendingVerification}
-                  className="w-full p-3.5 rounded-2xl bg-amber-50/60 hover:bg-amber-100/80 border border-amber-200/90 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
+                  className="w-full p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 hover:bg-amber-100/80 dark:hover:bg-amber-950/50 border border-amber-200/90 dark:border-amber-800/80 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 group-hover:bg-amber-600 group-hover:text-white transition-colors shadow-2xs">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 group-hover:bg-amber-600 group-hover:text-white transition-colors shadow-2xs">
                     {resendingVerification ? <Loader2 className="h-5 w-5 animate-spin" /> : <Mail className="h-5 w-5" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-slate-900">
+                    <div className="text-xs font-bold text-slate-900 dark:text-slate-100">
                       Resend Verification Link
                     </div>
-                    <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5 leading-snug">
                       Send a fresh activation email link to {selectedUser?.email}
                     </div>
                   </div>
@@ -1534,16 +1534,16 @@ export function StaffManagementContent() {
                   setIsOperationsModalOpen(false);
                   handleOpenToggleStatus(selectedUser);
                 }}
-                className="w-full p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/80 hover:bg-slate-100/90 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
+                className="w-full p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100/90 dark:hover:bg-slate-700/80 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center shrink-0 group-hover:bg-slate-700 group-hover:text-white transition-colors shadow-2xs">
+                <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center shrink-0 group-hover:bg-slate-700 dark:group-hover:bg-slate-600 group-hover:text-white transition-colors shadow-2xs">
                   <Power className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-900">
+                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100">
                     {selectedUser?.isActive ? 'Deactivate Account' : 'Activate Account'}
                   </div>
-                  <div className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5 leading-snug">
                     {selectedUser?.isActive ? 'Temporarily suspend system access & login' : 'Restore system login access for this account'}
                   </div>
                 </div>
@@ -1556,16 +1556,16 @@ export function StaffManagementContent() {
                   setIsOperationsModalOpen(false);
                   handleOpenDelete(selectedUser);
                 }}
-                className="w-full p-3.5 rounded-2xl border border-rose-200 bg-rose-50/40 hover:bg-rose-50 hover:border-rose-300 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
+                className="w-full p-3.5 rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/40 dark:bg-rose-950/30 hover:bg-rose-50 dark:hover:bg-rose-950/50 hover:border-rose-300 dark:hover:border-rose-800 hover:shadow-xs transition-all flex items-start gap-3.5 text-left group cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-colors shadow-2xs">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-colors shadow-2xs">
                   <Trash2 className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-rose-900">
+                  <div className="text-xs font-bold text-rose-900 dark:text-rose-300">
                     Delete Staff Account
                   </div>
-                  <div className="text-[11px] text-rose-600/80 line-clamp-2 mt-0.5 leading-snug">
+                  <div className="text-[11px] text-rose-600/80 dark:text-rose-400/80 line-clamp-2 mt-0.5 leading-snug">
                     Permanently archive this staff member record and credentials
                   </div>
                 </div>
@@ -1573,8 +1573,8 @@ export function StaffManagementContent() {
             </div>
           </div>
 
-          <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
-            <span className="text-xs text-slate-400 hidden sm:inline font-medium">
+          <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+            <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline font-medium">
               Actions will update records across local and cloud databases
             </span>
             <Button
@@ -1582,7 +1582,7 @@ export function StaffManagementContent() {
               variant="outline"
               size="sm"
               onClick={() => setIsOperationsModalOpen(false)}
-              className="rounded-xl text-xs font-bold border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer h-9 px-5"
+              className="rounded-xl text-xs font-bold border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer h-9 px-5"
             >
               Close Menu
             </Button>
@@ -1594,7 +1594,7 @@ export function StaffManagementContent() {
       {/* 2. VIEW STAFF DETAILS MODAL */}
       {/* ========================================================================= */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-lg rounded-3xl p-0 border border-slate-200 shadow-2xl overflow-hidden bg-white max-h-[90vh] flex flex-col">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-lg rounded-3xl p-0 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden bg-white dark:bg-slate-900 max-h-[90vh] flex flex-col">
           <DialogHeader className="p-5 sm:p-6 pb-4 bg-slate-900 text-white shrink-0 overflow-hidden">
             <div className="flex items-center gap-3 min-w-0 overflow-hidden">
               <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-lg overflow-hidden border-2 border-indigo-400/30 shadow-md shrink-0">
@@ -1634,18 +1634,18 @@ export function StaffManagementContent() {
                     className={cn(
                       "text-xs font-bold px-3 py-1 rounded-xl uppercase tracking-wider border",
                       selectedUser.isActive && (selectedUser.accountStatus || 'ACTIVE') === 'ACTIVE'
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-rose-50 text-rose-700 border-rose-200"
+                        ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                        : "bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800"
                     )}
                   >
                     {selectedUser.isActive ? 'Online / Active' : 'Deactivated / Locked'}
                   </Badge>
                   {is2FAActive(selectedUser) ? (
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-bold px-3 py-1 rounded-xl">
+                    <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-xs font-bold px-3 py-1 rounded-xl">
                       <Fingerprint className="h-3.5 w-3.5 mr-1" /> ● 2FA Enabled
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300 text-xs font-bold px-3 py-1 rounded-xl">
+                    <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 text-xs font-bold px-3 py-1 rounded-xl">
                       <Fingerprint className="h-3.5 w-3.5 mr-1" /> ○ 2FA Disabled
                     </Badge>
                   )}
@@ -1656,23 +1656,23 @@ export function StaffManagementContent() {
             {/* Information Cards */}
             <div className="space-y-3 pt-2">
               {/* Security & 2FA Control Section */}
-              <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100 space-y-2.5">
+              <div className="p-4 rounded-2xl bg-indigo-50/40 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <div className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <Fingerprint className="h-3.5 w-3.5 text-indigo-600" />
+                  <div className="text-[11px] font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Fingerprint className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
                     Two-Factor Authentication (2FA)
                   </div>
                   {is2FAActive(selectedUser) ? (
-                    <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[11px] px-2.5 py-0.5 rounded-full">
+                    <Badge variant="outline" className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 font-bold text-[11px] px-2.5 py-0.5 rounded-full">
                       ● Enabled (Email OTP)
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="bg-slate-200 text-slate-700 border-slate-300 font-bold text-[11px] px-2.5 py-0.5 rounded-full">
+                    <Badge variant="outline" className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 font-bold text-[11px] px-2.5 py-0.5 rounded-full">
                       ○ Disabled (Direct Login)
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
                   {is2FAActive(selectedUser)
                     ? `This staff member is required to enter a 6-digit verification code sent to ${selectedUser?.email || 'their email'} upon every login attempt.`
                     : `Two-Factor Authentication is currently turned OFF. This user logs in with their password directly without receiving an email OTP.`}
@@ -1690,8 +1690,8 @@ export function StaffManagementContent() {
                     className={cn(
                       "rounded-xl text-xs font-bold h-9 px-4 border shadow-xs transition-all cursor-pointer",
                       is2FAActive(selectedUser)
-                        ? "border-slate-300 text-slate-700 hover:bg-slate-100"
-                        : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                        ? "border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        : "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/80"
                     )}
                   >
                     <Fingerprint className="mr-1.5 h-3.5 w-3.5" />
@@ -1701,23 +1701,23 @@ export function StaffManagementContent() {
               </div>
 
               {/* Email Verification Section */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                    <Mail className="h-3.5 w-3.5 text-indigo-600" />
+                  <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Mail className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
                     Email Verification Status
                   </div>
                   {selectedUser?.emailVerified ? (
-                    <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                    <Badge variant="outline" className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 font-bold text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
                       <CheckCircle2 className="h-3 w-3" /> Verified
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 font-bold text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <Badge variant="outline" className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 font-bold text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1">
                       <AlertCircle className="h-3 w-3" /> Unverified
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
                   {selectedUser?.emailVerified
                     ? `Staff member's email (${selectedUser?.email}) is verified and synchronized to central database.`
                     : `Staff member's email has not been verified yet. System login is restricted until the verification link is clicked.`}
@@ -1729,7 +1729,7 @@ export function StaffManagementContent() {
                     variant="outline"
                     disabled={checkingVerification}
                     onClick={() => handleCheckUserVerification(selectedUser)}
-                    className="rounded-xl text-xs font-bold h-8 px-3 border-slate-300 gap-1.5 cursor-pointer"
+                    className="rounded-xl text-xs font-bold h-8 px-3 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 gap-1.5 cursor-pointer"
                   >
                     {checkingVerification ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                     Check Live Status
@@ -1740,7 +1740,7 @@ export function StaffManagementContent() {
                       size="sm"
                       disabled={resendingVerification}
                       onClick={() => handleResendUserVerification(selectedUser)}
-                      className="rounded-xl text-xs font-bold h-8 px-3 bg-slate-900 text-white hover:bg-slate-800 gap-1.5 cursor-pointer"
+                      className="rounded-xl text-xs font-bold h-8 px-3 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white gap-1.5 cursor-pointer"
                     >
                       {resendingVerification ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />}
                       Resend Link
@@ -1760,52 +1760,52 @@ export function StaffManagementContent() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Contact Details</div>
-                <div className="space-y-2 text-xs font-medium text-slate-700">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 space-y-2.5">
+                <div className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Contact Details</div>
+                <div className="space-y-2 text-xs font-medium text-slate-700 dark:text-slate-300">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500 flex items-center gap-1.5">
-                      <Mail className="h-3.5 w-3.5 text-slate-400" /> Work Email
+                    <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Mail className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" /> Work Email
                     </span>
-                    <span className="font-semibold text-slate-900">{selectedUser?.email || 'Not provided'}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedUser?.email || 'Not provided'}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500 flex items-center gap-1.5">
-                      <Phone className="h-3.5 w-3.5 text-slate-400" /> Phone Number
+                    <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Phone className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" /> Phone Number
                     </span>
-                    <span className="font-semibold text-slate-900">{selectedUser?.phoneNumber || 'Not provided'}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedUser?.phoneNumber || 'Not provided'}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500 flex items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5 text-slate-400" /> Address
+                    <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" /> Address
                     </span>
-                    <span className="font-semibold text-slate-900">{selectedUser?.address || 'Kathmandu, Nepal'}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedUser?.address || 'Kathmandu, Nepal'}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Organization & Clearance</div>
-                <div className="space-y-2 text-xs font-medium text-slate-700">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 space-y-2.5">
+                <div className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Organization & Clearance</div>
+                <div className="space-y-2 text-xs font-medium text-slate-700 dark:text-slate-300">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500 flex items-center gap-1.5">
-                      <Building2 className="h-3.5 w-3.5 text-slate-400" /> Department
+                    <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Building2 className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" /> Department
                     </span>
-                    <span className="font-semibold text-slate-900">{selectedUser?.department || 'General Operations'}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedUser?.department || 'General Operations'}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500 flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5 text-slate-400" /> Account Created
+                    <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" /> Account Created
                     </span>
-                    <span className="font-semibold text-slate-900">
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
                       {formatSafeDate(selectedUser?.createdAt, 'MMM dd, yyyy', 'N/A')}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500 flex items-center gap-1.5">
-                      <Clock className="h-3.5 w-3.5 text-slate-400" /> Last Active
+                    <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" /> Last Active
                     </span>
-                    <span className="font-semibold text-slate-900">
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
                       {formatSafeDate(selectedUser?.lastLoginAt, 'MMM dd, yyyy HH:mm', 'Recently')}
                     </span>
                   </div>
@@ -1814,7 +1814,7 @@ export function StaffManagementContent() {
             </div>
           </div>
 
-          <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 flex flex-row items-center justify-between gap-2 shrink-0">
+          <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between gap-2 shrink-0">
             <Button
               type="button"
               variant="outline"
@@ -1823,7 +1823,7 @@ export function StaffManagementContent() {
                 setIsViewDialogOpen(false);
                 handleOpenEdit(selectedUser);
               }}
-              className="rounded-xl text-xs font-bold border-slate-300 cursor-pointer"
+              className="rounded-xl text-xs font-bold border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
             >
               <Edit3 className="mr-1.5 h-3.5 w-3.5" /> Edit Profile
             </Button>
@@ -1832,7 +1832,7 @@ export function StaffManagementContent() {
               variant="default"
               size="sm"
               onClick={() => setIsViewDialogOpen(false)}
-              className="rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white cursor-pointer"
+              className="rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white cursor-pointer"
             >
               Close
             </Button>
@@ -1844,7 +1844,7 @@ export function StaffManagementContent() {
       {/* 3. ADD STAFF DIALOG */}
       {/* ========================================================================= */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl rounded-3xl p-0 border border-slate-200 shadow-2xl overflow-hidden bg-white max-h-[90vh] flex flex-col">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl rounded-3xl p-0 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden bg-white dark:bg-slate-900 max-h-[90vh] flex flex-col">
           <DialogHeader className="p-6 pb-4 bg-slate-900 text-white shrink-0">
             <DialogTitle className="text-2xl font-black text-white">Add New Staff Member</DialogTitle>
             <DialogDescription className="font-medium text-slate-400 text-xs">
@@ -1856,20 +1856,20 @@ export function StaffManagementContent() {
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Full Name *</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Full Name *</Label>
                   <Input 
                     placeholder="e.g. John Sharma" 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.name}
                     onChange={e => setFormData({...formData, name: e.target.value})}
                     required
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Username *</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Username *</Label>
                   <Input 
                     placeholder="e.g. john_tech" 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.username}
                     onChange={e => setFormData({...formData, username: e.target.value})}
                     required
@@ -1879,22 +1879,22 @@ export function StaffManagementContent() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Work Email *</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Work Email *</Label>
                   <Input 
                     type="email" 
                     placeholder="john@mtslab.com" 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.email}
                     onChange={e => setFormData({...formData, email: e.target.value})}
                     required
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Initial Password *</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Initial Password *</Label>
                   <Input 
                     type="password" 
                     placeholder="••••••••" 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.password}
                     onChange={e => setFormData({...formData, password: e.target.value})}
                     required
@@ -1904,26 +1904,26 @@ export function StaffManagementContent() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">System Role *</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">System Role *</Label>
                   <Select value={formData.role} onValueChange={v => setFormData({...formData, role: v})}>
-                    <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs font-bold">
+                    <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-slate-100">
                       <SelectValue placeholder="Select role" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-xl shadow-xl">
+                    <SelectContent className="rounded-xl shadow-xl dark:bg-slate-900 dark:border-slate-800">
                       {ROLES.map(r => (
                         <SelectItem key={r.value} value={r.value} className="text-xs py-2">
                           <div className="font-bold">{r.label}</div>
-                          <div className="text-[10px] text-slate-400 font-normal">{r.description}</div>
+                          <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">{r.description}</div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Phone Number</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Phone Number</Label>
                   <Input 
                     placeholder="98XXXXXXXX" 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.phoneNumber}
                     onChange={e => setFormData({...formData, phoneNumber: e.target.value})}
                   />
@@ -1932,19 +1932,19 @@ export function StaffManagementContent() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Department</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Department</Label>
                   <Input 
                     placeholder="e.g. Micro Soldering, Front Desk" 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.department}
                     onChange={e => setFormData({...formData, department: e.target.value})}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Address</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Address</Label>
                   <Input 
                     placeholder="e.g. Kathmandu, Nepal" 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.address}
                     onChange={e => setFormData({...formData, address: e.target.value})}
                   />
@@ -1952,7 +1952,7 @@ export function StaffManagementContent() {
               </div>
 
               <div className="space-y-1.5 pt-1">
-                <Label className="text-xs font-bold text-slate-700">Profile Photo</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Profile Photo</Label>
                 <ImageUpload 
                   value={formData.profileImage}
                   onChange={(url) => setFormData({...formData, profileImage: url})}
@@ -1962,18 +1962,18 @@ export function StaffManagementContent() {
               </div>
             </div>
 
-            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+            <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => setIsAddDialogOpen(false)}
-                className="rounded-xl text-xs font-bold text-slate-500 cursor-pointer"
+                className="rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
               >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
-                className="rounded-xl h-11 px-6 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md cursor-pointer"
+                className="rounded-xl h-11 px-6 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-bold text-sm shadow-md cursor-pointer"
                 disabled={submitting}
               >
                 {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4 text-indigo-400" />}
@@ -1988,7 +1988,7 @@ export function StaffManagementContent() {
       {/* 4. EDIT STAFF DIALOG */}
       {/* ========================================================================= */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl rounded-3xl p-0 border border-slate-200 shadow-2xl overflow-hidden bg-white max-h-[90vh] flex flex-col">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl rounded-3xl p-0 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden bg-white dark:bg-slate-900 max-h-[90vh] flex flex-col">
           <DialogHeader className="p-6 pb-4 bg-slate-900 text-white shrink-0">
             <DialogTitle className="text-2xl font-black text-white">Edit Staff Profile</DialogTitle>
             <DialogDescription className="font-medium text-slate-400 text-xs">
@@ -2000,18 +2000,18 @@ export function StaffManagementContent() {
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Full Name *</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Full Name *</Label>
                   <Input 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.name}
                     onChange={e => setFormData({...formData, name: e.target.value})}
                     required
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Username *</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Username *</Label>
                   <Input 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.username}
                     onChange={e => setFormData({...formData, username: e.target.value})}
                     required
@@ -2021,19 +2021,19 @@ export function StaffManagementContent() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Work Email *</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Work Email *</Label>
                   <Input 
                     type="email" 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.email}
                     onChange={e => setFormData({...formData, email: e.target.value})}
                     required
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Phone Number</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Phone Number</Label>
                   <Input 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.phoneNumber}
                     onChange={e => setFormData({...formData, phoneNumber: e.target.value})}
                   />
@@ -2042,17 +2042,17 @@ export function StaffManagementContent() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Department</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Department</Label>
                   <Input 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.department}
                     onChange={e => setFormData({...formData, department: e.target.value})}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Home Address</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Home Address</Label>
                   <Input 
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium" 
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white" 
                     value={formData.address}
                     onChange={e => setFormData({...formData, address: e.target.value})}
                   />
@@ -2060,7 +2060,7 @@ export function StaffManagementContent() {
               </div>
 
               <div className="space-y-1.5 pt-1">
-                <Label className="text-xs font-bold text-slate-700">Profile Photo</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Profile Photo</Label>
                 <ImageUpload 
                   value={formData.profileImage}
                   onChange={(url) => setFormData({...formData, profileImage: url})}
@@ -2070,18 +2070,18 @@ export function StaffManagementContent() {
               </div>
             </div>
 
-            <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+            <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => setIsEditDialogOpen(false)}
-                className="rounded-xl text-xs font-bold text-slate-500 cursor-pointer"
+                className="rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
               >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
-                className="rounded-xl h-11 px-6 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md cursor-pointer"
+                className="rounded-xl h-11 px-6 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-bold text-sm shadow-md cursor-pointer"
                 disabled={submitting}
               >
                 {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Save Changes'}
@@ -2095,19 +2095,19 @@ export function StaffManagementContent() {
       {/* 5. CHANGE ROLE DIALOG */}
       {/* ========================================================================= */}
       <Dialog open={isChangeRoleOpen} onOpenChange={setIsChangeRoleOpen}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 space-y-4">
           <DialogHeader>
-            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1 border border-purple-100">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-1 border border-purple-100 dark:border-purple-800/60">
               <ShieldCheck className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-xl font-bold text-slate-900">Change Staff Role</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
+            <DialogTitle className="text-xl font-bold text-slate-900 dark:text-white">Change Staff Role</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
               Modify operational role and permission boundaries for <b>{selectedUser?.name || 'User'}</b>
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2">
-            <Label className="text-xs font-bold text-slate-700">Select Target Role</Label>
+            <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Select Target Role</Label>
             <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
               {ROLES.map(r => {
                 const isSelected = newSelectedRole === r.value;
@@ -2118,19 +2118,19 @@ export function StaffManagementContent() {
                     className={cn(
                       "p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3",
                       isSelected 
-                        ? "bg-indigo-50/70 border-indigo-300 ring-2 ring-indigo-500/20" 
-                        : "bg-slate-50/50 border-slate-200 hover:bg-slate-100/70"
+                        ? "bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-600 ring-2 ring-indigo-500/20" 
+                        : "bg-slate-50/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:bg-slate-100/70 dark:hover:bg-slate-800"
                     )}
                   >
                     <div className={cn(
                       "w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center shrink-0",
-                      isSelected ? "border-indigo-600 bg-indigo-600" : "border-slate-300 bg-white"
+                      isSelected ? "border-indigo-600 bg-indigo-600" : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
                     )}>
                       {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-slate-900">{r.label}</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">{r.description}</div>
+                      <div className="text-xs font-bold text-slate-900 dark:text-slate-100">{r.label}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">{r.description}</div>
                     </div>
                   </div>
                 );
@@ -2143,14 +2143,14 @@ export function StaffManagementContent() {
               type="button"
               variant="ghost"
               onClick={() => setIsChangeRoleOpen(false)}
-              className="rounded-xl text-xs font-bold text-slate-500 cursor-pointer"
+              className="rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
             >
               Cancel
             </Button>
             <Button 
               type="button"
               onClick={handleChangeRole}
-              className="rounded-xl h-10 px-5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer"
+              className="rounded-xl h-10 px-5 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-bold text-xs cursor-pointer"
               disabled={submitting || newSelectedRole === selectedUser?.role}
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Role Update'}
@@ -2163,35 +2163,35 @@ export function StaffManagementContent() {
       {/* 6. RESET PASSWORD DIALOG */}
       {/* ========================================================================= */}
       <Dialog open={isResetPasswordOpen} onOpenChange={setIsResetPasswordOpen}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 space-y-4">
           <DialogHeader>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1 border border-amber-100">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-1 border border-amber-100 dark:border-amber-800/60">
               <KeyRound className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-xl font-bold text-slate-900">Reset Staff Password</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
+            <DialogTitle className="text-xl font-bold text-slate-900 dark:text-white">Reset Staff Password</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
               Assign a new login password for <b>{selectedUser?.name || 'Staff Member'}</b> ({selectedUser?.email || ''})
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleResetPassword} className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">New Password</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">New Password</Label>
               <Input 
                 type="password" 
                 placeholder="••••••••••••" 
-                className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium"
+                className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white"
                 value={resetPasswordData.password}
                 onChange={e => setResetPasswordData({...resetPasswordData, password: e.target.value})}
                 required
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Confirm New Password</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Confirm New Password</Label>
               <Input 
                 type="password" 
                 placeholder="••••••••••••" 
-                className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium"
+                className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm font-medium text-slate-900 dark:text-white"
                 value={resetPasswordData.confirmPassword}
                 onChange={e => setResetPasswordData({...resetPasswordData, confirmPassword: e.target.value})}
                 required
@@ -2203,13 +2203,13 @@ export function StaffManagementContent() {
                 type="button"
                 variant="ghost"
                 onClick={() => setIsResetPasswordOpen(false)}
-                className="rounded-xl text-xs font-bold text-slate-500 cursor-pointer"
+                className="rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
               >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
-                className="rounded-xl h-10 px-5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer"
+                className="rounded-xl h-10 px-5 bg-slate-900 hover:bg-slate-800 dark:bg-amber-600 dark:hover:bg-amber-500 text-white font-bold text-xs cursor-pointer"
                 disabled={submitting}
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Set Password'}
@@ -2223,31 +2223,31 @@ export function StaffManagementContent() {
       {/* 7. ACTIVATE / DEACTIVATE CONFIRMATION DIALOG */}
       {/* ========================================================================= */}
       <AlertDialog open={isToggleStatusOpen} onOpenChange={setIsToggleStatusOpen}>
-        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white">
+        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900">
           <AlertDialogHeader>
             <div className={cn(
               "w-10 h-10 rounded-xl flex items-center justify-center mb-1 border",
-              selectedUser?.isActive ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-emerald-50 text-emerald-600 border-emerald-100"
+              selectedUser?.isActive ? "bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-800/60" : "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/60"
             )}>
               {selectedUser?.isActive ? <UserX className="h-5 w-5" /> : <UserCheck className="h-5 w-5" />}
             </div>
-            <AlertDialogTitle className="text-xl font-bold text-slate-900">
+            <AlertDialogTitle className="text-xl font-bold text-slate-900 dark:text-white">
               {selectedUser?.isActive ? 'Deactivate Staff Account?' : 'Activate Staff Account?'}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
+            <AlertDialogDescription className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
               {selectedUser?.isActive ? (
                 <>
-                  Deactivating <b>{selectedUser?.name || 'this user'}</b> will immediately revoke their access, terminate active dashboard sessions, and prevent any new sign-in attempts.
+                  Deactivating <b className="text-slate-900 dark:text-slate-100">{selectedUser?.name || 'this user'}</b> will immediately revoke their access, terminate active dashboard sessions, and prevent any new sign-in attempts.
                 </>
               ) : (
                 <>
-                  Activating <b>{selectedUser?.name || 'this user'}</b> will restore their sign-in privileges and dashboard access according to their assigned role.
+                  Activating <b className="text-slate-900 dark:text-slate-100">{selectedUser?.name || 'this user'}</b> will restore their sign-in privileges and dashboard access according to their assigned role.
                 </>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="pt-3 flex items-center justify-between gap-2">
-            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-500 border-slate-200 cursor-pointer">
+            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
@@ -2271,25 +2271,25 @@ export function StaffManagementContent() {
       {/* 8. DELETE STAFF CONFIRMATION DIALOG */}
       {/* ========================================================================= */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white">
+        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900">
           <AlertDialogHeader>
-            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-1 border border-rose-100">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-1 border border-rose-100 dark:border-rose-800/60">
               <Trash2 className="h-5 w-5" />
             </div>
-            <AlertDialogTitle className="text-xl font-bold text-slate-900">
+            <AlertDialogTitle className="text-xl font-bold text-slate-900 dark:text-white">
               Permanently Delete Staff Member?
             </AlertDialogTitle>
-            <div className="text-xs text-slate-500 leading-relaxed space-y-2">
+            <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed space-y-2">
               <p>
-                Are you sure you want to delete the account for <b>{selectedUser?.name || 'this user'}</b> ({selectedUser?.email || ''})?
+                Are you sure you want to delete the account for <b className="text-slate-900 dark:text-slate-100">{selectedUser?.name || 'this user'}</b> ({selectedUser?.email || ''})?
               </p>
-              <p className="text-rose-600 font-semibold">
+              <p className="text-rose-600 dark:text-rose-400 font-semibold">
                 This action is irreversible and permanently removes their security credentials, assigned sessions, and access permissions.
               </p>
             </div>
           </AlertDialogHeader>
           <AlertDialogFooter className="pt-3 flex items-center justify-between gap-2">
-            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-500 border-slate-200 cursor-pointer">
+            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
@@ -2308,53 +2308,53 @@ export function StaffManagementContent() {
       {/* 9. TWO-FACTOR AUTHENTICATION (2FA) TOGGLE CONFIRMATION DIALOG */}
       {/* ========================================================================= */}
       <AlertDialog open={isToggle2FAOpen} onOpenChange={setIsToggle2FAOpen}>
-        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-sm sm:max-w-md rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
+        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-sm sm:max-w-md rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 space-y-4">
           <AlertDialogHeader>
             <div className="flex items-start gap-3 min-w-0 overflow-hidden">
               <div className={cn(
                 "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border shadow-xs mt-0.5",
                 is2FAActive(target2FAUser) 
-                  ? "bg-slate-100 text-slate-700 border-slate-200" 
-                  : "bg-emerald-50 text-emerald-600 border-emerald-100"
+                  ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" 
+                  : "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/60"
               )}>
                 <Fingerprint className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1 overflow-hidden">
-                <AlertDialogTitle className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                <AlertDialogTitle className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">
                   {is2FAActive(target2FAUser) ? 'Disable Two-Factor Auth' : 'Enable Two-Factor Auth'}
                 </AlertDialogTitle>
-                <div className="text-xs text-slate-500 mt-0.5 min-w-0 overflow-hidden">
-                  User: <span className="font-semibold text-slate-800 truncate">{target2FAUser?.name || 'User'}</span>
-                  <span className="block truncate text-slate-400">{target2FAUser?.email || ''}</span>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 min-w-0 overflow-hidden">
+                  User: <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{target2FAUser?.name || 'User'}</span>
+                  <span className="block truncate text-slate-400 dark:text-slate-500">{target2FAUser?.email || ''}</span>
                 </div>
               </div>
             </div>
           </AlertDialogHeader>
 
-          <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
+          <div className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-2">
             {is2FAActive(target2FAUser) ? (
               <>
                 <p>
-                  Are you sure you want to <b>disable 2FA</b> for <span className="font-bold text-slate-900">{target2FAUser?.name || 'this user'}</span>?
+                  Are you sure you want to <b>disable 2FA</b> for <span className="font-bold text-slate-900 dark:text-slate-100">{target2FAUser?.name || 'this user'}</span>?
                 </p>
-                <p className="text-slate-500">
+                <p className="text-slate-500 dark:text-slate-400">
                   The staff member will be able to log into the MTS Lab system using only their password, and <b>no email OTP code</b> will be dispatched.
                 </p>
               </>
             ) : (
               <>
                 <p>
-                  Enable <b>Two-Factor Authentication</b> for <span className="font-bold text-slate-900">{target2FAUser?.name || 'this user'}</span>?
+                  Enable <b>Two-Factor Authentication</b> for <span className="font-bold text-slate-900 dark:text-slate-100">{target2FAUser?.name || 'this user'}</span>?
                 </p>
-                <p className="text-slate-500">
-                  Upon logging in with their password, a secure 6-digit verification code will be sent to <span className="font-bold text-slate-900">{target2FAUser?.email || 'their email'}</span> before dashboard access is granted.
+                <p className="text-slate-500 dark:text-slate-400">
+                  Upon logging in with their password, a secure 6-digit verification code will be sent to <span className="font-bold text-slate-900 dark:text-slate-100">{target2FAUser?.email || 'their email'}</span> before dashboard access is granted.
                 </p>
               </>
             )}
           </div>
 
           <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 pt-2">
-            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-600 border-slate-200 cursor-pointer w-full sm:w-auto">
+            <AlertDialogCancel className="rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer w-full sm:w-auto">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
@@ -2363,7 +2363,7 @@ export function StaffManagementContent() {
               className={cn(
                 "rounded-xl text-xs font-bold h-10 px-5 text-white shadow-md transition-all cursor-pointer w-full sm:w-auto",
                 is2FAActive(target2FAUser) 
-                  ? "bg-slate-900 hover:bg-slate-800 shadow-slate-900/10" 
+                  ? "bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 shadow-slate-900/10" 
                   : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20"
               )}
             >
@@ -2378,29 +2378,29 @@ export function StaffManagementContent() {
       {/* 10. SUPER ADMIN DIRECT EMAIL VERIFICATION CONFIRMATION DIALOG */}
       {/* ========================================================================= */}
       <AlertDialog open={!!userToDirectVerify} onOpenChange={(open) => !open && !directVerifying && setUserToDirectVerify(null)}>
-        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-sm sm:max-w-md rounded-3xl border-slate-200 shadow-2xl bg-white p-5 sm:p-6 space-y-4">
+        <AlertDialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-sm sm:max-w-md rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 p-5 sm:p-6 space-y-4">
           <AlertDialogHeader>
             <div className="flex items-start gap-3 min-w-0 overflow-hidden">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-xs shrink-0 mt-0.5">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-xs shrink-0 mt-0.5">
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1 overflow-hidden">
-                <AlertDialogTitle className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                <AlertDialogTitle className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">
                   Verify Email Address?
                 </AlertDialogTitle>
-                <div className="text-xs text-slate-500 mt-0.5 truncate">
-                  Target: <span className="font-semibold text-slate-800 truncate">{userToDirectVerify?.name || 'User'}</span>
-                  <span className="block truncate text-slate-400">{userToDirectVerify?.email || ''}</span>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                  Target: <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{userToDirectVerify?.name || 'User'}</span>
+                  <span className="block truncate text-slate-400 dark:text-slate-500">{userToDirectVerify?.email || ''}</span>
                 </div>
               </div>
             </div>
           </AlertDialogHeader>
 
-          <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
+          <div className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-2">
             <p>
-              You are about to manually verify this user's email address (<b>{userToDirectVerify?.email}</b>).
+              You are about to manually verify this user's email address (<b className="text-slate-900 dark:text-slate-100">{userToDirectVerify?.email}</b>).
             </p>
-            <p className="text-slate-500">
+            <p className="text-slate-500 dark:text-slate-400">
               This action directly updates the user's verification status in the central MTS database. This action should only be used when you have confirmed the user's identity.
             </p>
           </div>
@@ -2409,7 +2409,7 @@ export function StaffManagementContent() {
             <AlertDialogCancel
               disabled={directVerifying}
               onClick={() => setUserToDirectVerify(null)}
-              className="rounded-xl text-xs font-bold text-slate-600 border-slate-200 cursor-pointer w-full sm:w-auto"
+              className="rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer w-full sm:w-auto"
             >
               Cancel
             </AlertDialogCancel>

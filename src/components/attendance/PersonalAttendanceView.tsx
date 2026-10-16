@@ -161,16 +161,16 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
       {/* Monthly Statistics Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* KPI 1: Present Days */}
-        <Card className="border border-slate-200/80 bg-white shadow-2xs rounded-2xl">
+        <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs rounded-2xl">
           <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
               <UserCheck className="w-6 h-6" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Days Present ({selectedMonth})
               </div>
-              <div className="text-2xl font-black text-slate-900">
+              <div className="text-2xl font-black text-slate-900 dark:text-white">
                 {monthlyStats.presentCount} <span className="text-sm font-semibold text-slate-400">days</span>
               </div>
             </div>
@@ -178,16 +178,16 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
         </Card>
 
         {/* KPI 2: Absent Days */}
-        <Card className="border border-slate-200/80 bg-white shadow-2xs rounded-2xl">
+        <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs rounded-2xl">
           <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-800 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0">
               <UserX className="w-6 h-6" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Days Absent ({selectedMonth})
               </div>
-              <div className="text-2xl font-black text-slate-900">
+              <div className="text-2xl font-black text-slate-900 dark:text-white">
                 {monthlyStats.absentCount} <span className="text-sm font-semibold text-slate-400">days</span>
               </div>
             </div>
@@ -195,16 +195,16 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
         </Card>
 
         {/* KPI 3: Attendance Rate */}
-        <Card className="border border-slate-200/80 bg-white shadow-2xs rounded-2xl">
+        <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs rounded-2xl">
           <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
               <Percent className="w-6 h-6" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Monthly Attendance Rate
               </div>
-              <div className="text-2xl font-black text-indigo-950">
+              <div className="text-2xl font-black text-indigo-950 dark:text-indigo-300">
                 {monthlyStats.attendanceRate !== null ? `${monthlyStats.attendanceRate}%` : '100%'}
               </div>
             </div>
@@ -213,14 +213,14 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
       </div>
 
       {/* Monthly Attendance Calendar Log */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-2xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-indigo-600" />
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               My Daily Attendance Log
             </h3>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Day-by-day record of check-in times and verified statuses.
             </p>
           </div>
@@ -230,13 +230,13 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
               type="month"
               value={selectedMonth}
               onChange={(e) => onMonthChange(e.target.value)}
-              className="h-9 px-3 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl"
+              className="h-9 px-3 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl"
             />
           </div>
         </div>
 
         {/* Calendar Grid */}
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-100 dark:divide-slate-800">
           {dailyLogs.map((log) => {
             const isSaturday = log.dayOfWeek === 'Sat';
 
@@ -245,7 +245,7 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
                 key={log.date}
                 className={cn(
                   'p-4 flex items-center justify-between gap-4 transition-colors',
-                  log.isToday ? 'bg-indigo-50/40 font-semibold' : 'hover:bg-slate-50/60'
+                  log.isToday ? 'bg-indigo-50/40 dark:bg-indigo-950/20 font-semibold' : 'hover:bg-slate-50/60 dark:hover:bg-slate-800/50'
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -255,8 +255,8 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
                       log.isToday
                         ? 'bg-indigo-600 text-white shadow-xs'
                         : isSaturday
-                        ? 'bg-amber-100 text-amber-900'
-                        : 'bg-slate-100 text-slate-700'
+                        ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                     )}
                   >
                     <span className="text-[9px] uppercase leading-tight font-black">{log.dayOfWeek}</span>
@@ -264,7 +264,7 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
                   </div>
 
                   <div>
-                    <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                    <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                       <span>{log.date}</span>
                       {log.isToday && (
                         <Badge className="bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0">
@@ -272,13 +272,13 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
                         </Badge>
                       )}
                       {isSaturday && (
-                        <Badge className="bg-amber-100 text-amber-800 border border-amber-200 text-[9px] font-bold px-1.5 py-0">
+                        <Badge className="bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[9px] font-bold px-1.5 py-0">
                           SATURDAY OFF
                         </Badge>
                       )}
                     </div>
                     {log.record?.formattedCheckInTime && log.record.formattedCheckInTime !== '—' && (
-                      <div className="text-[11px] font-mono text-slate-500 flex items-center gap-1 mt-0.5">
+                      <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                         <Clock className="w-3 h-3 text-slate-400" />
                         Check-in at {log.record.formattedCheckInTime}
                       </div>
@@ -289,27 +289,27 @@ export const PersonalAttendanceView: React.FC<PersonalAttendanceViewProps> = ({
                 {/* Status Badge */}
                 <div>
                   {log.status === 'PRESENT' && (
-                    <Badge className="bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 text-xs font-bold gap-1">
+                    <Badge className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold gap-1">
                       <CheckCircle2 className="w-3 h-3" /> PRESENT
                     </Badge>
                   )}
                   {log.status === 'LATE' && (
-                    <Badge className="bg-amber-500/10 text-amber-700 border border-amber-500/20 text-xs font-bold gap-1">
+                    <Badge className="bg-amber-500/10 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/20 text-xs font-bold gap-1">
                       <Clock className="w-3 h-3" /> LATE
                     </Badge>
                   )}
                   {log.status === 'HALF_DAY' && (
-                    <Badge className="bg-sky-500/10 text-sky-700 border border-sky-500/20 text-xs font-bold gap-1">
+                    <Badge className="bg-sky-500/10 dark:bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/20 text-xs font-bold gap-1">
                       <Clock className="w-3 h-3" /> HALF DAY
                     </Badge>
                   )}
                   {log.status === 'ABSENT' && (
-                    <Badge className="bg-rose-500/10 text-rose-700 border border-rose-500/20 text-xs font-bold gap-1">
+                    <Badge className="bg-rose-500/10 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-500/20 text-xs font-bold gap-1">
                       <XCircle className="w-3 h-3" /> ABSENT
                     </Badge>
                   )}
                   {log.status === 'NOT_MARKED' && !log.isFuture && (
-                    <Badge className="bg-slate-100 text-slate-500 border border-slate-200 text-xs font-bold">
+                    <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 text-xs font-bold">
                       NOT MARKED
                     </Badge>
                   )}

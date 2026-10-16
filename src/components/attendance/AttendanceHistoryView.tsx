@@ -165,16 +165,16 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
   return (
     <div className="space-y-4">
       {/* Header and View Mode Switcher */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
             <History className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-sm font-bold text-slate-900">
+            <div className="text-sm font-bold text-slate-900 dark:text-white">
               {showAuditLogs ? 'Security & Audit Changelog' : 'Complete Attendance Logs'}
             </div>
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
               {showAuditLogs
                 ? 'Immutable record of all creations, manual edits, and status corrections'
                 : 'Historical record of all staff attendances with date filters and search'}
@@ -189,10 +189,10 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
               size="sm"
               onClick={() => setShowAuditLogs(!showAuditLogs)}
               className={cn(
-                'h-9 px-3 text-xs font-bold rounded-xl gap-1.5 transition-all',
+                'h-9 px-3 text-xs font-bold rounded-xl gap-1.5 transition-all cursor-pointer',
                 showAuditLogs
-                  ? 'bg-slate-900 text-white hover:bg-slate-800'
-                  : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                  ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
               )}
             >
               <ShieldCheck className="w-3.5 h-3.5" />
@@ -205,7 +205,7 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
       {!showAuditLogs ? (
         <>
           {/* Filter Toolbar */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3 bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs w-full min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3 bg-white dark:bg-slate-900 p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs w-full min-w-0">
             {/* Search */}
             <div className="relative sm:col-span-2 lg:col-span-2 min-w-0">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 shrink-0" />
@@ -213,14 +213,14 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
                 placeholder="Search by staff name, email, notes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl w-full"
+                className="pl-9 h-9 text-xs bg-slate-50/50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl w-full"
               />
             </div>
 
             {/* Staff Filter */}
             <div className="min-w-0">
               <Select value={selectedUser} onValueChange={setSelectedUser}>
-                <SelectTrigger className="h-9 text-xs bg-slate-50/50 border-slate-200 rounded-xl w-full">
+                <SelectTrigger className="h-9 text-xs bg-slate-50/50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-xl w-full">
                   <SelectValue placeholder="All Staff Members" />
                 </SelectTrigger>
                 <SelectContent>
@@ -287,7 +287,7 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
           </div>
 
           {/* Records Table */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden w-full min-w-0">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs overflow-hidden w-full min-w-0">
             {isLoading ? (
               <div className="p-12 text-center text-slate-400 font-medium">
                 <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -303,7 +303,7 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-[860px]">
                     <thead>
-                      <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 select-none">
+                      <tr className="bg-slate-50/90 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 select-none">
                         <th className="py-3.5 pl-5 pr-3 w-[15%] min-w-[110px]">Date</th>
                         <th className="py-3.5 px-3 w-[25%] min-w-[200px]">Staff Member</th>
                         <th className="py-3.5 px-3 w-[16%] min-w-[130px]">Status</th>
@@ -312,30 +312,30 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
                         <th className="py-3.5 pl-3 pr-5 w-[10%] min-w-[90px] text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 text-xs">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                       {filteredRecords.map((rec) => {
                         const staffUser = rec.user;
                         return (
                           <tr
                             key={rec.id}
-                            className="hover:bg-slate-50/70 transition-colors group"
+                            className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors group"
                           >
                             {/* Date */}
-                            <td className="py-3.5 pl-5 pr-3 align-middle font-mono font-bold text-slate-800">
+                            <td className="py-3.5 pl-5 pr-3 align-middle font-mono font-bold text-slate-800 dark:text-slate-200">
                               {rec.date}
                             </td>
 
                             {/* Staff Member */}
                             <td className="py-3.5 px-3 align-middle">
                               <div className="flex items-center gap-2.5 min-w-0">
-                                <Avatar className="w-8 h-8 rounded-lg bg-indigo-50 border border-slate-200 shrink-0">
+                                <Avatar className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 border border-slate-200 dark:border-slate-700 shrink-0">
                                   <AvatarImage src={staffUser?.avatarUrl} />
-                                  <AvatarFallback className="text-[10px] font-black text-indigo-700">
+                                  <AvatarFallback className="text-[10px] font-black text-indigo-700 dark:text-indigo-300">
                                     {(staffUser?.name || 'Staff').slice(0, 2).toUpperCase()}
                                   </AvatarFallback>
                                 </Avatar>
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-xs font-bold text-slate-900 truncate max-w-[160px]" title={staffUser?.name}>
+                                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate max-w-[160px]" title={staffUser?.name}>
                                     {staffUser?.name || 'Staff Member'}
                                   </div>
                                   <div className="text-[10px] text-slate-400 truncate max-w-[160px]">
@@ -353,7 +353,7 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
                             {/* Time & Method */}
                             <td className="py-3.5 px-3 align-middle">
                               <div className="flex flex-col gap-0.5">
-                                <div className="text-xs font-mono font-bold text-slate-800 flex items-center gap-1">
+                                <div className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
                                   <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                                   <span>{rec.checkInTime || '—'}</span>
                                 </div>
@@ -366,7 +366,7 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
                             {/* Recorded By & Notes */}
                             <td className="py-3.5 px-3 align-middle">
                               <div className="flex flex-col gap-0.5 min-w-0">
-                                <div className="text-xs text-slate-700 font-medium truncate max-w-[130px]" title={rec.markedByName || 'System Auto'}>
+                                <div className="text-xs text-slate-700 dark:text-slate-300 font-medium truncate max-w-[130px]" title={rec.markedByName || 'System Auto'}>
                                   {rec.markedByName || 'System Auto'}
                                 </div>
                                 {rec.notes && (
@@ -414,25 +414,25 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
                 </div>
 
                 {/* Mobile Cards */}
-                <div className="md:hidden divide-y divide-slate-100">
+                <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
                   {filteredRecords.map((rec) => {
                     const staffUser = rec.user;
                     return (
-                      <div key={rec.id} className="p-4 space-y-2.5 bg-white">
+                      <div key={rec.id} className="p-4 space-y-2.5 bg-white dark:bg-slate-900">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <Avatar className="w-8 h-8 rounded-lg bg-indigo-50 border border-slate-200 shrink-0">
+                            <Avatar className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 border border-slate-200 dark:border-slate-700 shrink-0">
                               <AvatarImage src={staffUser?.avatarUrl} />
-                              <AvatarFallback className="text-[10px] font-black text-indigo-700">
+                              <AvatarFallback className="text-[10px] font-black text-indigo-700 dark:text-indigo-300">
                                 {(staffUser?.name || 'Staff').slice(0, 2).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
-                              <div className="text-xs font-bold text-slate-900 truncate">
+                              <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                                 {staffUser?.name || 'Staff Member'}
                               </div>
                               <div className="text-[10px] text-slate-400">
-                                {staffUser?.role || 'Staff'} • <span className="font-mono font-bold text-slate-600">{rec.date}</span>
+                                {staffUser?.role || 'Staff'} • <span className="font-mono font-bold text-slate-600 dark:text-slate-300">{rec.date}</span>
                               </div>
                             </div>
                           </div>
@@ -443,7 +443,7 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => onOpenEditModal(rec)}
-                                className="h-7 w-7 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                                className="h-7 w-7 p-0 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 rounded-lg"
                                 title="Edit Record"
                                 aria-label="Edit record"
                               >
@@ -455,7 +455,7 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => onDeleteRecord(rec.id)}
-                                className="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
+                                className="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"
                                 title="Delete Entry"
                                 aria-label="Delete entry"
                               >
@@ -465,17 +465,17 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200/60">
+                        <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700">
                           {getStatusBadge(rec.status)}
-                          <div className="text-xs font-mono font-bold text-slate-700 flex items-center gap-1">
+                          <div className="text-xs font-mono font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
                             <Clock className="w-3 h-3 text-slate-400" />
                             {rec.checkInTime || '—'}
                           </div>
                         </div>
 
                         {(rec.markedByName || rec.notes) && (
-                          <div className="text-[11px] text-slate-500 space-y-0.5">
-                            {rec.markedByName && <div>Recorded by: <span className="font-medium text-slate-700">{rec.markedByName}</span></div>}
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5">
+                            {rec.markedByName && <div>Recorded by: <span className="font-medium text-slate-700 dark:text-slate-300">{rec.markedByName}</span></div>}
                             {rec.notes && <div className="italic text-slate-400">"{rec.notes}"</div>}
                           </div>
                         )}
@@ -489,7 +489,7 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
         </>
       ) : (
         /* Audit Trail Table */
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs overflow-hidden">
           {auditLogs.length === 0 ? (
             <div className="p-12 text-center text-slate-400 font-medium">
               No audit log entries recorded yet.
@@ -498,34 +498,34 @@ export const AttendanceHistoryView: React.FC<AttendanceHistoryViewProps> = ({
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[700px]">
                 <thead>
-                  <tr className="bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider select-none">
+                  <tr className="bg-slate-900 dark:bg-slate-950 text-white text-[11px] font-bold uppercase tracking-wider select-none border-b dark:border-slate-800">
                     <th className="py-3.5 pl-5 pr-3 w-[25%]">Timestamp (NPT)</th>
                     <th className="py-3.5 px-3 w-[20%]">Action</th>
                     <th className="py-3.5 px-3 w-[25%]">Modified By</th>
                     <th className="py-3.5 pl-3 pr-5 w-[30%]">Audit Details / Changes</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                   {auditLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3.5 pl-5 pr-3 align-top font-mono font-medium text-slate-600">
+                    <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="py-3.5 pl-5 pr-3 align-top font-mono font-medium text-slate-600 dark:text-slate-300">
                         <div>{log.timeNPT || log.timestamp}</div>
                         <div className="text-[10px] text-slate-400">Target Date: {log.targetDate}</div>
                       </td>
 
                       <td className="py-3.5 px-3 align-top">
-                        <Badge className="bg-slate-100 text-slate-800 border border-slate-200 text-[10px] font-bold">
+                        <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-[10px] font-bold">
                           {log.action}
                         </Badge>
                       </td>
 
                       <td className="py-3.5 px-3 align-top">
-                        <div className="font-bold text-slate-900">{log.performedByName}</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100">{log.performedByName}</div>
                         <div className="text-[10px] text-slate-400 font-semibold">{log.performedByRole}</div>
                       </td>
 
                       <td className="py-3.5 pl-3 pr-5 align-top">
-                        <div className="font-mono text-[11px] text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-200/60 overflow-x-auto max-h-24">
+                        <div className="font-mono text-[11px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/70 p-2 rounded-lg border border-slate-200/60 dark:border-slate-700 overflow-x-auto max-h-24">
                           {JSON.stringify(log.details)}
                         </div>
                       </td>

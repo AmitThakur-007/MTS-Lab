@@ -352,22 +352,22 @@ export default function RepairDetails() {
   return (
     <div className="space-y-6 sm:space-y-8 pb-32 max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 w-full overflow-x-hidden">
       {/* Top Header Toolbar */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-sm w-full">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm w-full">
         <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1 w-full xl:w-auto">
           <Button
             variant="outline"
             onClick={() => navigate('/dashboard/repairs')}
-            className="rounded-2xl border-slate-200 h-10 w-10 p-0 flex items-center justify-center shrink-0 cursor-pointer hover:bg-slate-100 mt-1 sm:mt-0"
+            className="rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 h-10 w-10 p-0 flex items-center justify-center shrink-0 cursor-pointer hover:bg-slate-100 mt-1 sm:mt-0"
             title="Back to repairs"
           >
-            <ChevronLeft className="h-5 w-5 text-slate-700" />
+            <ChevronLeft className="h-5 w-5 text-slate-700 dark:text-slate-300" />
           </Button>
 
           <div className="space-y-1.5 min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <Badge
                 variant="secondary"
-                className="font-mono text-xs font-black uppercase tracking-tight bg-slate-900 text-white px-2.5 py-1 rounded-xl shadow-xs"
+                className="font-mono text-xs font-black uppercase tracking-tight bg-slate-900 dark:bg-slate-800 text-white dark:text-slate-100 px-2.5 py-1 rounded-xl shadow-xs"
               >
                 JOB #{repair.repairNumber}
               </Badge>
@@ -404,27 +404,27 @@ export default function RepairDetails() {
                 </Badge>
               )}
               {(!repair.priority || repair.priority === 'NORMAL') && (
-                <Badge variant="outline" className="bg-slate-100 text-slate-700 font-bold border-slate-300">
+                <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-slate-300 dark:border-slate-700">
                   NORMAL
                 </Badge>
               )}
 
               {isCourierDispatched && (
-                <Badge className="bg-blue-50 text-blue-700 border border-blue-200 font-bold flex items-center gap-1">
-                  <Truck className="h-3 w-3 text-blue-600" /> Courier Dispatched
+                <Badge className="bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-bold flex items-center gap-1">
+                  <Truck className="h-3 w-3 text-blue-600 dark:text-blue-400" /> Courier Dispatched
                 </Badge>
               )}
             </div>
 
             {/* Device Brand and Model (no aggressive truncation) */}
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-slate-900 break-words leading-tight">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 break-words leading-tight">
               {repair.deviceBrand} {repair.deviceModel}
             </h1>
           </div>
         </div>
 
         {/* Header Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end shrink-0 pt-3 xl:pt-0 border-t xl:border-t-0 border-slate-100">
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end shrink-0 pt-3 xl:pt-0 border-t xl:border-t-0 border-slate-100 dark:border-slate-800">
           {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(user?.role || '') && (
             <Button
               variant="outline"
@@ -432,11 +432,11 @@ export default function RepairDetails() {
               className={cn(
                 "rounded-2xl font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer transition-all flex items-center gap-1.5",
                 isCourierDispatched
-                  ? "border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold"
-                  : "border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-800"
+                  ? "border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-extrabold"
+                  : "border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200"
               )}
             >
-              <Truck className="h-4 w-4 text-blue-600" />
+              <Truck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               <span>{isCourierDispatched ? 'Update Courier' : 'Dispatch Courier'}</span>
             </Button>
           )}
@@ -445,9 +445,9 @@ export default function RepairDetails() {
             <Button
               variant="outline"
               onClick={() => setIsEditModalOpen(true)}
-              className="rounded-2xl border-slate-300 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5"
+              className="rounded-2xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5"
             >
-              <Edit3 className="h-4 w-4 text-slate-700" />
+              <Edit3 className="h-4 w-4 text-slate-700 dark:text-slate-300" />
               <span>Edit</span>
             </Button>
           )}
@@ -458,13 +458,13 @@ export default function RepairDetails() {
               onClick={() => setIsSmsModalOpen(true)}
               className={`rounded-2xl font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5 transition-all ${
                 repair.smsSummary?.status === 'SENT'
-                  ? 'border-emerald-300 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800'
-                  : 'border-teal-300 bg-teal-50/80 hover:bg-teal-100 text-teal-800'
+                  ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/80 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
+                  : 'border-teal-300 dark:border-teal-700 bg-teal-50/80 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-800 dark:text-teal-300'
               }`}
               title="Send SMS to Customer"
               aria-label="Send SMS to Customer"
             >
-              <MessageSquare className={`h-4 w-4 ${repair.smsSummary?.status === 'SENT' ? 'text-emerald-600' : 'text-teal-600'}`} />
+              <MessageSquare className={`h-4 w-4 ${repair.smsSummary?.status === 'SENT' ? 'text-emerald-600 dark:text-emerald-400' : 'text-teal-600 dark:text-teal-400'}`} />
               <span>{repair.smsSummary?.status === 'SENT' ? 'Send SMS Again' : 'Send SMS'}</span>
             </Button>
           )}
@@ -472,9 +472,9 @@ export default function RepairDetails() {
           <Button
             variant="outline"
             onClick={() => setIsSlipModalOpen(true)}
-            className="rounded-2xl border-slate-300 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5"
+            className="rounded-2xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5"
           >
-            <Printer className="h-4 w-4 text-slate-700" />
+            <Printer className="h-4 w-4 text-slate-700 dark:text-slate-300" />
             <span>Slip</span>
           </Button>
 
@@ -482,9 +482,9 @@ export default function RepairDetails() {
             <Button
               variant="outline"
               onClick={() => setIsCancelDialogOpen(true)}
-              className="rounded-2xl border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-700 font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5 transition-all"
+              className="rounded-2xl border-rose-200 dark:border-rose-800 bg-rose-50/60 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5 transition-all"
             >
-              <Ban className="h-4 w-4 text-rose-600" />
+              <Ban className="h-4 w-4 text-rose-600 dark:text-rose-400" />
               <span>Cancel Device</span>
             </Button>
           )}
@@ -493,9 +493,9 @@ export default function RepairDetails() {
             <Button
               variant="outline"
               onClick={() => setIsRestoreDialogOpen(true)}
-              className="rounded-2xl border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5 transition-all"
+              className="rounded-2xl border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs h-10 px-3.5 shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5 transition-all"
             >
-              <RotateCcw className="h-4 w-4 text-indigo-600" />
+              <RotateCcw className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
               <span>Re-Open Repair</span>
             </Button>
           )}
@@ -505,7 +505,7 @@ export default function RepairDetails() {
             size="sm"
             label="Refresh"
             variant="outline"
-            className="rounded-2xl h-10 border-slate-200 font-bold text-xs shrink-0"
+            className="rounded-2xl h-10 border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-bold text-xs shrink-0"
           />
         </div>
       </div>
@@ -514,18 +514,18 @@ export default function RepairDetails() {
         {/* Main Column */}
         <div className="lg:col-span-2 space-y-6 sm:space-y-8 w-full min-w-0">
           {/* Diagnostics & Priority Card */}
-          <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white w-full">
-            <CardHeader className="bg-slate-50/50 p-6 sm:p-8 border-b border-slate-100">
+          <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden bg-white dark:bg-slate-900 w-full">
+            <CardHeader className="bg-slate-50/50 dark:bg-slate-850/60 p-6 sm:p-8 border-b border-slate-100 dark:border-slate-800">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-12 h-12 bg-white rounded-2xl shadow-xs flex items-center justify-center text-slate-900 border border-slate-200/80 shrink-0">
-                    <Smartphone className="h-6 w-6 text-indigo-600" />
+                  <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl shadow-xs flex items-center justify-center text-slate-900 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 shrink-0">
+                    <Smartphone className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
                   </div>
                   <div className="min-w-0">
-                    <CardTitle className="text-xl sm:text-2xl font-bold truncate text-slate-900">
+                    <CardTitle className="text-xl sm:text-2xl font-bold truncate text-slate-900 dark:text-slate-100">
                       Repair Diagnostics
                     </CardTitle>
-                    <CardDescription className="text-xs text-slate-500 font-medium">
+                    <CardDescription className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                       Comprehensive device state & reported issues.
                     </CardDescription>
                   </div>
@@ -534,9 +534,9 @@ export default function RepairDetails() {
                 <Button
                   variant="outline"
                   onClick={() => setIsSlipModalOpen(true)}
-                  className="rounded-2xl font-bold border-slate-200 h-10 px-4 hover:bg-slate-50 cursor-pointer shrink-0 text-xs shadow-xs"
+                  className="rounded-2xl font-bold border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 h-10 px-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer shrink-0 text-xs shadow-xs text-slate-700 dark:text-slate-200"
                 >
-                  <Printer className="h-4 w-4 mr-2 text-slate-700" /> Print Service Slip
+                  <Printer className="h-4 w-4 mr-2 text-slate-700 dark:text-slate-300" /> Print Service Slip
                 </Button>
               </div>
             </CardHeader>
@@ -544,25 +544,25 @@ export default function RepairDetails() {
             <CardContent className="p-6 sm:p-8 space-y-8 w-full">
               {/* Device Spec Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-left">
-                <div className="space-y-1 bg-slate-50/70 p-4 rounded-2xl border border-slate-100">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Brand / Manufacturer</p>
-                  <p className="text-base sm:text-lg font-extrabold text-slate-900 truncate">{repair.deviceBrand}</p>
+                <div className="space-y-1 bg-slate-50/70 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Brand / Manufacturer</p>
+                  <p className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100 truncate">{repair.deviceBrand}</p>
                 </div>
-                <div className="space-y-1 bg-slate-50/70 p-4 rounded-2xl border border-slate-100">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Model Specification</p>
-                  <p className="text-base sm:text-lg font-extrabold text-slate-900 truncate">{repair.deviceModel}</p>
+                <div className="space-y-1 bg-slate-50/70 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Model Specification</p>
+                  <p className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100 truncate">{repair.deviceModel}</p>
                 </div>
-                <div className="space-y-1 bg-slate-50/70 p-4 rounded-2xl border border-slate-100 flex items-start justify-between">
+                <div className="space-y-1 bg-slate-50/70 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-start justify-between">
                   <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">IMEI / Serial</p>
-                    <p className="text-base sm:text-lg font-mono font-bold text-indigo-600 truncate">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">IMEI / Serial</p>
+                    <p className="text-base sm:text-lg font-mono font-bold text-indigo-600 dark:text-indigo-400 truncate">
                       {repair.imeiNumber || 'N/A'}
                     </p>
                   </div>
                   {repair.imeiNumber && (
                     <button
                       onClick={() => copyToClipboard(repair.imeiNumber, 'IMEI')}
-                      className="text-slate-400 hover:text-slate-700 p-1 mt-1 transition-colors"
+                      className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 mt-1 transition-colors"
                       title="Copy IMEI"
                     >
                       <Copy className="h-3.5 w-3.5" />
@@ -572,28 +572,28 @@ export default function RepairDetails() {
               </div>
 
               {/* Problem Description */}
-              <div className="bg-slate-50 p-5 sm:p-6 rounded-[28px] border border-slate-200/70 space-y-3.5">
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-5 sm:p-6 rounded-[28px] border border-slate-200/70 dark:border-slate-800 space-y-3.5">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 bg-white rounded-xl flex items-center justify-center shadow-xs shrink-0 border border-slate-100">
-                    <FileText className="h-4 w-4 text-indigo-600" />
+                  <div className="w-7 h-7 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center shadow-xs shrink-0 border border-slate-100 dark:border-slate-700">
+                    <FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                   </div>
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700">Problem Description</h4>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">Problem Description</h4>
                 </div>
-                <p className="text-slate-800 font-medium text-sm sm:text-base leading-relaxed break-words bg-white p-4 rounded-2xl border border-slate-200/50">
+                <p className="text-slate-800 dark:text-slate-200 font-medium text-sm sm:text-base leading-relaxed break-words bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800">
                   "{repair.problemDescription || 'No diagnostic notes provided on intake.'}"
                 </p>
 
                 <div className="pt-1 flex flex-wrap gap-2">
-                  <Badge variant="outline" className="bg-white rounded-xl px-3 py-1.5 font-bold border-slate-200 text-xs">
+                  <Badge variant="outline" className="bg-white dark:bg-slate-900 rounded-xl px-3 py-1.5 font-bold border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200">
                     <ShieldCheck className="h-3.5 w-3.5 mr-1 text-emerald-500" /> Condition: {repair.deviceCondition}
                   </Badge>
                   {repair.deviceColor && (
-                    <Badge variant="outline" className="bg-white rounded-xl px-3 py-1.5 font-bold border-slate-200 text-xs text-slate-800">
+                    <Badge variant="outline" className="bg-white dark:bg-slate-900 rounded-xl px-3 py-1.5 font-bold border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200">
                       Color: {repair.deviceColor}
                     </Badge>
                   )}
                   {repair.accessoriesReceived && (
-                    <Badge variant="outline" className="bg-white rounded-xl px-3 py-1.5 font-bold border-slate-200 text-xs">
+                    <Badge variant="outline" className="bg-white dark:bg-slate-900 rounded-xl px-3 py-1.5 font-bold border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200">
                       <Zap className="h-3.5 w-3.5 mr-1 text-amber-500" /> Includes: {repair.accessoriesReceived}
                     </Badge>
                   )}
@@ -603,20 +603,20 @@ export default function RepairDetails() {
               {/* ========================================================================= */}
               {/* 1. PROFESSIONAL REPAIR QUEUE PRIORITY SELECTOR (COMPACT & RESPONSIVE)    */}
               {/* ========================================================================= */}
-              <div className="space-y-3 pt-4 border-t border-slate-100">
+              <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="space-y-0.5">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-400">
                       Repair Queue Priority
                     </h3>
-                    <p className="text-[11px] text-slate-400 font-medium">
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
                       Select triage priority to reorder queue position for technicians
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-xl text-[11px] font-bold text-slate-700">
-                    <span className="text-slate-400">Current:</span>
-                    <span className="font-extrabold text-slate-900">
+                  <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-xl text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    <span className="text-slate-400 dark:text-slate-500">Current:</span>
+                    <span className="font-extrabold text-slate-900 dark:text-slate-100">
                       {repair.priority || 'NORMAL'}
                     </span>
                   </div>
@@ -636,7 +636,7 @@ export default function RepairDetails() {
                           'relative w-full rounded-2xl p-3 text-left transition-all duration-150 flex flex-col justify-between gap-2 border cursor-pointer select-none',
                           isCurrent
                             ? cn(p.activeBg, p.activeBorder)
-                            : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 hover:border-slate-300'
+                            : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200/90 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700'
                         )}
                       >
                         <div className="flex items-center justify-between w-full">
@@ -654,7 +654,7 @@ export default function RepairDetails() {
                                   ? p.value === 'MEDIUM'
                                     ? 'text-slate-950'
                                     : 'text-white'
-                                  : 'text-slate-900'
+                                  : 'text-slate-900 dark:text-slate-100'
                               )}
                             >
                               {p.label}
@@ -690,8 +690,8 @@ export default function RepairDetails() {
               </div>
 
               {/* Status Flow Buttons */}
-              <div className="space-y-3 pt-4 border-t border-slate-100">
-                <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
+              <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-400">
                   Update Operation Status
                 </h3>
                 <div className="flex flex-wrap gap-2">
@@ -723,17 +723,17 @@ export default function RepairDetails() {
                             ? s === 'RE_PROBLEM'
                               ? 'bg-rose-600 text-white shadow-sm'
                               : s === 'CANCELLED'
-                              ? 'bg-slate-800 text-white shadow-sm'
+                              ? 'bg-slate-800 dark:bg-slate-700 text-white shadow-sm'
                               : s === 'DISPATCHED_VIA_COURIER'
                               ? 'bg-blue-600 text-white shadow-sm'
                               : 'bg-indigo-600 text-white shadow-sm'
                             : s === 'RE_PROBLEM'
-                            ? 'border-rose-200 text-rose-700 hover:bg-rose-50'
+                            ? 'border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40'
                             : s === 'CANCELLED'
-                            ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                            ? 'border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                             : s === 'DISPATCHED_VIA_COURIER'
-                            ? 'border-blue-200 text-blue-700 hover:bg-blue-50'
-                            : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                            ? 'border-blue-200 dark:border-blue-900/60 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40'
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
                         )}
                       >
                         {s === 'RE_PROBLEM'
@@ -751,15 +751,15 @@ export default function RepairDetails() {
 
           {/* Dedicated Courier Logistics Section (Visible if Courier Details Exist) */}
           {hasCourierActivity && (
-            <Card className="rounded-[32px] sm:rounded-[40px] border-blue-200/80 shadow-sm overflow-hidden bg-white w-full">
-              <CardHeader className="bg-blue-50/60 p-6 sm:p-8 border-b border-blue-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <Card className="rounded-[32px] sm:rounded-[40px] border-blue-200/80 dark:border-blue-900/60 shadow-sm overflow-hidden bg-white dark:bg-slate-900 w-full">
+              <CardHeader className="bg-blue-50/60 dark:bg-blue-950/40 p-6 sm:p-8 border-b border-blue-100 dark:border-blue-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
                   <div className="w-11 h-11 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-xs shrink-0">
                     <Truck className="h-6 w-6" />
                   </div>
                   <div>
-                    <CardTitle className="text-xl font-bold text-slate-900">Courier Logistics Details</CardTitle>
-                    <CardDescription className="text-xs text-blue-700 font-medium">
+                    <CardTitle className="text-xl font-bold text-slate-900 dark:text-slate-100">Courier Logistics Details</CardTitle>
+                    <CardDescription className="text-xs text-blue-700 dark:text-blue-300 font-medium">
                       Active parcel consignment & shipment tracking data
                     </CardDescription>
                   </div>
@@ -768,7 +768,7 @@ export default function RepairDetails() {
                 <Button
                   variant="outline"
                   onClick={() => setIsCourierDispatchDialogOpen(true)}
-                  className="rounded-2xl border-blue-300 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs h-10 px-4 shadow-xs shrink-0 flex items-center gap-1.5"
+                  className="rounded-2xl border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-bold text-xs h-10 px-4 shadow-xs shrink-0 flex items-center gap-1.5"
                 >
                   <Truck className="h-4 w-4" />
                   <span>Update Courier Info</span>
@@ -778,18 +778,18 @@ export default function RepairDetails() {
               <CardContent className="p-6 sm:p-8 space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {/* Outbound Courier Partner */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Return Courier Partner</p>
-                    <p className="text-sm font-extrabold text-slate-900 truncate">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Return Courier Partner</p>
+                    <p className="text-sm font-extrabold text-slate-900 dark:text-slate-100 truncate">
                       {repair.returnCourierCompany || repair.courierCompany || 'Not Specified'}
                     </p>
                   </div>
 
                   {/* Tracking Number */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1 flex items-start justify-between">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1 flex items-start justify-between">
                     <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Tracking / AWB #</p>
-                      <p className="text-sm font-mono font-black text-blue-600 truncate">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Tracking / AWB #</p>
+                      <p className="text-sm font-mono font-black text-blue-600 dark:text-blue-400 truncate">
                         {repair.returnCourierTrackingNumber || repair.courierTrackingNumber || 'Pending'}
                       </p>
                     </div>
@@ -801,7 +801,7 @@ export default function RepairDetails() {
                             'Tracking Number'
                           )
                         }
-                        className="text-slate-400 hover:text-slate-700 p-1 transition-colors"
+                        className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 transition-colors"
                         title="Copy Tracking Number"
                       >
                         <Copy className="h-3.5 w-3.5" />
@@ -810,34 +810,34 @@ export default function RepairDetails() {
                   </div>
 
                   {/* Shipment Status */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Logistics Status</p>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Logistics Status</p>
                     <Badge className="bg-blue-600 text-white text-[11px] font-bold">
                       {repair.courierOutStatus || repair.courierStatus || (isCourierDispatched ? 'DISPATCHED' : 'IN_LAB')}
                     </Badge>
                   </div>
 
                   {/* Destination */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Destination District</p>
-                    <p className="text-sm font-bold text-slate-900 truncate">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Destination District</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
                       {repair.destinationDistrict || repair.originDistrict || 'Kathmandu'}
                     </p>
                   </div>
 
                   {/* Receiver */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Receiver Contact</p>
-                    <p className="text-sm font-bold text-slate-900 truncate">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Receiver Contact</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
                       {repair.receiverName || repair.customerName || 'Customer'}
                       {repair.receiverPhone ? ` (${repair.receiverPhone})` : ''}
                     </p>
                   </div>
 
                   {/* Dispatch Date */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Dispatched Date</p>
-                    <p className="text-sm font-bold text-slate-900 truncate">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Dispatched Date</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
                       {repair.returnCourierDispatchDate
                         ? format(new Date(repair.returnCourierDispatchDate), 'dd MMM yyyy')
                         : repair.returnCourierDispatchedAt
@@ -849,17 +849,17 @@ export default function RepairDetails() {
 
                 {/* Delivery Address & Notes */}
                 {(repair.destinationAddress || repair.returnCourierNotes) && (
-                  <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/60 space-y-2 text-xs">
+                  <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 space-y-2 text-xs">
                     {repair.destinationAddress && (
                       <div>
-                        <span className="font-bold text-slate-500">Delivery Address: </span>
-                        <span className="text-slate-800 font-medium">{repair.destinationAddress}</span>
+                        <span className="font-bold text-slate-500 dark:text-slate-400">Delivery Address: </span>
+                        <span className="text-slate-800 dark:text-slate-200 font-medium">{repair.destinationAddress}</span>
                       </div>
                     )}
                     {repair.returnCourierNotes && (
                       <div>
-                        <span className="font-bold text-slate-500">Logistics Notes: </span>
-                        <span className="text-slate-800 font-medium italic">"{repair.returnCourierNotes}"</span>
+                        <span className="font-bold text-slate-500 dark:text-slate-400">Logistics Notes: </span>
+                        <span className="text-slate-800 dark:text-slate-200 font-medium italic">"{repair.returnCourierNotes}"</span>
                       </div>
                     )}
                   </div>
@@ -869,15 +869,15 @@ export default function RepairDetails() {
           )}
 
           {/* Notes Section */}
-          <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white w-full">
-            <CardHeader className="bg-slate-50/50 p-6 sm:p-8 border-b border-slate-100">
+          <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden bg-white dark:bg-slate-900 w-full">
+            <CardHeader className="bg-slate-50/50 dark:bg-slate-850/60 p-6 sm:p-8 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center border border-blue-100 shrink-0">
+                <div className="w-10 h-10 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center border border-blue-100 dark:border-blue-900/60 shrink-0">
                   <MessageSquare className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl font-bold text-slate-900">Communication & Technical Notes</CardTitle>
-                  <CardDescription className="text-xs text-slate-500">
+                  <CardTitle className="text-xl font-bold text-slate-900 dark:text-slate-100">Communication & Technical Notes</CardTitle>
+                  <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
                     Real-time collaboration across roles and diagnostics history.
                   </CardDescription>
                 </div>
@@ -887,38 +887,38 @@ export default function RepairDetails() {
             <CardContent className="p-6 sm:p-8 space-y-6">
               <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                 {notes.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  <div className="p-6 text-center text-xs text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
                     No communication notes recorded yet.
                   </div>
                 ) : (
                   notes.map((n) => (
                     <div
                       key={n.id}
-                      className="p-4 rounded-2xl text-xs space-y-1.5 border bg-slate-50 border-slate-100 text-slate-900 break-words"
+                      className="p-4 rounded-2xl text-xs space-y-1.5 border bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 text-slate-900 dark:text-slate-100 break-words"
                     >
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <span className="font-extrabold text-[11px] flex items-center gap-1.5">
                           <span>{n.authorName || n.technician?.name || 'Staff Member'}</span>
-                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 rounded-md font-bold uppercase">
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 rounded-md font-bold uppercase border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
                             {n.authorRole || n.technician?.role || 'STAFF'}
                           </Badge>
                         </span>
-                        <span className="text-[10px] text-slate-400 font-medium">
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
                           {n.createdAt ? format(new Date(n.createdAt), 'dd MMM yyyy, hh:mm a') : ''}
                         </span>
                       </div>
-                      <p className="text-xs font-medium leading-relaxed">{n.note}</p>
+                      <p className="text-xs font-medium leading-relaxed text-slate-800 dark:text-slate-200">{n.note}</p>
                     </div>
                   ))
                 )}
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-100">
+              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <Textarea
                   placeholder="Post internal instruction or diagnostic note..."
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
-                  className="rounded-2xl border-slate-200 text-xs font-medium min-h-[70px] bg-slate-50/60 focus:bg-white"
+                  className="rounded-2xl border-slate-200 dark:border-slate-800 text-xs font-medium min-h-[70px] bg-slate-50/60 dark:bg-slate-950/60 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-slate-100"
                 />
                 <div className="flex items-center justify-end">
                   <Button
@@ -943,7 +943,7 @@ export default function RepairDetails() {
         {/* Sidebar Column */}
         <div className="space-y-6 sm:space-y-8 w-full min-w-0">
           {/* Client Information */}
-          <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 shadow-sm overflow-hidden bg-white w-full">
+          <Card className="rounded-[32px] sm:rounded-[40px] border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden bg-white dark:bg-slate-900 w-full">
             <CardHeader className="bg-slate-950 text-white p-6 sm:p-8">
               <CardTitle className="text-lg sm:text-xl font-bold flex items-center gap-2">
                 <User className="h-5 w-5 text-indigo-400" /> Client Information
@@ -953,50 +953,50 @@ export default function RepairDetails() {
             <CardContent className="p-6 sm:p-8 space-y-6">
               <div className="space-y-3.5 text-xs">
                 <div className="flex justify-between items-center gap-2">
-                  <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Customer ID</span>
-                  <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 truncate">
+                  <span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest text-[10px]">Customer ID</span>
+                  <span className="font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-900/60 truncate">
                     {repair.customer?.customerId || repair.customerId || 'CUS-00101'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center gap-2">
-                  <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Client Name</span>
-                  <span className="font-bold text-slate-900 truncate">{repair.customerName}</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest text-[10px]">Client Name</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100 truncate">{repair.customerName}</span>
                 </div>
                 <div className="flex justify-between items-center gap-2">
-                  <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Phone Number</span>
-                  <span className="font-mono font-bold text-slate-900 truncate">{repair.customerPhone}</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest text-[10px]">Phone Number</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100 truncate">{repair.customerPhone}</span>
                 </div>
                 {isRepairedOrReady && (
-                  <div className="mt-2 p-3 rounded-2xl bg-teal-50/50 border border-teal-200/80 space-y-2">
+                  <div className="mt-2 p-3 rounded-2xl bg-teal-50/50 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-800/50 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <MessageSquare className="w-3.5 h-3.5 text-teal-600" />
-                        <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">SMS Notification</span>
+                        <MessageSquare className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                        <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 tracking-wider">SMS Notification</span>
                       </div>
                       {repair.smsSummary?.status === 'SENT' ? (
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                           <span>SMS: Sent</span>
                         </Badge>
                       ) : repair.smsSummary?.status === 'INITIATED' ? (
-                        <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
-                          <Clock className="w-3 h-3 text-sky-600" />
+                        <Badge variant="outline" className="bg-sky-50 dark:bg-sky-950/50 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-800 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                          <Clock className="w-3 h-3 text-sky-600 dark:text-sky-400" />
                           <span>SMS: Initiated</span>
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
+                        <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
                           SMS: Not Sent
                         </Badge>
                       )}
                     </div>
 
-                    <div className="text-xs text-slate-700 flex items-center justify-between">
+                    <div className="text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
                       <span>Messages Sent:</span>
-                      <strong className="text-slate-900 font-bold">{repair.smsSummary?.count || 0}</strong>
+                      <strong className="text-slate-900 dark:text-slate-100 font-bold">{repair.smsSummary?.count || 0}</strong>
                     </div>
 
                     {repair.smsSummary?.lastSentAt && (
-                      <div className="text-[10px] text-slate-500 font-mono">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                         Last: {format(new Date(repair.smsSummary.lastSentAt), 'dd MMM yyyy, h:mm a')}
                       </div>
                     )}
@@ -1009,13 +1009,13 @@ export default function RepairDetails() {
                           onClick={() => setIsSmsModalOpen(true)}
                           className={`w-full rounded-xl font-bold text-xs h-8 px-2.5 flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer ${
                             repair.smsSummary?.status === 'SENT'
-                              ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
-                              : 'border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800'
+                              ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300'
+                              : 'border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 dark:hover:bg-teal-900/50 text-teal-800 dark:text-teal-300'
                           }`}
                           title="Send Customer SMS (Google Messages for Web)"
                           aria-label="Send Customer SMS"
                         >
-                          <MessageSquare className={`h-3.5 w-3.5 ${repair.smsSummary?.status === 'SENT' ? 'text-emerald-600' : 'text-teal-600'}`} />
+                          <MessageSquare className={`h-3.5 w-3.5 ${repair.smsSummary?.status === 'SENT' ? 'text-emerald-600 dark:text-emerald-400' : 'text-teal-600 dark:text-teal-400'}`} />
                           <span>{repair.smsSummary?.status === 'SENT' ? 'Send SMS Again' : 'Send Customer SMS'}</span>
                         </Button>
                       </div>
@@ -1024,42 +1024,42 @@ export default function RepairDetails() {
                 )}
                 {repair.customerEmail && (
                   <div className="flex justify-between items-center gap-2">
-                    <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Email</span>
-                    <span className="font-medium text-slate-700 truncate">{repair.customerEmail}</span>
+                    <span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest text-[10px]">Email</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300 truncate">{repair.customerEmail}</span>
                   </div>
                 )}
                 {repair.customerAddress && (
                   <div className="flex justify-between items-center gap-2">
-                    <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Address</span>
-                    <span className="font-medium text-slate-700 truncate">{repair.customerAddress}</span>
+                    <span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest text-[10px]">Address</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300 truncate">{repair.customerAddress}</span>
                   </div>
                 )}
               </div>
 
-              <Separator />
+              <Separator className="dark:bg-slate-800" />
 
               {/* Billing Snapshot */}
               <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                  <Banknote className="h-4 w-4 text-emerald-600" /> Billing Snapshot
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 flex items-center gap-2">
+                  <Banknote className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Billing Snapshot
                 </h4>
                 <div className="space-y-2.5 text-xs sm:text-sm">
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-slate-500">Total Estimation</span>
-                    <span className="font-black font-mono text-slate-900">
+                    <span className="font-bold text-slate-500 dark:text-slate-400">Total Estimation</span>
+                    <span className="font-black font-mono text-slate-900 dark:text-slate-100">
                       {repair.estimatedCost != null ? formatNPR(repair.estimatedCost) : 'Unspecified'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-slate-500">Advance Paid</span>
-                    <span className="font-black font-mono text-emerald-600">
+                    <span className="font-bold text-slate-500 dark:text-slate-400">Advance Paid</span>
+                    <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
                       {formatNPR(repair.advancePaid || 0)}
                     </span>
                   </div>
-                  <Separator className="my-1" />
+                  <Separator className="my-1 dark:bg-slate-800" />
                   <div className="flex justify-between items-center text-base sm:text-lg">
-                    <span className="font-black text-slate-900">Balance Due</span>
-                    <span className="font-black font-mono text-rose-600">
+                    <span className="font-black text-slate-900 dark:text-slate-100">Balance Due</span>
+                    <span className="font-black font-mono text-rose-600 dark:text-rose-400">
                       {repair.estimatedCost != null
                         ? formatNPR(Math.max(0, repair.estimatedCost - (repair.advancePaid || 0)))
                         : '—'}
@@ -1071,12 +1071,12 @@ export default function RepairDetails() {
           </Card>
 
           {/* Specialist Assignment */}
-          <Card className="rounded-[32px] sm:rounded-[40px] border-indigo-100 shadow-sm overflow-hidden bg-white w-full">
+          <Card className="rounded-[32px] sm:rounded-[40px] border-indigo-100 dark:border-slate-800 shadow-sm overflow-hidden bg-white dark:bg-slate-900 w-full">
             <CardHeader className="p-6 sm:p-8">
-              <CardTitle className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-                <Zap className="h-5 w-5 text-indigo-600" /> Specialist Assignment
+              <CardTitle className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Zap className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> Specialist Assignment
               </CardTitle>
-              <CardDescription className="text-xs text-slate-500">
+              <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
                 Assign or transfer diagnostic case.
               </CardDescription>
             </CardHeader>
@@ -1087,10 +1087,10 @@ export default function RepairDetails() {
                 onValueChange={handleAssignmentChange}
                 disabled={updating}
               >
-                <SelectTrigger className="h-12 rounded-2xl border-slate-200 bg-white shadow-xs font-bold text-xs sm:text-sm">
+                <SelectTrigger className="h-12 rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">
                   <SelectValue placeholder="Manual Assignment" />
                 </SelectTrigger>
-                <SelectContent className="rounded-2xl">
+                <SelectContent className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                   {technicians.map((t) => (
                     <SelectItem key={t.id} value={t.id} className="rounded-xl font-bold text-xs py-2.5">
                       {t.name} ({t.role?.replace(/_/g, ' ') || 'STAFF'})
@@ -1101,13 +1101,13 @@ export default function RepairDetails() {
 
               {repair.technician && (
                 <div className="space-y-3 pt-2">
-                  <div className="flex items-center gap-3.5 p-3.5 bg-slate-50 rounded-2xl border border-indigo-100">
-                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-xs shrink-0">
+                  <div className="flex items-center gap-3.5 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-indigo-100 dark:border-slate-800">
+                    <div className="w-10 h-10 bg-indigo-600 dark:bg-indigo-500 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-xs shrink-0">
                       {repair.technician.name?.charAt(0) || 'T'}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-bold text-slate-900 text-xs truncate">{repair.technician.name}</p>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Active Specialist</p>
+                      <p className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate">{repair.technician.name}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Active Specialist</p>
                     </div>
                   </div>
                 </div>
@@ -1119,10 +1119,10 @@ export default function RepairDetails() {
 
       {/* Reopen Warranty Modal */}
       <Dialog open={isReopenDialogOpen} onOpenChange={setIsReopenDialogOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
+        <DialogContent className="max-w-md rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 space-y-4">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-900">Reopen Warranty Claim</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
+            <DialogTitle className="text-xl font-bold text-slate-900 dark:text-slate-100">Reopen Warranty Claim</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
               Mark this repair as Re-Problem and provide details of customer claim.
             </DialogDescription>
           </DialogHeader>
@@ -1130,13 +1130,13 @@ export default function RepairDetails() {
             placeholder="Specify reason for reopening under warranty..."
             value={reopenRemark}
             onChange={(e) => setReopenRemark(e.target.value)}
-            className="rounded-2xl border-slate-200 text-xs"
+            className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs"
           />
           <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={() => setIsReopenDialogOpen(false)}
-              className="rounded-xl font-bold text-xs"
+              className="rounded-xl font-bold text-xs border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
             >
               Cancel
             </Button>
@@ -1153,23 +1153,23 @@ export default function RepairDetails() {
 
       {/* Cancel Repair Confirmation Dialog */}
       <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
-        <DialogContent className="max-w-lg rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-2xl bg-white space-y-4">
+        <DialogContent className="max-w-lg rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 space-y-4">
           <DialogHeader>
-            <div className="w-12 h-12 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-center mb-2">
-              <Ban className="h-6 w-6 text-rose-600" />
+            <div className="w-12 h-12 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 rounded-2xl flex items-center justify-center mb-2">
+              <Ban className="h-6 w-6 text-rose-600 dark:text-rose-400" />
             </div>
-            <DialogTitle className="text-xl font-black text-slate-900">
+            <DialogTitle className="text-xl font-black text-slate-900 dark:text-slate-100">
               Cancel Repair Service?
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
               Job #{repair.repairNumber} — {repair.deviceBrand} {repair.deviceModel} ({repair.customerName || 'Customer'})
             </DialogDescription>
           </DialogHeader>
 
-          <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl text-xs text-amber-900 flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="p-3.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-2xl text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div className="space-y-1 leading-relaxed">
-              <p className="font-bold text-amber-950">Active Queue Removal</p>
+              <p className="font-bold text-amber-950 dark:text-amber-100">Active Queue Removal</p>
               <p>
                 Marking this ticket as <strong>CANCELLED</strong> removes it from active bench queues and technician workloads. All diagnostic logs and history remain safely archived.
               </p>
@@ -1178,12 +1178,12 @@ export default function RepairDetails() {
 
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Reason for Cancellation</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Reason for Cancellation</Label>
               <Select value={cancelReasonPreset} onValueChange={setCancelReasonPreset}>
-                <SelectTrigger className="h-11 rounded-xl border-slate-200 text-xs font-semibold">
+                <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs font-semibold">
                   <SelectValue placeholder="Select reason" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl">
+                <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                   <SelectItem value="Customer cancelled / withdrew repair">Customer cancelled / withdrew repair</SelectItem>
                   <SelectItem value="Customer did not approve estimate / quote">Customer did not approve estimate / quote</SelectItem>
                   <SelectItem value="Device collected unrepaired">Device collected unrepaired</SelectItem>
@@ -1196,13 +1196,13 @@ export default function RepairDetails() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Additional Remarks & Explanation (Optional)</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Additional Remarks & Explanation (Optional)</Label>
               <Textarea
                 rows={3}
                 placeholder="Specific customer feedback, parts context, or cancellation details..."
                 value={cancelRemarks}
                 onChange={(e) => setCancelRemarks(e.target.value)}
-                className="rounded-xl border-slate-200 text-xs font-medium"
+                className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs font-medium"
               />
             </div>
           </div>
@@ -1213,7 +1213,7 @@ export default function RepairDetails() {
               variant="outline"
               onClick={() => setIsCancelDialogOpen(false)}
               disabled={cancelling}
-              className="h-10 rounded-xl border-slate-200 text-xs font-bold"
+              className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-bold"
             >
               Back
             </Button>
@@ -1241,25 +1241,25 @@ export default function RepairDetails() {
 
       {/* Restore Cancelled Repair Dialog */}
       <Dialog open={isRestoreDialogOpen} onOpenChange={setIsRestoreDialogOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl bg-white space-y-4">
+        <DialogContent className="max-w-md rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 space-y-4">
           <DialogHeader>
-            <div className="w-10 h-10 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-center mb-1">
-              <RotateCcw className="h-5 w-5 text-indigo-600" />
+            <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-900/60 rounded-xl flex items-center justify-center mb-1">
+              <RotateCcw className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
             </div>
-            <DialogTitle className="text-xl font-bold text-slate-900">Re-Open Cancelled Repair</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
+            <DialogTitle className="text-xl font-bold text-slate-900 dark:text-slate-100">Re-Open Cancelled Repair</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
               Restore this repair ticket to the active workflow.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Restore to Target Status</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Restore to Target Status</Label>
               <Select value={restoreTargetStatus} onValueChange={setRestoreTargetStatus}>
-                <SelectTrigger className="h-11 rounded-xl border-slate-200 text-xs font-semibold">
+                <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs font-semibold">
                   <SelectValue placeholder="Target status" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl">
+                <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
                   <SelectItem value="PENDING">PENDING</SelectItem>
                   <SelectItem value="RECEIVED">RECEIVED</SelectItem>
                   <SelectItem value="DIAGNOSING">DIAGNOSING</SelectItem>
@@ -1269,13 +1269,13 @@ export default function RepairDetails() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Reason / Notes for Reopening</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Reason / Notes for Reopening</Label>
               <Textarea
                 rows={2}
                 placeholder="Why is this repair being reopened?..."
                 value={restoreNote}
                 onChange={(e) => setRestoreNote(e.target.value)}
-                className="rounded-xl border-slate-200 text-xs font-medium"
+                className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs font-medium"
               />
             </div>
           </div>
@@ -1286,7 +1286,7 @@ export default function RepairDetails() {
               variant="outline"
               onClick={() => setIsRestoreDialogOpen(false)}
               disabled={restoring}
-              className="h-10 rounded-xl font-bold text-xs"
+              className="h-10 rounded-xl font-bold text-xs border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
             >
               Cancel
             </Button>

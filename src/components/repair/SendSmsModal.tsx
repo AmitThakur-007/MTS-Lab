@@ -359,17 +359,17 @@ export default function SendSmsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-4">
+      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 shadow-2xl">
         <DialogHeader className="space-y-1">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-400 flex items-center justify-center shrink-0">
               <MessageSquare className="w-5 h-5" />
             </div>
             <div>
-              <DialogTitle className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+              <DialogTitle className="text-lg sm:text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
                 Send SMS to Customer
               </DialogTitle>
-              <DialogDescription className="text-xs text-slate-500">
+              <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
                 Manual customer notification via Google Messages for Web (paired with Android phone).
               </DialogDescription>
             </div>
@@ -567,12 +567,12 @@ export default function SendSmsModal({
                 }}
                 rows={3}
                 className={cn(
-                  "text-xs font-medium resize-none bg-white rounded-xl focus:ring-teal-500 transition-colors",
+                  "text-xs font-medium resize-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-xl focus:ring-teal-500 transition-colors",
                   isOverLimit
-                    ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20"
+                    ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20 dark:bg-rose-950/20"
                     : isApproachingLimit
-                    ? "border-amber-300 focus:ring-amber-500"
-                    : "border-slate-300"
+                    ? "border-amber-300 dark:border-amber-700 focus:ring-amber-500"
+                    : "border-slate-300 dark:border-slate-700"
                 )}
                 placeholder="Enter SMS message (maximum 160 characters)..."
               />

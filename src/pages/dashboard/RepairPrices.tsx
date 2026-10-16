@@ -1063,20 +1063,20 @@ export default function RepairPrices() {
   // Non-Admin Permission Restriction View
   if (!isAdmin) {
     return (
-      <div className="max-w-2xl mx-auto py-16 text-center space-y-6 bg-white p-10 rounded-3xl border border-slate-200 shadow-sm">
-        <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+      <div className="max-w-2xl mx-auto py-16 text-center space-y-6 bg-white dark:bg-slate-900 p-10 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="w-16 h-16 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto">
           <ShieldAlert className="w-8 h-8" />
         </div>
         <div className="space-y-2">
-          <h2 className="text-2xl font-black text-slate-900">Access Restricted (403 Forbidden)</h2>
-          <p className="text-slate-600 text-sm font-medium leading-relaxed max-w-md mx-auto">
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white">Access Restricted (403 Forbidden)</h2>
+          <p className="text-slate-600 dark:text-slate-300 text-sm font-medium leading-relaxed max-w-md mx-auto">
             Only <strong>SUPER_ADMIN</strong>, <strong>ADMIN</strong>, and <strong>RECEPTIONIST</strong> roles are authorized to manage device repair services, descriptions, and prices.
           </p>
         </div>
         <div className="pt-2">
           <Link 
             to="/dashboard" 
-            className="inline-flex items-center justify-center rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold h-11 px-5 text-sm"
+            className="inline-flex items-center justify-center rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold h-11 px-5 text-sm"
           >
             Return to Dashboard Overview
           </Link>
@@ -1091,17 +1091,17 @@ export default function RepairPrices() {
       {/* ========================================================= */}
       {/* 1. TOP HEADER & MAIN CONTROLS                             */}
       {/* ========================================================= */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 sm:p-7 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-white tracking-tight">
               Services & Repair Prices
             </h1>
-            <Badge variant="outline" className="font-extrabold text-xs bg-slate-50 border-slate-200 text-slate-700">
+            <Badge variant="outline" className="font-extrabold text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
               Hierarchical Manager
             </Badge>
           </div>
-          <p className="text-slate-500 text-xs sm:text-sm font-medium">
+          <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-medium">
             Manage smartphone brands, models, repair categories, and prices in a dynamic file-manager structure.
           </p>
         </div>
@@ -1116,7 +1116,7 @@ export default function RepairPrices() {
           <Link
             to="/services"
             target="_blank"
-            className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold h-11 px-3.5 text-xs gap-1.5 shadow-2xs transition-colors"
+            className="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold h-11 px-3.5 text-xs gap-1.5 shadow-2xs transition-colors"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span>Public Finder</span>
@@ -1125,9 +1125,9 @@ export default function RepairPrices() {
           <Button
             onClick={openCreateFolderModal}
             variant="outline"
-            className="rounded-2xl border-slate-200 hover:bg-slate-50 text-slate-800 font-bold h-11 px-4 text-xs gap-1.5"
+            className="rounded-2xl border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold h-11 px-4 text-xs gap-1.5"
           >
-            <FolderPlus className="w-4 h-4 text-amber-600" />
+            <FolderPlus className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             <span>
               {currentLevelDepth === 0 ? '+ New Brand' : currentLevelDepth === 1 ? '+ New Model' : '+ New Category'}
             </span>
@@ -1135,7 +1135,7 @@ export default function RepairPrices() {
 
           <Button
             onClick={openCreateServiceModal}
-            className="rounded-2xl bg-slate-950 hover:bg-slate-800 text-white font-bold h-11 px-4 shadow-sm text-xs gap-1.5 active:scale-[0.98] transition-all"
+            className="rounded-2xl bg-slate-950 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 text-white font-bold h-11 px-4 shadow-sm text-xs gap-1.5 active:scale-[0.98] transition-all"
           >
             <Plus className="w-4 h-4" />
             <span>+ New Service</span>
@@ -1147,43 +1147,43 @@ export default function RepairPrices() {
       {/* 2. STATS STRIP                                            */}
       {/* ========================================================= */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Services</span>
-          <div className="text-xl sm:text-2xl font-black text-slate-950 mt-0.5">{metrics.total}</div>
+          <div className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-0.5">{metrics.total}</div>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Active (Public)</span>
-          <div className="text-xl sm:text-2xl font-black text-emerald-700 mt-0.5">{metrics.active}</div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Active (Public)</span>
+          <div className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400 mt-0.5">{metrics.active}</div>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Inactive</span>
-          <div className="text-xl sm:text-2xl font-black text-slate-600 mt-0.5">{metrics.inactive}</div>
+          <div className="text-xl sm:text-2xl font-black text-slate-600 dark:text-slate-300 mt-0.5">{metrics.inactive}</div>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Phone Brands</span>
-          <div className="text-xl sm:text-2xl font-black text-indigo-700 mt-0.5">{metrics.uniqueBrands}</div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Phone Brands</span>
+          <div className="text-xl sm:text-2xl font-black text-indigo-700 dark:text-indigo-400 mt-0.5">{metrics.uniqueBrands}</div>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs col-span-2 lg:col-span-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">Distinct Models</span>
-          <div className="text-xl sm:text-2xl font-black text-purple-700 mt-0.5">{metrics.uniqueModels}</div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs col-span-2 lg:col-span-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">Distinct Models</span>
+          <div className="text-xl sm:text-2xl font-black text-purple-700 dark:text-purple-400 mt-0.5">{metrics.uniqueModels}</div>
         </div>
       </div>
 
       {/* ========================================================= */}
       {/* 3. BREADCRUMBS & EXPLORER NAVIGATION BAR                  */}
       {/* ========================================================= */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         
         {/* Clickable Breadcrumbs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none text-xs font-bold text-slate-600">
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none text-xs font-bold text-slate-600 dark:text-slate-300">
           
           {/* Root Button */}
           <button
             onClick={() => handleNavigateBreadcrumb(-1)}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all ${
               currentPath.length === 0 && !globalSearch
-                ? 'bg-slate-900 text-white font-extrabold shadow-2xs'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-extrabold shadow-2xs'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
             <FolderTree className="w-3.5 h-3.5" />
@@ -1199,8 +1199,8 @@ export default function RepairPrices() {
                   onClick={() => handleNavigateBreadcrumb(idx)}
                   className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${
                     isLast
-                      ? 'bg-slate-950 text-white font-extrabold shadow-2xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      ? 'bg-slate-950 dark:bg-white text-white dark:text-slate-900 font-extrabold shadow-2xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >
                   {idx === 0 && <Smartphone className="w-3 h-3 text-slate-400" />}
@@ -1230,18 +1230,18 @@ export default function RepairPrices() {
               variant="outline"
               size="sm"
               onClick={handleNavigateUp}
-              className="h-9 px-3 rounded-xl border-slate-200 text-slate-700 font-bold text-xs gap-1"
+              className="h-9 px-3 rounded-xl border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs gap-1 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
               <span>Back</span>
             </Button>
           )}
 
-          <div className="flex items-center rounded-xl bg-slate-100 p-0.5 border border-slate-200/60">
+          <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200/60 dark:border-slate-700">
             <button
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-lg transition-all ${
-                viewMode === 'grid' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
+                viewMode === 'grid' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
               title="Folder Grid View"
             >
@@ -1250,7 +1250,7 @@ export default function RepairPrices() {
             <button
               onClick={() => setViewMode('list')}
               className={`p-1.5 rounded-lg transition-all ${
-                viewMode === 'list' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-900'
+                viewMode === 'list' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
               title="Compact Table View"
             >
@@ -1264,7 +1264,7 @@ export default function RepairPrices() {
       {/* ========================================================= */}
       {/* 4. SEARCH & FILTER BAR                                    */}
       {/* ========================================================= */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
         
         {/* Global Search Input */}
         <div className="relative w-full md:w-96">
@@ -1274,12 +1274,12 @@ export default function RepairPrices() {
             placeholder="Search brand, model, service, or category..."
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
-            className="pl-10 h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium"
+            className="pl-10 h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium"
           />
           {globalSearch && (
             <button
               onClick={() => setGlobalSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -1292,7 +1292,7 @@ export default function RepairPrices() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="h-10 px-3 text-xs font-bold rounded-xl border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none"
+            className="h-10 px-3 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
           >
             <option value="ALL">All Status</option>
             <option value="ACTIVE">Active Only</option>
@@ -1302,7 +1302,7 @@ export default function RepairPrices() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
-            className="h-10 px-3 text-xs font-bold rounded-xl border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none"
+            className="h-10 px-3 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
           >
             <option value="name">Sort by Name</option>
             <option value="priceAsc">Price: Low to High</option>
@@ -1314,7 +1314,7 @@ export default function RepairPrices() {
             variant="outline"
             size="sm"
             onClick={handleSelectAll}
-            className="h-10 px-3 rounded-xl border-slate-200 text-slate-700 font-bold text-xs gap-1.5"
+            className="h-10 px-3 rounded-xl border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs gap-1.5"
           >
             <CheckSquare className="w-3.5 h-3.5" />
             <span>Select All</span>
@@ -1325,7 +1325,7 @@ export default function RepairPrices() {
               variant="ghost"
               size="sm"
               onClick={handleClearSelection}
-              className="h-10 px-3 rounded-xl text-slate-500 font-bold text-xs"
+              className="h-10 px-3 rounded-xl text-slate-500 dark:text-slate-400 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               Clear
             </Button>
@@ -1339,7 +1339,7 @@ export default function RepairPrices() {
       {/* 5. FLOATING MULTI-SELECTION ACTION BAR (WHEN ITEMS CHOSEN) */}
       {/* ========================================================= */}
       {totalSelectedCount > 0 && (
-        <div className="sticky top-4 z-30 bg-slate-950 text-white px-5 py-3.5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 border border-slate-800">
+        <div className="sticky top-4 z-30 bg-slate-950 dark:bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 border border-slate-800">
           <div className="flex items-center gap-3">
             <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
             <span className="font-extrabold text-sm">
@@ -1352,7 +1352,7 @@ export default function RepairPrices() {
               size="sm"
               variant="secondary"
               onClick={openMoveModalForSelection}
-              className="h-9 px-3.5 rounded-xl font-bold text-xs bg-slate-800 text-white hover:bg-slate-700 border border-slate-700 gap-1.5"
+              className="h-9 px-3.5 rounded-xl font-bold text-xs bg-slate-800 dark:bg-slate-800 text-white hover:bg-slate-700 border border-slate-700 gap-1.5"
             >
               <Move className="w-3.5 h-3.5" />
               <span>Move Selected</span>
@@ -1385,9 +1385,9 @@ export default function RepairPrices() {
       {/* 6. FOLDER EXPLORER CONTENT SECTION                        */}
       {/* ========================================================= */}
       {loading ? (
-        <div className="bg-white p-20 rounded-3xl border border-slate-200 text-center space-y-3">
-          <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin mx-auto" />
-          <p className="text-slate-500 font-bold text-sm">Loading services and folders...</p>
+        <div className="bg-white dark:bg-slate-900 p-20 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-3">
+          <div className="w-8 h-8 border-2 border-slate-300 dark:border-slate-700 border-t-slate-900 dark:border-t-white rounded-full animate-spin mx-auto" />
+          <p className="text-slate-500 dark:text-slate-400 font-bold text-sm">Loading services and folders...</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -1399,7 +1399,7 @@ export default function RepairPrices() {
                 <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
                   {currentLevelDepth === 0 ? 'Phone Brands' : currentLevelDepth === 1 ? 'Device Models' : 'Repair Categories'}
                 </span>
-                <span className="text-xs font-bold text-slate-500">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
                   {currentLevelFolders.length} {currentLevelFolders.length === 1 ? 'folder' : 'folders'}
                 </span>
               </div>
@@ -1415,7 +1415,7 @@ export default function RepairPrices() {
                       <div
                         key={folder.name}
                         className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
-                          isSelected ? 'bg-indigo-50/70 border-indigo-300 shadow-xs' : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-xs'
+                          isSelected ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700 shadow-xs' : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
@@ -1433,7 +1433,7 @@ export default function RepairPrices() {
                               <IconComponent className="w-4 h-4" />
                             </div>
                             <div className="min-w-0">
-                              <h4 className="font-extrabold text-slate-900 text-sm truncate">{folder.name}</h4>
+                              <h4 className="font-extrabold text-slate-900 dark:text-white text-sm truncate">{folder.name}</h4>
                               <p className="text-[11px] text-slate-400 font-medium">
                                 {folder.level === 'brand' && `${folder.modelCount || 0} Models • ${folder.serviceCount || 0} Services`}
                                 {folder.level === 'model' && `${folder.categoryCount || 0} Categories • ${folder.serviceCount || 0} Services`}
@@ -1448,7 +1448,7 @@ export default function RepairPrices() {
                             variant="ghost"
                             size="sm"
                             onClick={() => openRenameFolderModal(folder)}
-                            className="h-8 px-2 rounded-lg text-slate-600 hover:text-slate-950 font-bold text-xs"
+                            className="h-8 px-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs"
                             title="Rename Folder"
                           >
                             <FileEdit className="w-3.5 h-3.5" />
@@ -1457,7 +1457,7 @@ export default function RepairPrices() {
                             variant="ghost"
                             size="sm"
                             onClick={() => openDeleteFolderModal(folder)}
-                            className="h-8 px-2 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs"
+                            className="h-8 px-2 rounded-lg text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 font-bold text-xs"
                             title="Delete Folder"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1465,7 +1465,7 @@ export default function RepairPrices() {
                           <Button
                             size="sm"
                             onClick={() => handleOpenFolder(folder.name)}
-                            className="h-8 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs gap-1 ml-1"
+                            className="h-8 px-3 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs gap-1 ml-1"
                           >
                             <span>Open</span>
                             <ChevronRight className="w-3 h-3" />
@@ -1481,8 +1481,8 @@ export default function RepairPrices() {
                       key={folder.name}
                       className={`group relative p-5 rounded-3xl border transition-all cursor-pointer select-none flex flex-col justify-between min-h-[140px] ${
                         isSelected 
-                          ? 'bg-indigo-50/80 border-indigo-400 shadow-md ring-2 ring-indigo-200' 
-                          : 'bg-white border-slate-200/90 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
+                          ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-400 dark:border-indigo-600 shadow-md ring-2 ring-indigo-200 dark:ring-indigo-900' 
+                          : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md hover:-translate-y-0.5'
                       }`}
                       onClick={(e) => {
                         // If not clicking checkbox or actions, open folder
@@ -1508,7 +1508,7 @@ export default function RepairPrices() {
 
                       {/* Middle: Folder Title */}
                       <div className="py-2">
-                        <h4 className="font-extrabold text-slate-950 text-base group-hover:text-indigo-600 transition-colors line-clamp-1">
+                        <h4 className="font-extrabold text-slate-950 dark:text-white text-base group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-1">
                           {folder.name}
                         </h4>
                         <p className="text-xs text-slate-400 font-medium pt-0.5">
@@ -1519,22 +1519,22 @@ export default function RepairPrices() {
                       </div>
 
                       {/* Bottom Row: Actions */}
-                      <div className="pt-2 border-t border-slate-100/80 flex items-center justify-between text-xs stop-folder-nav">
-                        <span className="text-[11px] font-bold text-emerald-600">
+                      <div className="pt-2 border-t border-slate-100/80 dark:border-slate-800 flex items-center justify-between text-xs stop-folder-nav">
+                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                           {folder.activeCount ? `${folder.activeCount} Active` : '0 Active'}
                         </span>
 
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => openRenameFolderModal(folder)}
-                            className="p-1.5 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-100"
+                            className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                             title="Rename"
                           >
                             <FileEdit className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => openDeleteFolderModal(folder)}
-                            className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50"
+                            className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40"
                             title="Delete Folder"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1555,30 +1555,30 @@ export default function RepairPrices() {
                 <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
                   {globalSearch.trim() ? `Search Results (${currentLevelServices.length})` : 'Services & Repair Prices'}
                 </span>
-                <span className="text-xs font-bold text-slate-500">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
                   {currentLevelServices.length} {currentLevelServices.length === 1 ? 'service rate' : 'service rates'}
                 </span>
               </div>
 
               {currentLevelServices.length === 0 ? (
-                <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center space-y-3">
-                  <Tag className="w-10 h-10 text-slate-300 mx-auto" />
+                <div className="bg-white dark:bg-slate-900 p-12 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-3">
+                  <Tag className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto" />
                   <div className="space-y-1">
-                    <p className="font-bold text-slate-800 text-base">No services found in this location</p>
-                    <p className="text-xs text-slate-500">Click "+ New Service" below to add a repair price for this device.</p>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 text-base">No services found in this location</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Click "+ New Service" below to add a repair price for this device.</p>
                   </div>
-                  <Button onClick={openCreateServiceModal} className="rounded-2xl bg-slate-900 text-white font-bold h-10 px-5 text-xs">
+                  <Button onClick={openCreateServiceModal} className="rounded-2xl bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 text-white font-bold h-10 px-5 text-xs">
                     <Plus className="w-4 h-4 mr-1" />
                     Add Service to this Folder
                   </Button>
                 </div>
               ) : (
-                <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
                   
                   {/* Table View (Desktop & Tablet) */}
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-700">
-                      <thead className="bg-slate-50 text-[11px] uppercase font-bold text-slate-400 border-b border-slate-200 tracking-wider">
+                    <table className="w-full text-left text-sm text-slate-700 dark:text-slate-300">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 text-[11px] uppercase font-bold text-slate-400 border-b border-slate-200 dark:border-slate-700 tracking-wider">
                         <tr>
                           <th className="px-4 py-3.5 w-10 text-center">
                             <input
@@ -1602,13 +1602,13 @@ export default function RepairPrices() {
                           <th className="px-4 py-3.5 text-right">Action</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 font-medium">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
                         {currentLevelServices.map((item) => {
                           const isSelected = selectedServiceIds.has(item.id);
                           return (
                             <tr 
                               key={item.id} 
-                              className={`transition-colors ${isSelected ? 'bg-indigo-50/60' : 'hover:bg-slate-50/70'}`}
+                              className={`transition-colors ${isSelected ? 'bg-indigo-50/60 dark:bg-indigo-950/40' : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/50'}`}
                             >
                               {/* Checkbox */}
                               <td className="px-4 py-4 align-top text-center">
@@ -1622,12 +1622,12 @@ export default function RepairPrices() {
 
                               {/* Device & Hierarchy */}
                               <td className="px-4 py-4 align-top">
-                                <div className="font-black text-slate-950 text-sm">
+                                <div className="font-black text-slate-950 dark:text-white text-sm">
                                   {item.brand} {item.model}
                                 </div>
-                                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 mt-1">
+                                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                                   {item.variant && (
-                                    <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold">
+                                    <span className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded font-bold">
                                       {item.variant}
                                     </span>
                                   )}
@@ -1642,13 +1642,13 @@ export default function RepairPrices() {
 
                               {/* Service Name & Description */}
                               <td className="px-4 py-4 align-top max-w-xs sm:max-w-sm">
-                                <div className="font-bold text-slate-900 text-sm">{item.serviceName || item.problem}</div>
+                                <div className="font-bold text-slate-900 dark:text-slate-100 text-sm">{item.serviceName || item.problem}</div>
                                 {(item.description || item.notes) ? (
-                                  <p className="text-xs text-slate-500 line-clamp-2 mt-1 leading-relaxed">
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 leading-relaxed">
                                     {item.description || item.notes}
                                   </p>
                                 ) : (
-                                  <span className="text-xs text-slate-300 italic">No description</span>
+                                  <span className="text-xs text-slate-300 dark:text-slate-600 italic">No description</span>
                                 )}
                                 {item.estimatedTime && (
                                   <div className="text-[10px] text-slate-400 font-bold mt-1">
@@ -1659,20 +1659,20 @@ export default function RepairPrices() {
 
                               {/* Category */}
                               <td className="px-4 py-4 align-top">
-                                <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 text-xs font-bold">
+                                <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold">
                                   {item.category}
                                 </span>
                               </td>
 
                               {/* Price */}
                               <td className="px-4 py-4 align-top whitespace-nowrap">
-                                <div className="font-black text-slate-950 text-sm sm:text-base">
+                                <div className="font-black text-slate-950 dark:text-white text-sm sm:text-base">
                                   {item.priceType === 'ON_INSPECTION' ? (
-                                    <span className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded">
+                                    <span className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800 px-2 py-0.5 rounded">
                                       On Inspection
                                     </span>
                                   ) : item.priceType === 'CONTACT_FOR_PRICE' ? (
-                                    <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
                                       Quote on Request
                                     </span>
                                   ) : (
@@ -1690,13 +1690,13 @@ export default function RepairPrices() {
                                   onClick={() => handleToggleServiceStatus(item)}
                                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-extrabold cursor-pointer transition-all ${
                                     item.status === 'ACTIVE'
-                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                                      : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
+                                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/60'
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
                                   }`}
                                 >
                                   {item.status === 'ACTIVE' ? (
                                     <>
-                                      <Eye className="w-3 h-3 text-emerald-600" />
+                                      <Eye className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                                       <span>Active</span>
                                     </>
                                   ) : (
@@ -1715,7 +1715,7 @@ export default function RepairPrices() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => openEditServiceModal(item)}
-                                    className="h-8 px-2.5 rounded-xl text-slate-700 hover:text-slate-950 font-bold text-xs"
+                                    className="h-8 px-2.5 rounded-xl text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs"
                                   >
                                     <Edit3 className="w-3.5 h-3.5 mr-1" />
                                     Edit
@@ -1724,7 +1724,7 @@ export default function RepairPrices() {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => setServiceToDelete(item)}
-                                    className="h-8 w-8 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                                    className="h-8 w-8 rounded-xl text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                                     title="Delete Service"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1751,12 +1751,12 @@ export default function RepairPrices() {
       {/* 7. CREATE / EDIT SERVICE MODAL FORM                       */}
       {/* ========================================================= */}
       <Dialog open={isServiceModalOpen} onOpenChange={setIsServiceModalOpen}>
-        <DialogContent className="w-[95vw] sm:w-[90vw] md:max-w-3xl lg:max-w-4xl bg-white rounded-3xl p-6 sm:p-8 max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200">
-          <DialogHeader className="pb-2 border-b border-slate-100">
-            <DialogTitle className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+        <DialogContent className="w-[95vw] sm:w-[90vw] md:max-w-3xl lg:max-w-4xl bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-slate-800">
+          <DialogHeader className="pb-2 border-b border-slate-100 dark:border-slate-800">
+            <DialogTitle className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-white tracking-tight">
               {editingService ? 'Edit Repair Service' : 'Add Repair Service'}
             </DialogTitle>
-            <DialogDescription className="text-slate-500 text-xs sm:text-sm font-medium">
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-medium">
               {editingService 
                 ? 'Update repair service details, rate, and customer visibility.' 
                 : 'Add a new repair price item under current folder hierarchy.'}
@@ -1769,13 +1769,13 @@ export default function RepairPrices() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Brand <span className="text-rose-500">*</span></label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Brand <span className="text-rose-500">*</span></label>
                 <input
                   list="brand-suggestions"
                   value={serviceFormData.brand}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, brand: e.target.value })}
                   placeholder="e.g. Samsung, Apple"
-                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-base md:text-xs font-semibold focus:bg-white focus:outline-none"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 text-base md:text-xs font-semibold focus:bg-white dark:focus:bg-slate-900 focus:outline-none"
                 />
                 <datalist id="brand-suggestions">
                   {allBrands.map(b => <option key={b} value={b} />)}
@@ -1784,23 +1784,23 @@ export default function RepairPrices() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Model <span className="text-rose-500">*</span></label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Model <span className="text-rose-500">*</span></label>
                 <Input
                   value={serviceFormData.model}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, model: e.target.value })}
                   placeholder="e.g. Galaxy S23 Ultra, iPhone 14"
-                  className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                  className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold focus:bg-white dark:focus:bg-slate-900"
                 />
                 {serviceFormErrors.model && <p className="text-[11px] text-rose-600 font-medium">{serviceFormErrors.model}</p>}
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Variant (Optional)</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Variant (Optional)</label>
                 <Input
                   value={serviceFormData.variant}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, variant: e.target.value })}
                   placeholder="e.g. 5G, Snapdragon"
-                  className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                  className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold focus:bg-white dark:focus:bg-slate-900"
                 />
               </div>
 
@@ -1810,13 +1810,13 @@ export default function RepairPrices() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Category <span className="text-rose-500">*</span></label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Category <span className="text-rose-500">*</span></label>
                 <input
                   list="category-suggestions"
                   value={serviceFormData.category}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, category: e.target.value })}
                   placeholder="e.g. Display, Battery"
-                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-base md:text-xs font-semibold focus:bg-white focus:outline-none"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 text-base md:text-xs font-semibold focus:bg-white dark:focus:bg-slate-900 focus:outline-none"
                 />
                 <datalist id="category-suggestions">
                   {DEFAULT_POPULAR_CATEGORIES.map(c => <option key={c} value={c} />)}
@@ -1825,24 +1825,24 @@ export default function RepairPrices() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Service Name <span className="text-rose-500">*</span></label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Service Name <span className="text-rose-500">*</span></label>
                 <Input
                   ref={serviceInputRef}
                   value={serviceFormData.serviceName}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, serviceName: e.target.value })}
                   placeholder="e.g. Display Replacement, Glass Change"
-                  className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                  className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold focus:bg-white dark:focus:bg-slate-900"
                 />
                 {serviceFormErrors.serviceName && <p className="text-[11px] text-rose-600 font-medium">{serviceFormErrors.serviceName}</p>}
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Estimated Turnaround</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Estimated Turnaround</label>
                 <Input
                   value={serviceFormData.estimatedTime}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, estimatedTime: e.target.value })}
                   placeholder="e.g. 1-2 Hours, Same Day"
-                  className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                  className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold focus:bg-white dark:focus:bg-slate-900"
                 />
               </div>
 
@@ -1852,7 +1852,7 @@ export default function RepairPrices() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Price (NPR)</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Price (NPR)</label>
                 <Input
                   type="number"
                   min="0"
@@ -1860,17 +1860,17 @@ export default function RepairPrices() {
                   value={serviceFormData.price}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, price: e.target.value })}
                   placeholder="e.g. 7000"
-                  className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                  className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold focus:bg-white dark:focus:bg-slate-900"
                 />
                 {serviceFormErrors.price && <p className="text-[11px] text-rose-600 font-medium">{serviceFormErrors.price}</p>}
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Price Type</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Price Type</label>
                 <select
                   value={serviceFormData.priceType}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, priceType: e.target.value as any })}
-                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold focus:outline-none"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none"
                 >
                   <option value="FIXED">Fixed Price</option>
                   <option value="STARTING_FROM">Starting From</option>
@@ -1880,14 +1880,14 @@ export default function RepairPrices() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Original Price (Optional Strikethrough)</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Original Price (Optional Strikethrough)</label>
                 <Input
                   type="number"
                   min="0"
                   value={serviceFormData.originalPrice}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, originalPrice: e.target.value })}
                   placeholder="e.g. 8500 (shows ~~8500~~)"
-                  className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                  className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold focus:bg-white dark:focus:bg-slate-900"
                 />
               </div>
 
@@ -1896,11 +1896,11 @@ export default function RepairPrices() {
             {/* ROW 3.5: DEVICE TYPE & RATINGS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Hardware Device Form</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Hardware Device Form</label>
                 <select
                   value={serviceFormData.deviceType}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, deviceType: e.target.value as any })}
-                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold focus:outline-none"
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none"
                 >
                   <option value="Smartphone">Smartphone</option>
                   <option value="Tablet">Tablet</option>
@@ -1909,7 +1909,7 @@ export default function RepairPrices() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Customer Rating (Optional)</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Customer Rating (Optional)</label>
                 <Input
                   type="number"
                   step="0.1"
@@ -1918,46 +1918,46 @@ export default function RepairPrices() {
                   value={serviceFormData.rating}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, rating: e.target.value })}
                   placeholder="e.g. 4.9"
-                  className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                  className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold focus:bg-white dark:focus:bg-slate-900"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Review Count (Optional)</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Review Count (Optional)</label>
                 <Input
                   type="number"
                   min="0"
                   value={serviceFormData.ratingCount}
                   onChange={(e) => setServiceFormData({ ...serviceFormData, ratingCount: e.target.value })}
                   placeholder="e.g. 24"
-                  className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                  className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold focus:bg-white dark:focus:bg-slate-900"
                 />
               </div>
             </div>
 
             {/* ROW 4: REPAIR DESCRIPTION */}
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Description / Technical Notes</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Description / Technical Notes</label>
               <textarea
                 rows={3}
                 value={serviceFormData.description}
                 onChange={(e) => setServiceFormData({ ...serviceFormData, description: e.target.value })}
                 placeholder="High-grade replacement panel retaining touch calibration and True Tone."
-                className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium focus:bg-white focus:outline-none resize-y min-h-[75px]"
+                className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs font-medium focus:bg-white dark:focus:bg-slate-900 focus:outline-none resize-y min-h-[75px]"
               />
             </div>
 
             {/* ROW 5: VISIBILITY STATUS */}
-            <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80">
+            <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700">
               <div>
-                <span className="text-xs font-extrabold text-slate-900 block">Visibility Status</span>
-                <span className="text-[11px] text-slate-500 font-medium">Active services appear immediately on the public price finder.</span>
+                <span className="text-xs font-extrabold text-slate-900 dark:text-slate-100 block">Visibility Status</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Active services appear immediately on the public price finder.</span>
               </div>
               <button
                 type="button"
                 onClick={() => setServiceFormData({ ...serviceFormData, status: serviceFormData.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' })}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
-                  serviceFormData.status === 'ACTIVE' ? 'bg-emerald-600 text-white shadow-2xs' : 'bg-slate-200 text-slate-700'
+                  serviceFormData.status === 'ACTIVE' ? 'bg-emerald-600 text-white shadow-2xs' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                 }`}
               >
                 {serviceFormData.status === 'ACTIVE' ? 'Active' : 'Inactive'}
@@ -1965,12 +1965,12 @@ export default function RepairPrices() {
             </div>
 
             {/* FOOTER ACTIONS */}
-            <DialogFooter className="pt-3 flex flex-col sm:flex-row gap-2 justify-between items-center border-t border-slate-100">
+            <DialogFooter className="pt-3 flex flex-col sm:flex-row gap-2 justify-between items-center border-t border-slate-100 dark:border-slate-800">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsServiceModalOpen(false)}
-                className="rounded-xl font-bold text-xs h-11 px-5 w-full sm:w-auto"
+                className="rounded-xl font-bold text-xs h-11 px-5 w-full sm:w-auto border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 disabled={isSubmittingService}
               >
                 Cancel
@@ -1983,7 +1983,7 @@ export default function RepairPrices() {
                     variant="secondary"
                     onClick={() => handleSaveService(true)}
                     disabled={isSubmittingService}
-                    className="rounded-xl font-bold text-xs h-11 px-4 bg-slate-100 text-slate-900 border border-slate-200 flex-1 sm:flex-initial"
+                    className="rounded-xl font-bold text-xs h-11 px-4 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 flex-1 sm:flex-initial"
                   >
                     Save & Add Another
                   </Button>
@@ -1992,7 +1992,7 @@ export default function RepairPrices() {
                 <Button
                   type="submit"
                   disabled={isSubmittingService}
-                  className="rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs h-11 px-6 flex-1 sm:flex-initial"
+                  className="rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-xs h-11 px-6 flex-1 sm:flex-initial"
                 >
                   {isSubmittingService ? 'Saving...' : editingService ? 'Save Changes' : 'Save Service'}
                 </Button>
@@ -2007,27 +2007,27 @@ export default function RepairPrices() {
       {/* 8. CREATE FOLDER MODAL                                    */}
       {/* ========================================================= */}
       <Dialog open={isFolderModalOpen} onOpenChange={setIsFolderModalOpen}>
-        <DialogContent className="sm:max-w-md bg-white rounded-3xl p-6 sm:p-7">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl">
           <DialogHeader>
-            <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1">
+            <div className="w-11 h-11 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-1">
               <FolderPlus className="w-5 h-5" />
             </div>
-            <DialogTitle className="text-xl font-black text-slate-950">
+            <DialogTitle className="text-xl font-black text-slate-950 dark:text-white">
               {currentLevelDepth === 0 ? 'Create New Brand Folder' : currentLevelDepth === 1 ? `New Model in ${currentBrand}` : `New Category in ${currentModel}`}
             </DialogTitle>
-            <DialogDescription className="text-slate-500 text-xs font-medium">
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs font-medium">
               Add a new folder to organize repair services hierarchically.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleCreateFolder} className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Folder Name</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Folder Name</label>
               <Input
                 placeholder={currentLevelDepth === 0 ? 'e.g. Sony, Motorola' : currentLevelDepth === 1 ? 'e.g. Galaxy S25 Ultra, Pixel 9' : 'e.g. Premium Display, Laser Glass'}
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
-                className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold focus:bg-white dark:focus:bg-slate-900"
                 autoFocus
               />
             </div>
@@ -2037,14 +2037,14 @@ export default function RepairPrices() {
                 type="button"
                 variant="outline"
                 onClick={() => setIsFolderModalOpen(false)}
-                className="rounded-xl font-bold text-xs h-10 flex-1"
+                className="rounded-xl font-bold text-xs h-10 flex-1 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 disabled={isSubmittingFolder}
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                className="rounded-xl bg-slate-950 text-white font-bold text-xs h-10 flex-1"
+                className="rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-xs h-10 flex-1"
                 disabled={isSubmittingFolder}
               >
                 {isSubmittingFolder ? 'Creating...' : 'Create Folder'}
@@ -2058,26 +2058,26 @@ export default function RepairPrices() {
       {/* 9. RENAME FOLDER MODAL                                    */}
       {/* ========================================================= */}
       <Dialog open={isRenameModalOpen} onOpenChange={setIsRenameModalOpen}>
-        <DialogContent className="sm:max-w-md bg-white rounded-3xl p-6 sm:p-7">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl">
           <DialogHeader>
-            <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1">
+            <div className="w-11 h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-1">
               <FileEdit className="w-5 h-5" />
             </div>
-            <DialogTitle className="text-xl font-black text-slate-950">
+            <DialogTitle className="text-xl font-black text-slate-950 dark:text-white">
               Rename Folder
             </DialogTitle>
-            <DialogDescription className="text-slate-500 text-xs font-medium">
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs font-medium">
               Renaming this folder will automatically update all nested repair records.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleRenameFolder} className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">New Folder Name</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">New Folder Name</label>
               <Input
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
-                className="h-11 rounded-xl bg-slate-50 text-xs font-semibold focus:bg-white"
+                className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold focus:bg-white dark:focus:bg-slate-900"
                 autoFocus
               />
             </div>
@@ -2087,14 +2087,14 @@ export default function RepairPrices() {
                 type="button"
                 variant="outline"
                 onClick={() => setIsRenameModalOpen(false)}
-                className="rounded-xl font-bold text-xs h-10 flex-1"
+                className="rounded-xl font-bold text-xs h-10 flex-1 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 disabled={isRenaming}
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                className="rounded-xl bg-slate-950 text-white font-bold text-xs h-10 flex-1"
+                className="rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-xs h-10 flex-1"
                 disabled={isRenaming}
               >
                 {isRenaming ? 'Renaming...' : 'Save Name'}
@@ -2108,28 +2108,28 @@ export default function RepairPrices() {
       {/* 10. MOVE ITEMS MODAL                                      */}
       {/* ========================================================= */}
       <Dialog open={isMoveModalOpen} onOpenChange={setIsMoveModalOpen}>
-        <DialogContent className="sm:max-w-md bg-white rounded-3xl p-6 sm:p-7">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl">
           <DialogHeader>
-            <div className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1">
+            <div className="w-11 h-11 rounded-2xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-1">
               <Move className="w-5 h-5" />
             </div>
-            <DialogTitle className="text-xl font-black text-slate-950">
+            <DialogTitle className="text-xl font-black text-slate-950 dark:text-white">
               Move Items to Destination
             </DialogTitle>
-            <DialogDescription className="text-slate-500 text-xs font-medium">
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs font-medium">
               Select destination brand, model, and category.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleExecuteMove} className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Target Brand <span className="text-rose-500">*</span></label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Target Brand <span className="text-rose-500">*</span></label>
               <input
                 list="target-brand-suggestions"
                 value={moveTargetInfo.brand}
                 onChange={(e) => setMoveTargetInfo({ ...moveTargetInfo, brand: e.target.value })}
                 placeholder="e.g. Samsung"
-                className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-base md:text-xs font-semibold focus:outline-none"
+                className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 text-base md:text-xs font-semibold focus:outline-none"
               />
               <datalist id="target-brand-suggestions">
                 {allBrands.map(b => <option key={b} value={b} />)}
@@ -2137,22 +2137,22 @@ export default function RepairPrices() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Target Model</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Target Model</label>
               <Input
                 value={moveTargetInfo.model}
                 onChange={(e) => setMoveTargetInfo({ ...moveTargetInfo, model: e.target.value })}
                 placeholder="e.g. Galaxy S25 Ultra"
-                className="h-11 rounded-xl bg-slate-50 text-xs font-semibold"
+                className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Target Category</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Target Category</label>
               <Input
                 value={moveTargetInfo.category}
                 onChange={(e) => setMoveTargetInfo({ ...moveTargetInfo, category: e.target.value })}
                 placeholder="e.g. Display"
-                className="h-11 rounded-xl bg-slate-50 text-xs font-semibold"
+                className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-semibold"
               />
             </div>
 
@@ -2161,14 +2161,14 @@ export default function RepairPrices() {
                 type="button"
                 variant="outline"
                 onClick={() => setIsMoveModalOpen(false)}
-                className="rounded-xl font-bold text-xs h-10 flex-1"
+                className="rounded-xl font-bold text-xs h-10 flex-1 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 disabled={isMoving}
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                className="rounded-xl bg-slate-950 text-white font-bold text-xs h-10 flex-1"
+                className="rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-xs h-10 flex-1"
                 disabled={isMoving}
               >
                 {isMoving ? 'Moving...' : 'Confirm Move'}
@@ -2182,28 +2182,28 @@ export default function RepairPrices() {
       {/* 11. DELETE SINGLE SERVICE MODAL                           */}
       {/* ========================================================= */}
       <Dialog open={!!serviceToDelete} onOpenChange={(open) => !open && setServiceToDelete(null)}>
-        <DialogContent className="sm:max-w-md bg-white rounded-3xl p-6 sm:p-7">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl">
           <DialogHeader>
-            <div className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-1">
+            <div className="w-11 h-11 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-1">
               <Trash2 className="w-5 h-5" />
             </div>
-            <DialogTitle className="text-xl font-black text-slate-950">
+            <DialogTitle className="text-xl font-black text-slate-950 dark:text-white">
               Delete Repair Service?
             </DialogTitle>
-            <DialogDescription className="text-slate-600 text-xs pt-1">
+            <DialogDescription className="text-slate-600 dark:text-slate-400 text-xs pt-1">
               Are you sure you want to delete this repair price entry?
             </DialogDescription>
           </DialogHeader>
 
           {serviceToDelete && (
-            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 my-2 space-y-1">
-              <div className="font-extrabold text-slate-900 text-sm">
+            <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 my-2 space-y-1">
+              <div className="font-extrabold text-slate-900 dark:text-slate-100 text-sm">
                 {serviceToDelete.brand} {serviceToDelete.model}
               </div>
-              <div className="text-xs font-bold text-slate-600">
+              <div className="text-xs font-bold text-slate-600 dark:text-slate-300">
                 {serviceToDelete.serviceName || serviceToDelete.problem}
               </div>
-              <div className="text-xs font-extrabold text-slate-900 pt-0.5">
+              <div className="text-xs font-extrabold text-slate-900 dark:text-slate-100 pt-0.5">
                 NPR {serviceToDelete.price.toLocaleString()}
               </div>
             </div>
@@ -2213,7 +2213,7 @@ export default function RepairPrices() {
             <Button
               variant="outline"
               onClick={() => setServiceToDelete(null)}
-              className="rounded-xl font-bold text-xs h-10 flex-1"
+              className="rounded-xl font-bold text-xs h-10 flex-1 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               disabled={isDeletingService}
             >
               Cancel
@@ -2233,27 +2233,27 @@ export default function RepairPrices() {
       {/* 12. DELETE FOLDER SAFETY WARNING MODAL (CASCADE ALERT)    */}
       {/* ========================================================= */}
       <Dialog open={!!folderToDelete} onOpenChange={(open) => !open && setFolderToDelete(null)}>
-        <DialogContent className="sm:max-w-lg bg-white rounded-3xl p-6 sm:p-8">
+        <DialogContent className="sm:max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
           <DialogHeader>
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-1">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-1">
               <AlertTriangle className="w-6 h-6" />
             </div>
-            <DialogTitle className="text-xl font-black text-slate-950">
+            <DialogTitle className="text-xl font-black text-slate-950 dark:text-white">
               Delete Folder: "{folderToDelete?.name}"?
             </DialogTitle>
-            <DialogDescription className="text-slate-600 text-xs leading-relaxed pt-1">
+            <DialogDescription className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed pt-1">
               Deleting this folder will permanently remove all nested categories and service rates inside it.
             </DialogDescription>
           </DialogHeader>
 
           {folderToDelete && (
             <div className="space-y-3 my-2">
-              <div className="bg-rose-50 p-4 rounded-2xl border border-rose-200/80 space-y-1.5">
-                <div className="flex items-center gap-2 text-rose-800 font-extrabold text-xs">
+              <div className="bg-rose-50 dark:bg-rose-950/50 p-4 rounded-2xl border border-rose-200/80 dark:border-rose-900/50 space-y-1.5">
+                <div className="flex items-center gap-2 text-rose-800 dark:text-rose-300 font-extrabold text-xs">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>Impact Summary</span>
                 </div>
-                <p className="text-xs text-rose-700 font-medium leading-relaxed">
+                <p className="text-xs text-rose-700 dark:text-rose-400 font-medium leading-relaxed">
                   This action will permanently delete <strong>{folderDeleteImpact.serviceCount} repair services</strong>
                   {folderDeleteImpact.categoryCount > 0 && ` across ${folderDeleteImpact.categoryCount} categories`}.
                 </p>
@@ -2265,7 +2265,7 @@ export default function RepairPrices() {
             <Button
               variant="outline"
               onClick={() => setFolderToDelete(null)}
-              className="rounded-xl font-bold text-xs h-11 flex-1"
+              className="rounded-xl font-bold text-xs h-11 flex-1 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               disabled={isDeletingFolder}
             >
               Cancel
@@ -2285,15 +2285,15 @@ export default function RepairPrices() {
       {/* 13. BULK DELETE CONFIRMATION MODAL                        */}
       {/* ========================================================= */}
       <Dialog open={isBulkDeleteModalOpen} onOpenChange={setIsBulkDeleteModalOpen}>
-        <DialogContent className="sm:max-w-md bg-white rounded-3xl p-6 sm:p-7">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl">
           <DialogHeader>
-            <div className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-1">
+            <div className="w-11 h-11 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-1">
               <Trash2 className="w-5 h-5" />
             </div>
-            <DialogTitle className="text-xl font-black text-slate-950">
+            <DialogTitle className="text-xl font-black text-slate-950 dark:text-white">
               Bulk Delete Selected Services?
             </DialogTitle>
-            <DialogDescription className="text-slate-600 text-xs pt-1">
+            <DialogDescription className="text-slate-600 dark:text-slate-400 text-xs pt-1">
               Are you sure you want to permanently delete {selectedServiceIds.size} selected repair service records?
             </DialogDescription>
           </DialogHeader>
@@ -2302,7 +2302,7 @@ export default function RepairPrices() {
             <Button
               variant="outline"
               onClick={() => setIsBulkDeleteModalOpen(false)}
-              className="rounded-xl font-bold text-xs h-10 flex-1"
+              className="rounded-xl font-bold text-xs h-10 flex-1 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               disabled={isBulkDeleting}
             >
               Cancel

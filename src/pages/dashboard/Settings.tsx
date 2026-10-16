@@ -285,37 +285,37 @@ export default function Settings() {
   return (
     <div className="space-y-8 pb-20">
       <div className="flex flex-col gap-1">
-        <h2 className="text-4xl font-black tracking-tight text-slate-900">Personal Vault</h2>
-        <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Manage your profile and security credentials</p>
+        <h2 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">Personal Vault</h2>
+        <p className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest text-[10px]">Manage your profile and security credentials</p>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="bg-slate-100/50 p-1.5 rounded-2xl h-auto flex flex-wrap sm:inline-flex border border-slate-100">
-          <TabsTrigger value="profile" className="rounded-xl py-3 px-6 font-bold data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50">
+        <TabsList className="bg-slate-100/80 dark:bg-slate-800/80 p-1.5 rounded-2xl h-auto flex flex-wrap sm:inline-flex border border-slate-200/60 dark:border-slate-700/60">
+          <TabsTrigger value="profile" className="rounded-xl py-3 px-6 font-bold text-slate-600 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-slate-950 dark:data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50 dark:data-[state=active]:shadow-none transition-all">
             <UserIcon className="h-4 w-4 mr-2" /> Identity
           </TabsTrigger>
-          <TabsTrigger value="security" className="rounded-xl py-3 px-6 font-bold data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50">
+          <TabsTrigger value="security" className="rounded-xl py-3 px-6 font-bold text-slate-600 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-slate-950 dark:data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50 dark:data-[state=active]:shadow-none transition-all">
             <Lock className="h-4 w-4 mr-2" /> Security
           </TabsTrigger>
-          <TabsTrigger value="sessions" className="rounded-xl py-3 px-6 font-bold data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50">
+          <TabsTrigger value="sessions" className="rounded-xl py-3 px-6 font-bold text-slate-600 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-slate-950 dark:data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50 dark:data-[state=active]:shadow-none transition-all">
             <Monitor className="h-4 w-4 mr-2" /> Sessions
           </TabsTrigger>
-          <TabsTrigger value="activity" className="rounded-xl py-3 px-6 font-bold data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50">
+          <TabsTrigger value="activity" className="rounded-xl py-3 px-6 font-bold text-slate-600 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-slate-950 dark:data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-slate-200/50 dark:data-[state=active]:shadow-none transition-all">
             <History className="h-4 w-4 mr-2" /> Logs
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-6">
-          <Card className="rounded-[40px] border-none shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+          <Card className="rounded-[40px] border border-slate-200/80 dark:border-slate-800 shadow-2xl shadow-slate-200/50 dark:shadow-none overflow-hidden bg-white dark:bg-slate-900">
              {/* Profile Header */}
-             <div className="h-48 bg-slate-100 relative group">
+             <div className="h-48 bg-slate-100 dark:bg-slate-800 relative group">
                 {user?.profileImage && (
                   <img src={user.profileImage} className="w-full h-full object-cover blur-sm opacity-20" alt="" />
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-slate-900 via-transparent to-transparent" />
                 <div className="absolute -bottom-12 left-10">
-                   <div className="w-32 h-32 rounded-[32px] bg-white p-1.5 shadow-2xl shadow-slate-300">
-                      <div className="w-full h-full rounded-[26px] bg-slate-50 flex items-center justify-center text-slate-300 overflow-hidden">
+                   <div className="w-32 h-32 rounded-[32px] bg-white dark:bg-slate-800 p-1.5 shadow-2xl shadow-slate-300 dark:shadow-none border border-slate-100 dark:border-slate-700">
+                      <div className="w-full h-full rounded-[26px] bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-slate-300 dark:text-slate-600 overflow-hidden">
                          {user?.profileImage ? (
                            <img src={user.profileImage} className="w-full h-full object-cover" alt={user.name} />
                          ) : (
@@ -329,12 +329,12 @@ export default function Settings() {
              <div className="pt-20 pb-10 px-10">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
                    <div>
-                      <h3 className="text-4xl font-black text-slate-900 tracking-tight">{user?.name}</h3>
+                      <h3 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">{user?.name}</h3>
                       <div className="flex items-center gap-2 mt-2">
-                         <Badge className="bg-indigo-600 text-white font-black px-4 py-1 rounded-full text-[10px] tracking-widest shadow-lg shadow-indigo-100">
+                         <Badge className="bg-indigo-600 text-white font-black px-4 py-1 rounded-full text-[10px] tracking-widest shadow-lg shadow-indigo-100 dark:shadow-none">
                             {user?.role.replace('_', ' ')}
                          </Badge>
-                         <span className="text-slate-400 font-bold flex items-center gap-1.5 text-xs">
+                         <span className="text-slate-400 dark:text-slate-400 font-bold flex items-center gap-1.5 text-xs">
                            <MapPin className="h-3 w-3" /> {user?.address || 'Location Not Set'}
                          </span>
                       </div>
@@ -342,7 +342,7 @@ export default function Settings() {
                    {!isEditing ? (
                      <Button 
                        onClick={() => setIsEditing(true)}
-                       className="rounded-[20px] h-14 px-8 font-black bg-black hover:bg-slate-800 shadow-xl shadow-slate-200"
+                       className="rounded-[20px] h-14 px-8 font-black bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 shadow-xl shadow-slate-200 dark:shadow-none cursor-pointer"
                      >
                         <Edit2 className="h-5 w-5 mr-3" /> Update Profile
                      </Button>
@@ -437,52 +437,52 @@ export default function Settings() {
                   </form>
                 ) : (
                   <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    <div className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 flex items-start gap-4">
-                       <div className="h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-indigo-500">
+                    <div className="p-6 rounded-[32px] bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-start gap-4">
+                       <div className="h-12 w-12 rounded-2xl bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center text-indigo-500 shrink-0">
                           <Mail className="h-6 w-6" />
                        </div>
                        <div>
-                          <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest mb-1">Electronic Mail</p>
-                          <p className="font-black text-slate-900">{user?.email}</p>
+                          <p className="font-black text-[10px] text-slate-400 dark:text-slate-400 uppercase tracking-widest mb-1">Electronic Mail</p>
+                          <p className="font-black text-slate-900 dark:text-white">{user?.email}</p>
                        </div>
                     </div>
-                    <div className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 flex items-start gap-4">
-                       <div className="h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-emerald-500">
+                    <div className="p-6 rounded-[32px] bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-start gap-4">
+                       <div className="h-12 w-12 rounded-2xl bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center text-emerald-500 shrink-0">
                           <Phone className="h-6 w-6" />
                        </div>
                        <div>
-                          <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest mb-1">Communication Line</p>
-                          <p className="font-black text-slate-900">{user?.phoneNumber || 'Unlinked'}</p>
+                          <p className="font-black text-[10px] text-slate-400 dark:text-slate-400 uppercase tracking-widest mb-1">Communication Line</p>
+                          <p className="font-black text-slate-900 dark:text-white">{user?.phoneNumber || 'Unlinked'}</p>
                        </div>
                     </div>
-                    <div className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 flex items-start gap-4">
-                       <div className="h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-amber-500">
+                    <div className="p-6 rounded-[32px] bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-start gap-4">
+                       <div className="h-12 w-12 rounded-2xl bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center text-amber-500 shrink-0">
                           <AtSign className="h-6 w-6" />
                        </div>
                        <div>
-                          <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest mb-1">System Handle</p>
-                          <p className="font-black text-slate-900">@{user?.username || user?.name.toLowerCase().replace(' ', '')}</p>
+                          <p className="font-black text-[10px] text-slate-400 dark:text-slate-400 uppercase tracking-widest mb-1">System Handle</p>
+                          <p className="font-black text-slate-900 dark:text-white">@{user?.username || user?.name.toLowerCase().replace(' ', '')}</p>
                        </div>
                     </div>
-                    <div className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 flex items-start gap-4">
-                       <div className="h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-rose-500">
+                    <div className="p-6 rounded-[32px] bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-start gap-4">
+                       <div className="h-12 w-12 rounded-2xl bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center text-rose-500 shrink-0">
                           <Building2 className="h-6 w-6" />
                        </div>
                        <div>
-                          <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest mb-1">Assignment Unit</p>
-                          <p className="font-black text-slate-900">{user?.department || 'Operations'}</p>
+                          <p className="font-black text-[10px] text-slate-400 dark:text-slate-400 uppercase tracking-widest mb-1">Assignment Unit</p>
+                          <p className="font-black text-slate-900 dark:text-white">{user?.department || 'Operations'}</p>
                        </div>
                     </div>
-                    <div className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 flex items-start gap-4">
-                       <div className="h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-slate-600">
+                    <div className="p-6 rounded-[32px] bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-start gap-4">
+                       <div className="h-12 w-12 rounded-2xl bg-white dark:bg-slate-700 shadow-sm flex items-center justify-center text-slate-600 dark:text-slate-300 shrink-0">
                           <BadgeCheck className="h-6 w-6" />
                        </div>
                        <div>
-                          <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest mb-1">Personnel ID</p>
-                          <p className="font-mono text-xs font-black text-slate-900 truncate max-w-[120px]">{user?.id}</p>
+                          <p className="font-black text-[10px] text-slate-400 dark:text-slate-400 uppercase tracking-widest mb-1">Personnel ID</p>
+                          <p className="font-mono text-xs font-black text-slate-900 dark:text-white truncate max-w-[120px]">{user?.id}</p>
                        </div>
                     </div>
-                    <div className="bg-indigo-600 p-8 rounded-[40px] text-white flex flex-col justify-between shadow-2xl shadow-indigo-200">
+                    <div className="bg-indigo-600 dark:bg-indigo-700 p-8 rounded-[40px] text-white flex flex-col justify-between shadow-2xl shadow-indigo-200 dark:shadow-none">
                        <Shield className="h-10 w-10 opacity-70" />
                        <div>
                          <h4 className="text-xl font-black mb-2 tracking-tight">Access Clearance</h4>
@@ -497,10 +497,10 @@ export default function Settings() {
 
         <TabsContent value="security" className="space-y-6">
           {/* Password Change Card with Mandatory Email OTP */}
-          <Card className="rounded-[40px] border-none shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+          <Card className="rounded-[40px] border border-slate-200/80 dark:border-slate-800 shadow-2xl shadow-slate-200/50 dark:shadow-none overflow-hidden bg-white dark:bg-slate-900">
             <CardHeader className="p-10 pb-4">
               <div className="flex items-center gap-5">
-                <div className="h-16 w-16 bg-black rounded-[24px] flex items-center justify-center text-white shadow-2xl shadow-black/20">
+                <div className="h-16 w-16 bg-black dark:bg-slate-800 border border-transparent dark:border-slate-700 rounded-[24px] flex items-center justify-center text-white shadow-2xl shadow-black/20">
                   <Key className="h-8 w-8 text-indigo-400" />
                 </div>
                 <div>
@@ -518,7 +518,7 @@ export default function Settings() {
                       <Input 
                         type="password" 
                         placeholder="Existing password"
-                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold"
+                        className="h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
                         value={passForm.currentPassword}
                         onChange={e => setPassForm({...passForm, currentPassword: e.target.value})}
                         required
@@ -529,7 +529,7 @@ export default function Settings() {
                       <Input 
                         type="password" 
                         placeholder="Min 8 chars, uppercase, lowercase, numbers"
-                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold"
+                        className="h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
                         value={passForm.newPassword}
                         onChange={e => setPassForm({...passForm, newPassword: e.target.value})}
                         required
@@ -540,7 +540,7 @@ export default function Settings() {
                       <Input 
                         type="password" 
                         placeholder="Re-enter new password"
-                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold"
+                        className="h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
                         value={passForm.confirmPassword}
                         onChange={e => setPassForm({...passForm, confirmPassword: e.target.value})}
                         required
@@ -550,7 +550,7 @@ export default function Settings() {
                   <Button 
                     type="submit" 
                     disabled={pwdLoading}
-                    className="h-14 w-full sm:w-auto px-10 rounded-2xl bg-black font-black text-sm transition-all active:scale-95 shadow-xl shadow-slate-200"
+                    className="h-14 w-full sm:w-auto px-10 rounded-2xl bg-black dark:bg-white text-white dark:text-slate-900 font-black text-sm transition-all active:scale-95 shadow-xl shadow-slate-200 dark:shadow-none cursor-pointer"
                   >
                     {pwdLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
                     Send Verification Code
@@ -558,7 +558,7 @@ export default function Settings() {
                 </form>
               ) : (
                 <form onSubmit={handleConfirmPasswordChange} className="max-w-md space-y-6">
-                  <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs font-semibold">
+                  <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 text-xs font-semibold">
                     A 6-digit verification code was dispatched to: <b>{pwdEmailMasked}</b>. Enter it below to authorize this password change.
                   </div>
 
@@ -568,7 +568,7 @@ export default function Settings() {
                       type="text" 
                       maxLength={6}
                       placeholder="000000"
-                      className="h-14 rounded-2xl bg-slate-50 border-none font-bold text-center text-xl tracking-widest"
+                      className="h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 font-bold text-center text-xl tracking-widest text-slate-900 dark:text-white"
                       value={passForm.code}
                       onChange={e => setPassForm({...passForm, code: e.target.value.replace(/\D/g, '')})}
                       required
@@ -580,16 +580,16 @@ export default function Settings() {
                     <Button 
                       type="submit" 
                       disabled={pwdLoading || passForm.code.length !== 6}
-                      className="h-14 flex-1 rounded-2xl bg-emerald-600 hover:bg-emerald-700 font-black text-sm transition-all shadow-xl shadow-emerald-200 text-white"
+                      className="h-14 flex-1 rounded-2xl bg-emerald-600 hover:bg-emerald-700 font-black text-sm transition-all shadow-xl shadow-emerald-200 dark:shadow-none text-white cursor-pointer"
                     >
                       {pwdLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                       Confirm Password Change
                     </Button>
                     <Button 
                       type="button" 
-                      variant="outline"
+                      variant="outline" 
                       onClick={() => setPwdStep('INPUT')}
-                      className="h-14 rounded-2xl font-bold px-5"
+                      className="h-14 rounded-2xl font-bold px-5 border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                     >
                       Cancel
                     </Button>
@@ -601,22 +601,22 @@ export default function Settings() {
 
           {/* Super Admin Email Change Section (Exclusive to SUPER_ADMIN) */}
           {user?.role === 'SUPER_ADMIN' && (
-            <Card className="rounded-[40px] border-none shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+            <Card className="rounded-[40px] border border-slate-200/80 dark:border-slate-800 shadow-2xl shadow-slate-200/50 dark:shadow-none overflow-hidden bg-white dark:bg-slate-900">
               <CardHeader className="p-10 pb-4">
                 <div className="flex items-center gap-5">
-                  <div className="h-16 w-16 bg-slate-900 rounded-[24px] flex items-center justify-center text-amber-400 shadow-2xl shadow-slate-900/20">
+                  <div className="h-16 w-16 bg-slate-900 dark:bg-slate-800 border border-transparent dark:border-slate-700 rounded-[24px] flex items-center justify-center text-amber-400 shadow-2xl shadow-slate-900/20">
                     <Mail className="h-8 w-8" />
                   </div>
                   <div>
                     <CardTitle className="text-2xl font-black">Primary Super Admin Email</CardTitle>
-                    <CardDescription className="font-bold text-slate-400">Current Primary: <span className="font-bold text-slate-800">{user.email}</span></CardDescription>
+                    <CardDescription className="font-bold text-slate-400">Current Primary: <span className="font-bold text-slate-800 dark:text-slate-200">{user.email}</span></CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="p-10">
                 {emailChangeStep === 'IDLE' && (
                   <form onSubmit={handleEmailChangeRequest} className="max-w-md space-y-4">
-                    <p className="text-xs text-slate-500 font-medium">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                       Changing the primary Super Admin email requires two-step cryptographic verification on both your current and new email addresses.
                     </p>
                     <div className="space-y-2">
@@ -624,7 +624,7 @@ export default function Settings() {
                       <Input 
                         type="password" 
                         placeholder="Current password"
-                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold"
+                        className="h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
                         value={emailChangeCurrentPass}
                         onChange={e => setEmailChangeCurrentPass(e.target.value)}
                         required
@@ -633,7 +633,7 @@ export default function Settings() {
                     <Button 
                       type="submit" 
                       disabled={emailChangeLoading || !emailChangeCurrentPass}
-                      className="h-14 w-full sm:w-auto px-8 rounded-2xl bg-slate-900 text-white font-black text-sm"
+                      className="h-14 w-full sm:w-auto px-8 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-sm cursor-pointer"
                     >
                       {emailChangeLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
                       Begin Step 1 (Verify Current Email)
@@ -643,7 +643,7 @@ export default function Settings() {
 
                 {emailChangeStep === 'STEP1_OTP' && (
                   <form onSubmit={handleEmailChangeVerifyCurrent} className="max-w-md space-y-4">
-                    <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
+                    <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs font-semibold">
                       Step 1 of 2: Enter the 6-digit verification code dispatched to <b>{user.email}</b> and provide your new email address.
                     </div>
 
@@ -653,7 +653,7 @@ export default function Settings() {
                         type="text" 
                         maxLength={6}
                         placeholder="000000"
-                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold text-center text-xl tracking-widest"
+                        className="h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 font-bold text-center text-xl tracking-widest text-slate-900 dark:text-white"
                         value={emailChangeCurrentOtp}
                         onChange={e => setEmailChangeCurrentOtp(e.target.value.replace(/\D/g, ''))}
                         required
@@ -666,7 +666,7 @@ export default function Settings() {
                       <Input 
                         type="email" 
                         placeholder="e.g. newadmin@mtslab.com"
-                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold text-sm"
+                        className="h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 font-bold text-sm text-slate-900 dark:text-white"
                         value={emailChangeNewEmail}
                         onChange={e => setEmailChangeNewEmail(e.target.value)}
                         required
@@ -677,16 +677,16 @@ export default function Settings() {
                       <Button 
                         type="submit" 
                         disabled={emailChangeLoading || emailChangeCurrentOtp.length !== 6 || !emailChangeNewEmail}
-                        className="h-14 flex-1 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm"
+                        className="h-14 flex-1 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 font-black text-sm cursor-pointer"
                       >
                         {emailChangeLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <ChevronRight className="h-4 w-4 mr-2" />}
                         Continue to Step 2
                       </Button>
                       <Button 
                         type="button" 
-                        variant="outline"
+                        variant="outline" 
                         onClick={() => setEmailChangeStep('IDLE')}
-                        className="h-14 rounded-2xl font-bold px-5"
+                        className="h-14 rounded-2xl font-bold px-5 border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                       >
                         Cancel
                       </Button>
@@ -696,7 +696,7 @@ export default function Settings() {
 
                 {emailChangeStep === 'STEP3_CONFIRM_OTP' && (
                   <form onSubmit={handleEmailChangeConfirm} className="max-w-md space-y-4">
-                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold">
+                    <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs font-semibold">
                       Step 2 of 2: Enter the 6-digit confirmation code dispatched to <b>{emailChangeNewEmail}</b>.
                     </div>
 
@@ -706,7 +706,7 @@ export default function Settings() {
                         type="text" 
                         maxLength={6}
                         placeholder="000000"
-                        className="h-14 rounded-2xl bg-slate-50 border-none font-bold text-center text-xl tracking-widest"
+                        className="h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 font-bold text-center text-xl tracking-widest text-slate-900 dark:text-white"
                         value={emailChangeNewOtp}
                         onChange={e => setEmailChangeNewOtp(e.target.value.replace(/\D/g, ''))}
                         required
@@ -718,16 +718,16 @@ export default function Settings() {
                       <Button 
                         type="submit" 
                         disabled={emailChangeLoading || emailChangeNewOtp.length !== 6}
-                        className="h-14 flex-1 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-xl shadow-emerald-200"
+                        className="h-14 flex-1 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-xl shadow-emerald-200 dark:shadow-none cursor-pointer"
                       >
                         {emailChangeLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                         Finalize Super Admin Email Change
                       </Button>
                       <Button 
                         type="button" 
-                        variant="outline"
+                        variant="outline" 
                         onClick={() => setEmailChangeStep('IDLE')}
-                        className="h-14 rounded-2xl font-bold px-5"
+                        className="h-14 rounded-2xl font-bold px-5 border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                       >
                         Cancel
                       </Button>
@@ -738,22 +738,22 @@ export default function Settings() {
             </Card>
           )}
 
-          <Card className="rounded-[40px] border-none bg-rose-50/10 shadow-2xl shadow-rose-100/50 p-10">
+          <Card className="rounded-[40px] border border-rose-200/80 dark:border-rose-950/60 bg-rose-50/20 dark:bg-rose-950/20 shadow-2xl shadow-rose-100/50 dark:shadow-none p-10">
             <div className="flex flex-col md:flex-row items-center justify-between gap-8">
               <div className="space-y-4 max-w-xl">
-                <div className="p-3 bg-rose-600 rounded-2xl text-white w-fit shadow-xl shadow-rose-200">
+                <div className="p-3 bg-rose-600 rounded-2xl text-white w-fit shadow-xl shadow-rose-200 dark:shadow-none">
                   <ShieldAlert className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-black text-slate-900">Total System Isolation</h3>
-                  <CardDescription className="mt-2 text-slate-500 font-bold leading-relaxed">
+                  <h3 className="text-2xl font-black text-slate-900 dark:text-white">Total System Isolation</h3>
+                  <CardDescription className="mt-2 text-slate-500 dark:text-slate-400 font-bold leading-relaxed">
                     Detected unauthorized pattern? This will instantly terminate all active sessions across all devices linked to this personnel ID.
                   </CardDescription>
                 </div>
               </div>
               <Button 
                 variant="destructive" 
-                className="rounded-3xl font-black h-20 px-10 text-lg shadow-2xl shadow-rose-200 uppercase tracking-widest"
+                className="rounded-3xl font-black h-20 px-10 text-lg shadow-2xl shadow-rose-200 dark:shadow-none uppercase tracking-widest cursor-pointer"
                 onClick={handleLogoutAll}
               >
                 Terminate Cross-Hub Access
@@ -763,18 +763,18 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="sessions" className="space-y-6">
-          <Card className="rounded-[40px] border-none shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+          <Card className="rounded-[40px] border border-slate-200/80 dark:border-slate-800 shadow-2xl shadow-slate-200/50 dark:shadow-none overflow-hidden bg-white dark:bg-slate-900">
             <CardHeader className="p-10 pb-6 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-2xl font-black">Active Access Hubs</CardTitle>
-                <CardDescription className="font-bold">Terminals currently interfacing with your staff credentials.</CardDescription>
+                <CardDescription className="font-bold text-slate-500 dark:text-slate-400">Terminals currently interfacing with your staff credentials.</CardDescription>
               </div>
               {sessions.length > 1 && (
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={handleRevokeOtherSessions}
-                  className="rounded-xl font-bold border-rose-200 text-rose-700 hover:bg-rose-50"
+                  className="rounded-xl font-bold border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
                 >
                   Revoke Other Devices
                 </Button>
@@ -782,9 +782,9 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="px-10 pb-10 space-y-4">
               {sessions.map((sess) => (
-                <div key={sess.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 rounded-[28px] bg-slate-50 border border-slate-100 group hover:bg-white hover:shadow-xl hover:shadow-slate-100 transition-all gap-4">
+                <div key={sess.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 rounded-[28px] bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/60 group hover:bg-white dark:hover:bg-slate-800 hover:shadow-xl hover:shadow-slate-100 dark:hover:shadow-none transition-all gap-4">
                   <div className="flex items-center gap-5">
-                    <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform shrink-0">
+                    <div className="w-14 h-14 bg-white dark:bg-slate-700 rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform shrink-0">
                       {sess.deviceType === 'SMARTPHONE' || sess.userAgent?.includes('Mobile') ? (
                         <Smartphone className="h-6 w-6 text-indigo-500" />
                       ) : sess.deviceType === 'TABLET' ? (
@@ -797,26 +797,26 @@ export default function Settings() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2.5">
-                        <p className="font-black text-slate-900 text-lg">
+                        <p className="font-black text-slate-900 dark:text-white text-lg">
                           {sess.deviceName || (sess.browser ? `${sess.browser} on ${sess.os}` : 'Work Terminal')}
                         </p>
                         {sess.isCurrent && (
-                          <Badge className="bg-emerald-500 text-white border-none font-black text-[10px] px-3 py-0.5 rounded-full shadow-lg shadow-emerald-100 tracking-wider">
+                          <Badge className="bg-emerald-500 text-white border-none font-black text-[10px] px-3 py-0.5 rounded-full shadow-lg shadow-emerald-100 dark:shadow-none tracking-wider">
                             THIS DEVICE
                           </Badge>
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-3 mt-1.5">
                         {sess.deviceType && (
-                          <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                          <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md uppercase tracking-wider">
                             {sess.deviceType}
                           </span>
                         )}
-                        <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                           <MapPin className="h-3 w-3 text-slate-400" /> {sess.ipAddress || 'Internal Network'}
                         </span>
-                        <span className="text-slate-200">•</span>
-                        <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
+                        <span className="text-slate-300 dark:text-slate-700">•</span>
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                           <Clock className="h-3 w-3 text-slate-400" /> {new Date(sess.lastActiveAt || sess.createdAt).toLocaleString()}
                         </span>
                       </div>
@@ -828,7 +828,7 @@ export default function Settings() {
                       variant="ghost" 
                       size="sm"
                       onClick={() => handleRevokeSession(sess.id)}
-                      className="rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 self-end sm:self-center font-bold text-xs"
+                      className="rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 self-end sm:self-center font-bold text-xs cursor-pointer"
                     >
                       <Trash2 className="h-4 w-4 mr-1.5" /> End Session
                     </Button>
@@ -840,44 +840,44 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="activity">
-          <Card className="rounded-[40px] border-none shadow-2xl shadow-slate-200/50 overflow-hidden bg-white">
+          <Card className="rounded-[40px] border border-slate-200/80 dark:border-slate-800 shadow-2xl shadow-slate-200/50 dark:shadow-none overflow-hidden bg-white dark:bg-slate-900">
             <CardHeader className="p-10">
               <CardTitle className="text-2xl font-black">Authentication Matrix</CardTitle>
-              <CardDescription className="font-bold">Review chronological access attempts and outcome vectors.</CardDescription>
+              <CardDescription className="font-bold text-slate-500 dark:text-slate-400">Review chronological access attempts and outcome vectors.</CardDescription>
             </CardHeader>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-slate-50/50">
-                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400">Time-Stamp</th>
-                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400">Authorization Status</th>
-                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400">Device / Terminal</th>
-                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400">IP Address</th>
+                  <tr className="bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800">
+                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-400">Time-Stamp</th>
+                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-400">Authorization Status</th>
+                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-400">Device / Terminal</th>
+                    <th className="px-10 py-6 font-black text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-400">IP Address</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {activities.map((act) => (
-                    <tr key={act.id} className="hover:bg-slate-50/30 transition-colors">
+                    <tr key={act.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="px-10 py-6">
                         <div className="flex flex-col">
-                           <span className="font-black text-slate-900 text-sm">{new Date(act.createdAt).toLocaleDateString()}</span>
+                           <span className="font-black text-slate-900 dark:text-white text-sm">{new Date(act.createdAt).toLocaleDateString()}</span>
                            <span className="text-[10px] font-bold text-slate-400">{new Date(act.createdAt).toLocaleTimeString()}</span>
                         </div>
                       </td>
                       <td className="px-10 py-6">
                         {act.status === 'SUCCESS' ? (
-                          <div className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-widest">
+                          <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-black text-[10px] uppercase tracking-widest">
                              <CheckCircle2 className="h-4 w-4" /> Cleared
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 text-rose-600 font-black text-[10px] uppercase tracking-widest">
+                          <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-black text-[10px] uppercase tracking-widest">
                              <AlertCircle className="h-4 w-4" /> Breach/Denied
                           </div>
                         )}
                       </td>
                       <td className="px-10 py-6">
                         <div className="flex flex-col">
-                          <span className="text-xs font-bold text-slate-800">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
                             {act.deviceName || (act.browser ? `${act.browser} on ${act.os}` : 'Device')}
                           </span>
                           <span className="text-[11px] text-slate-400 font-medium">
@@ -886,7 +886,7 @@ export default function Settings() {
                         </div>
                       </td>
                       <td className="px-10 py-6">
-                        <span className="font-mono text-[10px] font-black text-slate-500 bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200">
+                        <span className="font-mono text-[10px] font-black text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
                           {act.ipAddress || 'LOCAL'}
                         </span>
                       </td>

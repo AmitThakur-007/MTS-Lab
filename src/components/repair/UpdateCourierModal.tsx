@@ -194,19 +194,19 @@ export default function UpdateCourierModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl w-full max-h-[90vh] overflow-y-auto rounded-3xl p-6 sm:p-8 border border-slate-200 bg-white shadow-2xl space-y-5">
+      <DialogContent className="max-w-xl w-full max-h-[90vh] overflow-y-auto rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xl space-y-5">
         <form onSubmit={handleSubmit} className="space-y-5">
-          <DialogHeader className="space-y-1.5 text-left border-b border-slate-100 pb-4">
+          <DialogHeader className="space-y-1.5 text-left border-b border-slate-100 dark:border-slate-800 pb-4">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center border border-blue-100 shadow-xs shrink-0">
+              <div className="w-11 h-11 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center border border-blue-100 dark:border-blue-900 shadow-xs shrink-0">
                 <Truck className="h-6 w-6" />
               </div>
               <div className="min-w-0">
-                <DialogTitle className="text-xl font-extrabold text-slate-900 tracking-tight">
+                <DialogTitle className="text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
                   {repair?.isReturnCourierDispatched ? 'Update Courier Logistics' : 'Dispatch via Courier'}
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-500 font-medium truncate">
-                  Job <span className="font-mono font-bold text-slate-900">#{repair?.repairNumber}</span> • {repair?.deviceBrand} {repair?.deviceModel}
+                <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+                  Job <span className="font-mono font-bold text-slate-900 dark:text-slate-100">#{repair?.repairNumber}</span> • {repair?.deviceBrand} {repair?.deviceModel}
                 </DialogDescription>
               </div>
             </div>
@@ -216,20 +216,20 @@ export default function UpdateCourierModal({
             {/* Courier Partner & Tracking */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <Package className="h-3.5 w-3.5 text-blue-600" />
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Package className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
                   Courier Partner *
                 </Label>
                 <Select
                   value={form.returnCourierCompany}
                   onValueChange={(val) => setForm((prev) => ({ ...prev, returnCourierCompany: val }))}
                 >
-                  <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-semibold">
+                  <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-semibold">
                     <SelectValue placeholder="Select Courier" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl shadow-xl max-h-64">
+                  <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl max-h-64">
                     {NEPAL_COURIER_PARTNERS.map((c) => (
-                      <SelectItem key={c} value={c} className="text-xs font-medium">
+                      <SelectItem key={c} value={c} className="text-xs font-medium text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">
                         {c}
                       </SelectItem>
                     ))}
@@ -241,19 +241,19 @@ export default function UpdateCourierModal({
                     placeholder="Specify Courier Partner Name"
                     value={form.customCourierCompany}
                     onChange={(e) => setForm((prev) => ({ ...prev, customCourierCompany: e.target.value }))}
-                    className="h-9 rounded-xl border-slate-200 text-xs mt-1.5 bg-white"
+                    className="h-9 rounded-xl border-slate-200 dark:border-slate-700 text-xs mt-1.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                     required
                   />
                 )}
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Tracking / AWB Number *</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Tracking / AWB Number *</Label>
                 <Input
                   placeholder="e.g. NCM-882910, TRK-99231"
                   value={form.returnCourierTrackingNumber}
                   onChange={(e) => setForm((prev) => ({ ...prev, returnCourierTrackingNumber: e.target.value }))}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50 font-mono text-xs font-bold text-slate-900"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-xs font-bold text-slate-900 dark:text-slate-100"
                   required
                 />
               </div>
@@ -262,18 +262,18 @@ export default function UpdateCourierModal({
             {/* Dispatch Date & Destination District */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Dispatch Date *</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Dispatch Date *</Label>
                 <Input
                   type="date"
                   value={form.returnCourierDispatchDate}
                   onChange={(e) => setForm((prev) => ({ ...prev, returnCourierDispatchDate: e.target.value }))}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium"
                   required
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <MapPin className="h-3.5 w-3.5 text-rose-500" />
                   Destination District *
                 </Label>
@@ -281,12 +281,12 @@ export default function UpdateCourierModal({
                   value={form.destinationDistrict}
                   onValueChange={(val) => setForm((prev) => ({ ...prev, destinationDistrict: val }))}
                 >
-                  <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-semibold">
+                  <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-semibold">
                     <SelectValue placeholder="Select District" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl shadow-xl max-h-64">
+                  <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl max-h-64">
                     {NEPAL_DISTRICTS.map((d) => (
-                      <SelectItem key={d} value={d} className="text-xs font-medium">
+                      <SelectItem key={d} value={d} className="text-xs font-medium text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">
                         {d}
                       </SelectItem>
                     ))}
@@ -298,7 +298,7 @@ export default function UpdateCourierModal({
                     placeholder="Specify District Name"
                     value={form.customDestinationDistrict}
                     onChange={(e) => setForm((prev) => ({ ...prev, customDestinationDistrict: e.target.value }))}
-                    className="h-9 rounded-xl border-slate-200 text-xs mt-1.5 bg-white"
+                    className="h-9 rounded-xl border-slate-200 dark:border-slate-700 text-xs mt-1.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                     required
                   />
                 )}
@@ -307,40 +307,40 @@ export default function UpdateCourierModal({
 
             {/* Destination Address */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Delivery Address / Landmark</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Delivery Address / Landmark</Label>
               <Input
                 placeholder="e.g. Ward No. 4, Near Lions Club Chowk"
                 value={form.destinationAddress}
                 onChange={(e) => setForm((prev) => ({ ...prev, destinationAddress: e.target.value }))}
-                className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium"
               />
             </div>
 
             {/* Receiver Name & Phone */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <User className="h-3.5 w-3.5 text-slate-500" />
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
                   Receiver Name
                 </Label>
                 <Input
                   placeholder="Full name of person receiving"
                   value={form.receiverName}
                   onChange={(e) => setForm((prev) => ({ ...prev, receiverName: e.target.value }))}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <Phone className="h-3.5 w-3.5 text-slate-500" />
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
                   Receiver Phone
                 </Label>
                 <Input
                   placeholder="e.g. 98XXXXXXXX"
                   value={form.receiverPhone}
                   onChange={(e) => setForm((prev) => ({ ...prev, receiverPhone: e.target.value }))}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50 font-mono text-xs font-bold"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono text-xs font-bold"
                 />
               </div>
             </div>
@@ -348,8 +348,8 @@ export default function UpdateCourierModal({
             {/* Courier Charges & Status */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                  <DollarSign className="h-3.5 w-3.5 text-emerald-600" />
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                  <DollarSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                   Delivery Charge (NPR)
                 </Label>
                 <Input
@@ -358,43 +358,43 @@ export default function UpdateCourierModal({
                   placeholder="0.00"
                   value={form.courierOutCharge}
                   onChange={(e) => setForm((prev) => ({ ...prev, courierOutCharge: e.target.value }))}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50 font-mono text-xs font-bold"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono text-xs font-bold"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Courier Payment</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Courier Payment</Label>
                 <Select
                   value={form.courierOutPaymentStatus}
                   onValueChange={(val) => setForm((prev) => ({ ...prev, courierOutPaymentStatus: val }))}
                 >
-                  <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-semibold">
+                  <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-semibold">
                     <SelectValue placeholder="Payment" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl shadow-xl">
-                    <SelectItem value="UNPAID" className="text-xs font-medium">UNPAID / COD</SelectItem>
-                    <SelectItem value="PAID" className="text-xs font-medium">PAID (Prepaid)</SelectItem>
-                    <SelectItem value="COLLECT_ON_DELIVERY" className="text-xs font-medium">Collect On Delivery</SelectItem>
-                    <SelectItem value="TO_PAY" className="text-xs font-medium">To-Pay by Client</SelectItem>
+                  <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
+                    <SelectItem value="UNPAID" className="text-xs font-medium text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">UNPAID / COD</SelectItem>
+                    <SelectItem value="PAID" className="text-xs font-medium text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">PAID (Prepaid)</SelectItem>
+                    <SelectItem value="COLLECT_ON_DELIVERY" className="text-xs font-medium text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Collect On Delivery</SelectItem>
+                    <SelectItem value="TO_PAY" className="text-xs font-medium text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">To-Pay by Client</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Shipment Status</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Shipment Status</Label>
                 <Select
                   value={form.courierOutStatus}
                   onValueChange={(val) => setForm((prev) => ({ ...prev, courierOutStatus: val }))}
                 >
-                  <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-semibold">
+                  <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-semibold">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl shadow-xl">
-                    <SelectItem value="DISPATCHED" className="text-xs font-medium">Dispatched</SelectItem>
-                    <SelectItem value="IN_TRANSIT" className="text-xs font-medium">In Transit</SelectItem>
-                    <SelectItem value="OUT_FOR_DELIVERY" className="text-xs font-medium">Out for Delivery</SelectItem>
-                    <SelectItem value="DELIVERED" className="text-xs font-medium">Delivered</SelectItem>
-                    <SelectItem value="RETURNED" className="text-xs font-medium">Returned</SelectItem>
+                  <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
+                    <SelectItem value="DISPATCHED" className="text-xs font-medium text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Dispatched</SelectItem>
+                    <SelectItem value="IN_TRANSIT" className="text-xs font-medium text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">In Transit</SelectItem>
+                    <SelectItem value="OUT_FOR_DELIVERY" className="text-xs font-medium text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Out for Delivery</SelectItem>
+                    <SelectItem value="DELIVERED" className="text-xs font-medium text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Delivered</SelectItem>
+                    <SelectItem value="RETURNED" className="text-xs font-medium text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Returned</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -402,8 +402,8 @@ export default function UpdateCourierModal({
 
             {/* Courier Notes */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5 text-slate-500" />
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
                 Courier Logistics Notes / Fragile Instructions
               </Label>
               <Textarea
@@ -411,18 +411,18 @@ export default function UpdateCourierModal({
                 placeholder="e.g. Fragile glass sticker affixed, bubble wrap protective layers, client requested evening drop."
                 value={form.returnCourierNotes}
                 onChange={(e) => setForm((prev) => ({ ...prev, returnCourierNotes: e.target.value }))}
-                className="rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                className="rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium"
               />
             </div>
           </div>
 
-          <DialogFooter className="pt-3 border-t border-slate-100 flex flex-row items-center gap-2.5">
+          <DialogFooter className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-row items-center gap-2.5">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={loading}
-              className="flex-1 rounded-xl h-11 border-slate-200 font-bold text-xs hover:bg-slate-50"
+              className="flex-1 rounded-xl h-11 border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-bold text-xs hover:bg-slate-50"
             >
               Cancel
             </Button>

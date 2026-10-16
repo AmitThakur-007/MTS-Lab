@@ -35,6 +35,12 @@ function SelectTrigger({
 }: SelectPrimitive.Trigger.Props & {
   size?: "sm" | "default"
 }) {
+  const classNameStr = typeof className === 'string' ? className : '';
+  const hasLightBg = classNameStr.includes('bg-white') || classNameStr.includes('bg-slate-50') || classNameStr.includes('bg-slate-100') || classNameStr.includes('bg-gray-50') || classNameStr.includes('bg-gray-100') || classNameStr.includes('bg-zinc-50');
+  const hasDarkBg = classNameStr.includes('dark:bg-');
+  const hasLightBorder = classNameStr.includes('border-slate-200') || classNameStr.includes('border-slate-100') || classNameStr.includes('border-gray-200') || classNameStr.includes('border-gray-100');
+  const hasDarkBorder = classNameStr.includes('dark:border-');
+
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
@@ -42,7 +48,9 @@ function SelectTrigger({
       className={sanitizeInputClassName(
         cn(
           "flex w-full min-w-0 items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2.5 pl-3 text-base md:text-sm transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-9 data-[size=sm]:h-7.5 data-[size=sm]:rounded-[min(var(--radius-md),10px)] *:data-[slot=select-value]:truncate *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 cursor-pointer",
-          className
+          className,
+          hasLightBg && !hasDarkBg && "dark:bg-slate-800 dark:text-white",
+          hasLightBorder && !hasDarkBorder && "dark:border-slate-700"
         )
       )}
       {...props}
@@ -85,7 +93,7 @@ function SelectContent({
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
           className={cn(
-            "relative isolate z-50 max-h-72 min-w-[max(var(--anchor-width,10rem),12rem)] max-w-[calc(100vw-1.5rem)] origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-xl bg-popover text-popover-foreground shadow-xl ring-1 ring-black/10 duration-100 p-1 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            "relative isolate z-50 max-h-72 min-w-[max(var(--anchor-width,10rem),12rem)] max-w-[calc(100vw-1.5rem)] origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-xl bg-popover text-popover-foreground shadow-xl ring-1 ring-foreground/10 dark:ring-white/10 dark:border dark:border-slate-800 duration-100 p-1 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
             className
           )}
           {...props}
@@ -102,9 +110,9 @@ function SelectContent({
 function SelectLabel({
   className,
   ...props
-}: SelectPrimitive.GroupLabel.Props) {
+}: React.ComponentProps<"div">) {
   return (
-    <SelectPrimitive.GroupLabel
+    <div
       data-slot="select-label"
       className={cn("px-2 py-1 text-xs font-semibold text-muted-foreground", className)}
       {...props}

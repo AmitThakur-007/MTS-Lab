@@ -564,7 +564,7 @@ export default function Attendance() {
       <AttendanceStats stats={stats} isLoading={isLoading} />
 
       {/* 3. Navigation Tabs */}
-      <div className="w-full overflow-x-auto p-1.5 bg-slate-100/80 rounded-2xl border border-slate-200/80 scrollbar-none">
+      <div className="w-full overflow-x-auto p-1.5 bg-slate-100/80 dark:bg-slate-900/80 rounded-2xl border border-slate-200/80 dark:border-slate-800 scrollbar-none">
         <div className="flex items-center gap-1.5 min-w-max">
           <Button
             variant="ghost"
@@ -573,13 +573,13 @@ export default function Attendance() {
             className={cn(
               'h-9 px-3.5 sm:px-4 rounded-xl text-xs font-bold gap-2 transition-all shrink-0 whitespace-nowrap',
               activeTab === 'roster'
-                ? 'bg-white text-indigo-700 shadow-2xs font-black'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-2xs font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             )}
           >
             <Users className="w-4 h-4 shrink-0" />
             <span>Today's Roster & Marking</span>
-            <Badge className="bg-indigo-100 text-indigo-800 text-[10px] font-mono font-bold px-1.5 py-0 shrink-0">
+            <Badge className="bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 text-[10px] font-mono font-bold px-1.5 py-0 shrink-0">
               {roster.length}
             </Badge>
           </Button>
@@ -594,8 +594,8 @@ export default function Attendance() {
             className={cn(
               'h-9 px-3.5 sm:px-4 rounded-xl text-xs font-bold gap-2 transition-all shrink-0 whitespace-nowrap',
               activeTab === 'monthly'
-                ? 'bg-white text-indigo-700 shadow-2xs font-black'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-2xs font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             )}
           >
             <Calendar className="w-4 h-4 shrink-0" />
@@ -612,8 +612,8 @@ export default function Attendance() {
             className={cn(
               'h-9 px-3.5 sm:px-4 rounded-xl text-xs font-bold gap-2 transition-all shrink-0 whitespace-nowrap',
               activeTab === 'history'
-                ? 'bg-white text-indigo-700 shadow-2xs font-black'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-2xs font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             )}
           >
             <History className="w-4 h-4 shrink-0" />
@@ -630,8 +630,8 @@ export default function Attendance() {
             className={cn(
               'h-9 px-3.5 sm:px-4 rounded-xl text-xs font-bold gap-2 transition-all shrink-0 whitespace-nowrap',
               activeTab === 'personal'
-                ? 'bg-white text-indigo-700 shadow-2xs font-black'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-2xs font-black'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             )}
           >
             <UserCheck className="w-4 h-4 shrink-0" />

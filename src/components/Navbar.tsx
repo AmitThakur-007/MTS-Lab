@@ -107,8 +107,8 @@ export default function Navbar() {
   ];
 
   const glassStyle = isScrolled 
-    ? "bg-white/95 backdrop-blur-xl border-b border-slate-200/80 shadow-xs py-2.5 sm:py-3.5" 
-    : "bg-white/90 backdrop-blur-md border-b border-slate-200/50 shadow-2xs py-3 sm:py-4";
+    ? "bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800 shadow-xs py-2.5 sm:py-3.5" 
+    : "bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-800/60 shadow-2xs py-3 sm:py-4";
 
   return (
     <>
@@ -120,27 +120,27 @@ export default function Navbar() {
           {/* Brand Logo & Wordmark */}
           <Link 
             to="/" 
-            className="flex items-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 rounded-lg py-1 transition-opacity hover:opacity-90 cursor-pointer"
+            className="flex items-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 dark:focus-visible:ring-white focus-visible:ring-offset-2 rounded-lg py-1 transition-opacity hover:opacity-90 cursor-pointer"
             aria-label="MTS Lab - Home"
           >
             {/* Mobile View (Smartphones < 640px): Professional, clean MTS Lab wordmark */}
-            <span className="sm:hidden text-lg font-bold tracking-tight text-slate-950 flex items-center select-none leading-none shrink-0">
-              MTS<span className="text-slate-500 font-semibold ml-1">Lab</span>
+            <span className="sm:hidden text-lg font-bold tracking-tight text-slate-950 dark:text-white flex items-center select-none leading-none shrink-0">
+              MTS<span className="text-slate-500 dark:text-slate-400 font-semibold ml-1">Lab</span>
             </span>
 
             {/* Desktop & Tablet View (>= 640px): Preserved Brand Icon + MTSLAB */}
             <div className="hidden sm:flex items-center gap-3 shrink-0">
-              <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-black/20 shrink-0">
+              <div className="w-10 h-10 bg-black dark:bg-slate-800 border border-transparent dark:border-slate-700 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-black/20 shrink-0">
                 M
               </div>
-              <span className="text-xl font-bold tracking-tight text-slate-900 shrink-0">
+              <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white shrink-0">
                 MTS<span className="text-slate-400 font-medium">LAB</span>
               </span>
             </div>
           </Link>
 
           {/* Desktop Nav */}
-          <div className="hidden lg:flex items-center gap-1.5 bg-slate-100/80 p-1.5 rounded-full border border-slate-200/60 backdrop-blur-md">
+          <div className="hidden lg:flex items-center gap-1.5 bg-slate-100/80 dark:bg-slate-900/80 p-1.5 rounded-full border border-slate-200/60 dark:border-slate-800 backdrop-blur-md">
             {navLinks.map((link) => {
               const isActive = location.pathname === link.path;
               return (
@@ -149,8 +149,8 @@ export default function Navbar() {
                   to={link.path}
                   className={`text-xs font-extrabold px-4 py-2 rounded-full transition-all ${
                     isActive 
-                      ? 'bg-slate-950 text-white shadow-sm' 
-                      : 'text-slate-600 hover:text-slate-950 hover:bg-slate-200/60'
+                      ? 'bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-950 shadow-sm' 
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60'
                   }`}
                 >
                   {link.name}
@@ -165,7 +165,7 @@ export default function Navbar() {
               id="navbar-search-repair-button"
               onClick={() => navigate('/services?focus=search')}
               aria-label="Search Repair Prices"
-              className="p-2 sm:p-2.5 text-slate-600 hover:text-slate-950 hover:bg-slate-100 rounded-full transition-all cursor-pointer shrink-0"
+              className="p-2 sm:p-2.5 text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all cursor-pointer shrink-0"
             >
               <Search className="h-4.5 w-4.5" />
             </button>
@@ -174,7 +174,7 @@ export default function Navbar() {
               {!isAuthenticated ? (
                 <Button 
                   onClick={() => navigate('/login')}
-                  className="rounded-full bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer"
+                  className="rounded-full bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer"
                 >
                   Staff Portal
                 </Button>
@@ -182,7 +182,7 @@ export default function Navbar() {
                 <Button 
                   onClick={() => navigate('/dashboard')}
                   variant="outline"
-                  className="rounded-full border-slate-300 font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer"
+                  className="rounded-full border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer"
                 >
                   Dashboard
                 </Button>
@@ -191,7 +191,7 @@ export default function Navbar() {
 
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2 sm:p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-full cursor-pointer relative z-[70] shrink-0"
+              className="lg:hidden p-2 sm:p-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white rounded-full cursor-pointer relative z-[70] shrink-0"
               aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -220,20 +220,20 @@ export default function Navbar() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 right-0 w-full max-w-sm bg-white/95 backdrop-blur-2xl z-[60] shadow-2xl lg:hidden flex flex-col p-6 sm:p-8 pt-20 sm:pt-24 overflow-y-auto overscroll-contain"
+              className="fixed inset-y-0 right-0 w-full max-w-sm bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl z-[60] shadow-2xl lg:hidden flex flex-col p-6 sm:p-8 pt-20 sm:pt-24 overflow-y-auto overscroll-contain border-l border-transparent dark:border-slate-800"
             >
               <div className="flex flex-col gap-1">
                 {navLinks.map((link) => {
                   const isActive = location.pathname === link.path;
                   return (
                     <Link 
-                      key={link.name}
+                      key={link.name} 
                       to={link.path}
                       className={cn(
                         "flex items-center justify-between p-3.5 rounded-2xl transition-all group",
                         isActive 
-                          ? "bg-slate-900 text-white font-bold shadow-sm" 
-                          : "hover:bg-slate-100/80 text-slate-900"
+                          ? "bg-slate-900 dark:bg-slate-800 text-white font-bold shadow-sm" 
+                          : "hover:bg-slate-100/80 dark:hover:bg-slate-800/80 text-slate-900 dark:text-slate-100"
                       )}
                     >
                       <div className="flex items-center gap-3.5">
@@ -241,7 +241,7 @@ export default function Navbar() {
                           "p-2.5 rounded-xl transition-colors",
                           isActive 
                             ? "bg-white/15 text-white" 
-                            : "bg-slate-100 text-slate-700 group-hover:bg-slate-900 group-hover:text-white"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 group-hover:bg-slate-900 dark:group-hover:bg-slate-700 group-hover:text-white"
                         )}>
                           <link.icon className="h-4.5 w-4.5" />
                         </div>
@@ -257,18 +257,18 @@ export default function Navbar() {
               </div>
 
               {/* Bottom Actions & Social Media */}
-              <div className="mt-6 pt-6 border-t border-slate-200/70 space-y-5">
+              <div className="mt-6 pt-6 border-t border-slate-200/70 dark:border-slate-800 space-y-5">
                 {!isAuthenticated ? (
                   <Button 
                     onClick={() => navigate('/login')}
-                    className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold text-base shadow-sm cursor-pointer"
+                    className="w-full h-12 rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-base shadow-sm cursor-pointer"
                   >
                     Login to Account
                   </Button>
                 ) : (
                   <Button 
                     onClick={() => navigate('/dashboard')}
-                    className="w-full h-12 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold text-base shadow-sm cursor-pointer"
+                    className="w-full h-12 rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-base shadow-sm cursor-pointer"
                   >
                     Go to Dashboard
                   </Button>
@@ -277,11 +277,11 @@ export default function Navbar() {
                 {/* Connect With MTS Lab */}
                 <div className="space-y-3 pt-1">
                   <div className="flex items-center justify-center gap-2">
-                    <span className="h-px w-8 bg-slate-200" />
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 text-center">
+                    <span className="h-px w-8 bg-slate-200 dark:bg-slate-800" />
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">
                       Connect With MTS Lab
                     </p>
-                    <span className="h-px w-8 bg-slate-200" />
+                    <span className="h-px w-8 bg-slate-200 dark:bg-slate-800" />
                   </div>
 
                   <div className="flex items-center justify-center gap-2 sm:gap-2.5">
@@ -293,7 +293,7 @@ export default function Navbar() {
                         rel="noopener noreferrer"
                         aria-label={social.label}
                         className={cn(
-                          "w-11 h-11 rounded-xl bg-slate-100 border border-slate-200/80 text-slate-600 flex items-center justify-center transition-all duration-200 shadow-2xs group active:scale-95 cursor-pointer",
+                          "w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all duration-200 shadow-2xs group active:scale-95 cursor-pointer",
                           social.hoverColor
                         )}
                       >
@@ -305,7 +305,7 @@ export default function Navbar() {
                   </div>
                 </div>
 
-                <p className="text-center text-slate-400 text-xs font-medium pt-1">
+                <p className="text-center text-slate-400 dark:text-slate-500 text-xs font-medium pt-1">
                   MTS Lab Repair Management System
                 </p>
               </div>

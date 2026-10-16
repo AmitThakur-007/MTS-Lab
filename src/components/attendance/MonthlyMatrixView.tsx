@@ -128,16 +128,16 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
   return (
     <div className="space-y-4 w-full min-w-0">
       {/* Month Navigator Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs w-full min-w-0">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs w-full min-w-0">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
             <Calendar className="w-5 h-5" />
           </div>
           <div className="min-w-0">
-            <div className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">
+            <div className="text-[11px] sm:text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider truncate">
               Monthly Attendance Performance
             </div>
-            <div className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2 truncate">
+            <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2 truncate">
               {format(currentDateObj, 'MMMM yyyy')}
             </div>
           </div>
@@ -149,7 +149,7 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
             variant="outline"
             size="sm"
             onClick={handlePrevMonth}
-            className="h-9 px-2 sm:px-3 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold gap-1 flex-1 sm:flex-none justify-center"
+            className="h-9 px-2 sm:px-3 rounded-xl border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold gap-1 flex-1 sm:flex-none justify-center cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4" />
             <span>Prev</span>
@@ -159,7 +159,7 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
             variant="outline"
             size="sm"
             onClick={() => onMonthChange(new Date().toISOString().slice(0, 7))}
-            className="h-9 px-2.5 sm:px-3 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold flex-1 sm:flex-none justify-center"
+            className="h-9 px-2.5 sm:px-3 rounded-xl border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold flex-1 sm:flex-none justify-center cursor-pointer"
           >
             Current
           </Button>
@@ -168,7 +168,7 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
             variant="outline"
             size="sm"
             onClick={handleNextMonth}
-            className="h-9 px-2 sm:px-3 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold gap-1 flex-1 sm:flex-none justify-center"
+            className="h-9 px-2 sm:px-3 rounded-xl border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold gap-1 flex-1 sm:flex-none justify-center cursor-pointer"
           >
             <span>Next</span>
             <ChevronRight className="w-4 h-4" />
@@ -179,16 +179,16 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
       {/* Monthly Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {/* KPI 1: Average Monthly Rate */}
-        <Card className="border border-slate-200/80 bg-white shadow-2xs rounded-xl">
+        <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs rounded-xl">
           <CardContent className="p-4 flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
               <Percent className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Average Team Attendance
               </div>
-              <div className="text-xl font-black text-slate-900">
+              <div className="text-xl font-black text-slate-900 dark:text-white">
                 {isLoading ? '—' : `${averageRate}%`}
               </div>
             </div>
@@ -196,16 +196,16 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
         </Card>
 
         {/* KPI 2: Total Active Staff */}
-        <Card className="border border-slate-200/80 bg-white shadow-2xs rounded-xl">
+        <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs rounded-xl">
           <CardContent className="p-4 flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-100 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Staff Members Tracked
               </div>
-              <div className="text-xl font-black text-slate-900">
+              <div className="text-xl font-black text-slate-900 dark:text-white">
                 {isLoading ? '—' : report.length}
               </div>
             </div>
@@ -213,16 +213,16 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
         </Card>
 
         {/* KPI 3: Top Performer */}
-        <Card className="border border-slate-200/80 bg-white shadow-2xs rounded-xl">
+        <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs rounded-xl">
           <CardContent className="p-4 flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-100 dark:border-amber-800 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
               <Award className="w-5 h-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider truncate">
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
                 Top Monthly Attendee
               </div>
-              <div className="text-sm font-black text-slate-900 truncate">
+              <div className="text-sm font-black text-slate-900 dark:text-white truncate">
                 {isLoading || !topPerformer
                   ? '—'
                   : `${topPerformer.user.name} (${topPerformer.attendanceRate}%)`}
@@ -233,10 +233,10 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
       </div>
 
       {/* Monthly Interactive Matrix */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs overflow-hidden">
         {/* Matrix Legend Header */}
-        <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs font-bold text-slate-700 flex items-center gap-2">
+        <div className="p-4 bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
             <span>Legend:</span>
             <span className="flex items-center gap-1 font-semibold text-emerald-700">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Present (P)
@@ -336,22 +336,22 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
                   return (
                     <tr
                       key={user.id}
-                      className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer"
                       onClick={() => onOpenStaffDetail(user.id, user.name)}
                     >
                       {/* Column 1: Staff Name & Role */}
-                      <td className="p-3 sticky left-0 bg-white group-hover:bg-slate-50 transition-colors z-10 shadow-xs border-r border-slate-200/60">
+                      <td className="p-3 sticky left-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 transition-colors z-10 shadow-xs border-r border-slate-200/60 dark:border-slate-800">
                         <div className="flex items-center gap-2">
-                          <Avatar className="w-7 h-7 rounded-lg shrink-0 bg-indigo-50 border border-slate-200">
-                            <AvatarFallback className="text-[10px] font-black text-indigo-700">
+                          <Avatar className="w-7 h-7 rounded-lg shrink-0 bg-indigo-50 dark:bg-indigo-950/50 border border-slate-200 dark:border-slate-700">
+                            <AvatarFallback className="text-[10px] font-black text-indigo-700 dark:text-indigo-300">
                               {(user.name || 'ST').slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="min-w-0">
-                            <div className="font-bold text-slate-900 truncate max-w-[130px]">
+                            <div className="font-bold text-slate-900 dark:text-white truncate max-w-[130px]">
                               {user.name}
                             </div>
-                            <div className="text-[10px] text-slate-400 font-semibold truncate">
+                            <div className="text-[10px] text-slate-400 dark:text-slate-400 font-semibold truncate">
                               {user.role}
                             </div>
                           </div>
@@ -365,7 +365,7 @@ export const MonthlyMatrixView: React.FC<MonthlyMatrixViewProps> = ({
                         const dayDate = new Date(yearNum, monthNum - 1, day);
                         const isSaturday = dayDate.getDay() === 6;
 
-                        let cellBg = isSaturday ? 'bg-amber-50/40 text-amber-800' : 'text-slate-300';
+                        let cellBg = isSaturday ? 'bg-amber-50/40 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300' : 'text-slate-300 dark:text-slate-600';
                         let cellContent = '·';
 
                         if (log) {

@@ -850,12 +850,12 @@ export default function Repairs() {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Repair Management</h1>
-            <Badge variant="outline" className="font-semibold text-xs border-slate-300 bg-white text-slate-700">
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Repair Management</h1>
+            <Badge variant="outline" className="font-semibold text-xs border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300">
               {user?.role?.replace(/_/g, ' ')}
             </Badge>
           </div>
-          <p className="text-slate-500 text-sm mt-1">
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
             Real-time multi-brand repair records, instant assignment, status transitions, and payments.
           </p>
         </div>
@@ -870,7 +870,7 @@ export default function Repairs() {
           <Button
             variant="outline"
             onClick={() => generateRepairReport(finalFilteredRepairs, `REPAIR REPORT (${dateFilterPreset})`)}
-            className="h-10 rounded-xl border-slate-200 font-semibold gap-2 shadow-sm text-slate-700 hover:bg-slate-50"
+            className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold gap-2 shadow-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
             disabled={finalFilteredRepairs.length === 0}
           >
             <Download className="h-4 w-4" /> Print Report
@@ -883,10 +883,10 @@ export default function Repairs() {
                 size="sm"
                 onClick={handleDownloadTemplate}
                 disabled={downloadingTemplate}
-                className="h-10 rounded-xl border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50 gap-2 shadow-sm text-xs"
+                className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 gap-2 shadow-sm text-xs"
                 title="Download blank standard Excel template for repairs"
               >
-                {downloadingTemplate ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4 text-slate-500" />}
+                {downloadingTemplate ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4 text-slate-500 dark:text-slate-400" />}
                 <span className="hidden sm:inline">Download</span> Template
               </Button>
 
@@ -898,9 +898,9 @@ export default function Repairs() {
                   setPreviewData(null);
                   setIsImportModalOpen(true);
                 }}
-                className="h-10 rounded-xl border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50 gap-2 shadow-sm text-xs"
+                className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 gap-2 shadow-sm text-xs"
               >
-                <Upload className="h-4 w-4 text-indigo-600" />
+                <Upload className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                 Import Excel
               </Button>
 
@@ -909,9 +909,9 @@ export default function Repairs() {
                 size="sm"
                 onClick={handleExportExcel}
                 disabled={exportingExcel || repairs.length === 0}
-                className="h-10 rounded-xl border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-semibold gap-2 shadow-sm text-xs"
+                className="h-10 rounded-xl border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 font-semibold gap-2 shadow-sm text-xs"
               >
-                {exportingExcel ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 text-emerald-600" />}
+                {exportingExcel ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
                 Export Excel
               </Button>
             </>
@@ -932,17 +932,17 @@ export default function Repairs() {
         {/* Total Repairs */}
         <Card
           onClick={() => setActiveStatusTab('ALL')}
-          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'ALL' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'ALL' ? 'border-slate-900 bg-slate-900 text-white dark:border-indigo-500 dark:bg-indigo-600' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100'
             }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'ALL' ? 'text-slate-300' : 'text-slate-500'}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'ALL' ? 'text-slate-300 dark:text-indigo-100' : 'text-slate-500 dark:text-slate-400'}`}>
               Total Repairs
             </span>
-            <Layers className={`h-4 w-4 ${activeStatusTab === 'ALL' ? 'text-slate-300' : 'text-slate-400'}`} />
+            <Layers className={`h-4 w-4 ${activeStatusTab === 'ALL' ? 'text-slate-300 dark:text-indigo-100' : 'text-slate-400 dark:text-slate-500'}`} />
           </div>
           <div className="mt-2 text-2xl font-black">{metrics.total}</div>
-          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'ALL' ? 'text-slate-300' : 'text-slate-400'}`}>
+          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'ALL' ? 'text-slate-300 dark:text-indigo-100' : 'text-slate-400 dark:text-slate-500'}`}>
             Est. {formatNPR(metrics.estimatedTotalSum)}
           </div>
         </Card>
@@ -950,17 +950,17 @@ export default function Repairs() {
         {/* Pending */}
         <Card
           onClick={() => setActiveStatusTab('PENDING')}
-          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'PENDING' ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-200 bg-white text-slate-900'
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'PENDING' ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100'
             }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'PENDING' ? 'text-amber-100' : 'text-amber-700'}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'PENDING' ? 'text-amber-100' : 'text-amber-700 dark:text-amber-400'}`}>
               Pending
             </span>
-            <AlertCircle className={`h-4 w-4 ${activeStatusTab === 'PENDING' ? 'text-amber-100' : 'text-amber-500'}`} />
+            <AlertCircle className={`h-4 w-4 ${activeStatusTab === 'PENDING' ? 'text-amber-100' : 'text-amber-500 dark:text-amber-400'}`} />
           </div>
           <div className="mt-2 text-2xl font-black">{metrics.pending}</div>
-          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'PENDING' ? 'text-amber-100' : 'text-slate-400'}`}>
+          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'PENDING' ? 'text-amber-100' : 'text-slate-400 dark:text-slate-500'}`}>
             Awaiting triage
           </div>
         </Card>
@@ -968,17 +968,17 @@ export default function Repairs() {
         {/* Received */}
         <Card
           onClick={() => setActiveStatusTab('RECEIVED')}
-          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'RECEIVED' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 bg-white text-slate-900'
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'RECEIVED' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100'
             }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'RECEIVED' ? 'text-sky-100' : 'text-sky-700'}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'RECEIVED' ? 'text-sky-100' : 'text-sky-700 dark:text-sky-400'}`}>
               Received
             </span>
-            <Smartphone className={`h-4 w-4 ${activeStatusTab === 'RECEIVED' ? 'text-sky-100' : 'text-sky-500'}`} />
+            <Smartphone className={`h-4 w-4 ${activeStatusTab === 'RECEIVED' ? 'text-sky-100' : 'text-sky-500 dark:text-sky-400'}`} />
           </div>
           <div className="mt-2 text-2xl font-black">{metrics.received}</div>
-          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'RECEIVED' ? 'text-sky-100' : 'text-slate-400'}`}>
+          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'RECEIVED' ? 'text-sky-100' : 'text-slate-400 dark:text-slate-500'}`}>
             Checked in at desk
           </div>
         </Card>
@@ -986,17 +986,17 @@ export default function Repairs() {
         {/* In Progress */}
         <Card
           onClick={() => setActiveStatusTab('IN_PROGRESS')}
-          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'IN_PROGRESS' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-900'
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md ${activeStatusTab === 'IN_PROGRESS' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100'
             }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'IN_PROGRESS' ? 'text-indigo-100' : 'text-indigo-700'}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'IN_PROGRESS' ? 'text-indigo-100' : 'text-indigo-700 dark:text-indigo-400'}`}>
               In Progress
             </span>
-            <Wrench className={`h-4 w-4 ${activeStatusTab === 'IN_PROGRESS' ? 'text-indigo-100' : 'text-indigo-500'}`} />
+            <Wrench className={`h-4 w-4 ${activeStatusTab === 'IN_PROGRESS' ? 'text-indigo-100' : 'text-indigo-500 dark:text-indigo-400'}`} />
           </div>
           <div className="mt-2 text-2xl font-black">{metrics.inProgress}</div>
-          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'IN_PROGRESS' ? 'text-indigo-100' : 'text-slate-400'}`}>
+          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'IN_PROGRESS' ? 'text-indigo-100' : 'text-slate-400 dark:text-slate-500'}`}>
             On bench / Diagnosing
           </div>
         </Card>
@@ -1004,26 +1004,26 @@ export default function Repairs() {
         {/* Repaired */}
         <Card
           onClick={() => setActiveStatusTab('REPAIRED')}
-          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md col-span-2 sm:col-span-1 ${activeStatusTab === 'REPAIRED' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-200 bg-white text-slate-900'
+          className={`cursor-pointer transition-all duration-200 border rounded-2xl p-4 shadow-sm hover:shadow-md col-span-2 sm:col-span-1 ${activeStatusTab === 'REPAIRED' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100'
             }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'REPAIRED' ? 'text-emerald-100' : 'text-emerald-700'}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider ${activeStatusTab === 'REPAIRED' ? 'text-emerald-100' : 'text-emerald-700 dark:text-emerald-400'}`}>
               Repaired / Ready
             </span>
-            <CheckCircle2 className={`h-4 w-4 ${activeStatusTab === 'REPAIRED' ? 'text-emerald-100' : 'text-emerald-500'}`} />
+            <CheckCircle2 className={`h-4 w-4 ${activeStatusTab === 'REPAIRED' ? 'text-emerald-100' : 'text-emerald-500 dark:text-emerald-400'}`} />
           </div>
           <div className="mt-2 text-2xl font-black">{metrics.repaired}</div>
-          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'REPAIRED' ? 'text-emerald-100' : 'text-slate-400'}`}>
+          <div className={`text-[11px] mt-1 font-medium ${activeStatusTab === 'REPAIRED' ? 'text-emerald-100' : 'text-slate-400 dark:text-slate-500'}`}>
             Ready for customer
           </div>
         </Card>
       </div>
 
       {/* 2. Filter Toolbar: Date Filter & Status Views */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
         {/* Status Tabs Navigation */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
           {[
             { key: 'ALL', label: 'All Jobs', count: metrics.total },
             { key: 'PENDING', label: 'Pending', count: metrics.pending },
@@ -1040,13 +1040,13 @@ export default function Repairs() {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveStatusTab(tab.key as StatusTabKey)}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${isActive
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'bg-slate-100/80 hover:bg-slate-200 text-slate-700'
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${isActive
+                  ? 'bg-slate-900 dark:bg-indigo-600 text-white shadow-sm'
+                  : 'bg-slate-100/80 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
                   }`}
               >
                 <span>{tab.label}</span>
-                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${isActive ? 'bg-slate-800 text-slate-200' : 'bg-slate-200 text-slate-700'
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${isActive ? 'bg-slate-800 dark:bg-indigo-700 text-slate-200' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                   }`}>
                   {tab.count}
                 </span>
@@ -1059,17 +1059,17 @@ export default function Repairs() {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
           {/* Search Box */}
           <div className="md:col-span-4 relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
             <Input
               placeholder="Search repair #, customer, phone, model, tech..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-10 pl-9 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+              className="h-10 pl-9 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-sm text-slate-900 dark:text-white"
             />
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -1079,8 +1079,8 @@ export default function Repairs() {
           {/* Date Filter Presets */}
           <div className="md:col-span-5 flex flex-wrap items-center gap-1.5">
             <div className="flex items-center gap-1 mr-1">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date:</span>
-              <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded" title="All filters calibrated to Nepal Standard Time (UTC+5:45)">NPT</span>
+              <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Date:</span>
+              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded" title="All filters calibrated to Nepal Standard Time (UTC+5:45)">NPT</span>
             </div>
             {[
               { key: 'ALL', label: 'All' },
@@ -1096,9 +1096,9 @@ export default function Repairs() {
                   key={preset.key}
                   type="button"
                   onClick={() => setDateFilterPreset(preset.key as DateFilterPreset)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${isSelected
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${isSelected
                     ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                    : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
                     }`}
                 >
                   {preset.label}
@@ -1110,10 +1110,10 @@ export default function Repairs() {
           {/* Sort & Technician Filter Dropdowns */}
           <div className="md:col-span-3 flex items-center gap-2 justify-end">
             <Select value={selectedTechnicianFilter} onValueChange={setSelectedTechnicianFilter}>
-              <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-medium w-full sm:w-36">
+              <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-slate-100 w-full sm:w-36">
                 <SelectValue placeholder="Technician" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl">
+              <SelectContent className="rounded-xl dark:bg-slate-900 dark:border-slate-800">
                 <SelectItem value="ALL">All Technicians</SelectItem>
                 <SelectItem value="UNASSIGNED">Unassigned</SelectItem>
                 {technicians.map((t: any) => (
@@ -1123,10 +1123,10 @@ export default function Repairs() {
             </Select>
 
             <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
-              <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-medium w-full sm:w-32">
+              <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-slate-100 w-full sm:w-32">
                 <SelectValue placeholder="Sort" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl">
+              <SelectContent className="rounded-xl dark:bg-slate-900 dark:border-slate-800">
                 <SelectItem value="newest">Newest First</SelectItem>
                 <SelectItem value="oldest">Oldest First</SelectItem>
                 <SelectItem value="updated">Recently Updated</SelectItem>
@@ -1140,24 +1140,24 @@ export default function Repairs() {
 
         {/* Custom Date Range Picker (shown when CUSTOM preset selected) */}
         {dateFilterPreset === 'CUSTOM' && (
-          <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
+          <div className="flex flex-col gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <Label className="text-xs font-semibold text-slate-600">From:</Label>
+                <Label className="text-xs font-semibold text-slate-600 dark:text-slate-300">From:</Label>
                 <Input
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="h-9 w-40 rounded-xl border-slate-200 text-xs"
+                  className="h-9 w-40 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
                 />
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs font-semibold text-slate-600">To:</Label>
+                <Label className="text-xs font-semibold text-slate-600 dark:text-slate-300">To:</Label>
                 <Input
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="h-9 w-40 rounded-xl border-slate-200 text-xs"
+                  className="h-9 w-40 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
                 />
               </div>
               {(customStartDate || customEndDate) && (
@@ -1168,7 +1168,7 @@ export default function Repairs() {
                     setCustomStartDate('');
                     setCustomEndDate('');
                   }}
-                  className="h-9 text-xs text-slate-500 hover:text-slate-900 rounded-xl"
+                  className="h-9 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-xl cursor-pointer"
                 >
                   Clear Range
                 </Button>
@@ -1176,8 +1176,8 @@ export default function Repairs() {
             </div>
 
             {customRangeError && (
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-medium">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
                 <span>{customRangeError}</span>
               </div>
             )}
@@ -1187,23 +1187,23 @@ export default function Repairs() {
 
       {/* 3. Professional Repair Table & Responsive Cards */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-32 gap-3 bg-white rounded-3xl border border-slate-200">
-          <Loader2 className="h-10 w-10 text-slate-400 animate-spin" />
-          <p className="text-slate-500 font-semibold text-sm">Loading authorized repair records...</p>
+        <div className="flex flex-col items-center justify-center py-32 gap-3 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
+          <Loader2 className="h-10 w-10 text-slate-400 dark:text-slate-500 animate-spin" />
+          <p className="text-slate-500 dark:text-slate-400 font-semibold text-sm">Loading authorized repair records...</p>
         </div>
       ) : finalFilteredRepairs.length === 0 ? (
-        <div className="text-center py-24 bg-white rounded-3xl border border-dashed border-slate-300">
-          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Smartphone className="h-8 w-8 text-slate-400" />
+        <div className="text-center py-24 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">
+          <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Smartphone className="h-8 w-8 text-slate-400 dark:text-slate-500" />
           </div>
-          <h3 className="text-lg font-bold text-slate-800">
+          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
             {customRangeError
               ? "Invalid Date Range"
               : dateFilteredRepairs.length === 0 && dateFilterPreset !== 'ALL'
                 ? `No repairs found for ${dateFilterPreset.replace('_', ' ')}`
                 : "No repair records found"}
           </h3>
-          <p className="text-slate-500 text-sm max-w-sm mx-auto mt-1">
+          <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm mx-auto mt-1">
             {customRangeError
               ? "The selected start date is after the end date. Please adjust your dates."
               : dateFilteredRepairs.length === 0 && dateFilterPreset !== 'ALL'
@@ -1220,14 +1220,14 @@ export default function Repairs() {
                   setCustomStartDate('');
                   setCustomEndDate('');
                 }}
-                className="rounded-xl border-slate-300 text-slate-700 text-xs font-medium"
+                className="rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium cursor-pointer"
               >
                 Show All Repairs
               </Button>
             )}
             {canCreate && (
               <Link to="/dashboard/repairs/new">
-                <Button size="sm" className="rounded-xl bg-slate-900 text-white font-semibold">
+                <Button size="sm" className="rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold cursor-pointer">
                   <Plus className="h-4 w-4 mr-1" /> Register New Repair
                 </Button>
               </Link>
@@ -1271,7 +1271,7 @@ export default function Repairs() {
                   variant="ghost"
                   size="sm"
                   onClick={handleClearSelection}
-                  className="h-8 px-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold"
+                  className="h-8 px-3 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold cursor-pointer"
                 >
                   Clear Selection
                 </Button>
@@ -1289,10 +1289,10 @@ export default function Repairs() {
           )}
 
           {/* Desktop Table View */}
-          <div className="hidden lg:block bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="hidden lg:block bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-700">
-                <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+              <table className="w-full text-left text-sm text-slate-700 dark:text-slate-200">
+                <thead className="bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[11px] font-bold uppercase tracking-wider">
                   <tr>
                     {canDelete && (
                       <th className="py-3.5 px-4 w-10 text-center">
@@ -1300,10 +1300,10 @@ export default function Repairs() {
                           type="button"
                           onClick={handleToggleSelectAll}
                           className={`w-4 h-4 rounded border flex items-center justify-center transition-colors cursor-pointer mx-auto ${isAllVisibleSelected
-                            ? 'bg-slate-900 border-slate-900 text-white'
+                            ? 'bg-slate-900 dark:bg-indigo-600 border-slate-900 dark:border-indigo-600 text-white'
                             : isSomeVisibleSelected
-                              ? 'bg-slate-200 border-slate-400 text-slate-800'
-                              : 'border-slate-300 bg-white hover:border-slate-400'
+                              ? 'bg-slate-200 dark:bg-slate-700 border-slate-400 dark:border-slate-600 text-slate-800 dark:text-slate-200'
+                              : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
                             }`}
                           title={isAllVisibleSelected ? "Deselect all visible repairs" : "Select all visible repairs"}
                           aria-label={isAllVisibleSelected ? "Deselect all visible repairs" : "Select all visible repairs"}
@@ -1327,7 +1327,7 @@ export default function Repairs() {
                     <th className="py-3.5 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
                   {paginatedRepairs.map((repair) => {
                     const statusInfo = statusConfig[repair.status] || {
 
@@ -1350,7 +1350,7 @@ export default function Repairs() {
                     const isSelected = selectedRepairIds.has(repair.id);
 
                     return (
-                      <tr key={repair.id} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-indigo-50/40' : ''}`}>
+                      <tr key={repair.id} className={`hover:bg-slate-50/70 dark:hover:bg-slate-800/60 transition-colors ${isSelected ? 'bg-indigo-50/40 dark:bg-indigo-950/40' : ''}`}>
                         {/* Row Selection Checkbox */}
                         {canDelete && (
                           <td className="py-3.5 px-4 w-10 text-center" onClick={(e) => e.stopPropagation()}>
@@ -1358,8 +1358,8 @@ export default function Repairs() {
                               type="button"
                               onClick={(e) => handleToggleSelectRepair(repair.id, e)}
                               className={`w-4 h-4 rounded border flex items-center justify-center transition-colors cursor-pointer mx-auto ${isSelected
-                                ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
-                                : 'border-slate-300 bg-white hover:border-slate-400'
+                                ? 'bg-slate-900 dark:bg-indigo-600 border-slate-900 dark:border-indigo-600 text-white shadow-2xs'
+                                : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
                                 }`}
                               aria-label={`Select repair #${repair.repairNumber}`}
                             >
@@ -1369,11 +1369,11 @@ export default function Repairs() {
                         )}
 
                         {/* Repair No */}
-                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
-                              className="hover:underline text-indigo-600 flex items-center gap-1.5 cursor-pointer"
+                              className="hover:underline text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 cursor-pointer"
                             >
                               <span>#{repair.repairNumber}</span>
                             </button>
@@ -1402,27 +1402,27 @@ export default function Repairs() {
                         </td>
 
                         {/* Date Created */}
-                        <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-600">
+                        <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-600 dark:text-slate-300">
                           <div>{formatDateSafe(repair.createdAt, 'MMM dd, yyyy')}</div>
-                          <div className="text-[10px] text-slate-400">{formatDateSafe(repair.createdAt, 'hh:mm a')}</div>
+                          <div className="text-[10px] text-slate-400 dark:text-slate-500">{formatDateSafe(repair.createdAt, 'hh:mm a')}</div>
                         </td>
 
                         {/* Customer */}
                         <td className="py-3.5 px-4">
-                          <div className="font-semibold text-slate-900 truncate max-w-[140px]">{repair.customerName}</div>
-                          <div className="text-xs text-slate-500 font-mono flex items-center gap-1">
-                            <Phone className="h-3 w-3 text-slate-400 inline" />
+                          <div className="font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[140px]">{repair.customerName}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1">
+                            <Phone className="h-3 w-3 text-slate-400 dark:text-slate-500 inline" />
                             <span>{repair.customerPhone}</span>
                           </div>
                         </td>
 
                         {/* Device / Model */}
                         <td className="py-3.5 px-4">
-                          <div className="font-semibold text-slate-900 truncate max-w-[150px]">
+                          <div className="font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[150px]">
                             {repair.deviceBrand} {repair.deviceModel}
                           </div>
                           {repair.imeiNumber && (
-                            <div className="text-[10px] text-slate-400 font-mono truncate max-w-[120px]">
+                            <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono truncate max-w-[120px]">
                               IMEI: {repair.imeiNumber}
                             </div>
                           )}
@@ -1430,7 +1430,7 @@ export default function Repairs() {
 
                         {/* Problem */}
                         <td className="py-3.5 px-4">
-                          <div className="text-xs text-slate-600 truncate max-w-[160px]" title={repair.problemDescription}>
+                          <div className="text-xs text-slate-600 dark:text-slate-300 truncate max-w-[160px]" title={repair.problemDescription}>
                             {repair.problemDescription || 'No description'}
                           </div>
                         </td>
@@ -1439,17 +1439,17 @@ export default function Repairs() {
                         <td className="py-3.5 px-4">
                           {repair.technician?.name ? (
                             <div className="flex items-center gap-1.5">
-                              <div className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold uppercase">
+                              <div className="w-6 h-6 rounded-full bg-slate-900 dark:bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold uppercase">
                                 {repair.technician.name.charAt(0)}
                               </div>
-                              <span className="text-xs font-semibold text-slate-800 truncate max-w-[100px]">
+                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[100px]">
                                 {repair.technician.name}
                               </span>
                             </div>
                           ) : (
                             <button
                               onClick={() => handleOpenAssignModal(repair)}
-                              className="text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded-lg border border-amber-200 inline-flex items-center gap-1"
+                              className="text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800 inline-flex items-center gap-1 cursor-pointer"
                             >
                               <User className="h-3 w-3" /> Assign
                             </button>
@@ -1471,33 +1471,33 @@ export default function Repairs() {
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             <div className="flex flex-col items-start gap-1">
                               {smsSummary.status === 'SENT' ? (
-                                <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                                   <span>SMS: Sent</span>
                                 </Badge>
                               ) : smsSummary.status === 'INITIATED' ? (
-                                <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
-                                  <Clock className="w-3 h-3 text-sky-600" />
+                                <Badge variant="outline" className="bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                                  <Clock className="w-3 h-3 text-sky-600 dark:text-sky-400" />
                                   <span>SMS: Initiated</span>
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
+                                <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
                                   SMS: Not Sent
                                 </Badge>
                               )}
 
                               {smsSummary.count > 0 ? (
-                                <span className="text-[11px] text-slate-700 font-medium">
-                                  Messages Sent: <strong className="text-slate-900 font-bold">{smsSummary.count}</strong>
+                                <span className="text-[11px] text-slate-700 dark:text-slate-300 font-medium">
+                                  Messages Sent: <strong className="text-slate-900 dark:text-white font-bold">{smsSummary.count}</strong>
                                 </span>
                               ) : smsSummary.totalAttempts > 0 ? (
-                                <span className="text-[10px] text-slate-500">
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400">
                                   Initiated: {smsSummary.totalAttempts}
                                 </span>
                               ) : null}
 
                               {smsSummary.lastSentAt && (
-                                <span className="text-[10px] text-slate-400 font-mono">
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
                                   Last: {formatDateSafe(smsSummary.lastSentAt, 'dd MMM, h:mm a')}
                                 </span>
                               )}
@@ -1507,14 +1507,14 @@ export default function Repairs() {
 
                         {/* Payment */}
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          <div className="font-mono text-xs font-bold text-slate-900">
+                          <div className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
                             {formatRepairCost(repair.totalCost ?? repair.estimatedCost)}
                           </div>
                           <Badge
                             variant="secondary"
-                            className={`text-[9px] font-bold uppercase px-1.5 py-0.2 rounded ${isPaid ? 'bg-emerald-100 text-emerald-800' :
-                              isPartial ? 'bg-amber-100 text-amber-800' :
-                                'bg-slate-100 text-slate-600'
+                            className={`text-[9px] font-bold uppercase px-1.5 py-0.2 rounded ${isPaid ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' :
+                              isPartial ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800' :
+                                'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
                               }`}
                           >
                             {repair.paymentStatus || 'UNPAID'}
@@ -1528,7 +1528,7 @@ export default function Repairs() {
                               variant="ghost"
                               size="sm"
                               onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
-                              className="h-8 px-2.5 rounded-lg text-slate-700 hover:bg-slate-100 text-xs font-semibold"
+                              className="h-8 px-2.5 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold cursor-pointer"
                             >
                               <Eye className="h-3.5 w-3.5 mr-1" /> View
                             </Button>
@@ -1544,8 +1544,8 @@ export default function Repairs() {
                                 }}
                                 className={`h-8 px-2.5 rounded-xl font-bold text-xs gap-1.5 shadow-2xs cursor-pointer ${
                                   smsSummary.status === 'SENT'
-                                    ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
-                                    : 'border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800'
+                                    ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
+                                    : 'border-teal-300 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-800 dark:text-teal-300'
                                 }`}
                                 title={
                                   smsSummary.status === 'SENT'
@@ -1553,7 +1553,7 @@ export default function Repairs() {
                                     : 'Send Customer SMS (Google Messages for Web)'
                                 }
                               >
-                                <MessageSquare className={`h-3.5 w-3.5 ${smsSummary.status === 'SENT' ? 'text-emerald-600' : 'text-teal-600'}`} />
+                                <MessageSquare className={`h-3.5 w-3.5 ${smsSummary.status === 'SENT' ? 'text-emerald-600 dark:text-emerald-400' : 'text-teal-600 dark:text-teal-400'}`} />
                                 <span className="hidden xl:inline">
                                   {smsSummary.status === 'SENT' ? 'Send SMS Again' : 'Send SMS'}
                                 </span>
@@ -1562,11 +1562,11 @@ export default function Repairs() {
 
                             <DropdownMenu>
                               <DropdownMenuTrigger render={
-                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-500 hover:bg-slate-100" />
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer" />
                               }>
                                 <MoreVertical className="h-4 w-4" />
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="rounded-2xl w-48 shadow-xl border-slate-200 p-1.5">
+                              <DropdownMenuContent align="end" className="rounded-2xl w-48 shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-1.5">
                                 <DropdownMenuItem
                                   onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
                                   className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2"
@@ -1709,7 +1709,7 @@ export default function Repairs() {
               return (
                 <Card
                   key={repair.id}
-                  className={`rounded-2xl border bg-white p-4 shadow-sm space-y-3 hover:border-slate-300 transition-all ${isSelected ? 'border-indigo-400 bg-indigo-50/30 ring-1 ring-indigo-400/50' : 'border-slate-200'
+                  className={`rounded-2xl border bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all ${isSelected ? 'border-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/40 ring-1 ring-indigo-400/50' : 'border-slate-200 dark:border-slate-800'
                     }`}
                 >
                   <div className="flex items-center justify-between">
@@ -1720,14 +1720,14 @@ export default function Repairs() {
                           onClick={(e) => handleToggleSelectRepair(repair.id, e)}
                           className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer mr-0.5 ${isSelected
                             ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
-                            : 'border-slate-300 bg-white hover:border-slate-400'
+                            : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
                             }`}
                           aria-label={`Select repair #${repair.repairNumber}`}
                         >
                           {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                         </button>
                       )}
-                      <span className="font-mono font-bold text-sm text-slate-900">
+                      <span className="font-mono font-bold text-sm text-slate-900 dark:text-slate-100">
                         #{repair.repairNumber}
                       </span>
                       {(repair.receivingMethod === 'COURIER' || repair.isCourierIn) && (
@@ -1758,18 +1758,18 @@ export default function Repairs() {
 
                     <DropdownMenu>
                       <DropdownMenuTrigger render={
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-500" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" />
                       }>
                         <MoreVertical className="h-4 w-4" />
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="rounded-2xl w-48 shadow-xl border-slate-200 p-1.5">
-                        <DropdownMenuItem onClick={() => navigate(`/dashboard/repairs/${repair.id}`)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2">
+                      <DropdownMenuContent align="end" className="rounded-2xl w-48 shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5">
+                        <DropdownMenuItem onClick={() => navigate(`/dashboard/repairs/${repair.id}`)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
                           <Eye className="h-3.5 w-3.5" /> View Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleOpenQuickEdit(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2">
+                        <DropdownMenuItem onClick={() => handleOpenQuickEdit(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
                           <Edit3 className="h-3.5 w-3.5" /> Edit Info
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleOpenStatusModal(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2">
+                        <DropdownMenuItem onClick={() => handleOpenStatusModal(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
                           <PackageCheck className="h-3.5 w-3.5" /> Update Status
                         </DropdownMenuItem>
                         {canSendSms && isRepairedOrReadyStatus(repair.status) && (
@@ -1778,38 +1778,38 @@ export default function Repairs() {
                               setSmsModalRepair(repair);
                               setIsSmsModalOpen(true);
                             }}
-                            className="h-9 px-3 rounded-xl font-bold text-xs cursor-pointer gap-2 text-teal-700 hover:bg-teal-50"
+                            className="h-9 px-3 rounded-xl font-bold text-xs cursor-pointer gap-2 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40"
                           >
-                            <MessageSquare className="h-3.5 w-3.5 text-teal-600" /> Send Customer SMS
+                            <MessageSquare className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" /> Send Customer SMS
                           </DropdownMenuItem>
                         )}
                         {['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '') && (
-                          <DropdownMenuItem onClick={() => handleOpenCourierDispatch(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-blue-700 hover:bg-blue-50">
-                            <Truck className="h-3.5 w-3.5 text-blue-600" /> Dispatch Courier
+                          <DropdownMenuItem onClick={() => handleOpenCourierDispatch(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40">
+                            <Truck className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /> Dispatch Courier
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem onClick={() => handleOpenReProblem(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-rose-700 hover:bg-rose-50">
-                          <RotateCcw className="h-3.5 w-3.5 text-rose-600" /> Re-Problem Intake
+                        <DropdownMenuItem onClick={() => handleOpenReProblem(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40">
+                          <RotateCcw className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" /> Re-Problem Intake
                         </DropdownMenuItem>
                         {canCancel && !isCancelledStatus(repair.status) && (
-                          <DropdownMenuItem onClick={() => handleOpenCancelModal(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-rose-700 hover:bg-rose-50">
-                            <Ban className="h-3.5 w-3.5 text-rose-600" /> Cancel Device / Repair
+                          <DropdownMenuItem onClick={() => handleOpenCancelModal(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40">
+                            <Ban className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" /> Cancel Device / Repair
                           </DropdownMenuItem>
                         )}
                         {canCancel && isCancelledStatus(repair.status) && (
-                          <DropdownMenuItem onClick={() => handleReopenCancelledRepair(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-indigo-700 hover:bg-indigo-50">
-                            <RotateCcw className="h-3.5 w-3.5 text-indigo-600" /> Re-open / Restore
+                          <DropdownMenuItem onClick={() => handleReopenCancelledRepair(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40">
+                            <RotateCcw className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" /> Re-open / Restore
                           </DropdownMenuItem>
                         )}
                         {canAssign && (
-                          <DropdownMenuItem onClick={() => handleOpenAssignModal(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2">
+                          <DropdownMenuItem onClick={() => handleOpenAssignModal(repair)} className="h-9 px-3 rounded-xl font-medium text-xs cursor-pointer gap-2 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
                             <User className="h-3.5 w-3.5" /> Assign Tech
                           </DropdownMenuItem>
                         )}
                         {canDelete && (
                           <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setDeleteRepairData(repair)} className="h-9 px-3 rounded-xl font-semibold text-xs text-rose-600 hover:bg-rose-50 cursor-pointer gap-2">
+                            <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-800" />
+                            <DropdownMenuItem onClick={() => setDeleteRepairData(repair)} className="h-9 px-3 rounded-xl font-semibold text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer gap-2">
                               <Trash2 className="h-3.5 w-3.5" /> Delete
                             </DropdownMenuItem>
                           </>
@@ -1819,65 +1819,65 @@ export default function Repairs() {
                   </div>
 
                   <div className="space-y-1">
-                    <h4 className="font-bold text-slate-900 text-base">{repair.deviceBrand} {repair.deviceModel}</h4>
-                    <p className="text-xs text-slate-500 line-clamp-2">{repair.problemDescription || 'No description provided'}</p>
+                    <h4 className="font-bold text-slate-900 dark:text-slate-100 text-base">{repair.deviceBrand} {repair.deviceModel}</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{repair.problemDescription || 'No description provided'}</p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                     <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Customer</span>
-                      <span className="font-semibold text-slate-900 block truncate">{repair.customerName}</span>
-                      <span className="text-slate-500 font-mono text-[11px]">{repair.customerPhone}</span>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block">Customer</span>
+                      <span className="font-semibold text-slate-900 dark:text-slate-100 block truncate">{repair.customerName}</span>
+                      <span className="text-slate-500 dark:text-slate-400 font-mono text-[11px]">{repair.customerPhone}</span>
                     </div>
 
                     <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Specialist</span>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block">Specialist</span>
                       {repair.technician?.name ? (
-                        <span className="font-semibold text-slate-900 block truncate">{repair.technician.name}</span>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100 block truncate">{repair.technician.name}</span>
                       ) : (
                         <button
                           onClick={() => handleOpenAssignModal(repair)}
-                          className="text-[11px] font-semibold text-amber-700 underline"
+                          className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 underline"
                         >
                           Assign Specialist
                         </button>
                       )}
-                      <span className="text-slate-400 text-[10px] block">{formatDateSafe(repair.createdAt, 'MMM dd, yyyy')}</span>
+                      <span className="text-slate-400 dark:text-slate-500 text-[10px] block">{formatDateSafe(repair.createdAt, 'MMM dd, yyyy')}</span>
                     </div>
                   </div>
 
                   {/* SMS Status & Action Box for Repaired devices */}
                   {isRepairedOrReadyStatus(repair.status) && (
-                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/90 dark:border-slate-700/80 flex flex-wrap items-center justify-between gap-2 text-xs">
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-1.5">
                           {smsSummary.status === 'SENT' ? (
-                            <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                               <span>SMS: Sent</span>
                             </Badge>
                           ) : smsSummary.status === 'INITIATED' ? (
-                            <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
-                              <Clock className="w-3 h-3 text-sky-600" />
+                            <Badge variant="outline" className="bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <Clock className="w-3 h-3 text-sky-600 dark:text-sky-400" />
                               <span>SMS: Initiated</span>
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
+                            <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
                               SMS: Not Sent
                             </Badge>
                           )}
                           {smsSummary.count > 0 ? (
-                            <span className="text-[11px] text-slate-700 font-medium">
-                              Messages Sent: <strong className="text-slate-900 font-bold">{smsSummary.count}</strong>
+                            <span className="text-[11px] text-slate-700 dark:text-slate-300 font-medium">
+                              Messages Sent: <strong className="text-slate-900 dark:text-slate-100 font-bold">{smsSummary.count}</strong>
                             </span>
                           ) : smsSummary.totalAttempts > 0 ? (
-                            <span className="text-[10px] text-slate-500">
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
                               Initiated: {smsSummary.totalAttempts}
                             </span>
                           ) : null}
                         </div>
                         {smsSummary.lastSentAt && (
-                          <p className="text-[10px] text-slate-500 font-mono">
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                             Last Sent: {formatDateSafe(smsSummary.lastSentAt, 'dd MMM yyyy, h:mm a')}
                           </p>
                         )}
@@ -1893,21 +1893,21 @@ export default function Repairs() {
                           }}
                           className={`h-7 px-2.5 rounded-lg text-xs font-bold gap-1 cursor-pointer shadow-xs ${
                             smsSummary.status === 'SENT'
-                              ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
-                              : 'border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800'
+                              ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
+                              : 'border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-800 dark:text-teal-300'
                           }`}
                         >
-                          <MessageSquare className={`h-3 w-3 ${smsSummary.status === 'SENT' ? 'text-emerald-600' : 'text-teal-600'}`} />
+                          <MessageSquare className={`h-3 w-3 ${smsSummary.status === 'SENT' ? 'text-emerald-600 dark:text-emerald-400' : 'text-teal-600 dark:text-teal-400'}`} />
                           <span>{smsSummary.status === 'SENT' ? 'Send SMS Again' : 'Send SMS'}</span>
                         </Button>
                       )}
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
                     <div>
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Cost / Paid</span>
-                      <span className="font-mono font-bold text-slate-900 text-sm">
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold block">Cost / Paid</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
                         {formatRepairCost(repair.totalCost ?? repair.estimatedCost)}
                       </span>
                     </div>
@@ -1915,7 +1915,7 @@ export default function Repairs() {
                     <Button
                       size="sm"
                       onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
-                      className="h-8 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-semibold px-3"
+                      className="h-8 rounded-xl bg-slate-900 hover:bg-black dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 text-white text-xs font-semibold px-3"
                     >
                       Manage Job <ChevronRight className="h-3.5 w-3.5 ml-1" />
                     </Button>
@@ -1943,32 +1943,32 @@ export default function Repairs() {
       {/* MODAL 1: SINGLE DELETE CONFIRMATION (SUPER_ADMIN, ADMIN & RECEPTIONIST)   */}
       {/* ========================================================================= */}
       <Dialog open={!!deleteRepairData} onOpenChange={(open) => !open && setDeleteRepairData(null)}>
-        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-md">
+        <DialogContent className="rounded-3xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl p-6 sm:p-8 max-w-md">
           <DialogHeader>
-            <div className="w-14 h-14 bg-rose-100 rounded-2xl flex items-center justify-center mb-4 mx-auto sm:mx-0">
-              <Trash2 className="h-7 w-7 text-rose-600" />
+            <div className="w-14 h-14 bg-rose-100 dark:bg-rose-950/60 rounded-2xl flex items-center justify-center mb-4 mx-auto sm:mx-0">
+              <Trash2 className="h-7 w-7 text-rose-600 dark:text-rose-400" />
             </div>
-            <DialogTitle className="text-2xl font-extrabold text-slate-900">
+            <DialogTitle className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">
               Delete Repair Record?
             </DialogTitle>
-            <DialogDescription className="text-slate-500 text-sm pt-2 leading-relaxed">
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm pt-2 leading-relaxed">
               Are you sure you want to delete this repair record? This action will permanently remove its associated logs, notes, and payment records. Customer accounts will not be affected.
             </DialogDescription>
           </DialogHeader>
 
           {deleteRepairData && (
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 my-2">
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 text-xs space-y-1 my-2">
               <div className="flex justify-between">
-                <span className="text-slate-500 font-medium">Job Number:</span>
-                <span className="font-mono font-bold text-slate-900">#{deleteRepairData.repairNumber}</span>
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Job Number:</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-slate-100">#{deleteRepairData.repairNumber}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500 font-medium">Customer:</span>
-                <span className="font-bold text-slate-900">{deleteRepairData.customerName}</span>
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Customer:</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100">{deleteRepairData.customerName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500 font-medium">Device:</span>
-                <span className="font-semibold text-slate-900">{deleteRepairData.deviceBrand} {deleteRepairData.deviceModel}</span>
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Device:</span>
+                <span className="font-semibold text-slate-900 dark:text-slate-100">{deleteRepairData.deviceBrand} {deleteRepairData.deviceModel}</span>
               </div>
             </div>
           )}
@@ -1978,7 +1978,7 @@ export default function Repairs() {
               variant="outline"
               onClick={() => setDeleteRepairData(null)}
               disabled={deleteLoading}
-              className="h-11 rounded-xl border-slate-200 font-bold"
+              className="h-11 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-bold"
             >
               Cancel
             </Button>
@@ -2002,27 +2002,27 @@ export default function Repairs() {
       {/* MODAL 1B: BULK DELETE CONFIRMATION (SUPER_ADMIN, ADMIN & RECEPTIONIST)    */}
       {/* ========================================================================= */}
       <Dialog open={isBulkDeleteModalOpen} onOpenChange={setIsBulkDeleteModalOpen}>
-        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-md">
+        <DialogContent className="rounded-3xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl p-6 sm:p-8 max-w-md">
           <DialogHeader>
-            <div className="w-14 h-14 bg-rose-100 rounded-2xl flex items-center justify-center mb-4 mx-auto sm:mx-0">
-              <Trash2 className="h-7 w-7 text-rose-600" />
+            <div className="w-14 h-14 bg-rose-100 dark:bg-rose-950/60 rounded-2xl flex items-center justify-center mb-4 mx-auto sm:mx-0">
+              <Trash2 className="h-7 w-7 text-rose-600 dark:text-rose-400" />
             </div>
-            <DialogTitle className="text-2xl font-extrabold text-slate-900">
+            <DialogTitle className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">
               Delete Selected Repairs?
             </DialogTitle>
-            <DialogDescription className="text-slate-500 text-sm pt-2 leading-relaxed">
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm pt-2 leading-relaxed">
               You are about to permanently delete <strong>{selectedRepairIds.size}</strong> repair record(s). This action will remove all associated logs, notes, and payment records. Customer accounts will not be affected.
             </DialogDescription>
           </DialogHeader>
 
           {selectedRepairsList.length > 0 && (
-            <div className="max-h-44 overflow-y-auto p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 my-2">
-              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            <div className="max-h-44 overflow-y-auto p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-1.5 my-2">
+              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                 Selected Repairs ({selectedRepairsList.length}):
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {selectedRepairsList.map(rep => (
-                  <Badge key={rep.id} variant="secondary" className="bg-white border border-slate-200 text-slate-900 font-mono text-xs py-0.5 px-2 font-bold shadow-2xs">
+                  <Badge key={rep.id} variant="secondary" className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono text-xs py-0.5 px-2 font-bold shadow-2xs">
                     #{rep.repairNumber} — {rep.deviceBrand} {rep.deviceModel}
                   </Badge>
                 ))}
@@ -2036,7 +2036,7 @@ export default function Repairs() {
               variant="outline"
               onClick={() => setIsBulkDeleteModalOpen(false)}
               disabled={bulkDeleteLoading}
-              className="h-11 rounded-xl border-slate-200 font-bold"
+              className="h-11 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-bold"
             >
               Cancel
             </Button>
@@ -2063,29 +2063,29 @@ export default function Repairs() {
       {/* MODAL 2: UPDATE STATUS MODAL                                              */}
       {/* ========================================================================= */}
       <Dialog open={!!statusModalRepair} onOpenChange={(open) => !open && setStatusModalRepair(null)}>
-        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-md">
+        <DialogContent className="rounded-3xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl p-6 sm:p-8 max-w-md">
           <DialogHeader>
-            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-3">
-              <PackageCheck className="h-6 w-6 text-indigo-600" />
+            <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-950/60 rounded-2xl flex items-center justify-center mb-3">
+              <PackageCheck className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
             </div>
-            <DialogTitle className="text-xl font-extrabold text-slate-900">
+            <DialogTitle className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
               Update Repair Status
             </DialogTitle>
-            <DialogDescription className="text-slate-500 text-xs">
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs">
               Job #{statusModalRepair?.repairNumber} — {statusModalRepair?.deviceBrand} {statusModalRepair?.deviceModel}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 my-3">
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-slate-700">Select New Status</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Select New Status</Label>
               <Select value={newStatusValue} onValueChange={setNewStatusValue}>
-                <SelectTrigger className="h-11 rounded-xl border-slate-200 text-sm font-semibold">
+                <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm font-semibold">
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl">
+                <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                   {Object.keys(statusConfig).map((stKey) => (
-                    <SelectItem key={stKey} value={stKey}>
+                    <SelectItem key={stKey} value={stKey} className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">
                       {statusConfig[stKey].label}
                     </SelectItem>
                   ))}
@@ -2094,12 +2094,12 @@ export default function Repairs() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-slate-700">Status Update Note (Optional)</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Status Update Note (Optional)</Label>
               <Textarea
                 placeholder="Reason or technical remarks for this status transition..."
                 value={statusUpdateNote}
                 onChange={(e) => setStatusUpdateNote(e.target.value)}
-                className="rounded-xl border-slate-200 text-xs min-h-[80px]"
+                className="rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs min-h-[80px]"
               />
             </div>
           </div>
@@ -2109,14 +2109,14 @@ export default function Repairs() {
               variant="outline"
               onClick={() => setStatusModalRepair(null)}
               disabled={statusUpdateLoading}
-              className="h-10 rounded-xl border-slate-200 font-bold text-xs"
+              className="h-10 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-bold text-xs"
             >
               Cancel
             </Button>
             <Button
               onClick={handleSaveStatusUpdate}
               disabled={statusUpdateLoading}
-              className="h-10 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs px-5 shadow-sm"
+              className="h-10 rounded-xl bg-slate-900 hover:bg-black dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold text-xs px-5 shadow-sm"
             >
               {statusUpdateLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Status'}
             </Button>
@@ -2128,29 +2128,29 @@ export default function Repairs() {
       {/* MODAL 3: ASSIGN / REASSIGN TECHNICIAN                                     */}
       {/* ========================================================================= */}
       <Dialog open={!!assignModalRepair} onOpenChange={(open) => !open && setAssignModalRepair(null)}>
-        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-md">
+        <DialogContent className="rounded-3xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl p-6 sm:p-8 max-w-md">
           <DialogHeader>
-            <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center mb-3">
-              <User className="h-6 w-6 text-amber-600" />
+            <div className="w-12 h-12 bg-amber-50 dark:bg-amber-950/60 rounded-2xl flex items-center justify-center mb-3">
+              <User className="h-6 w-6 text-amber-600 dark:text-amber-400" />
             </div>
-            <DialogTitle className="text-xl font-extrabold text-slate-900">
+            <DialogTitle className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
               Assign Repair Specialist
             </DialogTitle>
-            <DialogDescription className="text-slate-500 text-xs">
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs">
               Job #{assignModalRepair?.repairNumber} ({assignModalRepair?.customerName})
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 my-3">
-            <Label className="text-xs font-bold text-slate-700">Choose Specialist</Label>
+            <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Choose Specialist</Label>
             <Select value={selectedTechId} onValueChange={setSelectedTechId}>
-              <SelectTrigger className="h-11 rounded-xl border-slate-200 text-sm font-medium">
+              <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm font-medium">
                 <SelectValue placeholder="Select technician" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="UNASSIGNED">— Unassigned —</SelectItem>
+              <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <SelectItem value="UNASSIGNED" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">— Unassigned —</SelectItem>
                 {technicians.map((tech: any) => (
-                  <SelectItem key={tech.id} value={tech.id}>
+                  <SelectItem key={tech.id} value={tech.id} className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">
                     {tech.name} ({tech.email || 'Technician'})
                   </SelectItem>
                 ))}
@@ -2163,14 +2163,14 @@ export default function Repairs() {
               variant="outline"
               onClick={() => setAssignModalRepair(null)}
               disabled={assignLoading}
-              className="h-10 rounded-xl border-slate-200 font-bold text-xs"
+              className="h-10 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-bold text-xs"
             >
               Cancel
             </Button>
             <Button
               onClick={handleSaveTechnicianAssignment}
               disabled={assignLoading}
-              className="h-10 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs px-5 shadow-sm"
+              className="h-10 rounded-xl bg-slate-900 hover:bg-black dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold text-xs px-5 shadow-sm"
             >
               {assignLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Assignment'}
             </Button>
@@ -2210,17 +2210,17 @@ export default function Repairs() {
 
       {/* Excel Import & Preview Modal */}
       <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl p-6">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 shadow-2xl">
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
                 <FileSpreadsheet className="h-5 w-5" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-black text-slate-900">
+                <DialogTitle className="text-xl font-black text-slate-900 dark:text-slate-100">
                   Import Repair Records (Excel .xlsx)
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-500 mt-0.5">
+                <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Upload standard spreadsheet data to bulk register repairs. Existing customers are matched automatically.
                 </DialogDescription>
               </div>
@@ -2229,7 +2229,7 @@ export default function Repairs() {
 
           <div className="space-y-5 my-2">
             {/* File Upload Box */}
-            <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/60 rounded-2xl p-6 text-center transition-all">
+            <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 bg-slate-50/60 dark:bg-slate-800/40 rounded-2xl p-6 text-center transition-all">
               <input
                 type="file"
                 id="repair-excel-upload"
@@ -2242,28 +2242,28 @@ export default function Repairs() {
                 htmlFor="repair-excel-upload"
                 className="cursor-pointer flex flex-col items-center justify-center gap-2"
               >
-                <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-indigo-600 border border-slate-200">
+                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-700">
                   {previewLoading ? (
                     <Loader2 className="h-6 w-6 animate-spin" />
                   ) : (
                     <Upload className="h-6 w-6" />
                   )}
                 </div>
-                <div className="text-sm font-bold text-slate-800">
+                <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
                   {importFile ? importFile.name : "Click to choose or drag & drop Excel (.xlsx) file"}
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-slate-500 dark:text-slate-400">
                   Compatible with Microsoft Excel, Apple Numbers, LibreOffice & Google Sheets export
                 </div>
               </label>
 
-              <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-center gap-2 text-xs text-slate-500">
+              <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <span>Need the official template?</span>
                 <button
                   type="button"
                   onClick={handleDownloadTemplate}
                   disabled={downloadingTemplate}
-                  className="font-bold text-indigo-600 hover:text-indigo-800 underline flex items-center gap-1"
+                  className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 underline flex items-center gap-1"
                 >
                   <FileDown className="h-3.5 w-3.5" /> Download Blank Template
                 </button>
@@ -2275,92 +2275,92 @@ export default function Repairs() {
               <div className="space-y-4">
                 {/* Stats row */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-slate-100 rounded-2xl p-3 text-center">
-                    <div className="text-xs font-bold text-slate-500 uppercase">Total Rows</div>
-                    <div className="text-2xl font-black text-slate-900">{previewData.totalRows}</div>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 rounded-2xl p-3 text-center border border-slate-200/50 dark:border-slate-700">
+                    <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Total Rows</div>
+                    <div className="text-2xl font-black text-slate-900 dark:text-slate-100">{previewData.totalRows}</div>
                   </div>
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-center">
-                    <div className="text-xs font-bold text-emerald-600 uppercase">Valid to Import</div>
-                    <div className="text-2xl font-black text-emerald-700">{previewData.validRows}</div>
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 rounded-2xl p-3 text-center">
+                    <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase">Valid to Import</div>
+                    <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{previewData.validRows}</div>
                   </div>
-                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-center">
-                    <div className="text-xs font-bold text-amber-600 uppercase">Duplicates (Skipped)</div>
-                    <div className="text-2xl font-black text-amber-700">{previewData.duplicateRows}</div>
+                  <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-2xl p-3 text-center">
+                    <div className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase">Duplicates (Skipped)</div>
+                    <div className="text-2xl font-black text-amber-700 dark:text-amber-300">{previewData.duplicateRows}</div>
                   </div>
-                  <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3 text-center">
-                    <div className="text-xs font-bold text-rose-600 uppercase">Invalid Rows</div>
-                    <div className="text-2xl font-black text-rose-700">{previewData.invalidRows}</div>
+                  <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 rounded-2xl p-3 text-center">
+                    <div className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase">Invalid Rows</div>
+                    <div className="text-2xl font-black text-rose-700 dark:text-rose-300">{previewData.invalidRows}</div>
                   </div>
                 </div>
 
                 {/* Items Preview Table */}
-                <div className="border border-slate-200 rounded-2xl overflow-hidden">
-                  <div className="bg-slate-100 px-4 py-2.5 font-bold text-xs text-slate-700 flex items-center justify-between border-b border-slate-200">
+                <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                  <div className="bg-slate-100 dark:bg-slate-800 px-4 py-2.5 font-bold text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between border-b border-slate-200 dark:border-slate-700">
                     <span>Spreadsheet Row Analysis</span>
-                    <span className="text-[11px] text-slate-500 font-normal">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
                       Showing {previewData.items?.length || 0} parsed records
                     </span>
                   </div>
 
-                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 text-xs">
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                     {previewData.items?.map((item: any, idx: number) => (
                       <div
                         key={idx}
                         className={`p-3 transition-colors ${item.status === 'VALID'
-                          ? 'bg-white hover:bg-slate-50/80'
+                          ? 'bg-white dark:bg-slate-900 hover:bg-slate-50/80 dark:hover:bg-slate-800/60'
                           : item.status === 'DUPLICATE'
-                            ? 'bg-amber-50/40 hover:bg-amber-50/70'
-                            : 'bg-rose-50/40 hover:bg-rose-50/70'
+                            ? 'bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-50/70 dark:hover:bg-amber-950/40'
+                            : 'bg-rose-50/40 dark:bg-rose-950/20 hover:bg-rose-50/70 dark:hover:bg-rose-950/40'
                           }`}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-slate-400 font-bold">Row {item.rowNumber}</span>
+                            <span className="font-mono text-slate-400 dark:text-slate-500 font-bold">Row {item.rowNumber}</span>
                             {item.status === 'VALID' && (
-                              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">
+                              <Badge className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px]">
                                 READY TO IMPORT
                               </Badge>
                             )}
                             {item.status === 'DUPLICATE' && (
-                              <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px]">
+                              <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 text-[10px]">
                                 DUPLICATE REPAIR
                               </Badge>
                             )}
                             {item.status === 'INVALID' && (
-                              <Badge className="bg-rose-100 text-rose-800 border-rose-300 text-[10px]">
+                              <Badge className="bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-700 text-[10px]">
                                 INVALID DATA
                               </Badge>
                             )}
-                            <span className="font-bold text-slate-800">
+                            <span className="font-bold text-slate-800 dark:text-slate-200">
                               {item.data?.customerName || 'No Name'}
                             </span>
-                            <span className="text-slate-500 font-mono">
+                            <span className="text-slate-500 dark:text-slate-400 font-mono">
                               ({item.data?.customerPhone || 'No Phone'})
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 text-slate-600">
-                            <span className="font-semibold text-slate-800">
+                          <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200">
                               {item.data?.deviceBrand} {item.data?.deviceModel}
                             </span>
-                            <Badge variant="outline" className="text-[10px] font-mono">
+                            <Badge variant="outline" className="text-[10px] font-mono border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
                               {item.data?.status || 'PENDING'}
                             </Badge>
                           </div>
                         </div>
 
-                        <div className="mt-1.5 flex flex-wrap items-center justify-between text-[11px] text-slate-500 gap-2">
+                        <div className="mt-1.5 flex flex-wrap items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 gap-2">
                           <div>
-                            <span className="font-medium text-slate-700">Problem:</span> {item.data?.problemDescription || '—'}
+                            <span className="font-medium text-slate-700 dark:text-slate-300">Problem:</span> {item.data?.problemDescription || '—'}
                           </div>
                           <div>
-                            <span className="font-medium text-slate-700">Est. Cost:</span> {formatNPR(item.data?.estimatedCost || 0)}
+                            <span className="font-medium text-slate-700 dark:text-slate-300">Est. Cost:</span> {formatNPR(item.data?.estimatedCost || 0)}
                           </div>
                         </div>
 
                         {/* Error & Warning Messages */}
                         {item.errors && item.errors.length > 0 && (
-                          <div className="mt-2 text-rose-600 font-medium space-y-0.5 text-[11px] bg-rose-100/60 p-2 rounded-xl border border-rose-200">
+                          <div className="mt-2 text-rose-600 dark:text-rose-400 font-medium space-y-0.5 text-[11px] bg-rose-100/60 dark:bg-rose-950/40 p-2 rounded-xl border border-rose-200 dark:border-rose-800">
                             {item.errors.map((err: string, eIdx: number) => (
                               <div key={eIdx} className="flex items-center gap-1.5">
                                 <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
@@ -2371,7 +2371,7 @@ export default function Repairs() {
                         )}
 
                         {item.warnings && item.warnings.length > 0 && (
-                          <div className="mt-1.5 text-amber-700 font-medium space-y-0.5 text-[11px] bg-amber-100/60 p-1.5 rounded-xl border border-amber-200">
+                          <div className="mt-1.5 text-amber-700 dark:text-amber-400 font-medium space-y-0.5 text-[11px] bg-amber-100/60 dark:bg-amber-950/40 p-1.5 rounded-xl border border-amber-200 dark:border-amber-800">
                             {item.warnings.map((warn: string, wIdx: number) => (
                               <div key={wIdx} className="flex items-center gap-1.5">
                                 <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
@@ -2398,7 +2398,7 @@ export default function Repairs() {
                 setPreviewData(null);
               }}
               disabled={confirmingImport}
-              className="rounded-xl border-slate-200 font-bold text-xs"
+              className="rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-bold text-xs"
             >
               Cancel
             </Button>
@@ -2407,7 +2407,7 @@ export default function Repairs() {
               type="button"
               onClick={handleExecuteConfirmImport}
               disabled={confirmingImport || !previewData || previewData.validRows === 0}
-              className="rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs px-6 shadow-md gap-2"
+              className="rounded-xl bg-slate-900 hover:bg-black dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold text-xs px-6 shadow-md gap-2"
             >
               {confirmingImport ? (
                 <>
@@ -2429,16 +2429,16 @@ export default function Repairs() {
       {/* MODAL 6: COURIER RETURN DISPATCH MODAL                                    */}
       {/* ========================================================================= */}
       <Dialog open={!!courierDispatchModalRepair} onOpenChange={(open) => !open && setCourierDispatchModalRepair(null)}>
-        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-lg">
+        <DialogContent className="rounded-3xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xl p-6 sm:p-8 max-w-lg">
           <form onSubmit={handleSaveCourierDispatch}>
             <DialogHeader>
-              <div className="w-12 h-12 bg-blue-100 text-blue-700 rounded-2xl flex items-center justify-center mb-3">
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 rounded-2xl flex items-center justify-center mb-3">
                 <Truck className="h-6 w-6" />
               </div>
-              <DialogTitle className="text-xl font-bold text-slate-900">
+              <DialogTitle className="text-xl font-bold text-slate-900 dark:text-slate-100">
                 Dispatch Repaired Device via Courier
               </DialogTitle>
-              <DialogDescription className="text-slate-500 text-xs">
+              <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs">
                 Hand over job <strong>#{courierDispatchModalRepair?.repairNumber}</strong> ({courierDispatchModalRepair?.deviceBrand} {courierDispatchModalRepair?.deviceModel}) to courier logistics for return delivery.
               </DialogDescription>
             </DialogHeader>
@@ -2448,15 +2448,15 @@ export default function Repairs() {
 
                 {/* Courier Partner */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Courier Partner *</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Courier Partner *</Label>
                   <Select
                     value={courierDispatchForm.returnCourierCompany}
                     onValueChange={(v) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierCompany: v }))}
                   >
-                    <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-semibold">
+                    <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-semibold">
                       <SelectValue placeholder="Select Courier" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-xl shadow-xl">
+                    <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
                       {[
                         "Nepal Can Move (NCM)",
                         "Sundar Courier",
@@ -2469,7 +2469,7 @@ export default function Repairs() {
                         "Gaura Courier",
                         "Other Courier"
                       ].map(c => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                        <SelectItem key={c} value={c} className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">{c}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -2478,7 +2478,7 @@ export default function Repairs() {
                       placeholder="Specify Courier Name"
                       value={courierDispatchForm.customCourierCompany}
                       onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, customCourierCompany: e.target.value }))}
-                      className="h-9 rounded-xl border-slate-200 bg-white text-xs mt-1"
+                      className="h-9 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs mt-1"
                       required
                     />
                   )}
@@ -2486,58 +2486,58 @@ export default function Repairs() {
 
                 {/* Tracking / Consignment Number */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Tracking / Consignment # *</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Tracking / Consignment # *</Label>
                   <Input
                     placeholder="e.g. SCN-982341, TRK-10293"
                     value={courierDispatchForm.returnCourierTrackingNumber}
                     onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierTrackingNumber: e.target.value }))}
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50 font-mono text-xs font-bold"
+                    className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono text-xs font-bold"
                     required
                   />
                 </div>
 
                 {/* Dispatch Date */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Dispatch Date *</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Dispatch Date *</Label>
                   <Input
                     type="date"
                     value={courierDispatchForm.returnCourierDispatchDate}
                     onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierDispatchDate: e.target.value }))}
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
+                    className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs"
                     required
                   />
                 </div>
 
                 {/* Destination District */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Destination District</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Destination District</Label>
                   <Input
                     placeholder="e.g. Pokhara, Morang"
                     value={courierDispatchForm.destinationDistrict}
                     onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, destinationDistrict: e.target.value }))}
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
+                    className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs"
                   />
                 </div>
 
                 {/* Receiver Name */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Receiver Name</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Receiver Name</Label>
                   <Input
                     placeholder="Receiver Full Name"
                     value={courierDispatchForm.receiverName}
                     onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, receiverName: e.target.value }))}
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
+                    className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs"
                   />
                 </div>
 
                 {/* Receiver Phone */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700">Receiver Phone</Label>
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Receiver Phone</Label>
                   <Input
                     placeholder="Receiver Phone Number"
                     value={courierDispatchForm.receiverPhone}
                     onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, receiverPhone: e.target.value }))}
-                    className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-mono"
+                    className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-mono"
                   />
                 </div>
 
@@ -2545,24 +2545,24 @@ export default function Repairs() {
 
               {/* Destination Address */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Delivery Address</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Delivery Address</Label>
                 <Input
                   placeholder="Full delivery location / address"
                   value={courierDispatchForm.destinationAddress}
                   onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, destinationAddress: e.target.value }))}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs"
                 />
               </div>
 
               {/* Courier Notes */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Courier Return Notes</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Courier Return Notes</Label>
                 <Textarea
                   rows={2}
                   placeholder="e.g. Fragile glass sticker attached, bubble wrap 3-layers"
                   value={courierDispatchForm.returnCourierNotes}
                   onChange={(e) => setCourierDispatchForm((prev: any) => ({ ...prev, returnCourierNotes: e.target.value }))}
-                  className="rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                  className="rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium"
                 />
               </div>
             </div>
@@ -2573,7 +2573,7 @@ export default function Repairs() {
                 variant="outline"
                 onClick={() => setCourierDispatchModalRepair(null)}
                 disabled={courierDispatchLoading}
-                className="h-10 rounded-xl border-slate-200 text-xs font-bold"
+                className="h-10 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 text-xs font-bold"
               >
                 Cancel
               </Button>
@@ -2603,45 +2603,45 @@ export default function Repairs() {
       {/* MODAL 7: RE-PROBLEM / WARRANTY INTAKE MODAL                                 */}
       {/* ========================================================================= */}
       <Dialog open={!!reProblemModalRepair} onOpenChange={(open) => !open && setReProblemModalRepair(null)}>
-        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-md">
+        <DialogContent className="rounded-3xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xl p-6 sm:p-8 max-w-md">
           <form onSubmit={handleSaveReProblem}>
             <DialogHeader>
-              <div className="w-12 h-12 bg-rose-100 text-rose-700 rounded-2xl flex items-center justify-center mb-3">
+              <div className="w-12 h-12 bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 rounded-2xl flex items-center justify-center mb-3">
                 <RotateCcw className="h-6 w-6" />
               </div>
-              <DialogTitle className="text-xl font-bold text-slate-900">
+              <DialogTitle className="text-xl font-bold text-slate-900 dark:text-slate-100">
                 Log Re-Problem / Warranty Intake
               </DialogTitle>
-              <DialogDescription className="text-slate-500 text-xs">
+              <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs">
                 Reopen job <strong>#{reProblemModalRepair?.repairNumber}</strong> ({reProblemModalRepair?.deviceBrand} {reProblemModalRepair?.deviceModel}) for priority warranty re-inspection.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-3.5 my-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Problem Category / Reason *</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Problem Category / Reason *</Label>
                 <Input
                   placeholder="e.g. Touch stopped working after 4 days"
                   value={reProblemReason}
                   onChange={(e) => setReProblemReason(e.target.value)}
-                  className="h-10 rounded-xl border-slate-200 text-xs font-medium"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium"
                   required
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Diagnostic Details & Customer Description</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Diagnostic Details & Customer Description</Label>
                 <Textarea
                   rows={3}
                   placeholder="Describe the issue reported by the customer for priority engineering review..."
                   value={reProblemDescription}
                   onChange={(e) => setReProblemDescription(e.target.value)}
-                  className="rounded-xl border-slate-200 text-xs font-medium"
+                  className="rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium"
                 />
               </div>
 
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-900 dark:text-rose-300 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                 <span>
                   This will reopen the repair with <strong>HIGH PRIORITY</strong> and update the customer tracking timeline for warranty inspection.
                 </span>
@@ -2654,7 +2654,7 @@ export default function Repairs() {
                 variant="outline"
                 onClick={() => setReProblemModalRepair(null)}
                 disabled={reProblemLoading}
-                className="h-10 rounded-xl border-slate-200 text-xs font-bold"
+                className="h-10 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 text-xs font-bold"
               >
                 Cancel
               </Button>
@@ -2698,24 +2698,24 @@ export default function Repairs() {
       {/* MODAL 8: CANCEL REPAIR CONFIRMATION MODAL                                  */}
       {/* ========================================================================= */}
       <Dialog open={!!cancelModalRepair} onOpenChange={(open) => !open && setCancelModalRepair(null)}>
-        <DialogContent className="rounded-3xl border-slate-200 shadow-2xl p-6 sm:p-8 max-w-lg">
+        <DialogContent className="rounded-3xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xl p-6 sm:p-8 max-w-lg">
           <DialogHeader>
-            <div className="w-12 h-12 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-center mb-3">
-              <Ban className="h-6 w-6 text-rose-600" />
+            <div className="w-12 h-12 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-2xl flex items-center justify-center mb-3">
+              <Ban className="h-6 w-6 text-rose-600 dark:text-rose-400" />
             </div>
-            <DialogTitle className="text-xl font-black text-slate-900">
+            <DialogTitle className="text-xl font-black text-slate-900 dark:text-slate-100">
               Cancel Repair Service?
             </DialogTitle>
-            <DialogDescription className="text-slate-500 text-xs mt-1">
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs mt-1">
               Job #{cancelModalRepair?.repairNumber} — {cancelModalRepair?.deviceBrand} {cancelModalRepair?.deviceModel} ({cancelModalRepair?.customerName || 'Customer'})
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 my-3">
-            <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl text-xs text-amber-900 flex items-start gap-2.5">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="p-3.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-2xl text-xs text-amber-900 dark:text-amber-300 flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="space-y-1 leading-relaxed">
-                <p className="font-bold text-amber-950">Active Queue Removal</p>
+                <p className="font-bold text-amber-950 dark:text-amber-200">Active Queue Removal</p>
                 <p>
                   This repair ticket will be marked as <strong>CANCELLED</strong> and removed from active repair queues and technician benches. Customer history, hardware notes, and diagnostic records remain securely preserved in the database.
                 </p>
@@ -2723,31 +2723,31 @@ export default function Repairs() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Reason for Cancellation</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Reason for Cancellation</Label>
               <Select value={cancellationReasonPreset} onValueChange={setCancellationReasonPreset}>
-                <SelectTrigger className="h-11 rounded-xl border-slate-200 text-xs font-semibold">
+                <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-semibold">
                   <SelectValue placeholder="Select reason" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="Customer cancelled / withdrew repair">Customer cancelled / withdrew repair</SelectItem>
-                  <SelectItem value="Customer did not approve estimate / quote">Customer did not approve estimate / quote</SelectItem>
-                  <SelectItem value="Device collected unrepaired">Device collected unrepaired</SelectItem>
-                  <SelectItem value="Duplicate repair entry">Duplicate repair entry</SelectItem>
-                  <SelectItem value="Parts unavailable / repair unfeasible">Parts unavailable / repair unfeasible</SelectItem>
-                  <SelectItem value="Incorrect entry / wrong ticket">Incorrect entry / wrong ticket</SelectItem>
-                  <SelectItem value="Other reason">Other reason</SelectItem>
+                <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                  <SelectItem value="Customer cancelled / withdrew repair" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Customer cancelled / withdrew repair</SelectItem>
+                  <SelectItem value="Customer did not approve estimate / quote" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Customer did not approve estimate / quote</SelectItem>
+                  <SelectItem value="Device collected unrepaired" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Device collected unrepaired</SelectItem>
+                  <SelectItem value="Duplicate repair entry" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Duplicate repair entry</SelectItem>
+                  <SelectItem value="Parts unavailable / repair unfeasible" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Parts unavailable / repair unfeasible</SelectItem>
+                  <SelectItem value="Incorrect entry / wrong ticket" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Incorrect entry / wrong ticket</SelectItem>
+                  <SelectItem value="Other reason" className="text-slate-800 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800">Other reason</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700">Additional Remarks & Explanation (Optional)</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Additional Remarks & Explanation (Optional)</Label>
               <Textarea
                 rows={3}
                 placeholder="Specific customer feedback, parts context, or cancellation details..."
                 value={cancellationCustomNotes}
                 onChange={(e) => setCancellationCustomNotes(e.target.value)}
-                className="rounded-xl border-slate-200 text-xs font-medium"
+                className="rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium"
               />
             </div>
           </div>
@@ -2758,7 +2758,7 @@ export default function Repairs() {
               variant="outline"
               onClick={() => setCancelModalRepair(null)}
               disabled={cancellationLoading}
-              className="h-10 rounded-xl border-slate-200 text-xs font-bold"
+              className="h-10 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 text-xs font-bold"
             >
               Cancel Action
             </Button>
