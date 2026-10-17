@@ -1118,21 +1118,21 @@ export default function Services() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-slate-950 selection:text-white antialiased">
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-slate-950 dark:selection:bg-indigo-600 selection:text-white antialiased">
       <Navbar />
 
       <main className="flex-1 pt-24 sm:pt-28 lg:pt-32 pb-16 px-2.5 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-4 sm:space-y-6">
         
         {/* Dedicated Breadcrumb Container */}
-        <div className="w-full bg-white border border-slate-200/80 rounded-2xl px-3.5 sm:px-4 py-2.5 shadow-2xs">
+        <div className="w-full bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl px-3.5 sm:px-4 py-2.5 shadow-2xs">
           <nav 
             aria-label="Breadcrumb" 
-            className="flex items-center text-xs sm:text-sm text-slate-500 gap-1.5 overflow-x-auto whitespace-nowrap py-0.5 min-w-0 max-w-full"
+            className="flex items-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 gap-1.5 overflow-x-auto whitespace-nowrap py-0.5 min-w-0 max-w-full"
           >
-            <Link to="/" className="hover:text-slate-900 font-medium shrink-0 transition-colors">Home</Link>
+            <Link to="/" className="hover:text-slate-900 dark:hover:text-white font-medium shrink-0 transition-colors">Home</Link>
             <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />
             <span 
-              className="font-bold text-slate-900 shrink-0"
+              className="font-bold text-slate-900 dark:text-white shrink-0"
               aria-current="page"
             >
               Repair Services
@@ -1148,17 +1148,17 @@ export default function Services() {
           className="text-center max-w-3xl mx-auto space-y-3.5 pt-1 sm:pt-2"
         >
           {/* Badge Tag */}
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-white text-[11px] font-black tracking-wider uppercase shadow-xs">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 dark:bg-slate-900 text-white text-[11px] font-black tracking-wider uppercase shadow-xs border border-transparent dark:border-slate-800">
             <Wrench className="w-3.5 h-3.5 text-amber-400" />
             <span>MTS Official Service Catalog</span>
           </div>
 
           {/* Heading */}
           <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-slate-950">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-slate-950 dark:text-white">
               Smartphone Repair Services & Pricing
             </h1>
-            <p className="text-xs sm:text-sm md:text-base text-slate-600 font-medium max-w-xl mx-auto leading-relaxed">
+            <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-400 font-medium max-w-xl mx-auto leading-relaxed">
               Explore lab-certified hardware restoration services with transparent pricing and expert turnaround.
             </p>
           </div>
@@ -1169,7 +1169,7 @@ export default function Services() {
               <form 
                 id="service-search-form"
                 onSubmit={handleSearchSubmit}
-                className="relative flex items-center bg-white rounded-2xl sm:rounded-3xl border-2 border-slate-200 shadow-md shadow-slate-200/50 focus-within:border-slate-950 focus-within:ring-4 focus-within:ring-slate-950/5 transition-all p-1 sm:p-1.5"
+                className="relative flex items-center bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border-2 border-slate-200 dark:border-slate-700 shadow-md shadow-slate-200/50 dark:shadow-none focus-within:border-slate-950 dark:focus-within:border-slate-400 focus-within:ring-4 focus-within:ring-slate-950/5 transition-all p-1 sm:p-1.5"
               >
                 <div className="relative flex-1 flex items-center min-h-[46px] sm:min-h-[50px] pl-3 pr-2">
                   <Search className="w-5 h-5 text-slate-400 shrink-0 ml-1" />
@@ -1216,7 +1216,7 @@ export default function Services() {
                         setIsSuggestionsOpen(false);
                       }
                     }}
-                    className="w-full h-full border-0 focus:outline-none text-base md:text-sm font-semibold px-3 bg-transparent placeholder:text-slate-400 placeholder:font-normal text-slate-950"
+                    className="w-full h-full border-0 focus:outline-none text-base md:text-sm font-semibold px-3 bg-transparent placeholder:text-slate-400 placeholder:font-normal text-slate-950 dark:text-white"
                     aria-label="Search repair catalog"
                   />
 
@@ -1225,7 +1225,7 @@ export default function Services() {
                       type="button"
                       id="search-clear-btn"
                       onClick={handleClearSearch}
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-slate-500 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all cursor-pointer mr-1 shrink-0"
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-all cursor-pointer mr-1 shrink-0"
                       title="Clear search"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -1238,7 +1238,7 @@ export default function Services() {
                 <button
                   type="submit"
                   id="search-action-btn"
-                  className="h-10 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-slate-950 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer shrink-0"
+                  className="h-10 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-slate-950 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer shrink-0"
                   aria-label="Search services"
                 >
                   <Search className="w-4 h-4 text-amber-400" />
@@ -1250,9 +1250,9 @@ export default function Services() {
               {isSuggestionsOpen && autoSuggestions.length > 0 && (
                 <div 
                   id="search-autocomplete-dropdown"
-                  className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden z-50 divide-y divide-slate-100 text-left"
+                  className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden z-50 divide-y divide-slate-100 dark:divide-slate-800 text-left"
                 >
-                  <div className="px-3.5 py-2 bg-slate-50 flex items-center justify-between text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                  <div className="px-3.5 py-2 bg-slate-50 dark:bg-slate-800/80 flex items-center justify-between text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     <span>Suggested Searches</span>
                     <span className="text-[10px] font-medium text-slate-400">Click or press Enter to choose</span>
                   </div>
@@ -1264,8 +1264,8 @@ export default function Services() {
                           executeSearch(item.query);
                           setIsSuggestionsOpen(false);
                         }}
-                        className={`px-3.5 py-2.5 flex items-center justify-between gap-3 hover:bg-slate-50 cursor-pointer transition-colors ${
-                          selectedSuggestionIndex === idx ? 'bg-slate-100' : ''
+                        className={`px-3.5 py-2.5 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors ${
+                          selectedSuggestionIndex === idx ? 'bg-slate-100 dark:bg-slate-800' : ''
                         }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
@@ -1328,11 +1328,11 @@ export default function Services() {
         {/* ========================================================= */}
         {/* 2. CATEGORY HORIZONTAL BROWSER & BRAND SELECTOR           */}
         {/* ========================================================= */}
-        <section className="space-y-3.5 bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xs">
+        <section className="space-y-3.5 bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xs">
           
           {/* Hardware Platform Filter (Smartphones, Android Tablets, Apple iPads) */}
-          <div className="space-y-1.5 pb-2 border-b border-slate-100">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+          <div className="space-y-1.5 pb-2 border-b border-slate-100 dark:border-slate-800">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
               <Smartphone className="w-3.5 h-3.5 text-slate-400" />
               <span>Hardware Device Form</span>
             </span>
@@ -1364,8 +1364,8 @@ export default function Services() {
                     }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer border ${
                       isSelected
-                        ? 'bg-slate-950 text-white border-slate-950 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100 hover:text-slate-950 active:scale-95'
+                        ? 'bg-slate-950 dark:bg-indigo-600 text-white border-slate-950 dark:border-indigo-600 shadow-xs'
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-950 dark:hover:text-white active:scale-95'
                     }`}
                   >
                     <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-400' : 'text-slate-400'}`} />
@@ -1659,7 +1659,7 @@ export default function Services() {
                     <article
                       key={item.id}
                       onClick={() => navigate(serviceUrl)}
-                      className={`group bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 hover:border-slate-400/80 p-3 sm:p-4.5 md:p-5 h-full flex flex-col justify-between hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 ${catInfo.cardHover} transition-all duration-200 cursor-pointer relative overflow-hidden`}
+                      className={`group bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200/90 dark:border-slate-800 hover:border-slate-400/80 dark:hover:border-slate-700 p-3 sm:p-4.5 md:p-5 h-full flex flex-col justify-between hover:shadow-xl dark:hover:shadow-none hover:-translate-y-1 ${catInfo.cardHover} transition-all duration-200 cursor-pointer relative overflow-hidden`}
                     >
                       {/* Top Header: Icon + Category Badge + Brand Pill */}
                       <div className="space-y-2 sm:space-y-3">
@@ -1669,7 +1669,7 @@ export default function Services() {
                             to={serviceUrl}
                             onClick={(e) => e.stopPropagation()}
                             aria-label={`View full details for ${item.serviceName}`}
-                            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl ${catInfo.bgClass} flex items-center justify-center border border-slate-100/90 group-hover:scale-105 transition-transform shrink-0 shadow-2xs cursor-pointer`}
+                            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl ${catInfo.bgClass} flex items-center justify-center border border-slate-100/90 dark:border-slate-800 group-hover:scale-105 transition-transform shrink-0 shadow-2xs cursor-pointer`}
                           >
                             <CategoryIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${catInfo.iconClass}`} />
                           </Link>
@@ -1677,7 +1677,7 @@ export default function Services() {
                           {/* Brand Pill & Device Indicator */}
                           <div className="flex items-center gap-1 shrink-0">
                             {renderRatingStars(item.rating, item.ratingCount)}
-                            <span className="text-[9px] sm:text-xs font-black uppercase text-slate-600 bg-slate-100/90 border border-slate-200/70 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg tracking-wider truncate max-w-[65px] sm:max-w-none">
+                            <span className="text-[9px] sm:text-xs font-black uppercase text-slate-600 dark:text-slate-300 bg-slate-100/90 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg tracking-wider truncate max-w-[65px] sm:max-w-none">
                               {item.brand}
                             </span>
                           </div>
@@ -1685,7 +1685,7 @@ export default function Services() {
 
                         {/* Service Title & Device Model */}
                         <div className="space-y-0.5 sm:space-y-1">
-                          <div className="flex items-center gap-1 text-[10px] sm:text-xs font-bold text-slate-500">
+                          <div className="flex items-center gap-1 text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400">
                             {isTablet ? (
                               <Tablet className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-500 shrink-0" />
                             ) : (
@@ -1699,24 +1699,24 @@ export default function Services() {
                             onClick={(e) => e.stopPropagation()}
                             className="block focus-visible:outline-none focus-visible:underline"
                           >
-                            <h3 className="text-xs sm:text-sm md:text-base font-black text-slate-950 tracking-tight leading-snug group-hover:text-indigo-900 transition-colors line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] flex items-center cursor-pointer">
+                            <h3 className="text-xs sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] flex items-center cursor-pointer">
                               {item.serviceName}
                             </h3>
                           </Link>
                         </div>
 
                         {/* Short Description */}
-                        <p className="text-[11px] sm:text-xs text-slate-600 font-medium leading-relaxed line-clamp-1 sm:line-clamp-2 min-h-[1rem] sm:min-h-[2rem]">
+                        <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed line-clamp-1 sm:line-clamp-2 min-h-[1rem] sm:min-h-[2rem]">
                           {shortDescription}
                         </p>
 
                         {/* Service Highlights / Tags */}
-                        <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pt-0.5 text-[9px] sm:text-[10px] font-bold text-slate-500">
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pt-0.5 text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400">
                           <span className={`px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg border truncate max-w-full ${catInfo.badgeClass}`}>
                             {catInfo.name}
                           </span>
                           {item.estimatedTime && (
-                            <span className="hidden sm:flex px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg bg-slate-50 text-slate-600 border border-slate-200 items-center gap-0.5 sm:gap-1">
+                            <span className="hidden sm:flex px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 items-center gap-0.5 sm:gap-1">
                               <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-400" />
                               <span>{item.estimatedTime}</span>
                             </span>
@@ -1725,7 +1725,7 @@ export default function Services() {
                       </div>
 
                       {/* Card Footer: Clean Price & View Details Action */}
-                      <div className="pt-2.5 sm:pt-3 mt-2 sm:mt-3.5 border-t border-slate-100 flex items-center justify-between gap-1.5 sm:gap-2">
+                      <div className="pt-2.5 sm:pt-3 mt-2 sm:mt-3.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5 sm:gap-2">
                         {/* Price Display */}
                         <div className="min-w-0 flex-1">
                           {renderPriceBadge(item)}
@@ -1741,7 +1741,7 @@ export default function Services() {
                               handleOpenDetail(item);
                             }}
                             aria-label={`Quick preview modal for ${item.serviceName}`}
-                            className="h-7 sm:h-8 px-2 sm:px-2.5 rounded-lg sm:rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-0.5 cursor-pointer"
+                            className="h-7 sm:h-8 px-2 sm:px-2.5 rounded-lg sm:rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-[10px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-0.5 cursor-pointer"
                           >
                             <span>Quick View</span>
                           </Button>

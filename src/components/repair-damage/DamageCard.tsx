@@ -25,13 +25,13 @@ export const DamageCard: React.FC<Props> = ({
 
   return (
     <div 
-      className="bg-white rounded-3xl border border-slate-200/70 p-4 sm:p-5 hover:border-slate-300 hover:shadow-lg transition-all flex flex-col justify-between min-w-0 overflow-hidden group shadow-2xs space-y-3.5"
+      className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/70 dark:border-slate-800 p-4 sm:p-5 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-lg transition-all flex flex-col justify-between min-w-0 overflow-hidden group shadow-2xs space-y-3.5"
       id={`damage-card-${record.id}`}
     >
       {/* Top Bar: Record #, Date & Component Badge */}
-      <div className="flex items-start justify-between gap-2 min-w-0 pb-3 border-b border-slate-100">
+      <div className="flex items-start justify-between gap-2 min-w-0 pb-3 border-b border-slate-100 dark:border-slate-800">
         <div className="min-w-0 flex-1">
-          <span className="text-[11px] font-black tracking-wider text-slate-900 uppercase block font-mono truncate">
+          <span className="text-[11px] font-black tracking-wider text-slate-900 dark:text-white uppercase block font-mono truncate">
             {record.recordNumber}
           </span>
           <span className="text-[10px] font-semibold text-slate-400 flex items-center gap-1 mt-0.5 truncate">
@@ -100,7 +100,7 @@ export const DamageCard: React.FC<Props> = ({
         </div>
 
         {/* Incident Summary text */}
-        <p className="text-xs text-slate-600 font-medium line-clamp-2 leading-relaxed bg-white break-words" title={record.damageDescription}>
+        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium line-clamp-2 leading-relaxed bg-white dark:bg-slate-900 break-words" title={record.damageDescription}>
           {record.damageDescription}
         </p>
       </div>

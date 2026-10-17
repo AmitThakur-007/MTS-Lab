@@ -49,24 +49,24 @@ export const ArchiveDamageDialog: React.FC<Props> = ({
     <AlertDialog open={isOpen} onOpenChange={onClose}>
       <AlertDialogContent 
         id="archive-damage-dialog"
-        className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xl bg-white space-y-4"
+        className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 space-y-4"
       >
         <AlertDialogHeader>
-          <div className="w-11 h-11 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shadow-2xs shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/60 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-2xs shrink-0">
             <Trash2 className="h-5 w-5" />
           </div>
-          <AlertDialogTitle className="text-lg font-bold text-slate-900">
+          <AlertDialogTitle className="text-lg font-bold text-slate-900 dark:text-white">
             Archive Damage Record?
           </AlertDialogTitle>
-          <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
-            This record (<span className="font-mono font-bold text-slate-800">{record?.recordNumber}</span>) will be safely removed from active views and archived with an immutable audit log.
+          <AlertDialogDescription className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            This record (<span className="font-mono font-bold text-slate-800 dark:text-slate-200">{record?.recordNumber}</span>) will be safely removed from active views and archived with an immutable audit log.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         <AlertDialogFooter className="flex items-center justify-between gap-2 pt-2">
           <AlertDialogCancel 
             onClick={onClose}
-            className="rounded-xl text-xs font-bold text-slate-600 border-slate-200 cursor-pointer h-10 px-4"
+            className="rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 dark:bg-slate-800 cursor-pointer h-10 px-4"
           >
             Cancel
           </AlertDialogCancel>

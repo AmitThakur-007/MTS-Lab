@@ -289,30 +289,30 @@ export default function SuperAdmin() {
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-20 px-4 sm:px-0">
       {/* Header Banner */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 sm:p-6 lg:p-7 rounded-3xl border border-slate-200/90 shadow-2xs">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-5 sm:p-6 lg:p-7 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xs">
         <div className="space-y-2 max-w-2xl">
           <Button 
             variant="ghost" 
             size="sm" 
-            className="w-fit gap-1.5 font-bold text-slate-500 hover:text-slate-900 rounded-xl px-2.5 h-8 cursor-pointer" 
+            className="w-fit gap-1.5 font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-xl px-2.5 h-8 cursor-pointer" 
             onClick={() => navigate(-1)}
           >
             <ArrowLeft className="h-4 w-4" /> Back to Dashboard
           </Button>
           <div className="flex items-start sm:items-center gap-3.5">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shadow-2xs shrink-0 mt-0.5 sm:mt-0">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/60 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-2xs shrink-0 mt-0.5 sm:mt-0">
               <ShieldAlert className="h-6 w-6" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight text-slate-900">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
                   Super Admin Console
                 </h1>
-                <Badge className="bg-rose-50 text-rose-700 border-rose-200 font-extrabold text-[10px]">
+                <Badge className="bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/60 font-extrabold text-[10px]">
                   RESTRICTED PRIVILEGES
                 </Badge>
               </div>
-              <p className="text-slate-500 font-medium text-xs mt-1 leading-relaxed">
+              <p className="text-slate-500 dark:text-slate-400 font-medium text-xs mt-1 leading-relaxed">
                 Security surveillance, immutable audit logs, applet federation & system data governance.
               </p>
             </div>
@@ -341,30 +341,30 @@ export default function SuperAdmin() {
 
       {/* Main Tabs */}
       <Tabs defaultValue="audit-logs" className="space-y-6">
-        <TabsList className="bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200 w-full flex flex-wrap sm:inline-flex gap-1.5 h-auto">
-          <TabsTrigger value="audit-logs" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
-            <Shield className="h-4 w-4 mr-1.5 text-indigo-600 shrink-0" />
+        <TabsList className="bg-slate-100/90 dark:bg-slate-800/90 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 w-full flex flex-wrap sm:inline-flex gap-1.5 h-auto">
+          <TabsTrigger value="audit-logs" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm">
+            <Shield className="h-4 w-4 mr-1.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
             <span>Activity & Security Logs</span>
-            <span className="ml-1.5 text-[10px] font-mono font-black bg-slate-200/80 text-slate-700 px-1.5 py-0.5 rounded-md">{auditTotal}</span>
+            <span className="ml-1.5 text-[10px] font-mono font-black bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded-md">{auditTotal}</span>
           </TabsTrigger>
-          <TabsTrigger value="theme-controller" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
-            <Palette className="h-4 w-4 mr-1.5 text-pink-600 shrink-0" />
+          <TabsTrigger value="theme-controller" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm">
+            <Palette className="h-4 w-4 mr-1.5 text-pink-600 dark:text-pink-400 shrink-0" />
             <span>Theme Controller</span>
           </TabsTrigger>
-          <TabsTrigger value="permanent-deletion" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
-            <Trash2 className="h-4 w-4 mr-1.5 text-rose-600 shrink-0" />
+          <TabsTrigger value="permanent-deletion" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm">
+            <Trash2 className="h-4 w-4 mr-1.5 text-rose-600 dark:text-rose-400 shrink-0" />
             <span>Permanent Deletion</span>
           </TabsTrigger>
-          <TabsTrigger value="staff-directory" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
-            <Users className="h-4 w-4 mr-1.5 text-purple-600 shrink-0" />
+          <TabsTrigger value="staff-directory" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm">
+            <Users className="h-4 w-4 mr-1.5 text-purple-600 dark:text-purple-400 shrink-0" />
             <span>Staff Directory</span>
           </TabsTrigger>
-          <TabsTrigger value="data-wipe" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
-            <ShieldAlert className="h-4 w-4 mr-1.5 text-amber-600 shrink-0" />
+          <TabsTrigger value="data-wipe" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm">
+            <ShieldAlert className="h-4 w-4 mr-1.5 text-amber-600 dark:text-amber-400 shrink-0" />
             <span>System Data Purge</span>
           </TabsTrigger>
-          <TabsTrigger value="applet-sharing" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
-            <FileDown className="h-4 w-4 mr-1.5 text-blue-600 shrink-0" />
+          <TabsTrigger value="applet-sharing" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm">
+            <FileDown className="h-4 w-4 mr-1.5 text-blue-600 dark:text-blue-400 shrink-0" />
             <span>Federation & Sharing</span>
           </TabsTrigger>
         </TabsList>
@@ -386,15 +386,15 @@ export default function SuperAdmin() {
 
         {/* Tab 1: Activity & Security Logs */}
         <TabsContent value="audit-logs" className="space-y-6">
-          <Card className="rounded-[32px] border-none shadow-xl bg-white overflow-hidden">
-            <CardHeader className="p-7 sm:p-8 bg-slate-900 text-white flex flex-col md:flex-row justify-between md:items-center gap-4">
+          <Card className="rounded-[32px] border-none shadow-xl bg-white dark:bg-slate-900 overflow-hidden">
+            <CardHeader className="p-7 sm:p-8 bg-slate-900 dark:bg-slate-950 text-white flex flex-col md:flex-row justify-between md:items-center gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-[10px] font-bold">
                     IMMUTABLE AUDIT TRAIL
                   </Badge>
                 </div>
-                <CardTitle className="text-2xl font-black mt-2">Security & Activity Surveillance</CardTitle>
+                <CardTitle className="text-2xl font-black mt-2 text-white">Security & Activity Surveillance</CardTitle>
                 <CardDescription className="text-slate-400 text-xs font-semibold">
                   Real-time recording of logins, 2FA verifications, password updates, role mutations, and system events.
                 </CardDescription>
@@ -420,7 +420,7 @@ export default function SuperAdmin() {
 
             <CardContent className="p-6 sm:p-8 space-y-6">
               {/* Search & Filter Bar */}
-              <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
                 <form onSubmit={handleSearchSubmit} className="flex-1 flex gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -428,20 +428,20 @@ export default function SuperAdmin() {
                       placeholder="Search action, email, user, IP, resource..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 pr-8 h-11 bg-white rounded-xl border-slate-200 text-xs font-semibold"
+                      className="pl-10 pr-8 h-11 bg-white dark:bg-slate-900 rounded-xl border-slate-200 dark:border-slate-700 text-xs font-semibold dark:text-white"
                     />
                     {searchQuery && (
                       <button
                         type="button"
                         onClick={handleClearSearch}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold p-1 cursor-pointer"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs font-bold p-1 cursor-pointer"
                         title="Clear search"
                       >
                         ✕
                       </button>
                     )}
                   </div>
-                  <Button type="submit" size="sm" className="h-11 px-5 rounded-xl bg-slate-900 text-white font-bold text-xs cursor-pointer">
+                  <Button type="submit" size="sm" className="h-11 px-5 rounded-xl bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer">
                     Search
                   </Button>
                 </form>
@@ -451,7 +451,7 @@ export default function SuperAdmin() {
                   <select 
                     value={filterAction} 
                     onChange={(e) => { setFilterAction(e.target.value); setAuditPage(1); }}
-                    className="h-11 px-3 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 outline-none"
+                    className="h-11 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
                   >
                     <option value="ALL">All Actions</option>
                     <option value="LOGIN_SUCCESS">Login Success</option>
@@ -475,7 +475,7 @@ export default function SuperAdmin() {
                   <select 
                     value={filterRole} 
                     onChange={(e) => { setFilterRole(e.target.value); setAuditPage(1); }}
-                    className="h-11 px-3 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 outline-none"
+                    className="h-11 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
                   >
                     <option value="ALL">All Roles</option>
                     <option value="SUPER_ADMIN">Super Admin</option>
@@ -492,7 +492,7 @@ export default function SuperAdmin() {
                   <select 
                     value={filterStatus} 
                     onChange={(e) => { setFilterStatus(e.target.value); setAuditPage(1); }}
-                    className="h-11 px-3 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 outline-none"
+                    className="h-11 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
                   >
                     <option value="ALL">All Statuses</option>
                     <option value="SUCCESS">Success</option>
@@ -503,7 +503,7 @@ export default function SuperAdmin() {
                   <select 
                     value={filterResource} 
                     onChange={(e) => { setFilterResource(e.target.value); setAuditPage(1); }}
-                    className="h-11 px-3 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 outline-none"
+                    className="h-11 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
                   >
                     <option value="ALL">All Resources</option>
                     <option value="AUTH">AUTH</option>
@@ -515,22 +515,22 @@ export default function SuperAdmin() {
                   </select>
 
                   {/* Date Range Filters */}
-                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 h-11">
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 h-11">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">From</span>
                     <input
                       type="date"
                       value={filterStartDate}
                       onChange={(e) => { setFilterStartDate(e.target.value); setAuditPage(1); }}
-                      className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+                      className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none cursor-pointer"
                     />
                   </div>
-                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 h-11">
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 h-11">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">To</span>
                     <input
                       type="date"
                       value={filterEndDate}
                       onChange={(e) => { setFilterEndDate(e.target.value); setAuditPage(1); }}
-                      className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+                      className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-transparent outline-none cursor-pointer"
                     />
                   </div>
 
@@ -719,22 +719,22 @@ export default function SuperAdmin() {
                 </CardHeader>
                 <CardContent className="p-8">
                   <Tabs defaultValue="ALL" onValueChange={(v) => setDeletionType(v as any)}>
-                    <TabsList className="grid grid-cols-2 sm:grid-cols-5 h-auto min-h-12 rounded-2xl bg-slate-100 p-1.5 gap-1 mb-6">
-                      <TabsTrigger value="ALL" className="rounded-xl font-bold uppercase text-[10px] tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">Global</TabsTrigger>
-                      <TabsTrigger value="DATE" className="rounded-xl font-bold uppercase text-[10px] tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">Daily</TabsTrigger>
-                      <TabsTrigger value="MONTH" className="rounded-xl font-bold uppercase text-[10px] tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">Monthly</TabsTrigger>
-                      <TabsTrigger value="YEAR" className="rounded-xl font-bold uppercase text-[10px] tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">Yearly</TabsTrigger>
-                      <TabsTrigger value="RANGE" className="col-span-2 sm:col-span-1 rounded-xl font-bold uppercase text-[10px] tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">Range</TabsTrigger>
+                    <TabsList className="grid grid-cols-2 sm:grid-cols-5 h-auto min-h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 p-1.5 gap-1 mb-6">
+                      <TabsTrigger value="ALL" className="rounded-xl font-bold uppercase text-[10px] tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white text-slate-600 dark:text-slate-300 data-[state=active]:shadow-sm">Global</TabsTrigger>
+                      <TabsTrigger value="DATE" className="rounded-xl font-bold uppercase text-[10px] tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white text-slate-600 dark:text-slate-300 data-[state=active]:shadow-sm">Daily</TabsTrigger>
+                      <TabsTrigger value="MONTH" className="rounded-xl font-bold uppercase text-[10px] tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white text-slate-600 dark:text-slate-300 data-[state=active]:shadow-sm">Monthly</TabsTrigger>
+                      <TabsTrigger value="YEAR" className="rounded-xl font-bold uppercase text-[10px] tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white text-slate-600 dark:text-slate-300 data-[state=active]:shadow-sm">Yearly</TabsTrigger>
+                      <TabsTrigger value="RANGE" className="col-span-2 sm:col-span-1 rounded-xl font-bold uppercase text-[10px] tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white text-slate-600 dark:text-slate-300 data-[state=active]:shadow-sm">Range</TabsTrigger>
                     </TabsList>
 
-                    <div className="min-h-[140px] flex items-center justify-center bg-slate-50 rounded-[32px] p-8 border border-dashed border-slate-200">
+                    <div className="min-h-[140px] flex items-center justify-center bg-slate-50 dark:bg-slate-800/40 rounded-[32px] p-8 border border-dashed border-slate-200 dark:border-slate-700">
                       <AnimatePresence mode="wait">
                         {deletionType === 'ALL' && (
                           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="text-center space-y-4">
                             <FileWarning className="mx-auto h-12 w-12 text-rose-500" />
                             <div className="space-y-1">
-                              <p className="font-black text-xl text-slate-900 leading-tight">COMPLETE SYSTEM DATA WIPE</p>
-                              <p className="text-slate-500 font-bold text-sm">Targets: Every repair, customer, and transactional record.</p>
+                              <p className="font-black text-xl text-slate-900 dark:text-white leading-tight">COMPLETE SYSTEM DATA WIPE</p>
+                              <p className="text-slate-500 dark:text-slate-400 font-bold text-sm">Targets: Every repair, customer, and transactional record.</p>
                             </div>
                           </motion.div>
                         )}
@@ -743,7 +743,7 @@ export default function SuperAdmin() {
                             <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Select Specific Day</Label>
                             <Input 
                               type="date" 
-                              className="h-14 w-full max-w-sm rounded-2xl border-none shadow-xl font-bold text-lg text-center" 
+                              className="h-14 w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl font-bold text-lg text-center dark:text-white" 
                               value={selectedDate}
                               onChange={e => setSelectedDate(e.target.value)}
                             />
@@ -754,7 +754,7 @@ export default function SuperAdmin() {
                             <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Select Month</Label>
                             <Input 
                               type="month" 
-                              className="h-14 w-full max-w-sm rounded-2xl border-none shadow-xl font-bold text-lg text-center" 
+                              className="h-14 w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl font-bold text-lg text-center dark:text-white" 
                               value={selectedMonth}
                               onChange={e => setSelectedMonth(e.target.value)}
                             />
@@ -767,7 +767,7 @@ export default function SuperAdmin() {
                               type="number" 
                               min="2020" 
                               max="2030" 
-                              className="h-14 w-full max-w-sm rounded-2xl border-none shadow-xl font-bold text-lg text-center" 
+                              className="h-14 w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl font-bold text-lg text-center dark:text-white" 
                               value={selectedYear}
                               onChange={e => setSelectedYear(e.target.value)}
                             />
@@ -779,7 +779,7 @@ export default function SuperAdmin() {
                               <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Start Date</Label>
                               <Input 
                                 type="date" 
-                                className="h-14 rounded-2xl border-none shadow-xl font-bold text-sm" 
+                                className="h-14 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl font-bold text-sm dark:text-white" 
                                 value={startDate}
                                 onChange={e => setStartDate(e.target.value)}
                               />
@@ -788,7 +788,7 @@ export default function SuperAdmin() {
                               <Label className="text-xs font-black uppercase tracking-widest text-slate-400">End Date</Label>
                               <Input 
                                 type="date" 
-                                className="h-14 rounded-2xl border-none shadow-xl font-bold text-sm" 
+                                className="h-14 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl font-bold text-sm dark:text-white" 
                                 value={endDate}
                                 onChange={e => setEndDate(e.target.value)}
                               />
@@ -847,8 +847,8 @@ export default function SuperAdmin() {
 
         {/* Tab 3: Applet Sharing */}
         <TabsContent value="applet-sharing" className="space-y-6">
-          <Card className="rounded-[32px] border-none shadow-2xl overflow-hidden bg-white">
-            <CardHeader className="bg-slate-900 p-8 text-white">
+          <Card className="rounded-[32px] border-none shadow-2xl overflow-hidden bg-white dark:bg-slate-900">
+            <CardHeader className="bg-slate-900 dark:bg-slate-950 p-8 text-white">
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle className="text-2xl font-black">Applet Federation & Sharing</CardTitle>
@@ -864,28 +864,28 @@ export default function SuperAdmin() {
             <CardContent className="p-8 space-y-8">
               <form onSubmit={handleShareApplet} className="space-y-6 max-w-2xl">
                 <div className="space-y-2">
-                  <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Applet Name</Label>
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Applet Name</Label>
                   <Input 
                     value={shareForm.appletName}
                     onChange={(e) => setShareForm({ ...shareForm, appletName: e.target.value })}
-                    className="h-12 rounded-xl bg-slate-50 font-bold"
+                    className="h-12 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-white font-bold"
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Description</Label>
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Description</Label>
                   <Input 
                     value={shareForm.description}
                     onChange={(e) => setShareForm({ ...shareForm, description: e.target.value })}
-                    className="h-12 rounded-xl bg-slate-50 font-bold"
+                    className="h-12 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-white font-bold"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Visibility</Label>
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Visibility</Label>
                   <select
                     value={shareForm.visibility}
                     onChange={(e) => setShareForm({ ...shareForm, visibility: e.target.value as any })}
-                    className="h-12 w-full rounded-xl bg-slate-50 px-4 font-bold border border-slate-200 text-sm"
+                    className="h-12 w-full rounded-xl bg-slate-50 dark:bg-slate-800 px-4 font-bold border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white outline-none"
                   >
                     <option value="PUBLIC">PUBLIC (All System Admins)</option>
                     <option value="SHARED">SHARED (Specific Target Recipient)</option>
@@ -895,7 +895,7 @@ export default function SuperAdmin() {
                 <Button 
                   type="submit" 
                   disabled={shareLoading}
-                  className="h-14 px-8 rounded-2xl bg-slate-900 text-white font-bold"
+                  className="h-14 px-8 rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-bold cursor-pointer"
                 >
                   {shareLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <FileDown className="h-4 w-4 mr-2" />}
                   Publish Applet Module
@@ -903,19 +903,19 @@ export default function SuperAdmin() {
               </form>
 
               {/* Published Shares */}
-              <div className="pt-6 border-t border-slate-100 space-y-4">
-                <h3 className="text-lg font-black text-slate-900 uppercase">Published Applet Shares</h3>
+              <div className="pt-6 border-t border-slate-100 dark:border-slate-800 space-y-4">
+                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase">Published Applet Shares</h3>
                 {sharingHistory.length > 0 ? (
                   <div className="grid sm:grid-cols-2 gap-4">
                     {sharingHistory.map((item, index) => (
-                      <div key={item.id || index} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                      <div key={item.id || index} className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
                         <div className="flex justify-between items-start">
-                          <span className="font-extrabold text-slate-900 text-sm">{item.appletName}</span>
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">
+                          <span className="font-extrabold text-slate-900 dark:text-white text-sm">{item.appletName}</span>
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-full">
                             {item.visibility}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-500">{item.description}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{item.description}</p>
                       </div>
                     ))}
                   </div>
@@ -930,7 +930,7 @@ export default function SuperAdmin() {
 
       {/* Log Details Modal */}
       <Dialog open={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)}>
-        <DialogContent className="rounded-[32px] sm:max-w-xl p-0 overflow-hidden border-none shadow-2xl">
+        <DialogContent className="rounded-[32px] sm:max-w-xl p-0 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl">
           <div className="bg-slate-900 p-6 text-white">
             <div className="flex justify-between items-start">
               <div>
@@ -942,39 +942,39 @@ export default function SuperAdmin() {
               </Badge>
             </div>
           </div>
-          <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto bg-white text-xs">
-            <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto bg-white dark:bg-slate-900 text-xs">
+            <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800">
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400">Timestamp</div>
-                <div className="font-mono font-semibold text-slate-800">
+                <div className="font-mono font-semibold text-slate-800 dark:text-slate-200">
                   {selectedLog && format(new Date(selectedLog.createdAt), 'dd MMM yyyy HH:mm:ss')}
                 </div>
               </div>
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400">Resource</div>
-                <div className="font-semibold text-slate-800">{selectedLog?.resource} {selectedLog?.resourceId ? `(#${selectedLog.resourceId})` : ''}</div>
+                <div className="font-semibold text-slate-800 dark:text-slate-200">{selectedLog?.resource} {selectedLog?.resourceId ? `(#${selectedLog.resourceId})` : ''}</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400">Actor</div>
-                <div className="font-semibold text-slate-800">{selectedLog?.userName || 'System'} ({selectedLog?.userRole || 'N/A'})</div>
+                <div className="font-semibold text-slate-800 dark:text-slate-200">{selectedLog?.userName || 'System'} ({selectedLog?.userRole || 'N/A'})</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400">Actor Email</div>
-                <div className="font-semibold text-slate-800">{selectedLog?.userEmail || 'N/A'}</div>
+                <div className="font-semibold text-slate-800 dark:text-slate-200">{selectedLog?.userEmail || 'N/A'}</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400">Client IP</div>
-                <div className="font-mono font-semibold text-slate-800">{selectedLog?.ipAddress || '127.0.0.1'}</div>
+                <div className="font-mono font-semibold text-slate-800 dark:text-slate-200">{selectedLog?.ipAddress || '127.0.0.1'}</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400">Device Info</div>
-                <div className="font-semibold text-slate-800">{selectedLog?.deviceInfo || 'N/A'}</div>
+                <div className="font-semibold text-slate-800 dark:text-slate-200">{selectedLog?.deviceInfo || 'N/A'}</div>
               </div>
             </div>
 
             <div>
               <div className="text-[10px] uppercase font-bold text-slate-400 mb-1">Details</div>
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 font-medium text-slate-800 leading-relaxed">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 font-medium text-slate-800 dark:text-slate-200 leading-relaxed">
                 {selectedLog?.details || 'No details provided'}
               </div>
             </div>
@@ -982,7 +982,7 @@ export default function SuperAdmin() {
             {selectedLog?.previousValue && (
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400 mb-1">Previous Value</div>
-                <pre className="p-3 bg-slate-900 text-slate-100 rounded-2xl font-mono text-[11px] overflow-x-auto">
+                <pre className="p-3 bg-slate-900 text-slate-100 rounded-2xl font-mono text-[11px] overflow-x-auto border border-slate-800">
                   {selectedLog.previousValue}
                 </pre>
               </div>
@@ -991,7 +991,7 @@ export default function SuperAdmin() {
             {selectedLog?.newValue && (
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400 mb-1">New Value</div>
-                <pre className="p-3 bg-slate-900 text-slate-100 rounded-2xl font-mono text-[11px] overflow-x-auto">
+                <pre className="p-3 bg-slate-900 text-slate-100 rounded-2xl font-mono text-[11px] overflow-x-auto border border-slate-800">
                   {selectedLog.newValue}
                 </pre>
               </div>
@@ -1000,14 +1000,14 @@ export default function SuperAdmin() {
             {selectedLog?.userAgent && (
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400 mb-1">User Agent</div>
-                <div className="p-2.5 bg-slate-50 rounded-xl font-mono text-[10px] text-slate-600 break-all">
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl font-mono text-[10px] text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-700 break-all">
                   {selectedLog.userAgent}
                 </div>
               </div>
             )}
           </div>
-          <DialogFooter className="p-4 bg-slate-50 border-t border-slate-100">
-            <Button className="rounded-xl font-bold w-full" onClick={() => setSelectedLog(null)}>
+          <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800">
+            <Button className="rounded-xl font-bold w-full bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white" onClick={() => setSelectedLog(null)}>
               Close Inspection
             </Button>
           </DialogFooter>
@@ -1016,7 +1016,7 @@ export default function SuperAdmin() {
 
       {/* Deletion Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="rounded-[32px] sm:max-w-lg p-0 overflow-hidden border-none shadow-2xl">
+        <DialogContent className="rounded-[32px] sm:max-w-lg p-0 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl">
           <div className="bg-rose-600 p-8 text-white relative">
             <div className="space-y-2">
                <DialogTitle className="text-2xl font-black uppercase">PERMANENT SYSTEM DATA PURGE</DialogTitle>
@@ -1025,28 +1025,28 @@ export default function SuperAdmin() {
                </DialogDescription>
             </div>
           </div>
-          <div className="p-8 space-y-6 bg-white">
+          <div className="p-8 space-y-6 bg-white dark:bg-slate-900">
             <div className="space-y-2">
-               <Label className="text-xs font-bold text-slate-600">Type <span className="text-rose-600 font-black">DELETE</span> to confirm:</Label>
+               <Label className="text-xs font-bold text-slate-600 dark:text-slate-300">Type <span className="text-rose-600 font-black">DELETE</span> to confirm:</Label>
                <Input 
                  placeholder="DELETE" 
-                 className="h-12 rounded-xl text-center font-black tracking-widest"
+                 className="h-12 rounded-xl text-center font-black tracking-widest bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                  value={confirmText}
                  onChange={e => setConfirmText(e.target.value.toUpperCase())}
                />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-slate-600">Authority Master Password:</Label>
+              <Label className="text-xs font-bold text-slate-600 dark:text-slate-300">Authority Master Password:</Label>
               <Input 
                 type="password" 
                 placeholder="Enter password" 
-                className="h-12 rounded-xl"
+                className="h-12 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
               />
             </div>
             <DialogFooter className="grid grid-cols-2 gap-3 pt-2">
-              <Button variant="ghost" className="h-12 rounded-xl font-bold" onClick={() => setIsDeleteDialogOpen(false)}>
+              <Button variant="ghost" className="h-12 rounded-xl font-bold dark:text-slate-300 dark:hover:text-white" onClick={() => setIsDeleteDialogOpen(false)}>
                 Cancel
               </Button>
               <Button 

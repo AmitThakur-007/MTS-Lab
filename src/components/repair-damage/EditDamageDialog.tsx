@@ -101,7 +101,7 @@ export const EditDamageDialog: React.FC<Props> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         id="edit-damage-dialog"
-        className="w-[calc(100vw-1.5rem)] sm:w-full max-w-xl rounded-3xl p-0 border border-slate-200 shadow-2xl overflow-hidden bg-white max-h-[90vh] flex flex-col"
+        className="w-[calc(100vw-1.5rem)] sm:w-full max-w-xl rounded-3xl p-0 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden bg-white dark:bg-slate-900 max-h-[90vh] flex flex-col"
       >
         <DialogHeader className="p-4 sm:p-6 pb-4 bg-slate-900 text-white shrink-0">
           <DialogTitle className="text-lg sm:text-xl font-black text-white">
@@ -116,9 +116,9 @@ export const EditDamageDialog: React.FC<Props> = ({
           <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Damaged Component</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Damaged Component</Label>
                 <Select value={editFormData.damagedComponent} onValueChange={v => setEditFormData({ ...editFormData, damagedComponent: v })}>
-                  <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-bold">
+                  <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold dark:text-white">
                     <SelectValue placeholder="Component" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl max-h-56">
@@ -130,9 +130,9 @@ export const EditDamageDialog: React.FC<Props> = ({
               </div>
 
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Damage Classification</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Damage Classification</Label>
                 <Select value={editFormData.damageType} onValueChange={v => setEditFormData({ ...editFormData, damageType: v })}>
-                  <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-bold">
+                  <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold dark:text-white">
                     <SelectValue placeholder="Type" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
@@ -145,51 +145,51 @@ export const EditDamageDialog: React.FC<Props> = ({
             </div>
 
             <div className="space-y-1.5 min-w-0">
-              <Label className="text-xs font-bold text-slate-700">Damage Description *</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Damage Description *</Label>
               <Textarea 
                 rows={3}
                 value={editFormData.damageDescription}
                 onChange={e => setEditFormData({ ...editFormData, damageDescription: e.target.value })}
-                className="rounded-xl border-slate-200 text-xs font-medium resize-none"
+                className="rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-medium resize-none dark:text-white"
                 required
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Date</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Date</Label>
                 <Input 
                   type="date"
                   value={editFormData.damageDate}
                   onChange={e => setEditFormData({ ...editFormData, damageDate: e.target.value })}
-                  className="h-10 rounded-xl border-slate-200 text-xs font-medium"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium dark:text-white"
                 />
               </div>
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Time</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Time</Label>
                 <Input 
                   type="time"
                   value={editFormData.damageTime}
                   onChange={e => setEditFormData({ ...editFormData, damageTime: e.target.value })}
-                  className="h-10 rounded-xl border-slate-200 text-xs font-medium"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium dark:text-white"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Est. Cost (NPR)</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Est. Cost (NPR)</Label>
                 <Input 
                   type="number"
                   value={editFormData.estimatedCost}
                   onChange={e => setEditFormData({ ...editFormData, estimatedCost: e.target.value })}
-                  className="h-10 rounded-xl border-slate-200 text-xs font-medium"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium dark:text-white"
                 />
               </div>
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Status</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Status</Label>
                 <Select value={editFormData.status} onValueChange={v => setEditFormData({ ...editFormData, status: v })}>
-                  <SelectTrigger className="h-10 rounded-xl border-slate-200 text-xs font-bold">
+                  <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold dark:text-white">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
@@ -202,29 +202,29 @@ export const EditDamageDialog: React.FC<Props> = ({
             </div>
 
             <div className="space-y-1.5 min-w-0">
-              <Label className="text-xs font-bold text-slate-700">Audit Change Reason *</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Audit Change Reason *</Label>
               <Input 
                 placeholder="Reason for modifying this damage record (mandatory audit note)..."
                 value={editFormData.auditReason}
                 onChange={e => setEditFormData({ ...editFormData, auditReason: e.target.value })}
-                className="h-10 rounded-xl border-slate-200 text-xs font-medium"
+                className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium dark:text-white"
                 required
               />
             </div>
           </div>
 
-          <DialogFooter className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+          <DialogFooter className="p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
             <Button
               type="button"
               variant="ghost"
               onClick={onClose}
-              className="rounded-xl text-xs font-bold text-slate-500 cursor-pointer h-10 px-4"
+              className="rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer h-10 px-4"
             >
               Cancel
             </Button>
             <Button 
               type="submit" 
-              className="rounded-xl h-10 px-5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md cursor-pointer"
+              className="rounded-xl h-10 px-5 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-bold text-xs shadow-md cursor-pointer"
               disabled={submitting}
             >
               {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

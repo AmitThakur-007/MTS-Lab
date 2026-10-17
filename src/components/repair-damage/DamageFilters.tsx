@@ -97,9 +97,9 @@ export const DamageFilters: React.FC<Props> = ({
     <div className="space-y-4" id="damage-filter-controls">
       {/* Component Breakdown Summary Chips */}
       {componentBreakdown && Object.keys(componentBreakdown).length > 0 && (
-        <div className="bg-white p-3.5 sm:p-4 rounded-3xl border border-slate-200/70 shadow-xs space-y-2.5">
+        <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-3xl border border-slate-200/70 dark:border-slate-800 shadow-xs space-y-2.5">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <h3 className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
               <Layers className="h-3.5 w-3.5 text-slate-400 shrink-0" />
               <span>Component Breakdown Summary</span>
             </h3>
@@ -120,14 +120,14 @@ export const DamageFilters: React.FC<Props> = ({
                   className={cn(
                     "px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border shrink-0 flex items-center gap-2 cursor-pointer shadow-2xs",
                     isSelected 
-                      ? "bg-slate-900 text-white border-slate-900" 
-                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      ? "bg-slate-900 text-white border-slate-900 dark:bg-indigo-600 dark:border-indigo-600" 
+                      : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                   )}
                 >
                   <span className="truncate max-w-[160px]">{compName}</span>
                   <span className={cn(
                     "px-1.5 py-0.5 rounded-md text-[10px] font-black",
-                    isSelected ? "bg-white text-slate-900" : "bg-slate-200 text-slate-700"
+                    isSelected ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
                   )}>
                     {count}
                   </span>
@@ -139,9 +139,9 @@ export const DamageFilters: React.FC<Props> = ({
       )}
 
       {/* Main Filter Container */}
-      <div className="bg-white p-4 sm:p-5 lg:p-6 rounded-3xl border border-slate-200/70 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 lg:p-6 rounded-3xl border border-slate-200/70 dark:border-slate-800 shadow-xs space-y-4">
         {/* Quick Period Tabs & View Mode */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mr-1 hidden sm:inline">Period:</span>
             {[
@@ -181,7 +181,7 @@ export const DamageFilters: React.FC<Props> = ({
                 onClick={() => setViewMode('grid')}
                 className={cn(
                   "p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                  viewMode === 'grid' ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                  viewMode === 'grid' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 )}
                 title="Grid View"
               >
@@ -192,7 +192,7 @@ export const DamageFilters: React.FC<Props> = ({
                 onClick={() => setViewMode('table')}
                 className={cn(
                   "p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                  viewMode === 'table' ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                  viewMode === 'table' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 )}
                 title="Table View"
               >
@@ -217,11 +217,11 @@ export const DamageFilters: React.FC<Props> = ({
                   setStartDate('');
                   setEndDate('');
                 }}
-                className="h-9 text-xs rounded-xl bg-white border-slate-200 font-medium"
+                className="h-9 text-xs rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 font-medium dark:text-white"
               />
             </div>
             <div className="space-y-1 min-w-0">
-              <Label className="text-[11px] font-bold text-slate-600 truncate block">Specific Month</Label>
+              <Label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 truncate block">Specific Month</Label>
               <Input 
                 type="month"
                 value={customMonth}
@@ -232,11 +232,11 @@ export const DamageFilters: React.FC<Props> = ({
                   setStartDate('');
                   setEndDate('');
                 }}
-                className="h-9 text-xs rounded-xl bg-white border-slate-200 font-medium"
+                className="h-9 text-xs rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 font-medium dark:text-white"
               />
             </div>
             <div className="space-y-1 min-w-0">
-              <Label className="text-[11px] font-bold text-slate-600 truncate block">Start Date</Label>
+              <Label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 truncate block">Start Date</Label>
               <Input 
                 type="date"
                 value={startDate}
@@ -246,11 +246,11 @@ export const DamageFilters: React.FC<Props> = ({
                   setCustomMonth('');
                   setCustomYear('');
                 }}
-                className="h-9 text-xs rounded-xl bg-white border-slate-200 font-medium"
+                className="h-9 text-xs rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 font-medium dark:text-white"
               />
             </div>
             <div className="space-y-1 min-w-0">
-              <Label className="text-[11px] font-bold text-slate-600 truncate block">End Date</Label>
+              <Label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 truncate block">End Date</Label>
               <Input 
                 type="date"
                 value={endDate}
@@ -260,7 +260,7 @@ export const DamageFilters: React.FC<Props> = ({
                   setCustomMonth('');
                   setCustomYear('');
                 }}
-                className="h-9 text-xs rounded-xl bg-white border-slate-200 font-medium"
+                className="h-9 text-xs rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 font-medium dark:text-white"
               />
             </div>
           </div>
@@ -276,7 +276,7 @@ export const DamageFilters: React.FC<Props> = ({
               placeholder={isElevated ? "Search staff, repair #, device, part..." : "Search repair #, device, part..."}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="h-10 pl-9 pr-8 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white text-xs font-medium"
+              className="h-10 pl-9 pr-8 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/80 focus:bg-white dark:focus:bg-slate-800 text-xs font-medium dark:text-white"
             />
             {searchQuery && (
               <button 

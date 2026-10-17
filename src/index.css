@@ -373,3 +373,147 @@
     }
   }
 }
+
+/* ==========================================================================
+   MTS Lab — Complete Dark Mode Support for All User Roles & Components
+   ==========================================================================
+   Authoritative styling ensuring cards, tables, forms, labels, buttons,
+   icons, dropdowns, and modal dialogs maintain high-contrast readability
+   and dark laboratory aesthetics across Super Admin, Admin, Manager,
+   Head Technician, Technician, Receptionist, Accountant, and Customer portals.
+   ========================================================================== */
+.dark {
+  color-scheme: dark;
+
+  /* Form controls without explicit dark variants */
+  input:not([class*="dark:bg-"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="hidden"]):not(.keep-white),
+  textarea:not([class*="dark:bg-"]):not(.keep-white),
+  select:not([class*="dark:bg-"]):not(.keep-white) {
+    background-color: #0f172a;
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #f8fafc;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #94a3b8;
+  }
+
+  /* Popovers, menus, selects and dialog containers */
+  [role="menu"],
+  [role="listbox"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="select-content"],
+  [data-slot="popover-content"] {
+    background-color: #0f172a;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #f8fafc;
+  }
+
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"] {
+    background-color: #0f172a;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #f8fafc;
+  }
+
+  /* Unthemed white backgrounds transform to deep slate cards (excluding printable documents and canvas) */
+  .bg-white:not([class*="dark:bg-"]):not([class*="dark:from-"]):not(.keep-white):not(.service-slip-root):not(.service-slip-root *) {
+    background-color: #0f172a;
+  }
+
+  /* Unthemed slate-50 / gray-50 / zinc-50 light backgrounds transform to elevated dark surface */
+  .bg-slate-50:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *),
+  .bg-gray-50:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *),
+  .bg-zinc-50:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *) {
+    background-color: #1e293b;
+  }
+
+  .bg-slate-100:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *),
+  .bg-gray-100:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *) {
+    background-color: #1e293b;
+  }
+
+  /* Light borders become subtle, high-contrast dark borders */
+  .border-slate-200:not([class*="dark:border-"]):not(.service-slip-root *),
+  .border-slate-100:not([class*="dark:border-"]):not(.service-slip-root *),
+  .border-gray-200:not([class*="dark:border-"]):not(.service-slip-root *),
+  .border-gray-100:not([class*="dark:border-"]):not(.service-slip-root *) {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Dividers in tables and lists */
+  .divide-slate-100:not([class*="dark:divide-"]):not(.service-slip-root *) > :not([hidden]) ~ :not([hidden]),
+  .divide-slate-200:not([class*="dark:divide-"]):not(.service-slip-root *) > :not([hidden]) ~ :not([hidden]),
+  .divide-gray-100:not([class*="dark:divide-"]):not(.service-slip-root *) > :not([hidden]) ~ :not([hidden]),
+  .divide-gray-200:not([class*="dark:divide-"]):not(.service-slip-root *) > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  /* High-contrast text adaptations */
+  .text-slate-900:not([class*="dark:text-"]):not(.keep-text):not(.service-slip-root *),
+  .text-slate-800:not([class*="dark:text-"]):not(.keep-text):not(.service-slip-root *),
+  .text-gray-900:not([class*="dark:text-"]):not(.keep-text):not(.service-slip-root *),
+  .text-gray-800:not([class*="dark:text-"]):not(.keep-text):not(.service-slip-root *),
+  .text-black:not([class*="dark:text-"]):not(.keep-text):not(.service-slip-root *) {
+    color: #f8fafc;
+  }
+
+  .text-slate-700:not([class*="dark:text-"]):not(.keep-text):not(.service-slip-root *),
+  .text-slate-600:not([class*="dark:text-"]):not(.keep-text):not(.service-slip-root *),
+  .text-gray-700:not([class*="dark:text-"]):not(.keep-text):not(.service-slip-root *),
+  .text-gray-600:not([class*="dark:text-"]):not(.keep-text):not(.service-slip-root *) {
+    color: #cbd5e1;
+  }
+
+  .text-slate-500:not([class*="dark:text-"]):not(.keep-text):not(.service-slip-root *),
+  .text-gray-500:not([class*="dark:text-"]):not(.keep-text):not(.service-slip-root *) {
+    color: #94a3b8;
+  }
+
+  /* Table head and row defaults */
+  table thead tr:not([class*="dark:bg-"]) {
+    background-color: #1e293b;
+    color: #94a3b8;
+  }
+
+  table tbody tr:hover:not([class*="dark:hover:bg-"]) {
+    background-color: rgba(30, 41, 59, 0.6);
+  }
+
+  .hover\:bg-slate-50:not([class*="dark:hover:bg-"]):hover:not(.service-slip-root *) {
+    background-color: rgba(30, 41, 59, 0.7);
+  }
+
+  .hover\:bg-slate-100:not([class*="dark:hover:bg-"]):hover:not(.service-slip-root *) {
+    background-color: #334155;
+  }
+
+  .hover\:bg-white:not([class*="dark:hover:bg-"]):hover:not(.service-slip-root *) {
+    background-color: #1e293b;
+  }
+
+  /* Active states & focus background adaptations */
+  .focus\:bg-white:not([class*="dark:focus:bg-"]):focus {
+    background-color: #1e293b;
+    color: #f8fafc;
+  }
+
+  [data-state="active"].data-\[state\=active\]\:bg-white:not([class*="dark:data-\[state\=active\]:bg-"]),
+  .data-\[state\=active\]\:bg-white[data-state="active"]:not([class*="dark:data-\[state\=active\]:bg-"]) {
+    background-color: #334155;
+    color: #f8fafc;
+  }
+
+  /* Dark mode borders for 300 / 400 */
+  .border-slate-300:not([class*="dark:border-"]):not(.service-slip-root *),
+  .border-slate-400:not([class*="dark:border-"]):not(.service-slip-root *) {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  /* Native select dropdown and option styling in dark mode */
+  select option {
+    background-color: #0f172a;
+    color: #f8fafc;
+  }
+}

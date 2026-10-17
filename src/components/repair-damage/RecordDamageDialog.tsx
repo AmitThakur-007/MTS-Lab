@@ -155,7 +155,7 @@ export const RecordDamageDialog: React.FC<Props> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         id="record-damage-dialog"
-        className="w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl rounded-3xl p-0 border border-slate-200 shadow-2xl overflow-hidden bg-white max-h-[90vh] flex flex-col"
+        className="w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl rounded-3xl p-0 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden bg-white dark:bg-slate-900 max-h-[90vh] flex flex-col"
       >
         <DialogHeader className="p-4 sm:p-6 pb-4 bg-slate-900 text-white shrink-0">
           <div className="flex items-center gap-3">
@@ -209,7 +209,7 @@ export const RecordDamageDialog: React.FC<Props> = ({
                   placeholder="Search by Repair # (e.g. MTS-2026-0001) or customer phone..."
                   value={repairSearchQuery}
                   onChange={e => handleSearchRepairs(e.target.value)}
-                  className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium pr-8"
+                  className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 focus:bg-white dark:focus:bg-slate-800 text-xs font-medium pr-8 dark:text-white"
                 />
                 {searchingRepairs && (
                   <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-slate-400" />
@@ -218,18 +218,18 @@ export const RecordDamageDialog: React.FC<Props> = ({
 
               {/* Repair Results Dropdown */}
               {repairSearchResults.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-2xl border border-slate-200 shadow-2xl z-50 overflow-hidden divide-y divide-slate-100 max-h-52 overflow-y-auto">
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl z-50 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700 max-h-52 overflow-y-auto">
                   {repairSearchResults.map(r => (
                     <div 
                       key={r.id}
                       onClick={() => selectRepair(r)}
-                      className="p-3 hover:bg-slate-50 cursor-pointer flex items-center justify-between text-xs gap-2"
+                      className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700/60 cursor-pointer flex items-center justify-between text-xs gap-2"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-slate-900 font-mono truncate">#{r.repairNumber} • {r.deviceBrand} {r.deviceModel}</p>
-                        <p className="text-[10px] text-slate-500 truncate">{r.customerName} ({r.customerPhone})</p>
+                        <p className="font-bold text-slate-900 dark:text-white font-mono truncate">#{r.repairNumber} • {r.deviceBrand} {r.deviceModel}</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{r.customerName} ({r.customerPhone})</p>
                       </div>
-                      <Badge variant="outline" className="text-[10px] font-bold shrink-0">Select</Badge>
+                      <Badge variant="outline" className="text-[10px] font-bold shrink-0 border-slate-200 dark:border-slate-700 dark:text-slate-300">Select</Badge>
                     </div>
                   ))}
                 </div>
@@ -239,21 +239,21 @@ export const RecordDamageDialog: React.FC<Props> = ({
             {/* Device specs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Device Brand</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Device Brand</Label>
                 <Input 
                   placeholder="e.g. Samsung, Apple, Xiaomi"
                   value={formData.deviceBrand}
                   onChange={e => setFormData({ ...formData, deviceBrand: e.target.value })}
-                  className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium"
+                  className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 focus:bg-white dark:focus:bg-slate-800 text-xs font-medium dark:text-white"
                 />
               </div>
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Device Model</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Device Model</Label>
                 <Input 
                   placeholder="e.g. Galaxy S23 Ultra, iPhone 15 Pro"
                   value={formData.deviceModel}
                   onChange={e => setFormData({ ...formData, deviceModel: e.target.value })}
-                  className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium"
+                  className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 focus:bg-white dark:focus:bg-slate-800 text-xs font-medium dark:text-white"
                 />
               </div>
             </div>
@@ -261,9 +261,9 @@ export const RecordDamageDialog: React.FC<Props> = ({
             {/* Component & Damage Type */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Damaged Component *</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Damaged Component *</Label>
                 <Select value={formData.damagedComponent} onValueChange={v => setFormData({ ...formData, damagedComponent: v })}>
-                  <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs font-bold">
+                  <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold dark:text-white">
                     <SelectValue placeholder="Select Damaged Component" />
                   </SelectTrigger>
                   <SelectContent className="rounded-2xl shadow-xl max-h-56">
@@ -275,9 +275,9 @@ export const RecordDamageDialog: React.FC<Props> = ({
               </div>
 
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Damage Classification</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Damage Classification</Label>
                 <Select value={formData.damageType} onValueChange={v => setFormData({ ...formData, damageType: v })}>
-                  <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs font-bold">
+                  <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold dark:text-white">
                     <SelectValue placeholder="Select Damage Type" />
                   </SelectTrigger>
                   <SelectContent className="rounded-2xl shadow-xl">
@@ -291,13 +291,13 @@ export const RecordDamageDialog: React.FC<Props> = ({
 
             {/* Incident Detailed Description */}
             <div className="space-y-1.5 min-w-0">
-              <Label className="text-xs font-bold text-slate-700">Damage Incident Description *</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Damage Incident Description *</Label>
               <Textarea 
                 rows={3}
                 placeholder="Explain exactly how the component was damaged during handling, repair separation, soldering, or reassembly..."
                 value={formData.damageDescription}
                 onChange={e => setFormData({ ...formData, damageDescription: e.target.value })}
-                className="rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium resize-none"
+                className="rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-medium resize-none dark:text-white"
                 required
               />
             </div>
@@ -305,55 +305,55 @@ export const RecordDamageDialog: React.FC<Props> = ({
             {/* Date, Time, Quantity, Est Cost */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Damage Date *</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Damage Date *</Label>
                 <Input 
                   type="date"
                   value={formData.damageDate}
                   onChange={e => setFormData({ ...formData, damageDate: e.target.value })}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium dark:text-white"
                   required
                 />
               </div>
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Damage Time</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Damage Time</Label>
                 <Input 
                   type="time"
                   value={formData.damageTime}
                   onChange={e => setFormData({ ...formData, damageTime: e.target.value })}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium dark:text-white"
                 />
               </div>
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Quantity</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Quantity</Label>
                 <Input 
                   type="number"
                   min={1}
                   value={formData.quantity}
                   onChange={e => setFormData({ ...formData, quantity: parseInt(e.target.value, 10) || 1 })}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium dark:text-white"
                 />
               </div>
               <div className="space-y-1.5 min-w-0">
-                <Label className="text-xs font-bold text-slate-700">Est. Cost (NPR)</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Est. Cost (NPR)</Label>
                 <Input 
                   type="number"
                   min={0}
                   placeholder="e.g. 4500"
                   value={formData.estimatedCost}
                   onChange={e => setFormData({ ...formData, estimatedCost: e.target.value })}
-                  className="h-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                  className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium dark:text-white"
                 />
               </div>
             </div>
 
             {/* Inventory Integration Option */}
-            <div className="p-3.5 sm:p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+            <div className="p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4 text-indigo-600 shrink-0" />
-                  <span className="text-xs font-bold text-slate-900">Inventory Hub Integration</span>
+                  <Package className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <span className="text-xs font-bold text-slate-900 dark:text-white">Inventory Hub Integration</span>
                 </div>
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer">
                   <input 
                     type="checkbox"
                     checked={formData.deductInventory}
@@ -366,9 +366,9 @@ export const RecordDamageDialog: React.FC<Props> = ({
 
               {formData.deductInventory && (
                 <div className="space-y-1.5 pt-1 min-w-0">
-                  <Label className="text-[11px] font-bold text-slate-600">Select Inventory Spare Part Item</Label>
+                  <Label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Select Inventory Spare Part Item</Label>
                   <Select value={formData.inventoryItemId} onValueChange={v => setFormData({ ...formData, inventoryItemId: v })}>
-                    <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white text-xs font-medium">
+                    <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium dark:text-white">
                       <SelectValue placeholder="Choose inventory item to record stock deduction" />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl shadow-xl max-h-56">
@@ -386,28 +386,28 @@ export const RecordDamageDialog: React.FC<Props> = ({
 
             {/* Remarks & Notes */}
             <div className="space-y-1.5 min-w-0">
-              <Label className="text-xs font-bold text-slate-700">Internal Remarks / Notes</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Internal Remarks / Notes</Label>
               <Input 
                 placeholder="Additional supervisor notes or replacement arrangement details..."
                 value={formData.notes}
                 onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                className="h-10 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium"
+                className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-medium dark:text-white"
               />
             </div>
           </div>
 
-          <DialogFooter className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+          <DialogFooter className="p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
             <Button
               type="button"
               variant="ghost"
               onClick={onClose}
-              className="rounded-xl text-xs font-bold text-slate-500 cursor-pointer h-10 px-4"
+              className="rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer h-10 px-4"
             >
               Cancel
             </Button>
             <Button 
               type="submit" 
-              className="rounded-xl h-10 sm:h-11 px-5 sm:px-6 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm shadow-md cursor-pointer"
+              className="rounded-xl h-10 sm:h-11 px-5 sm:px-6 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm shadow-md cursor-pointer"
               disabled={submitting}
             >
               {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileWarning className="mr-2 h-4 w-4 text-rose-400" />}

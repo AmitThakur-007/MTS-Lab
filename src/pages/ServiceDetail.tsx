@@ -162,9 +162,9 @@ export default function ServiceDetail() {
             </Link>
             <a
               href={`tel:${BUSINESS_PHONE}`}
-              className="inline-flex items-center justify-center h-12 px-6 rounded-xl font-semibold border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-sm shadow-sm transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center h-12 px-6 rounded-xl font-semibold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-sm shadow-sm transition-colors cursor-pointer"
             >
-              <PhoneCall className="w-4 h-4 mr-2 text-slate-700" />
+              <PhoneCall className="w-4 h-4 mr-2 text-slate-700 dark:text-slate-300" />
               <span>Call Workshop ({BUSINESS_PHONE})</span>
             </a>
           </div>
@@ -180,7 +180,7 @@ export default function ServiceDetail() {
   const priceDisplay = formatNprPrice(service.price, service.priceType);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans antialiased selection:bg-slate-950 selection:text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans antialiased selection:bg-slate-950 dark:selection:bg-indigo-600 selection:text-white">
       <PageSeo
         title={getServiceSeoTitle(service)}
         description={getServiceSeoDescription(service)}
@@ -191,17 +191,17 @@ export default function ServiceDetail() {
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 pt-24 sm:pt-28 lg:pt-32 pb-16 space-y-6 sm:space-y-8">
         {/* Dedicated Breadcrumb Container */}
-        <div className="w-full bg-white border border-slate-200/80 rounded-2xl px-3.5 sm:px-4 py-2.5 shadow-2xs">
+        <div className="w-full bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl px-3.5 sm:px-4 py-2.5 shadow-2xs">
           <nav 
             aria-label="Breadcrumb" 
-            className="flex items-center text-xs sm:text-sm text-slate-500 gap-1.5 overflow-x-auto whitespace-nowrap py-0.5 min-w-0 max-w-full"
+            className="flex items-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 gap-1.5 overflow-x-auto whitespace-nowrap py-0.5 min-w-0 max-w-full"
           >
-            <Link to="/" className="hover:text-slate-900 font-medium shrink-0 transition-colors">Home</Link>
+            <Link to="/" className="hover:text-slate-900 dark:hover:text-white font-medium shrink-0 transition-colors">Home</Link>
             <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />
-            <Link to="/services" className="hover:text-slate-900 font-medium shrink-0 transition-colors">Repair Services</Link>
+            <Link to="/services" className="hover:text-slate-900 dark:hover:text-white font-medium shrink-0 transition-colors">Repair Services</Link>
             <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />
             <span 
-              className="font-bold text-slate-900 truncate max-w-[160px] sm:max-w-xs md:max-w-md lg:max-w-xl shrink-0"
+              className="font-bold text-slate-900 dark:text-white truncate max-w-[160px] sm:max-w-xs md:max-w-md lg:max-w-xl shrink-0"
               aria-current="page"
               title={service.serviceName}
             >
@@ -214,7 +214,7 @@ export default function ServiceDetail() {
         <div>
           <Link
             to="/services"
-            className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
+            className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to Price Directory</span>
@@ -222,22 +222,22 @@ export default function ServiceDetail() {
         </div>
 
         {/* Hero Section: Technical Overview & Verified Laboratory Fee */}
-        <article className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 sm:p-8 lg:p-10 space-y-6">
+        <article className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-6 sm:p-8 lg:p-10 space-y-6">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
             
             {/* Left: Device & Service Identity */}
             <div className="space-y-3.5 max-w-2xl">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold text-slate-800 bg-slate-100 border border-slate-200/90 px-3 py-1 rounded-md">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 px-3 py-1 rounded-md">
                   {service.brand}
                 </span>
                 {service.category && (
-                  <span className="text-xs font-semibold text-slate-700 bg-slate-100/80 border border-slate-200/80 px-2.5 py-1 rounded-md">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 px-2.5 py-1 rounded-md">
                     {service.category}
                   </span>
                 )}
                 {service.deviceType && (
-                  <span className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md">
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-md">
                     {service.deviceType}
                   </span>
                 )}
@@ -357,25 +357,25 @@ export default function ServiceDetail() {
         </article>
 
         {/* Section: Hardware Diagnostics & Repair Process */}
-        <section className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 lg:p-10 space-y-6 shadow-xs">
+        <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 sm:p-8 lg:p-10 space-y-6 shadow-xs">
           <div className="space-y-2">
-            <h2 className="text-lg sm:text-xl font-bold text-slate-950 tracking-tight flex items-center gap-2">
-              <FileText className="w-5 h-5 text-slate-700" />
+            <h2 className="text-lg sm:text-xl font-bold text-slate-950 dark:text-white tracking-tight flex items-center gap-2">
+              <FileText className="w-5 h-5 text-slate-700 dark:text-slate-300" />
               <span>Hardware Diagnostics &amp; Repair Process</span>
             </h2>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-3xl">
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed max-w-3xl">
               Each device is assessed according to the reported fault and observed physical condition. Our technicians inspect the affected component, verify the appropriate repair procedure, and confirm applicable parts and service costs before commencing work.
             </p>
           </div>
 
           {/* Factual Diagnostic Summary */}
-          <div className="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-1.5">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Service Scope &amp; Assessment</div>
-            <p className="text-slate-800 text-sm sm:text-base leading-relaxed font-normal">
+          <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/70 dark:border-slate-700 space-y-1.5">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Service Scope &amp; Assessment</div>
+            <p className="text-slate-800 dark:text-slate-200 text-sm sm:text-base leading-relaxed font-normal">
               {directAnswer}
             </p>
             {service.description && (
-              <p className="text-slate-600 text-xs sm:text-sm pt-2 border-t border-slate-200/60 leading-relaxed">
+              <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm pt-2 border-t border-slate-200/60 dark:border-slate-700 leading-relaxed">
                 {service.description}
               </p>
             )}
@@ -383,26 +383,26 @@ export default function ServiceDetail() {
 
           {/* Structured Technical Specifications Grid */}
           <div className="pt-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Technical Specifications &amp; Workshop Details</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Technical Specifications &amp; Workshop Details</h3>
             <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 space-y-1">
-                <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Repair Category</dt>
-                <dd className="text-sm font-semibold text-slate-900">{service.category || 'Hardware Restoration'}</dd>
+              <div className="p-3.5 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-1">
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Repair Category</dt>
+                <dd className="text-sm font-semibold text-slate-900 dark:text-white">{service.category || 'Hardware Restoration'}</dd>
               </div>
 
-              <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 space-y-1">
-                <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Device Model</dt>
-                <dd className="text-sm font-semibold text-slate-900">{fullDeviceName}</dd>
+              <div className="p-3.5 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-1">
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Device Model</dt>
+                <dd className="text-sm font-semibold text-slate-900 dark:text-white">{fullDeviceName}</dd>
               </div>
 
-              <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 space-y-1">
-                <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Service Fee</dt>
-                <dd className="text-sm font-semibold text-emerald-700">{priceDisplay}</dd>
+              <div className="p-3.5 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-1">
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Service Fee</dt>
+                <dd className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{priceDisplay}</dd>
               </div>
 
-              <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 space-y-1">
-                <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Turnaround</dt>
-                <dd className="text-sm font-semibold text-slate-900">{service.estimatedTime || '1–2 Hours (Subject to intake)'}</dd>
+              <div className="p-3.5 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-1">
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Turnaround</dt>
+                <dd className="text-sm font-semibold text-slate-900 dark:text-white">{service.estimatedTime || '1–2 Hours (Subject to intake)'}</dd>
               </div>
             </dl>
           </div>
@@ -414,32 +414,32 @@ export default function ServiceDetail() {
             
             {/* Common Symptoms / Problem Solved */}
             {service.problem && (
-              <section className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 space-y-3 shadow-xs">
-                <h2 className="text-base sm:text-lg font-bold text-slate-950 flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-slate-700" />
+              <section className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-6 sm:p-8 space-y-3 shadow-xs">
+                <h2 className="text-base sm:text-lg font-bold text-slate-950 dark:text-white flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-slate-700 dark:text-slate-300" />
                   <span>Faults &amp; Symptoms Addressed</span>
                 </h2>
-                <p className="text-slate-700 text-sm sm:text-base leading-relaxed">
+                <p className="text-slate-700 dark:text-slate-300 text-sm sm:text-base leading-relaxed">
                   {service.problem}
                 </p>
               </section>
             )}
 
             {/* Verified FAQs */}
-            <section className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 space-y-5 shadow-xs">
+            <section className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-6 sm:p-8 space-y-5 shadow-xs">
               <div className="space-y-1">
-                <h2 className="text-base sm:text-lg font-bold text-slate-950 flex items-center gap-2">
-                  <HelpCircle className="w-5 h-5 text-slate-700" />
+                <h2 className="text-base sm:text-lg font-bold text-slate-950 dark:text-white flex items-center gap-2">
+                  <HelpCircle className="w-5 h-5 text-slate-700 dark:text-slate-300" />
                   <span>Frequently Asked Questions</span>
                 </h2>
-                <p className="text-xs text-slate-500">Verified laboratory turnaround, pricing, and warranty policies</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Verified laboratory turnaround, pricing, and warranty policies</p>
               </div>
 
-              <div className="space-y-4 divide-y divide-slate-100 pt-1">
+              <div className="space-y-4 divide-y divide-slate-100 dark:divide-slate-800 pt-1">
                 {faqs.map((faq, idx) => (
                   <div key={idx} className={idx > 0 ? 'pt-4 space-y-1.5' : 'space-y-1.5'}>
-                    <h3 className="text-sm font-bold text-slate-900">{faq.question}</h3>
-                    <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">{faq.answer}</p>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">{faq.question}</h3>
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{faq.answer}</p>
                   </div>
                 ))}
               </div>
@@ -449,22 +449,22 @@ export default function ServiceDetail() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Location & Workshop Hours */}
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 space-y-4 shadow-xs">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-slate-700" />
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-6 space-y-4 shadow-xs">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                 <span>Kathmandu Workshop Location</span>
               </h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                 {BUSINESS_ADDRESS.streetAddress}, {BUSINESS_ADDRESS.addressLocality}, Nepal.
               </p>
-              <div className="text-xs text-slate-500 space-y-1 pt-2 border-t border-slate-100">
+              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <div><strong>Sunday &ndash; Friday:</strong> 10:00 AM &ndash; 7:00 PM</div>
                 <div><strong>Saturday:</strong> 10:00 AM &ndash; 6:00 PM</div>
               </div>
               <div className="pt-1">
                 <Link
                   to="/contact"
-                  className="inline-flex items-center justify-center w-full h-10 px-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-xs font-semibold transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
                 >
                   View Workshop Map &amp; Directions
                 </Link>
@@ -494,8 +494,8 @@ export default function ServiceDetail() {
         {relatedServices.length > 0 && (
           <section className="space-y-4 pt-2">
             <div className="flex items-center justify-between">
-              <h2 className="text-base sm:text-lg font-bold text-slate-950">Related Repairs for {service.brand}</h2>
-              <Link to="/services" className="text-xs font-bold text-slate-700 hover:text-slate-950 transition-colors">
+              <h2 className="text-base sm:text-lg font-bold text-slate-950 dark:text-white">Related Repairs for {service.brand}</h2>
+              <Link to="/services" className="text-xs font-bold text-slate-700 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white transition-colors">
                 View All Services &rarr;
               </Link>
             </div>
@@ -507,18 +507,18 @@ export default function ServiceDetail() {
                   <Link
                     key={rel.id}
                     to={relSlug ? `/services/${relSlug}` : '/services'}
-                    className="block p-5 bg-white rounded-2xl border border-slate-200/80 hover:border-slate-300 hover:shadow-xs transition-all group"
+                    className="block p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs transition-all group"
                   >
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 font-semibold">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
                         <span>{rel.brand}</span>
                         <span>{rel.category}</span>
                       </div>
-                      <h3 className="text-sm font-bold text-slate-900 group-hover:text-slate-700 transition-colors line-clamp-1">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-1">
                         {rel.serviceName}
                       </h3>
-                      <p className="text-xs text-slate-500 line-clamp-1">{rel.model}</p>
-                      <div className="text-sm font-extrabold text-emerald-700 pt-2">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">{rel.model}</p>
+                      <div className="text-sm font-extrabold text-emerald-700 dark:text-emerald-400 pt-2">
                         {formatNprPrice(rel.price, rel.priceType)}
                       </div>
                     </div>

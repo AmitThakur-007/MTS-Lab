@@ -473,3 +473,5 @@ export function useAppTheme() {
   return context;
 }
 
+export const useTheme = useAppTheme;
+

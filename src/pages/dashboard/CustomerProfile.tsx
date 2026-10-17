@@ -571,20 +571,20 @@ export default function CustomerProfile() {
             {/* Filters */}
             <div className="flex items-center gap-2 flex-wrap">
               <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
-                <SelectTrigger className="h-9 rounded-xl border-slate-200 w-36 text-xs font-bold bg-white cursor-pointer">
+                <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 w-36 text-xs font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer">
                   <Filter className="w-3 h-3 mr-1.5" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
                   <SelectItem value="ALL" className="text-xs font-bold">All Repairs</SelectItem>
-                  <SelectItem value="ACTIVE" className="text-xs font-bold text-amber-600">Active</SelectItem>
-                  <SelectItem value="COMPLETED" className="text-xs font-bold text-emerald-600">Completed</SelectItem>
-                  <SelectItem value="CANCELLED" className="text-xs font-bold text-rose-600">Cancelled</SelectItem>
+                  <SelectItem value="ACTIVE" className="text-xs font-bold text-amber-600 dark:text-amber-400">Active</SelectItem>
+                  <SelectItem value="COMPLETED" className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Completed</SelectItem>
+                  <SelectItem value="CANCELLED" className="text-xs font-bold text-rose-600 dark:text-rose-400">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
 
               <Select value={dateFilter} onValueChange={handleDateFilterChange}>
-                <SelectTrigger className="h-9 rounded-xl border-slate-200 w-36 text-xs font-bold bg-white cursor-pointer">
+                <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 w-36 text-xs font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer">
                   <Calendar className="w-3 h-3 mr-1.5" />
                   <SelectValue />
                 </SelectTrigger>
@@ -603,20 +603,20 @@ export default function CustomerProfile() {
           {repairsLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-pulse">
+                <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden animate-pulse">
                   <div className="p-4 sm:p-5">
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-100 shrink-0" />
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 shrink-0" />
                       <div className="flex-1 min-w-0 space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <div className="h-3 w-20 bg-slate-100 rounded" />
-                          <div className="h-4 w-16 bg-slate-100 rounded-full" />
+                          <div className="h-3 w-20 bg-slate-100 dark:bg-slate-800 rounded" />
+                          <div className="h-4 w-16 bg-slate-100 dark:bg-slate-800 rounded-full" />
                         </div>
-                        <div className="h-4 w-40 bg-slate-100 rounded" />
-                        <div className="h-3 w-32 bg-slate-100 rounded" />
+                        <div className="h-4 w-40 bg-slate-100 dark:bg-slate-800 rounded" />
+                        <div className="h-3 w-32 bg-slate-100 dark:bg-slate-800 rounded" />
                         <div className="flex gap-3 pt-1">
-                          <div className="h-3 w-20 bg-slate-100 rounded" />
-                          <div className="h-3 w-16 bg-slate-100 rounded" />
+                          <div className="h-3 w-20 bg-slate-100 dark:bg-slate-800 rounded" />
+                          <div className="h-3 w-16 bg-slate-100 dark:bg-slate-800 rounded" />
                         </div>
                       </div>
                     </div>
@@ -625,8 +625,8 @@ export default function CustomerProfile() {
               ))}
             </div>
           ) : repairs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-              <Smartphone className="h-10 w-10 text-slate-200" />
+            <div className="flex flex-col items-center justify-center py-16 gap-3 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
+              <Smartphone className="h-10 w-10 text-slate-200 dark:text-slate-700" />
               <p className="text-sm font-bold text-slate-400">No repairs found</p>
               <p className="text-xs text-slate-400">
                 {statusFilter !== 'ALL' || dateFilter !== 'ALL' ? 'Try changing the filters above.' : 'No repairs registered yet for this customer.'}
@@ -648,8 +648,8 @@ export default function CustomerProfile() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.04 }}
                     className={cn(
-                      'bg-white rounded-2xl border shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden cursor-pointer group',
-                      isActiveStatus(repair.status) ? 'border-amber-200 hover:border-amber-300' : 'border-slate-200 hover:border-slate-300'
+                      'bg-white dark:bg-slate-900 rounded-2xl border shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden cursor-pointer group',
+                      isActiveStatus(repair.status) ? 'border-amber-200 dark:border-amber-800 hover:border-amber-300 dark:hover:border-amber-700' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                     )}
                     onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
                   >

@@ -39,7 +39,7 @@ export const DamageDetailsDialog: React.FC<Props> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         id="damage-details-dialog"
-        className="w-[calc(100vw-1.5rem)] sm:w-full max-w-xl rounded-3xl p-0 border border-slate-200 shadow-2xl overflow-hidden bg-white max-h-[90vh] flex flex-col"
+        className="w-[calc(100vw-1.5rem)] sm:w-full max-w-xl rounded-3xl p-0 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden bg-white dark:bg-slate-900 max-h-[90vh] flex flex-col"
       >
         <DialogHeader className="p-4 sm:p-6 pb-4 bg-slate-900 text-white shrink-0">
           <div className="flex items-center justify-between gap-3">
@@ -96,22 +96,22 @@ export const DamageDetailsDialog: React.FC<Props> = ({
               {/* Device & Repair Details */}
               <div className="space-y-1.5 text-xs">
                 <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Device & Repair Context</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-white rounded-2xl border border-slate-200">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-800">
                   <div className="min-w-0">
                     <span className="text-[10px] text-slate-400 font-bold block">Device Model</span>
-                    <span className="font-bold text-slate-900 truncate block" title={deviceName}>
+                    <span className="font-bold text-slate-900 dark:text-white truncate block" title={deviceName}>
                       {deviceName}
                     </span>
                   </div>
                   <div className="min-w-0">
                     <span className="text-[10px] text-slate-400 font-bold block">Repair Job #</span>
-                    <span className="font-mono font-bold text-indigo-600 truncate block">
+                    <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 truncate block">
                       {record.repairNumber ? `#${record.repairNumber}` : 'Unlinked'}
                     </span>
                   </div>
                   <div className="min-w-0">
                     <span className="text-[10px] text-slate-400 font-bold block">Estimated Cost</span>
-                    <span className="font-bold text-emerald-700 truncate block">
+                    <span className="font-bold text-emerald-700 dark:text-emerald-400 truncate block">
                       {record.estimatedCost !== null && record.estimatedCost !== undefined 
                         ? `NPR ${record.estimatedCost.toLocaleString()}` 
                         : '—'}
@@ -123,22 +123,22 @@ export const DamageDetailsDialog: React.FC<Props> = ({
               {/* Description */}
               <div className="space-y-1.5 text-xs">
                 <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Incident Description</h4>
-                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/70 text-slate-700 font-medium leading-relaxed break-words">
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/70 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-medium leading-relaxed break-words">
                   {record.damageDescription}
                 </div>
               </div>
 
               {/* Date, Recorded By & Notes */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs p-3.5 bg-slate-50 rounded-2xl border border-slate-200/60">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/60 dark:border-slate-800">
                 <div className="min-w-0">
                   <span className="text-[10px] text-slate-400 font-bold block">Date & Time</span>
-                  <span className="font-bold text-slate-800 truncate block">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">
                     {record.damageDate} {record.damageTime ? `• ${record.damageTime}` : ''}
                   </span>
                 </div>
                 <div className="min-w-0">
                   <span className="text-[10px] text-slate-400 font-bold block">Recorded By</span>
-                  <span className="font-bold text-slate-800 truncate block">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">
                     {record.recordedByName || 'System'} ({record.recordedByRole?.replace(/_/g, ' ') || 'MANAGER'})
                   </span>
                 </div>
@@ -147,7 +147,7 @@ export const DamageDetailsDialog: React.FC<Props> = ({
               {record.notes && (
                 <div className="space-y-1 text-xs">
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Internal Notes</span>
-                  <p className="text-slate-600 italic bg-slate-50 p-3 rounded-xl border border-slate-200/50 break-words">
+                  <p className="text-slate-600 dark:text-slate-300 italic bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200/50 dark:border-slate-800 break-words">
                     "{record.notes}"
                   </p>
                 </div>
@@ -155,22 +155,22 @@ export const DamageDetailsDialog: React.FC<Props> = ({
 
               {/* Audit Trail */}
               {record.audits && record.audits.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-slate-100">
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                   <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                     <History className="h-3.5 w-3.5" />
                     <span>Traceable Audit History ({record.audits.length})</span>
                   </h4>
                   <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                     {record.audits.map((log: any) => (
-                      <div key={log.id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 text-[11px] space-y-0.5">
-                        <div className="flex items-center justify-between font-bold text-slate-800 gap-2">
+                      <div key={log.id} className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-800 text-[11px] space-y-0.5">
+                        <div className="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200 gap-2">
                           <span className="truncate">{log.action}</span>
                           <span className="text-[10px] text-slate-400 font-normal shrink-0">
                             {format(new Date(log.createdAt), 'dd MMM yyyy, HH:mm')}
                           </span>
                         </div>
-                        <p className="text-slate-500 break-words">
-                          By <b className="text-slate-700">{log.performedByName}</b> ({log.performedByRole?.replace(/_/g, ' ')}) • {log.reason || 'No remarks'}
+                        <p className="text-slate-500 dark:text-slate-400 break-words">
+                          By <b className="text-slate-700 dark:text-slate-300">{log.performedByName}</b> ({log.performedByRole?.replace(/_/g, ' ')}) • {log.reason || 'No remarks'}
                         </p>
                       </div>
                     ))}
@@ -181,12 +181,12 @@ export const DamageDetailsDialog: React.FC<Props> = ({
           ) : null}
         </div>
 
-        <DialogFooter className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+        <DialogFooter className="p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
           <Button
             type="button"
             variant="outline"
             onClick={onClose}
-            className="rounded-xl text-xs font-bold text-slate-700 cursor-pointer h-10 px-4"
+            className="rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 cursor-pointer h-10 px-4"
           >
             Close
           </Button>
@@ -199,7 +199,7 @@ export const DamageDetailsDialog: React.FC<Props> = ({
                 onClose();
                 onEdit(record);
               }}
-              className="rounded-xl text-xs font-bold text-slate-700 cursor-pointer gap-1.5 h-10 px-4"
+              className="rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 dark:bg-slate-800 dark:border-slate-700 cursor-pointer gap-1.5 h-10 px-4"
             >
               <Edit3 className="h-3.5 w-3.5" />
               <span>Edit Record</span>

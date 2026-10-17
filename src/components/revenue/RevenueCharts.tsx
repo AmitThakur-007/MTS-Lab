@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { formatNPR } from '@/lib/format';
 import { TrendingUp, Award, Smartphone, Wrench, BarChart3, Layers } from 'lucide-react';
+import { useTheme } from '@/context/ThemeContext';
 
 interface RevenueChartsProps {
   trend: Array<{
@@ -70,6 +71,13 @@ export const RevenueCharts: React.FC<RevenueChartsProps> = ({
   grossRevenue,
 }) => {
   const [activeChartTab, setActiveChartTab] = useState<'area' | 'bar'>('area');
+  const { effectiveTheme } = useTheme();
+  const isDark = effectiveTheme === 'dark' || effectiveTheme === 'night' || effectiveTheme === 'tihar';
+
+  // Theme-aware chart colors
+  const grossRevColor = isDark ? '#60a5fa' : '#0f172a';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : '#f1f5f9';
+  const tickColor = isDark ? '#94a3b8' : '#64748b';
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -98,24 +106,26 @@ export const RevenueCharts: React.FC<RevenueChartsProps> = ({
       {/* 1. Main Financial Performance Chart & Category Mix */}
       <div className="grid gap-6 lg:grid-cols-12">
         {/* Left Column: Interactive Trend Graph */}
-        <Card className="lg:col-span-8 rounded-2xl border-slate-200/80 shadow-xs bg-white flex flex-col justify-between overflow-hidden">
-          <CardHeader className="p-5 pb-3 border-b border-slate-100 bg-slate-50/40">
+        <Card className="lg:col-span-8 rounded-2xl border-slate-200/80 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 flex flex-col justify-between overflow-hidden">
+          <CardHeader className="p-5 pb-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/40">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-slate-900" />
+                <CardTitle className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-slate-900 dark:text-sky-400" />
                   Financial Inflow & Profitability Trend
                 </CardTitle>
-                <CardDescription className="text-xs text-slate-500 font-medium">
+                <CardDescription className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                   Authoritative daily/monthly timeline of collections, parts costs, and net workshop profit.
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                   <button
                     onClick={() => setActiveChartTab('area')}
                     className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      activeChartTab === 'area' ? 'bg-white text-slate-950 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
+                      activeChartTab === 'area'
+                        ? 'bg-white dark:bg-slate-700 text-slate-950 dark:text-white shadow-xs font-black'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     Smooth Flow
@@ -123,7 +133,9 @@ export const RevenueCharts: React.FC<RevenueChartsProps> = ({
                   <button
                     onClick={() => setActiveChartTab('bar')}
                     className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      activeChartTab === 'bar' ? 'bg-white text-slate-950 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
+                      activeChartTab === 'bar'
+                        ? 'bg-white dark:bg-slate-700 text-slate-950 dark:text-white shadow-xs font-black'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     Bar Comparison
@@ -140,8 +152,8 @@ export const RevenueCharts: React.FC<RevenueChartsProps> = ({
                     <AreaChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <defs>
                         <linearGradient id="gradRev" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#0f172a" stopOpacity={0.25} />
-                          <stop offset="95%" stopColor="#0f172a" stopOpacity={0.0} />
+                          <stop offset="5%" stopColor={grossRevColor} stopOpacity={0.25} />
+                          <stop offset="95%" stopColor={grossRevColor} stopOpacity={0.0} />
                         </linearGradient>
                         <linearGradient id="gradProf" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
@@ -152,23 +164,23 @@ export const RevenueCharts: React.FC<RevenueChartsProps> = ({
                           <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(val) => `Rs.${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`} />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: tickColor }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: tickColor }} tickFormatter={(val) => `Rs.${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`} />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
-                      <Area type="monotone" dataKey="revenue" name="Gross Revenue" stroke="#0f172a" strokeWidth={2.5} fill="url(#gradRev)" />
+                      <Area type="monotone" dataKey="revenue" name="Gross Revenue" stroke={grossRevColor} strokeWidth={2.5} fill="url(#gradRev)" />
                       <Area type="monotone" dataKey="profit" name="Net Profit" stroke="#10b981" strokeWidth={2.5} fill="url(#gradProf)" />
                       <Area type="monotone" dataKey="partsCost" name="Parts Cost" stroke="#f59e0b" strokeWidth={2} fill="url(#gradCost)" strokeDasharray="4 4" />
                     </AreaChart>
                   ) : (
                     <BarChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(val) => `Rs.${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`} />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: tickColor }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: tickColor }} tickFormatter={(val) => `Rs.${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`} />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
-                      <Bar dataKey="revenue" name="Gross Revenue" fill="#0f172a" radius={[6, 6, 0, 0]} maxBarSize={30} />
+                      <Bar dataKey="revenue" name="Gross Revenue" fill={grossRevColor} radius={[6, 6, 0, 0]} maxBarSize={30} />
                       <Bar dataKey="profit" name="Net Profit" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={30} />
                       <Bar dataKey="partsCost" name="Parts Cost" fill="#f59e0b" radius={[6, 6, 0, 0]} maxBarSize={30} />
                     </BarChart>
@@ -184,13 +196,13 @@ export const RevenueCharts: React.FC<RevenueChartsProps> = ({
         </Card>
 
         {/* Right Column: Service & Repair Categories */}
-        <Card className="lg:col-span-4 rounded-2xl border-slate-200/80 shadow-xs bg-white flex flex-col justify-between overflow-hidden">
-          <CardHeader className="p-5 pb-3 border-b border-slate-100 bg-slate-50/40">
-            <CardTitle className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <Layers className="w-4 h-4 text-indigo-600" />
+        <Card className="lg:col-span-4 rounded-2xl border-slate-200/80 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 flex flex-col justify-between overflow-hidden">
+          <CardHeader className="p-5 pb-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/40">
+            <CardTitle className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+              <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               Service Category Breakdown
             </CardTitle>
-            <CardDescription className="text-xs text-slate-500 font-medium">
+            <CardDescription className="text-xs text-slate-500 dark:text-slate-400 font-medium">
               Revenue distribution and profit margins by problem domain.
             </CardDescription>
           </CardHeader>
@@ -199,27 +211,27 @@ export const RevenueCharts: React.FC<RevenueChartsProps> = ({
               categoryBreakdown.map((item, idx) => (
                 <div key={idx} className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-extrabold text-slate-800 truncate max-w-[180px]">
+                    <span className="font-extrabold text-slate-800 dark:text-slate-200 truncate max-w-[180px]">
                       {item.category}
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-slate-900">
+                      <span className="font-mono font-black text-slate-900 dark:text-white">
                         {formatNPR(item.revenue)}
                       </span>
-                      <Badge variant="outline" className="bg-slate-50 text-[10px] font-bold text-slate-600 border-slate-200 px-1.5 py-0">
+                      <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 px-1.5 py-0">
                         {item.percentage}%
                       </Badge>
                     </div>
                   </div>
-                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex">
+                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden flex">
                     <div
-                      className="h-full bg-slate-900 rounded-full transition-all duration-500"
+                      className="h-full bg-slate-900 dark:bg-indigo-500 rounded-full transition-all duration-500"
                       style={{ width: `${Math.min(100, Math.max(5, item.percentage))}%` }}
                     />
                   </div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-500">
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
                     <span>{item.count} tickets</span>
-                    <span className="font-bold text-emerald-600">Margin: {item.margin}% (Profit: {formatNPR(item.profit)})</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">Margin: {item.margin}% (Profit: {formatNPR(item.profit)})</span>
                   </div>
                 </div>
               ))
@@ -235,13 +247,13 @@ export const RevenueCharts: React.FC<RevenueChartsProps> = ({
       {/* 2. Device Brand Mix & Technician Performance Leaderboard */}
       <div className="grid gap-6 lg:grid-cols-12">
         {/* Brand Distribution */}
-        <Card className="lg:col-span-5 rounded-2xl border-slate-200/80 shadow-xs bg-white overflow-hidden flex flex-col justify-between">
-          <CardHeader className="p-5 pb-3 border-b border-slate-100 bg-slate-50/40">
-            <CardTitle className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-emerald-600" />
+        <Card className="lg:col-span-5 rounded-2xl border-slate-200/80 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 overflow-hidden flex flex-col justify-between">
+          <CardHeader className="p-5 pb-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/40">
+            <CardTitle className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               Device Brand Share
             </CardTitle>
-            <CardDescription className="text-xs text-slate-500 font-medium">
+            <CardDescription className="text-xs text-slate-500 dark:text-slate-400 font-medium">
               Market revenue distribution across smartphone manufacturers.
             </CardDescription>
           </CardHeader>
@@ -250,15 +262,15 @@ export const RevenueCharts: React.FC<RevenueChartsProps> = ({
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   {brandBreakdown.slice(0, 6).map((b, i) => (
-                    <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between">
+                    <div key={i} className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-700/60 flex flex-col justify-between">
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-xs text-slate-900">{b.brand}</span>
-                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-white text-slate-700 shadow-xs">
+                        <span className="font-extrabold text-xs text-slate-900 dark:text-slate-100">{b.brand}</span>
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-xs">
                           {b.percentage}%
                         </span>
                       </div>
                       <div className="mt-2 flex items-baseline justify-between">
-                        <span className="text-sm font-black font-mono text-slate-900">{formatNPR(b.revenue)}</span>
+                        <span className="text-sm font-black font-mono text-slate-900 dark:text-white">{formatNPR(b.revenue)}</span>
                         <span className="text-[10px] text-slate-400 font-medium">{b.count} jobs</span>
                       </div>
                     </div>
@@ -274,20 +286,20 @@ export const RevenueCharts: React.FC<RevenueChartsProps> = ({
         </Card>
 
         {/* Technician Financial Performance */}
-        <Card className="lg:col-span-7 rounded-2xl border-slate-200/80 shadow-xs bg-white overflow-hidden flex flex-col justify-between">
-          <CardHeader className="p-5 pb-3 border-b border-slate-100 bg-slate-50/40">
-            <CardTitle className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+        <Card className="lg:col-span-7 rounded-2xl border-slate-200/80 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 overflow-hidden flex flex-col justify-between">
+          <CardHeader className="p-5 pb-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/40">
+            <CardTitle className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
               <Award className="w-4 h-4 text-amber-500" />
               Technician Financial Contribution
             </CardTitle>
-            <CardDescription className="text-xs text-slate-500 font-medium">
+            <CardDescription className="text-xs text-slate-500 dark:text-slate-400 font-medium">
               Direct revenue, parts cost management, and profit generated per staff technician.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0 flex-1 overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400">
                   <th className="px-5 py-3">Technician</th>
                   <th className="px-4 py-3 text-center">Jobs Done</th>
                   <th className="px-4 py-3 text-right">Revenue</th>
@@ -295,33 +307,33 @@ export const RevenueCharts: React.FC<RevenueChartsProps> = ({
                   <th className="px-5 py-3 text-right">Net Contribution</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300">
                 {technicianPerformance && technicianPerformance.length > 0 ? (
                   technicianPerformance.map((tech, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-slate-950 text-white font-black text-[10px] flex items-center justify-center shrink-0">
+                          <div className="w-7 h-7 rounded-lg bg-slate-950 dark:bg-slate-800 text-white font-black text-[10px] flex items-center justify-center shrink-0 border border-slate-800 dark:border-slate-700">
                             {tech.name ? tech.name.charAt(0).toUpperCase() : 'T'}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-extrabold text-slate-900 truncate">{tech.name}</p>
+                            <p className="font-extrabold text-slate-900 dark:text-white truncate">{tech.name}</p>
                             <p className="text-[10px] text-slate-400 uppercase font-semibold">{tech.role?.replace(/_/g, ' ')}</p>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-center">
-                        <Badge variant="outline" className="bg-slate-50 text-slate-700 font-black border-slate-200 text-[10px]">
+                        <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-black border-slate-200 dark:border-slate-700 text-[10px]">
                           {tech.completedCount} finished
                         </Badge>
                       </td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">
+                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900 dark:text-white">
                         {formatNPR(tech.revenue)}
                       </td>
-                      <td className="px-4 py-3.5 text-right font-mono text-slate-500">
+                      <td className="px-4 py-3.5 text-right font-mono text-slate-500 dark:text-slate-400">
                         {formatNPR(tech.cost)}
                       </td>
-                      <td className="px-5 py-3.5 text-right font-mono font-black text-emerald-700">
+                      <td className="px-5 py-3.5 text-right font-mono font-black text-emerald-700 dark:text-emerald-400">
                         {formatNPR(tech.profit)}
                       </td>
                     </tr>

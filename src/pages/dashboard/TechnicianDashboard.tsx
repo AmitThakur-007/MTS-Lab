@@ -780,25 +780,25 @@ export default function TechnicianDashboard() {
     <div className="space-y-6 pb-24 max-w-7xl mx-auto px-2 sm:px-4">
 
       {/* 1. Header with Nepal Time and Quick Actions */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-5 sm:p-7 md:p-8 rounded-[28px] sm:rounded-3xl border border-slate-200/80 shadow-sm">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white dark:bg-slate-900 p-5 sm:p-7 md:p-8 rounded-[28px] sm:rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
         <div className="space-y-1.5 max-w-2xl min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-              <Wrench className="h-7 w-7 text-indigo-600 shrink-0" />
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+              <Wrench className="h-7 w-7 text-indigo-600 dark:text-indigo-400 shrink-0" />
               <span>Technician Workspace</span>
             </h1>
-            <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shrink-0">
+            <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 font-bold text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shrink-0">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               Active Bench
             </Badge>
           </div>
-          <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed break-words">
-            Welcome, <span className="font-bold text-slate-800">{user?.name}</span>. Viewing assigned technical queue.
+          <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-medium leading-relaxed break-words">
+            Welcome, <span className="font-bold text-slate-800 dark:text-slate-200">{user?.name}</span>. Viewing assigned technical queue.
           </p>
-          <div className="flex items-center gap-2 text-[11px] text-slate-500 pt-0.5">
-            <Calendar className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-            <span className="font-semibold text-slate-700">Nepal Standard Time (NPT, UTC+5:45):</span>
-            <span className="font-bold text-indigo-700">{nepalCalendar.formattedTodayNpt}</span>
+          <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 pt-0.5">
+            <Calendar className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span className="font-semibold text-slate-700 dark:text-slate-300">Nepal Standard Time (NPT, UTC+5:45):</span>
+            <span className="font-bold text-indigo-700 dark:text-indigo-300">{nepalCalendar.formattedTodayNpt}</span>
           </div>
         </div>
 
@@ -807,10 +807,10 @@ export default function TechnicianDashboard() {
             type="button"
             variant="outline"
             onClick={() => setIsNotificationCenterOpen(true)}
-            className="flex-1 sm:flex-initial rounded-2xl border-slate-200 h-10 sm:h-11 px-3.5 sm:px-4 relative flex items-center justify-center gap-2 bg-white hover:bg-slate-50 shadow-xs cursor-pointer"
+            className="flex-1 sm:flex-initial rounded-2xl border-slate-200 dark:border-slate-700 h-10 sm:h-11 px-3.5 sm:px-4 relative flex items-center justify-center gap-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 shadow-xs cursor-pointer"
           >
-            <Bell className="h-4 w-4 text-slate-700" />
-            <span className="font-bold text-xs text-slate-800">Alerts</span>
+            <Bell className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+            <span className="font-bold text-xs text-slate-800 dark:text-slate-200">Alerts</span>
             {unreadNotificationCount > 0 && (
               <span className="min-w-[18px] h-[18px] px-1 bg-rose-500 text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-xs animate-bounce">
                 {unreadNotificationCount}
@@ -825,13 +825,13 @@ export default function TechnicianDashboard() {
             size="sm"
             label="Refresh"
             variant="outline"
-            className="h-10 sm:h-11 rounded-2xl border-slate-200 font-bold text-xs shrink-0"
+            className="h-10 sm:h-11 rounded-2xl border-slate-200 dark:border-slate-700 font-bold text-xs shrink-0"
           />
         </div>
       </div>
 
       {/* 2. Date Filtering Bar (Nepal Time Conventions) */}
-      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
+      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
@@ -1257,7 +1257,7 @@ export default function TechnicianDashboard() {
                   transition={{ duration: 0.2 }}
                 >
                   <Card className={cn(
-                    "rounded-3xl border transition-all hover:shadow-xl overflow-hidden flex flex-col justify-between bg-white min-w-0",
+                    "rounded-3xl border transition-all hover:shadow-xl overflow-hidden flex flex-col justify-between bg-white dark:bg-slate-900 min-w-0",
                     priorityMeta.cardBorder
                   )}>
                     <CardHeader className={cn("p-4 sm:p-5 pb-3 space-y-3", priorityMeta.headerBg)}>

@@ -686,7 +686,9 @@ export default function ManagerDashboard() {
           onClick={() => { setStatusFilter('ALL'); setTechFilter('ALL'); }}
           className={cn(
             "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
-            statusFilter === 'ALL' ? "border-slate-900 bg-slate-900 text-white shadow-md" : "border-slate-200 bg-white text-slate-900"
+            statusFilter === 'ALL' 
+              ? "border-slate-900 bg-slate-900 text-white shadow-md dark:border-slate-100 dark:bg-slate-800" 
+              : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
           )}
         >
           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider opacity-80">
@@ -704,17 +706,17 @@ export default function ManagerDashboard() {
             "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
             statusFilter === 'UNASSIGNED'
               ? "border-amber-600 bg-amber-600 text-white shadow-md"
-              : "border-amber-200 bg-amber-50/50 text-slate-900"
+              : "border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/30 text-slate-900 dark:text-amber-200"
           )}
         >
-          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-800">
+          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">
             <span className={statusFilter === 'UNASSIGNED' ? 'text-white' : ''}>Unassigned</span>
-            <AlertTriangle className={cn("h-4 w-4", statusFilter === 'UNASSIGNED' ? "text-white" : "text-amber-600")} />
+            <AlertTriangle className={cn("h-4 w-4", statusFilter === 'UNASSIGNED' ? "text-white" : "text-amber-600 dark:text-amber-400")} />
           </div>
-          <div className={cn("mt-2 text-2xl sm:text-3xl font-black", statusFilter === 'UNASSIGNED' ? "text-white" : "text-amber-700")}>
+          <div className={cn("mt-2 text-2xl sm:text-3xl font-black", statusFilter === 'UNASSIGNED' ? "text-white" : "text-amber-700 dark:text-amber-300")}>
             {stats.unassigned}
           </div>
-          <p className={cn("text-[11px] font-bold mt-1", statusFilter === 'UNASSIGNED' ? "text-amber-100" : "text-amber-600")}>
+          <p className={cn("text-[11px] font-bold mt-1", statusFilter === 'UNASSIGNED' ? "text-amber-100" : "text-amber-600 dark:text-amber-400")}>
             Requires specialist
           </p>
         </Card>
@@ -726,12 +728,12 @@ export default function ManagerDashboard() {
             "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
             statusFilter === 'IN_PROGRESS'
               ? "border-indigo-600 bg-indigo-600 text-white shadow-md"
-              : "border-slate-200 bg-white text-slate-900"
+              : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
           )}
         >
-          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-indigo-700">
+          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
             <span className={statusFilter === 'IN_PROGRESS' ? 'text-white' : ''}>In Process</span>
-            <Wrench className={cn("h-4 w-4", statusFilter === 'IN_PROGRESS' ? "text-white" : "text-indigo-600")} />
+            <Wrench className={cn("h-4 w-4", statusFilter === 'IN_PROGRESS' ? "text-white" : "text-indigo-600 dark:text-indigo-400")} />
           </div>
           <div className="mt-2 text-2xl sm:text-3xl font-black">{stats.inProgress}</div>
           <p className="text-[11px] font-medium text-slate-400 mt-1">Bench diagnostics</p>
@@ -744,12 +746,12 @@ export default function ManagerDashboard() {
             "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
             statusFilter === 'REPAIRED'
               ? "border-teal-600 bg-teal-600 text-white shadow-md"
-              : "border-slate-200 bg-white text-slate-900"
+              : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
           )}
         >
-          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-teal-700">
+          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400">
             <span className={statusFilter === 'REPAIRED' ? 'text-white' : ''}>Repaired</span>
-            <CheckCircle2 className={cn("h-4 w-4", statusFilter === 'REPAIRED' ? "text-white" : "text-teal-600")} />
+            <CheckCircle2 className={cn("h-4 w-4", statusFilter === 'REPAIRED' ? "text-white" : "text-teal-600 dark:text-teal-400")} />
           </div>
           <div className="mt-2 text-2xl sm:text-3xl font-black">{stats.repaired + stats.ready}</div>
           <p className="text-[11px] font-medium text-slate-400 mt-1">Ready for pickup</p>
@@ -762,10 +764,10 @@ export default function ManagerDashboard() {
             "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
             statusFilter === 'DELIVERED'
               ? "border-slate-700 bg-slate-700 text-white shadow-md"
-              : "border-slate-200 bg-white text-slate-900"
+              : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
           )}
         >
-          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-600">
+          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
             <span className={statusFilter === 'DELIVERED' ? 'text-white' : ''}>Delivered</span>
             <ShieldCheck className={cn("h-4 w-4", statusFilter === 'DELIVERED' ? "text-white" : "text-slate-500")} />
           </div>

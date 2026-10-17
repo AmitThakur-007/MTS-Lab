@@ -1326,22 +1326,22 @@ export default function Inventory() {
 
       {/* Stats Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-xs">
+        <Card className="rounded-3xl border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
           <CardContent className="p-4 md:p-5 flex flex-col justify-between">
-            <span className="text-[11px] font-black tracking-wider uppercase text-slate-400">Total Parts</span>
+            <span className="text-[11px] font-black tracking-wider uppercase text-slate-400 dark:text-slate-500">Total Parts</span>
             <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl md:text-3xl font-black text-slate-900">{stats.totalProducts}</span>
-              <Badge className="bg-slate-100 text-slate-700 border-none font-bold text-[10px]">Catalog</Badge>
+              <span className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white">{stats.totalProducts}</span>
+              <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-none font-bold text-[10px]">Catalog</Badge>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-xs">
+        <Card className="rounded-3xl border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
           <CardContent className="p-4 md:p-5 flex flex-col justify-between">
-            <span className="text-[11px] font-black tracking-wider uppercase text-slate-400">Physical Units</span>
+            <span className="text-[11px] font-black tracking-wider uppercase text-slate-400 dark:text-slate-500">Physical Units</span>
             <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl md:text-3xl font-black text-slate-900">{stats.totalStockUnits}</span>
-              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[10px]">On Hand</Badge>
+              <span className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white">{stats.totalStockUnits}</span>
+              <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 font-bold text-[10px]">On Hand</Badge>
             </div>
           </CardContent>
         </Card>
@@ -1349,15 +1349,15 @@ export default function Inventory() {
         <Card 
           onClick={() => setStockFilter(stockFilter === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK')}
           className={cn(
-            "rounded-3xl border-slate-200/80 bg-white shadow-xs cursor-pointer transition-all hover:scale-[1.02]",
-            stockFilter === 'LOW_STOCK' && "border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/20"
+            "rounded-3xl border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs cursor-pointer transition-all hover:scale-[1.02]",
+            stockFilter === 'LOW_STOCK' && "border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/20 dark:bg-amber-950/20"
           )}
         >
           <CardContent className="p-4 md:p-5 flex flex-col justify-between">
-            <span className="text-[11px] font-black tracking-wider uppercase text-amber-600">Low Stock Alert</span>
+            <span className="text-[11px] font-black tracking-wider uppercase text-amber-600 dark:text-amber-400">Low Stock Alert</span>
             <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl md:text-3xl font-black text-amber-600">{stats.lowStockCount}</span>
-              <Badge className="bg-amber-100 text-amber-800 border-none font-bold text-[10px] flex items-center gap-1">
+              <span className="text-2xl md:text-3xl font-black text-amber-600 dark:text-amber-400">{stats.lowStockCount}</span>
+              <Badge className="bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-none font-bold text-[10px] flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
                 Alert
               </Badge>
@@ -1368,15 +1368,15 @@ export default function Inventory() {
         <Card 
           onClick={() => setStockFilter(stockFilter === 'OUT_OF_STOCK' ? 'ALL' : 'OUT_OF_STOCK')}
           className={cn(
-            "rounded-3xl border-slate-200/80 bg-white shadow-xs cursor-pointer transition-all hover:scale-[1.02]",
-            stockFilter === 'OUT_OF_STOCK' && "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20"
+            "rounded-3xl border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs cursor-pointer transition-all hover:scale-[1.02]",
+            stockFilter === 'OUT_OF_STOCK' && "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20 dark:bg-rose-950/20"
           )}
         >
           <CardContent className="p-4 md:p-5 flex flex-col justify-between">
-            <span className="text-[11px] font-black tracking-wider uppercase text-rose-600">Out of Stock</span>
+            <span className="text-[11px] font-black tracking-wider uppercase text-rose-600 dark:text-rose-400">Out of Stock</span>
             <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl md:text-3xl font-black text-rose-600">{stats.outOfStockCount}</span>
-              <Badge className="bg-rose-100 text-rose-800 border-none font-bold text-[10px] flex items-center gap-1">
+              <span className="text-2xl md:text-3xl font-black text-rose-600 dark:text-rose-400">{stats.outOfStockCount}</span>
+              <Badge className="bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-none font-bold text-[10px] flex items-center gap-1">
                 <XCircle className="h-3 w-3" />
                 Empty
               </Badge>
@@ -1384,12 +1384,12 @@ export default function Inventory() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-2 sm:col-span-1 rounded-3xl border-slate-200/80 bg-white shadow-xs">
+        <Card className="col-span-2 sm:col-span-1 rounded-3xl border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
           <CardContent className="p-4 md:p-5 flex flex-col justify-between h-full">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black tracking-wider uppercase text-indigo-600">Stock Valuation</span>
+              <span className="text-[11px] font-black tracking-wider uppercase text-indigo-600 dark:text-indigo-400">Stock Valuation</span>
               {stats.profitMargin !== undefined && stats.profitMargin > 0 && (
-                <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200">
+                <span className="text-[10px] font-extrabold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
                   +{stats.profitMargin}% margin
                 </span>
               )}
@@ -1419,20 +1419,20 @@ export default function Inventory() {
 
       {/* Switcher Tabs: Parts Inventory vs Technical Documentation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80 w-fit">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700 w-fit">
           <button
             type="button"
             onClick={() => setFolderTab('PARTS')}
             className={cn(
               "px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2",
               folderTab === 'PARTS'
-                ? "bg-white text-slate-900 shadow-xs"
-                : "text-slate-500 hover:text-slate-800"
+                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
             )}
           >
-            <Boxes className="h-4 w-4 text-slate-700" />
+            <Boxes className="h-4 w-4 text-slate-700 dark:text-slate-300" />
             <span>Spare Parts & Stock</span>
-            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
               {stats.totalProducts}
             </span>
           </button>
@@ -1442,11 +1442,11 @@ export default function Inventory() {
             className={cn(
               "px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2",
               folderTab === 'FILES'
-                ? "bg-white text-indigo-600 shadow-xs"
-                : "text-slate-500 hover:text-slate-800"
+                ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
             )}
           >
-            <FileText className="h-4 w-4 text-indigo-500" />
+            <FileText className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
             <span>Technical Files & Schematics</span>
           </button>
         </div>
@@ -1458,7 +1458,7 @@ export default function Inventory() {
       </div>
 
       {/* Breadcrumb Navigation & Action Bar */}
-      <Card className="rounded-3xl border-slate-200/80 bg-white shadow-xs overflow-hidden">
+      <Card className="rounded-3xl border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
         <CardContent className="p-3.5 md:p-5 space-y-4">
           <div className="flex flex-col md:flex-row gap-3 justify-between items-stretch md:items-center">
             {/* Breadcrumb Trail */}
@@ -1466,10 +1466,10 @@ export default function Inventory() {
               <button
                 onClick={() => { setNavPath({ brand: null, model: null, category: null }); setSearchTerm(''); }}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-extrabold transition-all shrink-0",
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-extrabold transition-all shrink-0 cursor-pointer",
                   !navPath.brand && !searchTerm.trim()
-                    ? "bg-black text-white shadow-xs" 
-                    : "text-slate-600 hover:bg-slate-100"
+                    ? "bg-black dark:bg-indigo-600 text-white shadow-xs" 
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 )}
               >
                 <Boxes className="h-4 w-4" />
@@ -1566,12 +1566,12 @@ export default function Inventory() {
                 )}
 
                 {/* View Toggle */}
-                <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/60">
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-700">
                   <button
                     onClick={() => setViewMode('grid')}
                     className={cn(
-                      "p-2 rounded-xl transition-all",
-                      viewMode === 'grid' ? "bg-white text-black shadow-xs font-bold" : "text-slate-400 hover:text-slate-600"
+                      "p-2 rounded-xl transition-all cursor-pointer",
+                      viewMode === 'grid' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-bold" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                     )}
                     title="Grid View"
                   >
@@ -1580,8 +1580,8 @@ export default function Inventory() {
                   <button
                     onClick={() => setViewMode('table')}
                     className={cn(
-                      "p-2 rounded-xl transition-all",
-                      viewMode === 'table' ? "bg-white text-black shadow-xs font-bold" : "text-slate-400 hover:text-slate-600"
+                      "p-2 rounded-xl transition-all cursor-pointer",
+                      viewMode === 'table' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-bold" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                     )}
                     title="Table View"
                   >
@@ -1690,16 +1690,16 @@ export default function Inventory() {
       {/* TECHNICAL DOCUMENTATION & FILES VIEW */}
       {/* ========================================================= */}
       {folderTab === 'FILES' ? (
-        <Card className="rounded-3xl border-slate-200/80 bg-white shadow-xs p-5 md:p-6">
-          <div className="mb-4 pb-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <Card className="rounded-3xl border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs p-5 md:p-6">
+          <div className="mb-4 pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <FileText className="h-5 w-5 text-indigo-600" />
+              <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <FileText className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                 Technical Documentation & Schematics
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Service manuals, pinouts, boardviews, and component datasheets for{' '}
-                <span className="font-bold text-slate-800">
+                <span className="font-bold text-slate-800 dark:text-slate-200">
                   {navPath.category ? `${navPath.brand} > ${navPath.model} > ${navPath.category}` :
                    navPath.model ? `${navPath.brand} > ${navPath.model}` :
                    navPath.brand ? navPath.brand : 'All Brands & Hardware'}
@@ -1707,7 +1707,7 @@ export default function Inventory() {
               </p>
             </div>
             {navPath.brand && (
-              <Badge className="bg-indigo-50 text-indigo-700 border-indigo-100 font-bold text-xs px-2.5 py-1 w-fit">
+              <Badge className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-100 dark:border-indigo-800 font-bold text-xs px-2.5 py-1 w-fit">
                 Filtered by {navPath.brand} {navPath.model ? `› ${navPath.model}` : ''}
               </Badge>
             )}
@@ -1730,12 +1730,12 @@ export default function Inventory() {
       {searchTerm.trim() ? (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black uppercase tracking-wider text-slate-500">
+            <h3 className="text-sm font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Search Results ({searchResults.length} matches found)
             </h3>
             {searchResults.length > 0 && (
               <div className="flex items-center gap-2">
-                <Button size="xs" variant="outline" onClick={handleSelectAllCurrent} className="rounded-xl text-xs font-bold">
+                <Button size="xs" variant="outline" onClick={handleSelectAllCurrent} className="rounded-xl text-xs font-bold border-slate-200 dark:border-slate-700 dark:text-slate-200">
                   <CheckSquare className="h-3.5 w-3.5 mr-1" /> Select All
                 </Button>
                 {selectedIds.length > 0 && (
@@ -1748,7 +1748,7 @@ export default function Inventory() {
           </div>
 
           {searchResults.length === 0 ? (
-            <Card className="rounded-3xl border-dashed border-2 border-slate-200 bg-white p-12 text-center">
+            <Card className="rounded-3xl border-dashed border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-12 text-center">
               <div className="max-w-md mx-auto space-y-3">
                 <Package className="h-12 w-12 text-slate-300 mx-auto" />
                 <h3 className="text-lg font-bold text-slate-900">No Inventory Parts Found</h3>
@@ -2429,13 +2429,13 @@ export default function Inventory() {
           </DialogHeader>
 
           {/* Level Switcher Tabs */}
-          <div className="flex p-1 bg-slate-100 rounded-2xl gap-1 my-1">
+          <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl gap-1 my-1 border border-slate-200/60 dark:border-slate-700">
             <button
               type="button"
               onClick={() => setFolderLevel('brand')}
               className={cn(
-                "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all",
-                folderLevel === 'brand' ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer",
+                folderLevel === 'brand' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
             >
               1. Brand
@@ -2449,8 +2449,8 @@ export default function Inventory() {
                 }
               }}
               className={cn(
-                "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all",
-                folderLevel === 'model' ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer",
+                folderLevel === 'model' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
             >
               2. Model
@@ -2466,8 +2466,8 @@ export default function Inventory() {
                 }));
               }}
               className={cn(
-                "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all",
-                folderLevel === 'category' ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
+                "flex-1 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer",
+                folderLevel === 'category' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
             >
               3. Category

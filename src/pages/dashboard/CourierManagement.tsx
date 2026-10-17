@@ -784,19 +784,19 @@ export default function CourierManagement() {
     <div className="max-w-[1600px] mx-auto space-y-4 pb-12 animate-in fade-in duration-200">
 
       {/* 1. Header (Compact, High Density) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-slate-950 text-white rounded-xl flex items-center justify-center shadow-xs">
+          <div className="w-10 h-10 bg-slate-950 dark:bg-slate-800 text-white rounded-xl flex items-center justify-center shadow-xs">
             <Truck className="w-5 h-5 text-indigo-400" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">Courier Hub</h1>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              <h1 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">Courier Hub</h1>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80">
                 Live Logistics OS
               </span>
             </div>
-            <p className="text-[11px] font-medium text-slate-500">Inbound & Outbound Device Consignments Connected to Core Repairs</p>
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Inbound & Outbound Device Consignments Connected to Core Repairs</p>
           </div>
         </div>
 
@@ -876,18 +876,18 @@ export default function CourierManagement() {
         <button
           onClick={() => handleCardClick('TOTAL')}
           className={cn(
-            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
+            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white dark:bg-slate-900 shadow-2xs relative overflow-hidden",
             statusFilter === 'ALL'
-              ? "border-slate-900 ring-2 ring-slate-900/10 bg-slate-50/70"
-              : "border-slate-200 hover:border-slate-300"
+              ? "border-slate-900 ring-2 ring-slate-900/10 bg-slate-50/70 dark:border-slate-100 dark:ring-white/20 dark:bg-slate-800"
+              : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
           )}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total</span>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total</span>
             <Layers className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-slate-900">{stats.totalShipments}</span>
+            <span className="text-xl font-black text-slate-900 dark:text-white">{stats.totalShipments}</span>
             <span className="text-[10px] font-semibold text-slate-400">All</span>
           </div>
         </button>
@@ -896,19 +896,19 @@ export default function CourierManagement() {
         <button
           onClick={() => handleCardClick('IN_TRANSIT')}
           className={cn(
-            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
+            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white dark:bg-slate-900 shadow-2xs relative overflow-hidden",
             statusFilter === 'IN_TRANSIT'
-              ? "border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/50"
-              : "border-slate-200 hover:border-indigo-300"
+              ? "border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-950/40 dark:border-indigo-500"
+              : "border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-800"
           )}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">In Transit</span>
-            <Truck className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+            <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">In Transit</span>
+            <Truck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 animate-pulse" />
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-indigo-800">{stats.inTransit}</span>
-            <span className="text-[10px] font-semibold text-indigo-600">Active</span>
+            <span className="text-xl font-black text-indigo-800 dark:text-indigo-200">{stats.inTransit}</span>
+            <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">Active</span>
           </div>
         </button>
 
@@ -916,19 +916,19 @@ export default function CourierManagement() {
         <button
           onClick={() => handleCardClick('RECEIVED_AT_LAB')}
           className={cn(
-            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
+            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white dark:bg-slate-900 shadow-2xs relative overflow-hidden",
             statusFilter === 'RECEIVED_AT_LAB'
-              ? "border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/50"
-              : "border-slate-200 hover:border-emerald-300"
+              ? "border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/40 dark:border-emerald-500"
+              : "border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-800"
           )}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Received</span>
-            <Package className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Received</span>
+            <Package className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-emerald-800">{stats.receivedAtLab}</span>
-            <span className="text-[10px] font-semibold text-emerald-600">Inbound</span>
+            <span className="text-xl font-black text-emerald-800 dark:text-emerald-200">{stats.receivedAtLab}</span>
+            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Inbound</span>
           </div>
         </button>
 
@@ -936,19 +936,19 @@ export default function CourierManagement() {
         <button
           onClick={() => handleCardClick('READY_FOR_DISPATCH')}
           className={cn(
-            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
+            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white dark:bg-slate-900 shadow-2xs relative overflow-hidden",
             statusFilter === 'READY_FOR_DISPATCH'
-              ? "border-amber-600 ring-2 ring-amber-500/20 bg-amber-50/50"
-              : "border-slate-200 hover:border-amber-300"
+              ? "border-amber-600 ring-2 ring-amber-500/20 bg-amber-50/50 dark:bg-amber-950/40 dark:border-amber-500"
+              : "border-slate-200 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-800"
           )}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Ready</span>
-            <Clock className="w-3.5 h-3.5 text-amber-600" />
+            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">Ready</span>
+            <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-amber-800">{stats.readyForDispatch}</span>
-            <span className="text-[10px] font-semibold text-amber-600">Repaired</span>
+            <span className="text-xl font-black text-amber-800 dark:text-amber-200">{stats.readyForDispatch}</span>
+            <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">Repaired</span>
           </div>
         </button>
 
@@ -956,19 +956,19 @@ export default function CourierManagement() {
         <button
           onClick={() => handleCardClick('DISPATCHED')}
           className={cn(
-            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
+            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white dark:bg-slate-900 shadow-2xs relative overflow-hidden",
             statusFilter === 'DISPATCHED'
-              ? "border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50"
-              : "border-slate-200 hover:border-blue-300"
+              ? "border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/40 dark:border-blue-500"
+              : "border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-800"
           )}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Dispatched</span>
-            <Send className="w-3.5 h-3.5 text-blue-600" />
+            <span className="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">Dispatched</span>
+            <Send className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-blue-800">{stats.dispatched}</span>
-            <span className="text-[10px] font-semibold text-blue-600">En Route</span>
+            <span className="text-xl font-black text-blue-800 dark:text-blue-200">{stats.dispatched}</span>
+            <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">En Route</span>
           </div>
         </button>
 
@@ -976,18 +976,18 @@ export default function CourierManagement() {
         <button
           onClick={() => handleCardClick('DELIVERED')}
           className={cn(
-            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden",
+            "text-left p-3.5 rounded-xl border transition-all cursor-pointer bg-white dark:bg-slate-900 shadow-2xs relative overflow-hidden",
             statusFilter === 'DELIVERED'
-              ? "border-slate-900 ring-2 ring-slate-900/10 bg-slate-100"
-              : "border-slate-200 hover:border-slate-400"
+              ? "border-slate-900 ring-2 ring-slate-900/10 bg-slate-100 dark:border-slate-100 dark:ring-white/20 dark:bg-slate-800"
+              : "border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-700"
           )}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Delivered</span>
+            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-400 uppercase tracking-wider">Delivered</span>
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-slate-900">{stats.delivered}</span>
+            <span className="text-xl font-black text-slate-900 dark:text-white">{stats.delivered}</span>
             <span className="text-[10px] font-semibold text-emerald-600 font-bold">100%</span>
           </div>
         </button>
@@ -995,18 +995,18 @@ export default function CourierManagement() {
       </div>
 
       {/* 3. Main Filter & Control Toolbar */}
-      <Card className="rounded-2xl border-slate-200 bg-white p-3.5 shadow-2xs space-y-3">
+      <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-2xs space-y-3">
 
         {/* Top Control Line */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
 
           {/* Direction Tabs */}
-          <div className="inline-flex p-0.5 bg-slate-100 rounded-xl border border-slate-200/60 shrink-0">
+          <div className="inline-flex p-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700 shrink-0">
             <button
               onClick={() => setActiveTab('ALL')}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                activeTab === 'ALL' ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                activeTab === 'ALL' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
             >
               All ({stats.totalShipments})
@@ -1015,7 +1015,7 @@ export default function CourierManagement() {
               onClick={() => setActiveTab('INCOMING')}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1",
-                activeTab === 'INCOMING' ? "bg-emerald-600 text-white shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                activeTab === 'INCOMING' ? "bg-emerald-600 text-white shadow-2xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
             >
               <ArrowDownLeft className="w-3 h-3 stroke-[3]" />
@@ -1025,10 +1025,10 @@ export default function CourierManagement() {
               onClick={() => setActiveTab('OUTGOING')}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1",
-                activeTab === 'OUTGOING' ? "bg-slate-950 text-white shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                activeTab === 'OUTGOING' ? "bg-slate-950 dark:bg-indigo-600 text-white shadow-2xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
             >
-              <ArrowUpRight className="w-3 h-3 text-indigo-400 stroke-[3]" />
+              <ArrowUpRight className="w-3 h-3 text-indigo-400 dark:text-white stroke-[3]" />
               <span>Outbound ({stats.outgoingTotal})</span>
             </button>
           </div>
@@ -1044,7 +1044,7 @@ export default function CourierManagement() {
                 placeholder="Search AWB, repair #, customer, phone, IMEI, district..."
                 value={searchQuery}
                 onChange={handleSearchChange}
-                className="h-9 pl-8 pr-7 rounded-xl bg-slate-50 border-slate-200 text-xs font-medium"
+                className="h-9 pl-8 pr-7 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-medium dark:text-white"
               />
               {searchQuery && (
                 <button
@@ -1052,7 +1052,7 @@ export default function CourierManagement() {
                     setSearchQuery('');
                     fetchData();
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1061,7 +1061,7 @@ export default function CourierManagement() {
 
             {/* Quick Status Select */}
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
-              <SelectTrigger className="h-9 w-[140px] rounded-xl bg-slate-50 border-slate-200 text-xs font-bold">
+              <SelectTrigger className="h-9 w-[140px] rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs font-bold dark:text-white">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
@@ -1083,10 +1083,10 @@ export default function CourierManagement() {
               size="sm"
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               className={cn(
-                "h-9 rounded-xl border-slate-200 text-xs font-bold cursor-pointer gap-1.5",
+                "h-9 rounded-xl border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer gap-1.5",
                 (showAdvancedFilters || courierCompanyFilter !== 'ALL' || districtFilter !== 'ALL' || paymentStatusFilter !== 'ALL' || dateRangeFilter !== 'ALL')
-                  ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-                  : "bg-slate-50 hover:bg-slate-100 text-slate-700"
+                  ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300"
+                  : "bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
               )}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -1099,10 +1099,10 @@ export default function CourierManagement() {
               variant="outline"
               size="sm"
               onClick={handleExportCSV}
-              className="h-9 rounded-xl border-slate-200 hover:bg-slate-100 text-xs font-bold text-slate-700 cursor-pointer gap-1.5"
+              className="h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer gap-1.5"
               title="Export filtered shipments to CSV"
             >
-              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               <span className="hidden sm:inline">Export</span>
             </Button>
 
@@ -1111,10 +1111,10 @@ export default function CourierManagement() {
               variant="outline"
               size="icon"
               onClick={() => fetchData(false)}
-              className="h-9 w-9 rounded-xl border-slate-200 hover:bg-slate-100 shrink-0 cursor-pointer"
+              className="h-9 w-9 rounded-xl border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 cursor-pointer"
               title="Refresh Data"
             >
-              <RotateCw className={cn("w-3.5 h-3.5 text-slate-700", loading && "animate-spin")} />
+              <RotateCw className={cn("w-3.5 h-3.5 text-slate-700 dark:text-slate-300", loading && "animate-spin")} />
             </Button>
 
           </div>
@@ -1210,23 +1210,23 @@ export default function CourierManagement() {
 
             {/* Custom Date Pickers */}
             {dateRangeFilter === 'CUSTOM' && (
-              <div className="col-span-2 sm:col-span-3 lg:col-span-5 flex flex-wrap items-center gap-2 pt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              <div className="col-span-2 sm:col-span-3 lg:col-span-5 flex flex-wrap items-center gap-2 pt-2 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-600">From:</span>
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">From:</span>
                   <Input
                     type="date"
                     value={customStartDate}
                     onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="h-8 rounded-lg bg-white border-slate-200 text-xs"
+                    className="h-8 rounded-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-xs dark:text-white"
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-600">To:</span>
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">To:</span>
                   <Input
                     type="date"
                     value={customEndDate}
                     onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="h-8 rounded-lg bg-white border-slate-200 text-xs"
+                    className="h-8 rounded-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-xs dark:text-white"
                   />
                 </div>
               </div>
@@ -1299,17 +1299,17 @@ export default function CourierManagement() {
       )}
 
       {/* 5. Main Shipments Content: High-Density Table */}
-      <Card className="rounded-2xl border-slate-200 bg-white p-3.5 sm:p-4 shadow-2xs">
+      <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 sm:p-4 shadow-2xs">
 
         {loading ? (
           <div className="p-12 text-center text-slate-400 space-y-2">
-            <RotateCw className="w-6 h-6 animate-spin mx-auto text-indigo-600" />
-            <p className="text-xs font-bold">Synchronizing shipment records...</p>
+            <RotateCw className="w-6 h-6 animate-spin mx-auto text-indigo-600 dark:text-indigo-400" />
+            <p className="text-xs font-bold dark:text-slate-300">Synchronizing shipment records...</p>
           </div>
         ) : shipments.length === 0 ? (
-          <div className="p-10 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-2">
-            <Truck className="w-8 h-8 mx-auto text-slate-300" />
-            <p className="text-sm font-bold text-slate-700">No shipments found</p>
+          <div className="p-10 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-800/40 space-y-2">
+            <Truck className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-200">No shipments found</p>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
               Try changing your search query or filter settings.
             </p>
@@ -1317,23 +1317,23 @@ export default function CourierManagement() {
               variant="outline"
               size="sm"
               onClick={handleResetFilters}
-              className="rounded-xl h-8 text-xs font-bold border-slate-200 cursor-pointer mt-2"
+              className="rounded-xl h-8 text-xs font-bold border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer mt-2"
             >
               Reset Filters
             </Button>
           </div>
         ) : (
           <>
-            <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-100">
+            <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-50/90 border-b border-slate-100 text-slate-500 font-extrabold uppercase tracking-wider text-[10px]">
+                  <tr className="bg-slate-50/90 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">
                     <th className="py-2.5 px-3 w-8">
                       <input
                         type="checkbox"
                         checked={selectedIds.length > 0 && selectedIds.length === shipments.length}
                         onChange={handleToggleSelectAll}
-                        className="rounded border-slate-300 cursor-pointer"
+                        className="rounded border-slate-300 dark:border-slate-600 cursor-pointer"
                       />
                     </th>
                     <th className="py-2.5 px-3">Type</th>
@@ -1346,7 +1346,7 @@ export default function CourierManagement() {
                     <th className="py-2.5 px-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-800">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
                   {shipments.map((shipment) => {
                     const isOutbound = shipment.isCourierOut || shipment.isReturnCourierDispatched || shipment.courierStatus === 'COURIER_DISPATCHED' || shipment.courierOutStatus;
                     const trackingNo = isOutbound ? shipment.returnCourierTrackingNumber : shipment.courierTrackingNumber;
@@ -1363,8 +1363,8 @@ export default function CourierManagement() {
                       <tr
                         key={shipment.id}
                         className={cn(
-                          "hover:bg-slate-50 transition-colors group",
-                          isSelected && "bg-indigo-50/40"
+                          "hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors group",
+                          isSelected && "bg-indigo-50/40 dark:bg-indigo-950/40"
                         )}
                       >
                         <td className="py-2.5 px-3">
@@ -1372,7 +1372,7 @@ export default function CourierManagement() {
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => handleToggleSelectOne(shipment.id)}
-                            className="rounded border-slate-300 cursor-pointer"
+                            className="rounded border-slate-300 dark:border-slate-600 cursor-pointer"
                           />
                         </td>
 
@@ -1601,8 +1601,8 @@ export default function CourierManagement() {
                   <div
                     key={shipment.id}
                     className={cn(
-                      "p-3.5 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2.5 transition-all",
-                      isSelected && "border-indigo-400 bg-indigo-50/30"
+                      "p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs space-y-2.5 transition-all",
+                      isSelected && "border-indigo-400 dark:border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/40"
                     )}
                   >
                     <div className="flex items-center justify-between">
@@ -1706,13 +1706,13 @@ export default function CourierManagement() {
                 </div>
               </div>
 
-              <div className="inline-flex p-0.5 bg-slate-100 rounded-xl border border-slate-200/60 shrink-0 self-start sm:self-auto">
+              <div className="inline-flex p-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700 shrink-0 self-start sm:self-auto">
                 <button
                   type="button"
                   onClick={() => setIncomingMode('NEW')}
                   className={cn(
                     "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                    incomingMode === 'NEW' ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                    incomingMode === 'NEW' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   )}
                 >
                   + New Intake Ticket
@@ -1725,7 +1725,7 @@ export default function CourierManagement() {
                   }}
                   className={cn(
                     "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                    incomingMode === 'EXISTING' ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                    incomingMode === 'EXISTING' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   )}
                 >
                   Link Existing Ticket
@@ -1772,7 +1772,7 @@ export default function CourierManagement() {
                           originAddress: rep?.customerAddress || rep?.customer?.address || ''
                         }));
                       }}
-                      className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer"
+                      className="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs cursor-pointer"
                     >
                       <option value="">
                         {loadingRepairs ? 'Loading repair tickets...' : '-- Search & Select Repair Job --'}
@@ -1785,7 +1785,7 @@ export default function CourierManagement() {
                     </select>
 
                     {eligibleRepairs.length === 0 && !loadingRepairs && (
-                      <p className="text-[11px] text-amber-600 font-medium">
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
                         No active repair tickets available. Switch to "+ New Intake Ticket" or create one in Repairs.
                       </p>
                     )}
@@ -1793,28 +1793,28 @@ export default function CourierManagement() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div className="space-y-1 relative">
-                      <Label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                      <Label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                         <span>Customer Phone *</span>
-                        {isSearchingCustomers && <span className="text-[10px] text-indigo-600 animate-pulse">Searching...</span>}
+                        {isSearchingCustomers && <span className="text-[10px] text-indigo-600 dark:text-indigo-400 animate-pulse">Searching...</span>}
                       </Label>
                       <Input
                         required
                         placeholder="98XXXXXXXX"
                         value={incomingForm.customerPhone}
                         onChange={(e) => handleCustomerPhoneInputChange(e.target.value)}
-                        className="h-8.5 rounded-lg bg-white border-slate-200 text-xs font-medium"
+                        className="h-8.5 rounded-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-xs font-medium dark:text-white"
                       />
                       {customerSuggestions.length > 0 && (
-                        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-40 overflow-y-auto divide-y divide-slate-100">
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-40 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                           {customerSuggestions.map(c => (
                             <button
                               type="button"
                               key={c.id}
                               onClick={() => handleSelectCustomerSuggestion(c)}
-                              className="w-full text-left p-2 hover:bg-indigo-50 text-xs cursor-pointer block"
+                              className="w-full text-left p-2 hover:bg-indigo-50 dark:hover:bg-slate-800 text-xs cursor-pointer block"
                             >
-                              <div className="font-bold text-slate-900">{c.name} ({c.phone})</div>
-                              <div className="text-[10px] text-slate-500">{c.district || 'Nepal'} {c.address ? `• ${c.address}` : ''}</div>
+                              <div className="font-bold text-slate-900 dark:text-white">{c.name} ({c.phone})</div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400">{c.district || 'Nepal'} {c.address ? `• ${c.address}` : ''}</div>
                             </button>
                           ))}
                         </div>
@@ -1932,7 +1932,7 @@ export default function CourierManagement() {
                           "px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer border",
                           incomingForm.courierCompany === 'Nepal Can Move (NCM)'
                             ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
-                            : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                            : "bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/60 hover:bg-indigo-50 dark:hover:bg-slate-700"
                         )}
                       >
                         ⚡ Nepal Can Move (NCM)
@@ -1943,8 +1943,8 @@ export default function CourierManagement() {
                         className={cn(
                           "px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer border",
                           incomingForm.courierCompany === 'Sundarban Courier'
-                            ? "bg-slate-900 text-white border-slate-900"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                            ? "bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-600"
+                            : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                         )}
                       >
                         Sundarban
@@ -1955,8 +1955,8 @@ export default function CourierManagement() {
                         className={cn(
                           "px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer border",
                           incomingForm.courierCompany === 'Gorkha Courier'
-                            ? "bg-slate-900 text-white border-slate-900"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                            ? "bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-600"
+                            : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                         )}
                       >
                         Gorkha
@@ -1967,8 +1967,8 @@ export default function CourierManagement() {
                         className={cn(
                           "px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer border",
                           incomingForm.courierCompany === 'Nepal Post (EMS)'
-                            ? "bg-slate-900 text-white border-slate-900"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                            ? "bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-600"
+                            : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                         )}
                       >
                         Nepal Post
@@ -2198,7 +2198,7 @@ export default function CourierManagement() {
                           "px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer border",
                           outgoingForm.returnCourierCompany === 'Nepal Can Move (NCM)'
                             ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
-                            : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                            : "bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/60 hover:bg-indigo-50 dark:hover:bg-slate-700"
                         )}
                       >
                         ⚡ Nepal Can Move (NCM)
@@ -2209,8 +2209,8 @@ export default function CourierManagement() {
                         className={cn(
                           "px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer border",
                           outgoingForm.returnCourierCompany === 'Sundarban Courier'
-                            ? "bg-slate-900 text-white border-slate-900"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                            ? "bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-600"
+                            : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                         )}
                       >
                         Sundarban
@@ -2221,8 +2221,8 @@ export default function CourierManagement() {
                         className={cn(
                           "px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer border",
                           outgoingForm.returnCourierCompany === 'Gorkha Courier'
-                            ? "bg-slate-900 text-white border-slate-900"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                            ? "bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-600"
+                            : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                         )}
                       >
                         Gorkha
@@ -2233,8 +2233,8 @@ export default function CourierManagement() {
                         className={cn(
                           "px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer border",
                           outgoingForm.returnCourierCompany === 'Nepal Post (EMS)'
-                            ? "bg-slate-900 text-white border-slate-900"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                            ? "bg-slate-900 dark:bg-slate-700 text-white border-slate-900 dark:border-slate-600"
+                            : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                         )}
                       >
                         Nepal Post
@@ -2623,13 +2623,13 @@ export default function CourierManagement() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex p-0.5 bg-slate-100 rounded-xl">
+            <div className="flex p-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => openWhatsAppModal(selectedShipment, 'DISPATCH')}
                 className={cn(
                   "flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                  whatsappTemplateType === 'DISPATCH' ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                  whatsappTemplateType === 'DISPATCH' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
                 Dispatched
@@ -2639,7 +2639,7 @@ export default function CourierManagement() {
                 onClick={() => openWhatsAppModal(selectedShipment, 'RECEIVED')}
                 className={cn(
                   "flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                  whatsappTemplateType === 'RECEIVED' ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                  whatsappTemplateType === 'RECEIVED' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
                 Inbound Received
@@ -2649,7 +2649,7 @@ export default function CourierManagement() {
                 onClick={() => openWhatsAppModal(selectedShipment, 'DELIVERED')}
                 className={cn(
                   "flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                  whatsappTemplateType === 'DELIVERED' ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                  whatsappTemplateType === 'DELIVERED' ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-2xs" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
                 Delivered
@@ -2699,7 +2699,7 @@ export default function CourierManagement() {
                   value={statusUpdateForm.status}
                   onValueChange={(v) => setStatusUpdateForm({ ...statusUpdateForm, status: v })}
                 >
-                  <SelectTrigger className="h-10 rounded-xl bg-white border-slate-200 text-xs font-bold">
+                  <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-xs font-bold dark:text-white">
                     <SelectValue placeholder="Select Status Milestone" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
@@ -2721,20 +2721,20 @@ export default function CourierManagement() {
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700">Status Update Note</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Status Update Note</Label>
                 <Input
                   placeholder="e.g. Package dispatched via express route"
                   value={statusUpdateForm.notes}
                   onChange={(e) => setStatusUpdateForm({ ...statusUpdateForm, notes: e.target.value })}
-                  className="h-9 rounded-xl bg-white border-slate-200 text-xs font-medium"
+                  className="h-9 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-xs font-medium dark:text-white"
                 />
               </div>
 
               <DialogFooter className="pt-2">
-                <Button type="button" variant="outline" onClick={() => setStatusModalOpen(false)} className="rounded-xl h-9 text-xs font-bold border-slate-200">
+                <Button type="button" variant="outline" onClick={() => setStatusModalOpen(false)} className="rounded-xl h-9 text-xs font-bold border-slate-200 dark:border-slate-700 dark:text-slate-200">
                   Cancel
                 </Button>
-                <Button type="submit" className="rounded-xl h-9 text-xs font-bold bg-slate-950 hover:bg-black text-white px-5">
+                <Button type="submit" className="rounded-xl h-9 text-xs font-bold bg-slate-950 dark:bg-indigo-600 hover:bg-black dark:hover:bg-indigo-700 text-white px-5">
                   Save Status
                 </Button>
               </DialogFooter>
@@ -2747,23 +2747,23 @@ export default function CourierManagement() {
       <Dialog open={bulkStatusModalOpen} onOpenChange={setBulkStatusModalOpen}>
         <DialogContent className="max-w-md rounded-2xl p-5 space-y-3">
           <DialogHeader>
-            <DialogTitle className="text-base font-black text-slate-900 flex items-center gap-2">
+            <DialogTitle className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
               <RotateCw className="w-5 h-5 text-indigo-600" />
               <span>Bulk Update Status ({selectedIds.length} Shipments)</span>
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
               Apply new milestone status across all selected courier shipments.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleBulkStatusSubmit} className="space-y-3">
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-slate-700">Milestone Status *</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Milestone Status *</Label>
               <Select
                 value={bulkStatusForm.status}
                 onValueChange={(v) => setBulkStatusForm({ ...bulkStatusForm, status: v })}
               >
-                <SelectTrigger className="h-10 rounded-xl bg-white border-slate-200 text-xs font-bold">
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-xs font-bold dark:text-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
@@ -2777,17 +2777,17 @@ export default function CourierManagement() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-slate-700">Remarks / Note</Label>
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Remarks / Note</Label>
               <Input
                 placeholder="e.g. Batch logistics transit update"
                 value={bulkStatusForm.notes}
                 onChange={(e) => setBulkStatusForm({ ...bulkStatusForm, notes: e.target.value })}
-                className="h-9 rounded-xl bg-white border-slate-200 text-xs"
+                className="h-9 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-xs dark:text-white"
               />
             </div>
 
             <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setBulkStatusModalOpen(false)} className="rounded-xl h-9 text-xs font-bold border-slate-200">
+              <Button type="button" variant="outline" onClick={() => setBulkStatusModalOpen(false)} className="rounded-xl h-9 text-xs font-bold border-slate-200 dark:border-slate-700 dark:text-slate-200">
                 Cancel
               </Button>
               <Button type="submit" className="rounded-xl h-9 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-5">

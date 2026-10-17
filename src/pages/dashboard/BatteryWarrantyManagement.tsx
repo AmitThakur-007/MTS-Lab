@@ -718,13 +718,13 @@ export default function BatteryWarrantyManagement() {
                 variant="outline"
                 onClick={handleDownloadTemplate}
                 disabled={downloadingTemplate}
-                className="rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold h-10 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer text-xs"
+                className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold h-10 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer text-xs"
                 title="Download Blank Excel Import Template"
               >
                 {downloadingTemplate ? (
                   <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
                 ) : (
-                  <FileDown className="w-4 h-4 text-indigo-600" />
+                  <FileDown className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 )}
                 <span className="hidden sm:inline">Template</span>
               </Button>
@@ -736,9 +736,9 @@ export default function BatteryWarrantyManagement() {
                   setPreviewData(null);
                   setIsImportModalOpen(true);
                 }}
-                className="rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold h-10 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer text-xs"
+                className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold h-10 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer text-xs"
               >
-                <Upload className="w-4 h-4 text-emerald-600" />
+                <Upload className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Import Excel</span>
               </Button>
 
@@ -746,7 +746,7 @@ export default function BatteryWarrantyManagement() {
                 variant="outline"
                 onClick={handleExportExcel}
                 disabled={exportingExcel}
-                className="rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold h-10 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer text-xs"
+                className="rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold h-10 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer text-xs"
               >
                 {exportingExcel ? (
                   <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
@@ -775,14 +775,14 @@ export default function BatteryWarrantyManagement() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
 
         {/* Total Warranties */}
-        <Card className="rounded-2xl border-slate-200 shadow-xs bg-white hover:shadow-md transition-shadow">
+        <Card className="rounded-2xl border-slate-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 hover:shadow-md transition-shadow">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5 text-slate-700" />
+            <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5 text-slate-700 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Logs</p>
-              <h3 className="text-xl sm:text-2xl font-black text-slate-900">{summary.total}</h3>
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Logs</p>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{summary.total}</h3>
             </div>
           </CardContent>
         </Card>
@@ -857,11 +857,11 @@ export default function BatteryWarrantyManagement() {
       </div>
 
       {/* Filters, Date Range, and Search Bar */}
-      <Card className="rounded-2xl border border-slate-200 shadow-xs bg-white overflow-hidden">
+      <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 overflow-hidden">
         <CardContent className="p-4 sm:p-5 space-y-4">
           
           {/* Quick Date Filter Buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -879,8 +879,8 @@ export default function BatteryWarrantyManagement() {
                 className={cn(
                   "h-8 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer",
                   dateFilter === 'ALL'
-                    ? "bg-slate-900 text-white shadow-xs"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    ? "bg-slate-900 dark:bg-slate-700 text-white shadow-xs"
+                    : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
                 All Time
@@ -894,7 +894,7 @@ export default function BatteryWarrantyManagement() {
                   "h-8 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer",
                   dateFilter === 'TODAY'
                     ? "bg-emerald-600 text-white shadow-xs"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
                 Today
@@ -908,7 +908,7 @@ export default function BatteryWarrantyManagement() {
                   "h-8 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer",
                   dateFilter === 'YESTERDAY'
                     ? "bg-emerald-600 text-white shadow-xs"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
                 Yesterday
@@ -922,7 +922,7 @@ export default function BatteryWarrantyManagement() {
                   "h-8 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer",
                   dateFilter === 'CUSTOM'
                     ? "bg-indigo-600 text-white shadow-xs"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
                 Custom Range
@@ -976,7 +976,7 @@ export default function BatteryWarrantyManagement() {
                 placeholder="Search by phone number, customer name, repair # (e.g. 9869276668 or MTS-2026-0001)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-24 h-11 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white text-xs sm:text-sm font-medium"
+                className="pl-10 pr-24 h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/70 focus:bg-white dark:focus:bg-slate-900 text-xs sm:text-sm font-medium dark:text-white"
               />
               <Button
                 type="submit"
@@ -1093,8 +1093,8 @@ export default function BatteryWarrantyManagement() {
       )}
 
       {/* Main Table / Grid of Warranties */}
-      <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden">
-        <CardHeader className="bg-slate-900 text-white px-6 py-4 flex flex-row items-center justify-between">
+      <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+        <CardHeader className="bg-slate-900 dark:bg-slate-950 text-white px-6 py-4 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base font-extrabold tracking-tight text-white flex items-center gap-2">
               <span>Registered Battery Warranties</span>
@@ -1707,23 +1707,23 @@ export default function BatteryWarrantyManagement() {
               ) : (
                 <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
                   {selectedWarranty.claims.map((claim: any, idx: number) => (
-                    <div key={claim.id || idx} className="p-4 rounded-xl border border-slate-200 bg-white space-y-2 shadow-2xs">
+                    <div key={claim.id || idx} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2 shadow-2xs">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-black text-slate-900 font-mono">{claim.claimNumber}</span>
-                        <span className="text-[11px] text-slate-500 font-semibold">{format(new Date(claim.claimDate), 'dd MMM yyyy, HH:mm')}</span>
+                        <span className="font-black text-slate-900 dark:text-white font-mono">{claim.claimNumber}</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">{format(new Date(claim.claimDate), 'dd MMM yyyy, HH:mm')}</span>
                       </div>
 
-                      <div className="text-xs text-slate-800">
-                        <span className="font-bold text-slate-600">Issue: </span>
+                      <div className="text-xs text-slate-800 dark:text-slate-200">
+                        <span className="font-bold text-slate-600 dark:text-slate-400">Issue: </span>
                         {claim.issueDescription}
                       </div>
 
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px]">
-                        <span className="text-slate-500">
-                          Action: <strong className="text-slate-800">{claim.actionTaken?.replace(/_/g, ' ')}</strong>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                        <span className="text-slate-500 dark:text-slate-400">
+                          Action: <strong className="text-slate-800 dark:text-slate-200">{claim.actionTaken?.replace(/_/g, ' ')}</strong>
                         </span>
-                        <span className="text-slate-500">
-                          Processed By: <strong className="text-slate-800">{claim.processedByName}</strong>
+                        <span className="text-slate-500 dark:text-slate-400">
+                          Processed By: <strong className="text-slate-800 dark:text-slate-200">{claim.processedByName}</strong>
                         </span>
                       </div>
                     </div>
@@ -1985,18 +1985,18 @@ export default function BatteryWarrantyManagement() {
           }
         }}
       >
-        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] flex flex-col rounded-3xl p-0 overflow-hidden border border-slate-200 bg-white shadow-2xl">
-          <DialogHeader className="p-6 pb-4 border-b border-slate-100 bg-slate-50/70">
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] flex flex-col rounded-3xl p-0 overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl">
+          <DialogHeader className="p-6 pb-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold">
                   <FileSpreadsheet className="w-5 h-5" />
                 </div>
                 <div>
-                  <DialogTitle className="text-lg sm:text-xl font-black text-slate-900">
+                  <DialogTitle className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
                     Import Battery Warranties from Excel
                   </DialogTitle>
-                  <DialogDescription className="text-xs text-slate-500 font-medium">
+                  <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                     Upload an Excel (.xlsx) file to register warranties, link customer accounts, and prevent duplicates.
                   </DialogDescription>
                 </div>
@@ -2103,9 +2103,9 @@ export default function BatteryWarrantyManagement() {
                 </div>
 
                 {/* Table Container */}
-                <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs max-h-[360px] overflow-y-auto">
+                <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xs max-h-[360px] overflow-y-auto">
                   <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 text-slate-600 font-bold z-10">
+                    <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold z-10">
                       <tr>
                         <th className="py-2.5 px-3">Row</th>
                         <th className="py-2.5 px-3">Status</th>

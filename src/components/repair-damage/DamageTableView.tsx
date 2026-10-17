@@ -21,11 +21,11 @@ export const DamageTableView: React.FC<Props> = ({
   onDelete,
 }) => {
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/70 shadow-xs overflow-hidden" id="damage-table-container">
+    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/70 dark:border-slate-800 shadow-xs overflow-hidden" id="damage-table-container">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs border-collapse min-w-[760px]">
           <thead>
-            <tr className="bg-slate-50/80 border-b border-slate-200/70 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+            <tr className="bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-200/70 dark:border-slate-800 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <th className="py-3.5 px-4 font-black">Record #</th>
               <th className="py-3.5 px-4 font-black">Staff Member</th>
               <th className="py-3.5 px-4 font-black">Damaged Component</th>
@@ -35,15 +35,15 @@ export const DamageTableView: React.FC<Props> = ({
               <th className="py-3.5 px-4 font-black text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-200">
             {records.map((rec) => {
               const compBadgeClass = getComponentBadgeColor(rec.damagedComponent);
               const deviceName = `${rec.deviceBrand || ''} ${rec.deviceModel || ''}`.trim() || '—';
 
               return (
-                <tr key={rec.id} className="hover:bg-slate-50/70 transition-colors">
+                <tr key={rec.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors">
                   {/* Record # */}
-                  <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                  <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
                     {rec.recordNumber}
                   </td>
 

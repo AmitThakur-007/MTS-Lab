@@ -98,10 +98,10 @@ function CustomerCard({ customer, onView, onNewRepair, onEdit, onRestore, canEdi
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
       className={cn(
-        "bg-white rounded-2xl border shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden group flex flex-col",
+        "bg-white dark:bg-slate-900 rounded-2xl border shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden group flex flex-col",
         archived
-          ? "border-dashed border-slate-300 opacity-80"
-          : "border-slate-200/80 hover:border-slate-300"
+          ? "border-dashed border-slate-300 dark:border-slate-700 opacity-80"
+          : "border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
       )}
     >
       <div className="p-4 sm:p-5 flex-1">
@@ -247,18 +247,18 @@ function CustomerCard({ customer, onView, onNewRepair, onEdit, onRestore, canEdi
 
 function CustomerCardSkeleton() {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
       <div className="p-4 sm:p-5">
         <div className="flex items-start gap-3 sm:gap-4">
-          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-100 animate-pulse shrink-0" />
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse shrink-0" />
           <div className="flex-1 min-w-0 space-y-2">
-            <div className="h-4 w-2/3 bg-slate-100 rounded animate-pulse" />
-            <div className="h-3 w-1/2 bg-slate-100 rounded animate-pulse" />
+            <div className="h-4 w-2/3 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+            <div className="h-3 w-1/2 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
             <div className="flex gap-3 pt-2">
-              <div className="h-3 w-12 bg-slate-100 rounded animate-pulse" />
-              <div className="h-3 w-10 bg-slate-100 rounded animate-pulse" />
+              <div className="h-3 w-12 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+              <div className="h-3 w-10 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
             </div>
-            <div className="h-8 w-full bg-slate-100 rounded-xl animate-pulse mt-2" />
+            <div className="h-8 w-full bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse mt-2" />
           </div>
         </div>
       </div>

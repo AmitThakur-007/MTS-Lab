@@ -350,17 +350,17 @@ export default function PermanentDeletionHub() {
 
       {/* Section Switcher Tabs */}
       <Tabs value={activeSection} onValueChange={(v: any) => setActiveSection(v)} className="space-y-6">
-        <TabsList className="bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200 w-full sm:w-auto flex flex-wrap sm:inline-flex gap-1.5 h-auto">
-          <TabsTrigger value="REPAIRS" className="flex-1 sm:flex-initial rounded-xl py-2 px-4 sm:px-5 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
-            <Smartphone className="h-4 w-4 mr-2 text-indigo-600 shrink-0" />
+        <TabsList className="bg-slate-100/90 dark:bg-slate-800/90 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto flex flex-wrap sm:inline-flex gap-1.5 h-auto">
+          <TabsTrigger value="REPAIRS" className="flex-1 sm:flex-initial rounded-xl py-2 px-4 sm:px-5 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm">
+            <Smartphone className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400 shrink-0" />
             <span>Customer & Repair Records</span>
-            <span className="ml-1.5 text-[10px] font-mono font-black bg-slate-200/80 text-slate-700 px-1.5 py-0.5 rounded-md">{repairs.length}</span>
+            <span className="ml-1.5 text-[10px] font-mono font-black bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded-md">{repairs.length}</span>
           </TabsTrigger>
-          <TabsTrigger value="WARRANTIES" className="flex-1 sm:flex-initial rounded-xl py-2 px-4 sm:px-5 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
-            <BatteryCharging className="h-4 w-4 mr-2 text-emerald-600 shrink-0" />
+          <TabsTrigger value="WARRANTIES" className="flex-1 sm:flex-initial rounded-xl py-2 px-4 sm:px-5 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm">
+            <BatteryCharging className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <span>Battery Warranty Hub</span>
-            <span className="ml-1.5 text-[10px] font-mono font-black bg-slate-200/80 text-slate-700 px-1.5 py-0.5 rounded-md">{warranties.length}</span>
-            <Badge className="ml-2 bg-rose-100 text-rose-800 text-[9px] font-extrabold border-rose-300">2FA</Badge>
+            <span className="ml-1.5 text-[10px] font-mono font-black bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded-md">{warranties.length}</span>
+            <Badge className="ml-2 bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 text-[9px] font-extrabold border-rose-300 dark:border-rose-800">2FA</Badge>
           </TabsTrigger>
         </TabsList>
 

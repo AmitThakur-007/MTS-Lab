@@ -812,24 +812,24 @@ export default function NewRepair() {
                 className={cn(
                   "cursor-pointer rounded-2xl p-5 border-2 transition-all flex items-start gap-4",
                   receivingMethod === 'WALK_IN' 
-                    ? "border-blue-600 bg-blue-50/40 shadow-sm ring-2 ring-blue-500/10" 
-                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    ? "border-blue-600 bg-blue-50/40 dark:bg-blue-950/40 dark:border-blue-500 shadow-sm ring-2 ring-blue-500/10" 
+                    : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/60"
                 )}
               >
                 <div className={cn(
                   "p-3 rounded-xl shrink-0 transition-colors",
-                  receivingMethod === 'WALK_IN' ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"
+                  receivingMethod === 'WALK_IN' ? "bg-blue-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
                 )}>
                   <User className="w-6 h-6" />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-sm text-slate-900">Walk-in Customer</span>
+                    <span className="font-extrabold text-sm text-slate-900 dark:text-white">Walk-in Customer</span>
                     {receivingMethod === 'WALK_IN' && (
                       <Badge className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5">Selected</Badge>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                     Customer visited MTS Lab lab in person to hand over the device at our New Road service counter.
                   </p>
                 </div>
@@ -841,19 +841,19 @@ export default function NewRepair() {
                 className={cn(
                   "cursor-pointer rounded-2xl p-5 border-2 transition-all flex items-start gap-4",
                   receivingMethod === 'COURIER' 
-                    ? "border-amber-500 bg-amber-50/40 shadow-sm ring-2 ring-amber-400/20" 
-                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    ? "border-amber-500 bg-amber-50/40 dark:bg-amber-950/40 dark:border-amber-500 shadow-sm ring-2 ring-amber-400/20" 
+                    : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/60"
                 )}
               >
                 <div className={cn(
                   "p-3 rounded-xl shrink-0 transition-colors",
-                  receivingMethod === 'COURIER' ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600"
+                  receivingMethod === 'COURIER' ? "bg-amber-500 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
                 )}>
                   <Package className="w-6 h-6" />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-sm text-slate-900">Courier / Remote District</span>
+                    <span className="font-extrabold text-sm text-slate-900 dark:text-white">Courier / Remote District</span>
                     {receivingMethod === 'COURIER' && (
                       <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5">Courier Mode</Badge>
                     )}
@@ -1705,13 +1705,13 @@ export default function NewRepair() {
                           </div>
 
                           {/* Toggle: [ No Warranty ] vs [ Warranty ] */}
-                          <div className="flex items-center p-1 bg-slate-200/80 rounded-xl text-xs font-bold shrink-0 self-start sm:self-auto shadow-inner">
+                          <div className="flex items-center p-1 bg-slate-200/80 dark:bg-slate-800 rounded-xl text-xs font-bold shrink-0 self-start sm:self-auto shadow-inner border border-slate-300/50 dark:border-slate-700">
                             <button
                               type="button"
                               onClick={() => handleDeviceChange(idx, 'hasBatteryWarranty', false)}
                               className={cn(
                                 "px-3.5 py-1.5 rounded-lg transition-all cursor-pointer",
-                                !device.hasBatteryWarranty ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
+                                !device.hasBatteryWarranty ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                               )}
                             >
                               No Warranty
@@ -1721,7 +1721,7 @@ export default function NewRepair() {
                               onClick={() => handleDeviceChange(idx, 'hasBatteryWarranty', true)}
                               className={cn(
                                 "px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
-                                device.hasBatteryWarranty ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
+                                device.hasBatteryWarranty ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                               )}
                             >
                               <ShieldCheck className="h-3.5 w-3.5" />
