@@ -321,6 +321,7 @@ model Repair {
   repairImages                String?
   branchId                    String
   technicianId                String?
+  receivedAt                  DateTime?
   assignedAt                  DateTime?
   assignedById                String?
   assignedByName              String?

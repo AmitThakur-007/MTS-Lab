@@ -36,6 +36,28 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 export const ALLOWED_SMS_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'];
 
+/**
+ * Authoritatively enriches a repair entity with accurate timeline tracking timestamps:
+ * - receivedAt: When the device was received by the laboratory.
+ *   (Explicit receivedAt, or courierReceivedDate for courier intake, or createdAt for walk-in intake)
+ * - assignedAt: When the technician was assigned (null if unassigned)
+ */
+export function enrichRepairTimeline<T extends Record<string, any>>(repair: T): T & { receivedAt: string; assignedAt: string | null } {
+  if (!repair) return repair as any;
+  const isCourier = Boolean(repair.isCourierIn || repair.receivingMethod === 'COURIER');
+  const receivedAt = repair.receivedAt ||
+    (isCourier && repair.courierReceivedDate ? repair.courierReceivedDate : repair.createdAt) ||
+    new Date().toISOString();
+
+  const assignedAt = repair.technicianId ? (repair.assignedAt || null) : null;
+
+  return {
+    ...repair,
+    receivedAt,
+    assignedAt,
+  };
+}
+
 const ALLOWED_REPAIR_COLUMNS = new Set([
   'customerId',
   'customerName',
@@ -420,20 +442,23 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     res.setHeader('X-Total-Pages', String(totalPages));
 
     const smsSummaries = getAllRepairSmsSummaries();
-    const repairsWithSms = (repairs || []).map((r: any) => ({
-      ...r,
-      smsSummary: smsSummaries[r.id] || (r.repairNumber ? smsSummaries[r.repairNumber] : null) || {
-        repairId: r.id,
-        repairNumber: r.repairNumber,
-        status: 'NOT_SENT',
-        count: 0,
-        totalAttempts: 0,
-        lastSentAt: null,
-        lastChannel: null,
-        lastStaffName: null,
-        lastRecordId: null,
-      },
-    }));
+    const repairsWithSms = (repairs || []).map((r: any) => {
+      const enriched = enrichRepairTimeline(r);
+      return {
+        ...enriched,
+        smsSummary: smsSummaries[r.id] || (r.repairNumber ? smsSummaries[r.repairNumber] : null) || {
+          repairId: r.id,
+          repairNumber: r.repairNumber,
+          status: 'NOT_SENT',
+          count: 0,
+          totalAttempts: 0,
+          lastSentAt: null,
+          lastChannel: null,
+          lastStaffName: null,
+          lastRecordId: null,
+        },
+      };
+    });
 
     if (isPaginatedRequest) {
       return res.json({
@@ -693,7 +718,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
           }
         }
         return res.json({
-          ...byNum,
+          ...enrichRepairTimeline(byNum),
           smsSummary: getRepairSmsSummary(byNum.id),
         });
       }
@@ -709,7 +734,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     return res.json({
-      ...repair,
+      ...enrichRepairTimeline(repair),
       smsSummary: getRepairSmsSummary(repair.id),
     });
   } catch (err: any) {
@@ -992,7 +1017,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     await broadcastServerChange('Repair', 'CREATE', created.id, created);
 
-    return res.status(201).json(created);
+    return res.status(201).json(enrichRepairTimeline(created));
   } catch (err: any) {
     console.error('[CREATE REPAIR ERROR]', err);
     return res.status(500).json({ error: 'Failed to register repair ticket.' });
@@ -1274,7 +1299,7 @@ const handleBatchRepairIntake = async (req: AuthRequest, res: Response) => {
         },
       });
 
-      createdRepairs.push(created);
+      createdRepairs.push(enrichRepairTimeline(created));
     }
 
     return res.status(201).json({
@@ -2167,7 +2192,7 @@ router.post('/:id/assign', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MAN
 
     await broadcastServerChange('Repair', 'UPDATE', id, updated);
 
-    return res.json(updated);
+    return res.json(enrichRepairTimeline(updated));
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to assign technician.' });
   }

@@ -88,6 +88,12 @@ import UserOverviewCards from '@/components/dashboard/UserOverviewCards';
 import { formatNPR } from '@/lib/format';
 import { Pagination } from '@/components/common/Pagination';
 import { REPAIRS_PER_PAGE } from '@/lib/pagination';
+import {
+  RepairTimelineTableCell,
+  RepairTimelineCardSection,
+  RepairTimelineOverviewBanner
+} from '@/components/repair/RepairTimelineTracker';
+import { getRepairTimelineMetrics } from '@/lib/repairTimeline';
 
 
 const statusConfig: Record<string, { label: string; badge: string; bgSoft: string; textClass: string }> = {
@@ -142,7 +148,16 @@ export default function ManagerDashboard() {
   const [dateFilter, setDateFilter] = useState<DateFilterOption>('ALL');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
-  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'repairNumber' | 'customer' | 'priority'>('newest');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'repairNumber' | 'customer' | 'priority' | 'longestWaiting' | 'longestUnassigned' | 'recentlyAssigned'>('newest');
+
+  // Shared lightweight timer to continuously update elapsed-time calculations without row-level intervals
+  const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Authoritative 40-record page state
   const [currentPage, setCurrentPage] = useState(1);
@@ -366,6 +381,25 @@ export default function ManagerDashboard() {
       if (sortBy === 'oldest') {
         return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
       }
+      if (sortBy === 'longestWaiting') {
+        const timeA = getRepairTimelineMetrics(a, currentTime).rawElapsedSinceReceivedMs;
+        const timeB = getRepairTimelineMetrics(b, currentTime).rawElapsedSinceReceivedMs;
+        return timeB - timeA;
+      }
+      if (sortBy === 'longestUnassigned') {
+        const unassignedA = !a.technicianId;
+        const unassignedB = !b.technicianId;
+        if (unassignedA && !unassignedB) return -1;
+        if (!unassignedA && unassignedB) return 1;
+        const timeA = getRepairTimelineMetrics(a, currentTime).rawElapsedSinceReceivedMs;
+        const timeB = getRepairTimelineMetrics(b, currentTime).rawElapsedSinceReceivedMs;
+        return timeB - timeA;
+      }
+      if (sortBy === 'recentlyAssigned') {
+        const assignA = a.technicianId ? (new Date(a.assignedAt || a.updatedAt || a.createdAt || 0).getTime()) : 0;
+        const assignB = b.technicianId ? (new Date(b.assignedAt || b.updatedAt || b.createdAt || 0).getTime()) : 0;
+        return assignB - assignA;
+      }
       if (sortBy === 'repairNumber') {
         return (a.repairNumber || '').localeCompare(b.repairNumber || '');
       }
@@ -378,7 +412,7 @@ export default function ManagerDashboard() {
       }
       return 0;
     });
-  }, [repairs, searchQuery, statusFilter, techFilter, priorityFilter, dateFilter, customStartDate, customEndDate, sortBy]);
+  }, [repairs, searchQuery, statusFilter, techFilter, priorityFilter, dateFilter, customStartDate, customEndDate, sortBy, currentTime]);
 
   // Global 40-record page bounds calculation
   const totalFilteredCount = filteredRepairs.length;
@@ -909,7 +943,22 @@ export default function ManagerDashboard() {
         </CardContent>
       </Card>
 
-      {/* 4. Filter Toolbar & Search */}
+      {/* 4. Dedicated Repair Timeline & Bottleneck Monitor Banner */}
+      <RepairTimelineOverviewBanner
+        repairs={repairs}
+        now={currentTime}
+        activeStatusFilter={statusFilter}
+        onFilterUnassigned={() => {
+          setStatusFilter('UNASSIGNED');
+          setSortBy('longestUnassigned');
+        }}
+        onFilterProlonged={() => {
+          setStatusFilter('UNASSIGNED');
+          setSortBy('longestWaiting');
+        }}
+      />
+
+      {/* 5. Filter Toolbar & Search */}
       <div className="bg-white border border-slate-200 rounded-[24px] sm:rounded-[32px] p-4 sm:p-6 shadow-sm space-y-3.5 sm:space-y-4">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-4">
           {/* Search Input */}
@@ -980,12 +1029,15 @@ export default function ManagerDashboard() {
 
             {/* Sort Filter */}
             <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-              <SelectTrigger className="h-10 sm:h-12 flex-1 sm:w-36 rounded-xl sm:rounded-2xl border-slate-200 font-bold text-xs bg-white">
+              <SelectTrigger className="h-10 sm:h-12 flex-1 sm:w-44 rounded-xl sm:rounded-2xl border-slate-200 font-bold text-xs bg-white">
                 <SelectValue placeholder="Sort" />
               </SelectTrigger>
               <SelectContent className="rounded-2xl">
                 <SelectItem value="newest" className="font-bold text-xs">Newest First</SelectItem>
                 <SelectItem value="oldest" className="font-bold text-xs">Oldest First</SelectItem>
+                <SelectItem value="longestWaiting" className="font-bold text-xs text-indigo-700">Longest Waiting (Floor Time)</SelectItem>
+                <SelectItem value="longestUnassigned" className="font-bold text-xs text-amber-700">Unassigned (Longest Delay First)</SelectItem>
+                <SelectItem value="recentlyAssigned" className="font-bold text-xs text-teal-700">Recently Assigned</SelectItem>
                 <SelectItem value="priority" className="font-bold text-xs">Priority (Highest)</SelectItem>
                 <SelectItem value="repairNumber" className="font-bold text-xs">Repair #</SelectItem>
                 <SelectItem value="customer" className="font-bold text-xs">Customer Name</SelectItem>
@@ -1105,7 +1157,7 @@ export default function ManagerDashboard() {
                   <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
                     <tr>
                       <th className="py-4 px-4">Job #</th>
-                      <th className="py-4 px-4">Date</th>
+                      <th className="py-4 px-4 min-w-[210px]">Repair Timeline & Tracking</th>
                       <th className="py-4 px-4">Customer</th>
                       <th className="py-4 px-4">Device & Problem</th>
                       <th className="py-4 px-4">Priority</th>
@@ -1139,12 +1191,9 @@ export default function ManagerDashboard() {
                             </button>
                           </td>
 
-                          {/* Date */}
-                          <td className="py-4 px-4 whitespace-nowrap text-xs text-slate-600">
-                            <div>{repair.createdAt ? format(new Date(repair.createdAt), 'MMM dd, yyyy') : 'N/A'}</div>
-                            <div className="text-[10px] text-slate-400">
-                              {repair.createdAt ? format(new Date(repair.createdAt), 'hh:mm a') : ''}
-                            </div>
+                          {/* Repair Timeline & Elapsed Time Tracking */}
+                          <td className="py-3 px-4">
+                            <RepairTimelineTableCell repair={repair} now={currentTime} />
                           </td>
 
                           {/* Customer */}
@@ -1356,6 +1405,9 @@ export default function ManagerDashboard() {
                     <div className="bg-slate-50 p-3 rounded-2xl text-xs text-slate-600 italic">
                       "{repair.problemDescription}"
                     </div>
+
+                    {/* Dedicated Repair Timeline & Time Tracking Section */}
+                    <RepairTimelineCardSection repair={repair} now={currentTime} />
 
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                       <div className="text-xs">
