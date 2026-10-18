@@ -1285,8 +1285,8 @@ export default function Services() {
     if (item.priceType === 'ON_INSPECTION') {
       return (
         <div className="flex flex-col min-w-0">
-          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">Estimate</span>
-          <span className="text-[10px] sm:text-xs md:text-sm font-extrabold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/80 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg inline-block w-fit mt-0.5 truncate max-w-full">
+          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 leading-none mb-0.5">Estimate</span>
+          <span className="text-[11px] sm:text-xs md:text-sm font-extrabold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/80 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg inline-block w-fit whitespace-nowrap">
             On Inspection
           </span>
         </div>
@@ -1296,8 +1296,8 @@ export default function Services() {
     if (item.priceType === 'CONTACT_FOR_PRICE' || (!item.price && item.priceType !== 'FIXED')) {
       return (
         <div className="flex flex-col min-w-0">
-          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">Quotation</span>
-          <span className="text-[10px] sm:text-xs md:text-sm font-extrabold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg inline-block w-fit mt-0.5 truncate max-w-full">
+          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 leading-none mb-0.5">Quotation</span>
+          <span className="text-[11px] sm:text-xs md:text-sm font-extrabold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg inline-block w-fit whitespace-nowrap">
             Contact
           </span>
         </div>
@@ -1307,17 +1307,17 @@ export default function Services() {
     if (item.priceType === 'STARTING_FROM') {
       return (
         <div className="flex flex-col min-w-0">
-          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">From</span>
+          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 leading-none mb-0.5">From</span>
           <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
-            <span className="text-[11px] sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight truncate">
+            <span className="text-xs sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight whitespace-nowrap">
               NPR {item.price.toLocaleString()}
             </span>
             {hasDiscount && (
               <>
-                <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 dark:text-slate-500 line-through">
+                <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 dark:text-slate-500 line-through whitespace-nowrap">
                   NPR {item.originalPrice!.toLocaleString()}
                 </span>
-                <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 px-1 py-0.2 rounded">
+                <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 px-1 py-0.2 rounded whitespace-nowrap">
                   -{discountPercent}%
                 </span>
               </>
@@ -1330,17 +1330,17 @@ export default function Services() {
     // Default FIXED
     return (
       <div className="flex flex-col min-w-0">
-        <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">Price</span>
+        <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 leading-none mb-0.5">Price</span>
         <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
-          <span className="text-[11px] sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight truncate">
+          <span className="text-xs sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight whitespace-nowrap">
             NPR {item.price.toLocaleString()}
           </span>
           {hasDiscount && (
             <>
-              <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 dark:text-slate-500 line-through">
+              <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 dark:text-slate-500 line-through whitespace-nowrap">
                 NPR {item.originalPrice!.toLocaleString()}
               </span>
-              <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 px-1 py-0.2 rounded">
+              <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 px-1 py-0.2 rounded whitespace-nowrap">
                 -{discountPercent}%
               </span>
             </>
@@ -1966,20 +1966,20 @@ export default function Services() {
               {Array.from({ length: 8 }).map((_, idx) => (
                 <div 
                   key={idx} 
-                  className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 p-3 sm:p-4.5 md:p-5 space-y-3 sm:space-y-4 shadow-xs animate-pulse flex flex-col justify-between h-full min-h-[220px] sm:min-h-[260px]"
+                  className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-slate-200/90 dark:border-slate-800 p-2.5 sm:p-4 md:p-5 space-y-2.5 sm:space-y-3 shadow-xs animate-pulse flex flex-col justify-between h-full min-h-[200px] sm:min-h-[240px]"
                 >
                   <div className="flex justify-between items-start">
-                    <div className="h-9 w-9 sm:h-11 sm:w-11 bg-slate-100 rounded-xl sm:rounded-2xl" />
-                    <div className="h-5 sm:h-6 bg-slate-100 rounded-md sm:rounded-lg w-12 sm:w-16" />
+                    <div className="h-8 w-8 sm:h-11 sm:w-11 bg-slate-100 dark:bg-slate-800 rounded-lg sm:rounded-2xl" />
+                    <div className="h-5 sm:h-6 bg-slate-100 dark:bg-slate-800 rounded-md sm:rounded-lg w-12 sm:w-16" />
                   </div>
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <div className="h-3 sm:h-3.5 bg-slate-100 rounded-md w-1/2" />
-                    <div className="h-4 sm:h-5 bg-slate-200 rounded-md w-4/5" />
-                    <div className="h-3 sm:h-4 bg-slate-100 rounded-md w-full hidden sm:block" />
+                  <div className="space-y-1 sm:space-y-1.5">
+                    <div className="h-3 sm:h-3.5 bg-slate-100 dark:bg-slate-800 rounded-md w-1/2" />
+                    <div className="h-4 sm:h-5 bg-slate-200 dark:bg-slate-700 rounded-md w-4/5" />
+                    <div className="h-3 sm:h-4 bg-slate-100 dark:bg-slate-800 rounded-md w-full hidden sm:block" />
                   </div>
-                  <div className="pt-2.5 sm:pt-3 border-t border-slate-100 flex justify-between items-center">
-                    <div className="h-5 sm:h-6 bg-slate-200 rounded-md w-14 sm:w-20" />
-                    <div className="h-7 sm:h-8 bg-slate-200 rounded-lg sm:rounded-xl w-14 sm:w-20" />
+                  <div className="pt-2 sm:pt-2.5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                    <div className="h-5 sm:h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-14 sm:w-20" />
+                    <div className="h-7 sm:h-8 bg-slate-200 dark:bg-slate-700 rounded-lg sm:rounded-xl w-14 sm:w-18" />
                   </div>
                 </div>
               ))}
@@ -2143,25 +2143,25 @@ export default function Services() {
                     <article
                       key={item.id}
                       onClick={() => navigate(serviceUrl)}
-                      className={`group bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200/90 dark:border-slate-800 hover:border-slate-400/80 dark:hover:border-slate-700 p-3 sm:p-4.5 md:p-5 h-full flex flex-col justify-between hover:shadow-xl dark:hover:shadow-none hover:-translate-y-1 ${catInfo.cardHover} transition-all duration-200 cursor-pointer relative overflow-hidden`}
+                      className={`group bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-slate-200/90 dark:border-slate-800 hover:border-slate-400/80 dark:hover:border-slate-700 p-2.5 sm:p-4 md:p-5 h-full flex flex-col justify-between hover:shadow-xl dark:hover:shadow-none hover:-translate-y-1 ${catInfo.cardHover} transition-all duration-200 cursor-pointer relative overflow-hidden`}
                     >
                       {/* Top Header: Icon + Category Badge + Brand Pill */}
-                      <div className="space-y-2 sm:space-y-3">
+                      <div className="space-y-1.5 sm:space-y-2.5">
                         <div className="flex items-start justify-between gap-1 sm:gap-2">
                           {/* Category Icon in Curved Square Badge */}
                           <Link
                             to={serviceUrl}
                             onClick={(e) => e.stopPropagation()}
                             aria-label={`View full details for ${item.serviceName}`}
-                            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl ${catInfo.bgClass} flex items-center justify-center border border-slate-100/90 dark:border-slate-800 group-hover:scale-105 transition-transform shrink-0 shadow-2xs cursor-pointer`}
+                            className={`w-8 h-8 sm:w-11 sm:h-11 rounded-lg sm:rounded-2xl ${catInfo.bgClass} flex items-center justify-center border border-slate-100/90 dark:border-slate-800 group-hover:scale-105 transition-transform shrink-0 shadow-2xs cursor-pointer`}
                           >
                             <CategoryIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${catInfo.iconClass}`} />
                           </Link>
 
-                          {/* Brand Pill & Device Indicator */}
+                          {/* Brand Pill & Rating Stars */}
                           <div className="flex items-center gap-1 shrink-0">
                             {renderRatingStars(item.rating, item.ratingCount)}
-                            <span className="text-[9px] sm:text-xs font-black uppercase text-slate-600 dark:text-slate-300 bg-slate-100/90 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg tracking-wider truncate max-w-[65px] sm:max-w-none">
+                            <span className="text-[9px] sm:text-xs font-black uppercase text-slate-600 dark:text-slate-300 bg-slate-100/90 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg tracking-wider whitespace-nowrap">
                               {item.brand}
                             </span>
                           </div>
@@ -2187,14 +2187,14 @@ export default function Services() {
                             onClick={(e) => e.stopPropagation()}
                             className="block focus-visible:outline-none focus-visible:underline"
                           >
-                            <h3 className="text-xs sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] flex items-center cursor-pointer">
+                            <h3 className="text-xs sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 min-h-[1.75rem] sm:min-h-[2.5rem] flex items-center cursor-pointer">
                               {item.serviceName}
                             </h3>
                           </Link>
                         </div>
 
                         {/* Short Description */}
-                        <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed line-clamp-1 sm:line-clamp-2 min-h-[1rem] sm:min-h-[2rem]">
+                        <p className="text-[10px] sm:text-xs text-slate-600 dark:text-slate-400 font-normal sm:font-medium leading-relaxed line-clamp-1 sm:line-clamp-2 min-h-[0.875rem] sm:min-h-[2rem]">
                           {shortDescription}
                         </p>
 
@@ -2213,32 +2213,19 @@ export default function Services() {
                       </div>
 
                       {/* Card Footer: Clean Price & View Details Action */}
-                      <div className="pt-2.5 sm:pt-3 mt-2 sm:mt-3.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5 sm:gap-2">
-                        {/* Price Display */}
+                      <div className="pt-2 sm:pt-2.5 mt-2 sm:mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5 sm:gap-2">
+                        {/* Price Display (Bottom-Left) */}
                         <div className="min-w-0 flex-1">
                           {renderPriceBadge(item)}
                         </div>
 
-                        {/* Actions: Quick View Modal & Direct Full Page */}
-                        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenDetail(item);
-                            }}
-                            aria-label={`Quick preview modal for ${item.serviceName}`}
-                            className="h-7 sm:h-8 px-2 sm:px-2.5 rounded-lg sm:rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-[10px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-0.5 cursor-pointer"
-                          >
-                            <span>Quick View</span>
-                          </Button>
-
+                        {/* Actions: Single Details Button (Bottom-Right) */}
+                        <div className="shrink-0">
                           <Link
                             to={serviceUrl}
                             onClick={(e) => e.stopPropagation()}
                             aria-label={`View full service details for ${item.serviceName}`}
-                            className="h-7 sm:h-8 px-2 sm:px-2.5 rounded-lg sm:rounded-xl bg-slate-950 hover:bg-slate-800 text-white text-[10px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-0.5 sm:gap-1 shadow-2xs cursor-pointer"
+                            className="h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg sm:rounded-xl bg-slate-950 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 shadow-2xs cursor-pointer whitespace-nowrap"
                           >
                             <span>Details</span>
                             <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />

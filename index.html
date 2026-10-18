@@ -134,7 +134,77 @@
     <!-- Fonts: Inter & Tiro Devanagari Hindi for Service Slips & UI -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet" />
+    <!-- Early Theme Initialization to Prevent Flash of Light Mode on Browser Refresh -->
+    <script>
+      (function() {
+        try {
+          var storedGlobal = localStorage.getItem('mtslab-global-theme');
+          var storedActive = localStorage.getItem('mtslab-active-theme');
+          var storedPref = localStorage.getItem('mtslab-theme-preference') || 'global';
+          var themeToApply = 'neutral-default';
+
+          if (storedGlobal) {
+            try {
+              var parsed = JSON.parse(storedGlobal);
+              if (parsed && parsed.effectiveTheme) {
+                themeToApply = parsed.effectiveTheme;
+              } else if (parsed && parsed.activeTheme) {
+                themeToApply = parsed.activeTheme;
+              }
+            } catch (e) {
+              if (['light', 'dark', 'night', 'neutral-default', 'dashain', 'tihar', 'holi', 'nepali-new-year'].indexOf(storedGlobal) !== -1) {
+                themeToApply = storedGlobal;
+              }
+            }
+          } else if (storedActive && ['light', 'dark', 'night', 'neutral-default', 'dashain', 'tihar', 'holi', 'nepali-new-year'].indexOf(storedActive) !== -1) {
+            themeToApply = storedActive;
+          }
+
+          var isFestival = ['dashain', 'tihar', 'holi', 'nepali-new-year'].indexOf(themeToApply) !== -1;
+
+          // Personal preference override (if not festival or explicitly chosen)
+          if (storedPref && storedPref !== 'global' && !isFestival) {
+            if (storedPref === 'system' && window.matchMedia) {
+              themeToApply = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            } else if (['light', 'dark', 'night', 'neutral-default'].indexOf(storedPref) !== -1) {
+              themeToApply = storedPref;
+            }
+          }
+
+          var root = document.documentElement;
+          root.classList.remove(
+            'dark',
+            'theme-light',
+            'theme-night',
+            'theme-neutral-default',
+            'theme-festival',
+            'theme-festival-dashain',
+            'theme-festival-tihar',
+            'theme-festival-holi',
+            'theme-festival-nepali-new-year'
+          );
+
+          if (themeToApply === 'light') {
+            root.classList.add('theme-light');
+          } else if (themeToApply === 'dark') {
+            root.classList.add('dark');
+          } else if (themeToApply === 'night') {
+            root.classList.add('dark', 'theme-night');
+          } else if (themeToApply === 'dashain') {
+            root.classList.add('theme-festival', 'theme-festival-dashain');
+          } else if (themeToApply === 'tihar') {
+            root.classList.add('dark', 'theme-festival', 'theme-festival-tihar');
+          } else if (themeToApply === 'holi') {
+            root.classList.add('theme-festival', 'theme-festival-holi');
+          } else if (themeToApply === 'nepali-new-year') {
+            root.classList.add('theme-festival', 'theme-festival-nepali-new-year');
+          } else {
+            root.classList.add('theme-neutral-default');
+          }
+          root.setAttribute('data-theme', themeToApply);
+        } catch (_) {}
+      })();
+    </script>
   </head>
   <body>
     <!-- Root container with semantic crawler-readable fallback content -->

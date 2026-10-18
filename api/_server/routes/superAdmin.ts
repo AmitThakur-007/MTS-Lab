@@ -446,7 +446,12 @@ router.get('/system-theme', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
     const config = await getSystemThemeConfigAsync();
     return res.json(config);
   } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to retrieve system theme settings.' });
+    try {
+      const fallback = getSystemThemeConfig();
+      return res.json(fallback);
+    } catch (_) {
+      return res.status(500).json({ error: 'Failed to retrieve system theme settings.' });
+    }
   }
 });
 
@@ -522,9 +527,13 @@ router.post('/system-theme', authenticate, authorize(['SUPER_ADMIN']), async (re
       }
     );
 
-    // Audit log
+    // Audit log with valid foreign key constraint
+    const validUserId = (req.user?.id && typeof req.user.id === 'string' && req.user.id.length === 36)
+      ? req.user.id
+      : null;
+
     await logAudit({
-      userId: req.user?.id || 'system',
+      userId: validUserId,
       userEmail: req.user?.email || 'superadmin@mtslab.com',
       action: 'SUPERADMIN_THEME_UPDATE',
       resource: 'SystemTheme',

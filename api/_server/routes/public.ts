@@ -1035,7 +1035,12 @@ const handleGetSystemTheme = async (_req: Request, res: Response) => {
     const themeConfig = await getSystemThemeConfigAsync();
     return res.json(themeConfig);
   } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to read system theme configuration.' });
+    try {
+      const fallback = getSystemThemeConfig();
+      return res.json(fallback);
+    } catch (_) {
+      return res.status(500).json({ error: 'Failed to read system theme configuration.' });
+    }
   }
 };
 
