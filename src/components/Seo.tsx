@@ -121,11 +121,12 @@ export function RouteSeo() {
     // Check static routes
     const staticConfig = STATIC_PAGES_SEO[pathname];
     if (staticConfig) {
+      const hasTrackingQuery = pathname === '/track' && Boolean(location.search);
       updateDocumentSeo({
         title: staticConfig.title,
         description: staticConfig.description,
         canonical: staticConfig.canonical,
-        noindex: staticConfig.noindex || false,
+        noindex: hasTrackingQuery ? true : (staticConfig.noindex || false),
         jsonLd: pathname === '/' ? getLocalBusinessJsonLd() : undefined,
       });
       return;

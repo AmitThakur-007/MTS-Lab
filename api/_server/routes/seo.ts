@@ -152,46 +152,130 @@ function injectSeoIntoTemplate(template: string, options: PageMetaOptions): stri
   return html;
 }
 
-// ==========================================
-// 1. SITEMAP: GET /sitemap.xml
-// ==========================================
-router.get('/sitemap.xml', async (req: Request, res: Response) => {
+const STATIC_PAGE_FILES: Record<string, string> = {
+  '/': 'src/pages/Home.tsx',
+  '/services': 'src/pages/Services.tsx',
+  '/about': 'src/pages/About.tsx',
+  '/contact': 'src/pages/Contact.tsx',
+  '/track': 'src/pages/Tracking.tsx',
+  '/shop': 'src/pages/Shop.tsx',
+  '/terms': 'src/pages/Terms.tsx',
+  '/privacy': 'src/pages/Privacy.tsx',
+};
+
+function getStaticPageLastmod(routePath: string): string | null {
+  const relFile = STATIC_PAGE_FILES[routePath];
+  if (relFile) {
+    try {
+      const fullPath = path.join(process.cwd(), relFile);
+      if (fs.existsSync(fullPath)) {
+        const stat = fs.statSync(fullPath);
+        if (stat.mtime && !isNaN(stat.mtime.getTime())) {
+          return stat.mtime.toISOString().split('T')[0];
+        }
+      }
+    } catch (_) {}
+  }
+  // Stable release date fallback, never fabricated dynamically on each request
+  return '2026-10-18';
+}
+
+function getValidW3cDate(val?: string | null): string | null {
+  if (!val) return null;
   try {
-    const services = await getAuthoritativeActiveServices();
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split('T')[0];
+    }
+  } catch (_) {}
+  return null;
+}
+
+// ==========================================
+// 1. ROBOTS.TXT: GET /robots.txt
+// ==========================================
+router.get('/robots.txt', (req: Request, res: Response) => {
+  try {
+    const publicRobots = path.join(process.cwd(), 'public', 'robots.txt');
+    if (fs.existsSync(publicRobots)) {
+      const content = fs.readFileSync(publicRobots, 'utf8');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+      return res.status(200).send(content);
+    }
+    const distRobots = path.join(process.cwd(), 'dist', 'robots.txt');
+    if (fs.existsSync(distRobots)) {
+      const content = fs.readFileSync(distRobots, 'utf8');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+      return res.status(200).send(content);
+    }
+  } catch (err) {
+    console.warn('[SEO ROUTER ROBOTS.TXT READ WARN]', err);
+  }
+
+  // Authoritative inline RFC 9309 fallback
+  const fallbackRobots = `# MTS Lab Kathmandu Robots Configuration\nUser-agent: *\nAllow: /\nAllow: /api/public/\nDisallow: /dashboard\nDisallow: /dashboard/\nDisallow: /login\nDisallow: /forgot-password\nDisallow: /reset-password\nDisallow: /pending-approval\nDisallow: /rejected-access\nDisallow: /api/\n\nUser-agent: OAI-SearchBot\nAllow: /\nAllow: /api/public/\nDisallow: /dashboard\nDisallow: /dashboard/\nDisallow: /login\nDisallow: /api/\n\nSitemap: ${SITE_URL}/sitemap.xml\n`;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+  return res.status(200).send(fallbackRobots);
+});
+
+// ==========================================
+// 2. SITEMAP: GET /sitemap.xml & /sitemap
+// ==========================================
+router.get(['/sitemap.xml', '/sitemap'], async (req: Request, res: Response) => {
+  try {
+    let services: ServiceLike[] = [];
+    try {
+      services = await getAuthoritativeActiveServices();
+    } catch (dbErr) {
+      console.warn('[SITEMAP NOTICE] Database services unavailable, emitting static canonical URLs:', dbErr);
+    }
+
     const { slugToService } = buildSlugMap(services);
 
-    const nowIso = new Date().toISOString().split('T')[0];
-
     const staticUrls = [
-      { loc: `${SITE_URL}/`, priority: '1.0', changefreq: 'weekly' },
-      { loc: `${SITE_URL}/services`, priority: '0.9', changefreq: 'daily' },
-      { loc: `${SITE_URL}/about`, priority: '0.8', changefreq: 'monthly' },
-      { loc: `${SITE_URL}/contact`, priority: '0.8', changefreq: 'monthly' },
-      { loc: `${SITE_URL}/track`, priority: '0.7', changefreq: 'monthly' },
-      { loc: `${SITE_URL}/shop`, priority: '0.7', changefreq: 'weekly' },
-      { loc: `${SITE_URL}/terms`, priority: '0.4', changefreq: 'yearly' },
-      { loc: `${SITE_URL}/privacy`, priority: '0.4', changefreq: 'yearly' },
+      { path: '/', loc: `${SITE_URL}/`, priority: '1.0', changefreq: 'weekly' },
+      { path: '/services', loc: `${SITE_URL}/services`, priority: '0.9', changefreq: 'daily' },
+      { path: '/about', loc: `${SITE_URL}/about`, priority: '0.8', changefreq: 'monthly' },
+      { path: '/contact', loc: `${SITE_URL}/contact`, priority: '0.8', changefreq: 'monthly' },
+      { path: '/track', loc: `${SITE_URL}/track`, priority: '0.7', changefreq: 'monthly' },
+      { path: '/shop', loc: `${SITE_URL}/shop`, priority: '0.7', changefreq: 'weekly' },
+      { path: '/terms', loc: `${SITE_URL}/terms`, priority: '0.4', changefreq: 'yearly' },
+      { path: '/privacy', loc: `${SITE_URL}/privacy`, priority: '0.4', changefreq: 'yearly' },
     ];
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
     xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
 
     for (const item of staticUrls) {
+      const lastmod = getStaticPageLastmod(item.path);
       xml += `  <url>\n`;
       xml += `    <loc>${escapeHtml(item.loc)}</loc>\n`;
-      xml += `    <lastmod>${nowIso}</lastmod>\n`;
+      if (lastmod) {
+        xml += `    <lastmod>${lastmod}</lastmod>\n`;
+      }
       xml += `    <changefreq>${item.changefreq}</changefreq>\n`;
       xml += `    <priority>${item.priority}</priority>\n`;
       xml += `  </url>\n`;
     }
 
     slugToService.forEach((svc, slug) => {
-      const lastmod = svc.updatedAt
-        ? new Date(svc.updatedAt).toISOString().split('T')[0]
-        : nowIso;
+      // Validate service data integrity
+      if (!svc || !svc.serviceName || !svc.brand || !svc.model) return;
+      if (svc.status && svc.status !== 'ACTIVE') return;
+
+      const cleanSlug = slug.trim().toLowerCase();
+      // Ensure clean URL format
+      if (!cleanSlug || cleanSlug === 'service' || cleanSlug.includes('?') || cleanSlug.includes('#')) return;
+
+      const serviceLastmod = getValidW3cDate(svc.updatedAt) || getValidW3cDate(svc.createdAt);
       xml += `  <url>\n`;
-      xml += `    <loc>${escapeHtml(`${SITE_URL}/services/${slug}`)}</loc>\n`;
-      xml += `    <lastmod>${lastmod}</lastmod>\n`;
+      xml += `    <loc>${escapeHtml(`${SITE_URL}/services/${cleanSlug}`)}</loc>\n`;
+      if (serviceLastmod) {
+        xml += `    <lastmod>${serviceLastmod}</lastmod>\n`;
+      }
       xml += `    <changefreq>weekly</changefreq>\n`;
       xml += `    <priority>0.8</priority>\n`;
       xml += `  </url>\n`;
@@ -206,6 +290,23 @@ router.get('/sitemap.xml', async (req: Request, res: Response) => {
     console.error('[SITEMAP GENERATION ERROR]', err);
     return res.status(500).type('text/plain').send('Failed to generate sitemap.xml');
   }
+});
+
+// ==========================================
+// 3. SITEMAP INDEX: GET /sitemap-index.xml
+// ==========================================
+router.get('/sitemap-index.xml', (req: Request, res: Response) => {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <sitemap>\n    <loc>${SITE_URL}/sitemap.xml</loc>\n  </sitemap>\n</sitemapindex>`;
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+  return res.status(200).send(xml);
+});
+
+// ==========================================
+// 4. NONCANONICAL REDIRECT: GET /price-finder
+// ==========================================
+router.get('/price-finder', (req: Request, res: Response) => {
+  return res.redirect(301, '/services');
 });
 
 // ==========================================
@@ -475,6 +576,60 @@ router.get('/contact', (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('[SEO /contact ERROR]', err);
     return res.status(500).send('Unable to render page');
+  }
+});
+
+// ==========================================
+// 6. TRACKING PAGE: GET /track
+// ==========================================
+router.get('/track', (req: Request, res: Response) => {
+  try {
+    const seoConfig = STATIC_PAGES_SEO['/track'];
+    const template = getHtmlTemplate();
+
+    // Check if customer query parameters are present (repairNumber, phone, ticket)
+    const hasCustomerQuery = Boolean(
+      req.query.repairNumber || req.query.phone || req.query.ticket || req.query.number
+    );
+
+    const bodyHtml = `
+      <main style="max-width:800px; margin:0 auto; padding:32px 16px; font-family:system-ui,-apple-system,sans-serif;">
+        <nav aria-label="Breadcrumb" style="font-size:14px; color:#64748b; margin-bottom:16px;">
+          <a href="/" style="color:#64748b; text-decoration:none;">Home</a> &gt; 
+          <span style="color:#0f172a; font-weight:600;">Track Repair</span>
+        </nav>
+        <header style="margin-bottom:24px;">
+          <h1 style="font-size:28px; font-weight:800; color:#0f172a;">${escapeHtml(seoConfig.title)}</h1>
+          <p style="font-size:16px; color:#475569; line-height:1.6; margin-top:8px;">${escapeHtml(seoConfig.description)}</p>
+        </header>
+        <section style="background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:24px; margin-bottom:24px;">
+          <h2 style="font-size:20px; font-weight:700; color:#0f172a; margin:0 0 12px;">Live Laboratory Repair Tracking</h2>
+          <p style="color:#334155; font-size:15px; line-height:1.6; margin:0 0 16px;">
+            MTS Lab Kathmandu provides live repair journey tracking for smartphone hardware restorations, laser line fixes, OCA glass laminations, and chip-level motherboard IC repairs.
+          </p>
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; font-size:14px; color:#334155;">
+            <p style="margin:0 0 6px;"><strong>How to Track:</strong> Enter your 4-to-6 digit Repair Ticket Number (found on your intake receipt) or your registered Mobile Phone Number.</p>
+            <p style="margin:0;"><strong>Hotline Support:</strong> <a href="tel:${BUSINESS_PHONE}" style="color:#059669; font-weight:700;">${BUSINESS_PHONE}</a> | <strong>Landline:</strong> ${BUSINESS_LANDLINE}</p>
+          </div>
+        </section>
+      </main>
+    `;
+
+    const html = injectSeoIntoTemplate(template, {
+      title: seoConfig.title,
+      description: seoConfig.description,
+      canonicalUrl: seoConfig.canonical,
+      noindex: hasCustomerQuery, // Strictly noindex if individual customer query parameters exist
+      jsonLd: getLocalBusinessJsonLd(),
+      bodyHtml,
+    });
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', hasCustomerQuery ? 'no-store, max-age=0' : 'public, max-age=3600, s-maxage=3600');
+    return res.status(200).send(html);
+  } catch (err: any) {
+    console.error('[SEO /track ERROR]', err);
+    return res.status(500).send('Unable to render tracking page');
   }
 });
 

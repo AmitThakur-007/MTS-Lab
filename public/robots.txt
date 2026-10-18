@@ -1,6 +1,10 @@
-# MTS Lab Kathmandu Robots Configuration
-# Production Domain: https://www.mobiletechnologystation.com.np
+# MTS Lab Kathmandu Robots Exclusion Configuration
+# Production Canonical Domain: https://www.mobiletechnologystation.com.np
+# Standards Compliance: RFC 9309 (Robots Exclusion Protocol)
 
+# ----------------------------------------------------
+# 1. Default Rules for All Web Crawlers
+# ----------------------------------------------------
 User-agent: *
 Allow: /
 Allow: /services
@@ -22,29 +26,130 @@ Disallow: /pending-approval
 Disallow: /rejected-access
 Disallow: /api/
 
-# Explicit permissions for AI & Search Answer Crawlers
+# ----------------------------------------------------
+# 2. Traditional Search Engine Crawlers
+# ----------------------------------------------------
 User-agent: Googlebot
 Allow: /
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /pending-approval
+Disallow: /rejected-access
+Disallow: /api/
 
 User-agent: Bingbot
 Allow: /
-
-User-agent: GPTBot
-Allow: /
-
-User-agent: ChatGPT-User
-Allow: /
-
-User-agent: Google-Extended
-Allow: /
-
-User-agent: ClaudeBot
-Allow: /
-
-User-agent: PerplexityBot
-Allow: /
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /pending-approval
+Disallow: /rejected-access
+Disallow: /api/
 
 User-agent: Applebot
 Allow: /
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /pending-approval
+Disallow: /rejected-access
+Disallow: /api/
 
+# ----------------------------------------------------
+# 3. OpenAI Crawlers: Search, Live Browsing & Training
+# ----------------------------------------------------
+# OpenAI Search Engine (SearchGPT & ChatGPT Search citations)
+User-agent: OAI-SearchBot
+Allow: /
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /pending-approval
+Disallow: /rejected-access
+Disallow: /api/
+
+# ChatGPT End-User Live URL Browsing Actions
+User-agent: ChatGPT-User
+Allow: /
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /pending-approval
+Disallow: /rejected-access
+Disallow: /api/
+
+# OpenAI Foundation Model Training Crawler
+User-agent: GPTBot
+Allow: /
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /pending-approval
+Disallow: /rejected-access
+Disallow: /api/
+
+# ----------------------------------------------------
+# 4. Other Leading AI & Answer Engine Crawlers
+# ----------------------------------------------------
+# Google AI Training & Extended Search
+User-agent: Google-Extended
+Allow: /
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /pending-approval
+Disallow: /rejected-access
+Disallow: /api/
+
+# Anthropic Claude AI Crawler
+User-agent: ClaudeBot
+Allow: /
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /pending-approval
+Disallow: /rejected-access
+Disallow: /api/
+
+# Perplexity AI Search Crawler
+User-agent: PerplexityBot
+Allow: /
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /pending-approval
+Disallow: /rejected-access
+Disallow: /api/
+
+# ----------------------------------------------------
+# 5. Authoritative XML Sitemap Reference
+# ----------------------------------------------------
 Sitemap: https://www.mobiletechnologystation.com.np/sitemap.xml

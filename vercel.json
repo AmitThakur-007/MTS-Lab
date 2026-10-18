@@ -7,7 +7,15 @@
       "destination": "/api/index.js"
     },
     {
+      "source": "/robots.txt",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/sitemap.xml",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/sitemap-index.xml",
       "destination": "/api/index.js"
     },
     {
@@ -19,11 +27,19 @@
       "destination": "/api/index.js"
     },
     {
+      "source": "/price-finder",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/about",
       "destination": "/api/index.js"
     },
     {
       "source": "/contact",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/track",
       "destination": "/api/index.js"
     },
     {

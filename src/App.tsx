@@ -58,7 +58,7 @@ export default function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/services" element={<Services />} />
                 <Route path="/services/:slug" element={<ServiceDetail />} />
-                <Route path="/price-finder" element={<Services />} />
+                <Route path="/price-finder" element={<Navigate to="/services" replace />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/track" element={<Tracking />} />
                 <Route path="/shop" element={<Shop />} />

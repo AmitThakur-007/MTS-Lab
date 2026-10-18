@@ -10395,7 +10395,11 @@ function parseServiceItem(item, isPublic = false) {
   }
   if (!deviceType) {
     const text = `${item.brand || ""} ${item.model || ""} ${item.serviceName || ""} ${item.category || ""}`.toLowerCase();
-    if (text.includes("ipad")) {
+    if (text.includes("macbook") || text.includes("laptop") || text.includes("notebook") || text.includes("thinkpad")) {
+      deviceType = "Laptop";
+    } else if (text.includes("smart tv") || text.includes("television") || text.includes("oled tv") || text.includes("bravia")) {
+      deviceType = "Smart TV";
+    } else if (text.includes("ipad")) {
       deviceType = "iPad";
     } else if (text.includes("tablet") || text.includes("tab ") || text.includes("tab-")) {
       deviceType = "Tablet";
@@ -10671,7 +10675,16 @@ var handleGetPrices = async (req, res) => {
     let parsedPrices = allMerged.map((item) => parseServiceItem(item, isPublic));
     if (deviceType && deviceType !== "ALL" && deviceType !== "all") {
       const targetDevice = String(deviceType).toLowerCase().trim();
-      parsedPrices = parsedPrices.filter((item) => (item.deviceType || "").toLowerCase() === targetDevice);
+      parsedPrices = parsedPrices.filter((item) => {
+        const itemType = (item.deviceType || "Smartphone").toLowerCase();
+        if (targetDevice === "tablet") {
+          return itemType === "tablet" || itemType === "ipad";
+        }
+        if (targetDevice === "tv" || targetDevice === "smart tv") {
+          return itemType === "smart tv" || itemType === "tv";
+        }
+        return itemType === targetDevice;
+      });
     }
     return res.json(parsedPrices);
   } catch (err) {
@@ -13147,73 +13160,235 @@ import { v4 as uuidv418 } from "uuid";
 // api/_server/services/systemThemeService.ts
 import fs7 from "fs";
 import path7 from "path";
-var DATA_DIR6 = path7.join(process.cwd(), "data");
-var THEME_CONFIG_FILE = path7.join(DATA_DIR6, "system_theme.json");
-if (!fs7.existsSync(DATA_DIR6)) {
-  try {
-    fs7.mkdirSync(DATA_DIR6, { recursive: true });
-  } catch (e) {
-    console.warn("[THEME STORAGE DIR WARN]", e);
-  }
-}
+var VALID_THEMES = [
+  "light",
+  "dark",
+  "night",
+  "neutral-default",
+  "dashain",
+  "tihar",
+  "holi",
+  "nepali-new-year"
+];
+var FESTIVAL_THEMES = [
+  "dashain",
+  "tihar",
+  "holi",
+  "nepali-new-year"
+];
+var DEFAULT_FESTIVAL_GREETINGS = {
+  dashain: "\u092C\u0921\u093E \u0926\u0936\u0948\u0902\u0915\u094B \u0939\u093E\u0930\u094D\u0926\u093F\u0915 \u092E\u0902\u0917\u0932\u092E\u092F \u0936\u0941\u092D\u0915\u093E\u092E\u0928\u093E | Happy Dashain - Celebrating Prosperity & Renewal",
+  tihar: "\u0936\u0941\u092D \u0926\u0940\u092A\u093E\u0935\u0932\u0940 \u0924\u0925\u093E \u0924\u093F\u0939\u093E\u0930\u0915\u094B \u0939\u093E\u0930\u094D\u0926\u093F\u0915 \u0936\u0941\u092D\u0915\u093E\u092E\u0928\u093E | Happy Tihar & Deepawali - Festival of Lights",
+  holi: "\u0939\u094B\u0932\u0940 \u092A\u0930\u094D\u0935\u0915\u094B \u0939\u093E\u0930\u094D\u0926\u093F\u0915 \u0936\u0941\u092D\u0915\u093E\u092E\u0928\u093E | Happy Holi - Festival of Vibrant Colors & Joy",
+  "nepali-new-year": "\u0928\u092F\u093E\u0901 \u0935\u0930\u094D\u0937\u0915\u094B \u0939\u093E\u0930\u094D\u0926\u093F\u0915 \u092E\u0902\u0917\u0932\u092E\u092F \u0936\u0941\u092D\u0915\u093E\u092E\u0928\u093E | Happy Nepali New Year - Fresh Beginnings"
+};
 var DEFAULT_CONFIG = {
+  activeTheme: "neutral-default",
+  effectiveTheme: "neutral-default",
+  festivalGreeting: "Serving with Excellence & Precision at MTS Lab Kathmandu",
+  customMessage: "Mobile Technology Station \u2014 Chip-Level Smartphone Hardware Lab",
+  schedule: {
+    enabled: false,
+    themeId: "dashain",
+    startDate: "",
+    endDate: ""
+  },
+  isScheduledActive: false,
   festivalModeEnabled: false,
   activeFestival: "dashain",
-  festivalGreeting: "Celebrating the festive spirit across MTS Lab Kathmandu",
-  customMessage: "Happy Festive Season from Mobile Technology Station",
   updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
   updatedBy: null,
   updatedByName: null
 };
 var cachedConfig = null;
-function getSystemThemeConfig() {
-  if (cachedConfig) {
-    return cachedConfig;
-  }
+function getConfigCandidatePaths() {
+  const paths = [];
   try {
-    if (fs7.existsSync(THEME_CONFIG_FILE)) {
-      const raw = fs7.readFileSync(THEME_CONFIG_FILE, "utf-8");
-      const parsed = JSON.parse(raw);
-      cachedConfig = {
-        festivalModeEnabled: Boolean(parsed.festivalModeEnabled),
-        activeFestival: ["holi", "dashain", "tihar"].includes(parsed.activeFestival) ? parsed.activeFestival : "dashain",
-        festivalGreeting: parsed.festivalGreeting || DEFAULT_CONFIG.festivalGreeting,
-        customMessage: parsed.customMessage || DEFAULT_CONFIG.customMessage,
-        updatedAt: parsed.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
-        updatedBy: parsed.updatedBy || null,
-        updatedByName: parsed.updatedByName || null
-      };
-      return cachedConfig;
-    }
-  } catch (err) {
-    console.warn("[THEME CONFIG READ ERROR]", err);
-  }
-  cachedConfig = { ...DEFAULT_CONFIG };
-  try {
-    fs7.writeFileSync(THEME_CONFIG_FILE, JSON.stringify(cachedConfig, null, 2), "utf-8");
+    paths.push(path7.join(process.cwd(), "data", "system_theme.json"));
   } catch (_) {
   }
+  try {
+    const tmpDir = process.env.TEMP || process.env.TMPDIR || "/tmp";
+    paths.push(path7.join(tmpDir, "system_theme.json"));
+  } catch (_) {
+  }
+  return paths;
+}
+function persistToFile(config2) {
+  const candidates = getConfigCandidatePaths();
+  for (const filePath of candidates) {
+    try {
+      const dir = path7.dirname(filePath);
+      if (!fs7.existsSync(dir)) {
+        fs7.mkdirSync(dir, { recursive: true });
+      }
+      fs7.writeFileSync(filePath, JSON.stringify(config2, null, 2), "utf-8");
+    } catch (_) {
+    }
+  }
+}
+function readFromFile() {
+  const candidates = getConfigCandidatePaths();
+  for (const filePath of candidates) {
+    try {
+      if (fs7.existsSync(filePath)) {
+        const raw = fs7.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          return parsed;
+        }
+      }
+    } catch (_) {
+    }
+  }
+  return null;
+}
+function isScheduleActiveNow(schedule) {
+  if (!schedule || !schedule.enabled || !schedule.startDate || !schedule.endDate) {
+    return false;
+  }
+  try {
+    const start = new Date(schedule.startDate).getTime();
+    const end = new Date(schedule.endDate).getTime();
+    if (isNaN(start) || isNaN(end) || start >= end) {
+      return false;
+    }
+    const now = Date.now();
+    return now >= start && now < end;
+  } catch {
+    return false;
+  }
+}
+function resolveEffectiveTheme(baseTheme, schedule) {
+  if (isScheduleActiveNow(schedule)) {
+    return { effectiveTheme: schedule.themeId, isScheduledActive: true };
+  }
+  return { effectiveTheme: baseTheme, isScheduledActive: false };
+}
+function normalizeThemeConfig(parsed) {
+  let activeTheme = "neutral-default";
+  if (parsed.activeTheme && VALID_THEMES.includes(parsed.activeTheme)) {
+    activeTheme = parsed.activeTheme;
+  } else if (parsed.festivalModeEnabled && parsed.activeFestival && VALID_THEMES.includes(parsed.activeFestival)) {
+    activeTheme = parsed.activeFestival;
+  }
+  const schedule = {
+    enabled: Boolean(parsed.schedule?.enabled),
+    themeId: parsed.schedule?.themeId && VALID_THEMES.includes(parsed.schedule.themeId) ? parsed.schedule.themeId : "dashain",
+    startDate: parsed.schedule?.startDate ? String(parsed.schedule.startDate) : "",
+    endDate: parsed.schedule?.endDate ? String(parsed.schedule.endDate) : ""
+  };
+  const { effectiveTheme, isScheduledActive } = resolveEffectiveTheme(activeTheme, schedule);
+  const isFestival = FESTIVAL_THEMES.includes(effectiveTheme);
+  return {
+    activeTheme,
+    effectiveTheme,
+    festivalGreeting: parsed.festivalGreeting || (isFestival ? DEFAULT_FESTIVAL_GREETINGS[effectiveTheme] : DEFAULT_CONFIG.festivalGreeting),
+    customMessage: parsed.customMessage || DEFAULT_CONFIG.customMessage,
+    schedule,
+    isScheduledActive,
+    festivalModeEnabled: isFestival,
+    activeFestival: isFestival ? effectiveTheme : "dashain",
+    updatedAt: parsed.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
+    updatedBy: parsed.updatedBy || null,
+    updatedByName: parsed.updatedByName || null
+  };
+}
+async function fetchLatestThemeFromSupabase() {
+  try {
+    const { data, error } = await supabaseAdmin.from("AuditLog").select("details, createdAt, userName").eq("resource", "SystemTheme").eq("action", "SUPERADMIN_THEME_UPDATE").order("createdAt", { ascending: false }).limit(1).maybeSingle();
+    if (!error && data?.details) {
+      const parsed = typeof data.details === "string" ? JSON.parse(data.details) : data.details;
+      if (parsed && (parsed.activeTheme || parsed.effectiveTheme)) {
+        return normalizeThemeConfig({
+          ...parsed,
+          updatedAt: data.createdAt,
+          updatedByName: data.userName || parsed.updatedByName
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("[SUPABASE THEME HYDRATION WARN]", err);
+  }
+  return null;
+}
+function getSystemThemeConfig() {
+  if (cachedConfig) {
+    const { effectiveTheme, isScheduledActive } = resolveEffectiveTheme(
+      cachedConfig.activeTheme,
+      cachedConfig.schedule
+    );
+    cachedConfig.effectiveTheme = effectiveTheme;
+    cachedConfig.isScheduledActive = isScheduledActive;
+    cachedConfig.festivalModeEnabled = FESTIVAL_THEMES.includes(effectiveTheme);
+    if (FESTIVAL_THEMES.includes(effectiveTheme)) {
+      cachedConfig.activeFestival = effectiveTheme;
+    }
+    return cachedConfig;
+  }
+  const fileData = readFromFile();
+  if (fileData) {
+    cachedConfig = normalizeThemeConfig(fileData);
+    return cachedConfig;
+  }
+  cachedConfig = { ...DEFAULT_CONFIG };
+  persistToFile(cachedConfig);
   return cachedConfig;
+}
+async function getSystemThemeConfigAsync() {
+  if (cachedConfig && cachedConfig.activeTheme !== "neutral-default") {
+    return getSystemThemeConfig();
+  }
+  const fileData = readFromFile();
+  if (fileData && fileData.activeTheme && fileData.activeTheme !== "neutral-default") {
+    cachedConfig = normalizeThemeConfig(fileData);
+    return cachedConfig;
+  }
+  const supabaseTheme = await fetchLatestThemeFromSupabase();
+  if (supabaseTheme) {
+    cachedConfig = supabaseTheme;
+    persistToFile(cachedConfig);
+    return cachedConfig;
+  }
+  return getSystemThemeConfig();
 }
 async function updateSystemThemeConfig(updates, user) {
   const current = getSystemThemeConfig();
-  const activeFestival = updates.activeFestival && ["holi", "dashain", "tihar"].includes(updates.activeFestival) ? updates.activeFestival : current.activeFestival;
-  const festivalModeEnabled = typeof updates.festivalModeEnabled === "boolean" ? updates.festivalModeEnabled : current.festivalModeEnabled;
+  let activeTheme = current.activeTheme;
+  if (updates.activeTheme && VALID_THEMES.includes(updates.activeTheme)) {
+    activeTheme = updates.activeTheme;
+  } else if (updates.festivalModeEnabled === false) {
+    activeTheme = "neutral-default";
+  } else if (updates.activeFestival && VALID_THEMES.includes(updates.activeFestival)) {
+    activeTheme = updates.activeFestival;
+  }
+  let schedule = { ...current.schedule };
+  if (updates.schedule) {
+    schedule = {
+      enabled: updates.schedule.enabled !== void 0 ? Boolean(updates.schedule.enabled) : schedule.enabled,
+      themeId: updates.schedule.themeId && VALID_THEMES.includes(updates.schedule.themeId) ? updates.schedule.themeId : schedule.themeId,
+      startDate: updates.schedule.startDate !== void 0 ? String(updates.schedule.startDate).trim() : schedule.startDate,
+      endDate: updates.schedule.endDate !== void 0 ? String(updates.schedule.endDate).trim() : schedule.endDate
+    };
+  }
+  const { effectiveTheme, isScheduledActive } = resolveEffectiveTheme(activeTheme, schedule);
+  const isFestival = FESTIVAL_THEMES.includes(effectiveTheme);
+  const defaultGreeting = isFestival ? DEFAULT_FESTIVAL_GREETINGS[effectiveTheme] || DEFAULT_CONFIG.festivalGreeting : DEFAULT_CONFIG.festivalGreeting;
   const updated = {
-    festivalModeEnabled,
-    activeFestival,
-    festivalGreeting: updates.festivalGreeting !== void 0 ? String(updates.festivalGreeting) : current.festivalGreeting,
-    customMessage: updates.customMessage !== void 0 ? String(updates.customMessage) : current.customMessage,
+    activeTheme,
+    effectiveTheme,
+    festivalGreeting: updates.festivalGreeting !== void 0 ? String(updates.festivalGreeting).trim() : current.festivalGreeting || defaultGreeting,
+    customMessage: updates.customMessage !== void 0 ? String(updates.customMessage).trim() : current.customMessage,
+    schedule,
+    isScheduledActive,
+    festivalModeEnabled: isFestival,
+    activeFestival: isFestival ? effectiveTheme : "dashain",
     updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
     updatedBy: user?.id || null,
     updatedByName: user?.name || null
   };
-  try {
-    fs7.writeFileSync(THEME_CONFIG_FILE, JSON.stringify(updated, null, 2), "utf-8");
-    cachedConfig = updated;
-  } catch (err) {
-    console.error("[THEME CONFIG WRITE ERROR]", err);
-  }
+  persistToFile(updated);
+  cachedConfig = updated;
   try {
     await broadcastServerChange("system_theme", "UPDATE", "global", updated);
   } catch (_) {
@@ -13549,7 +13724,7 @@ router17.post(
 );
 router17.get("/system-theme", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (_req, res) => {
   try {
-    const config2 = getSystemThemeConfig();
+    const config2 = await getSystemThemeConfigAsync();
     return res.json(config2);
   } catch (err) {
     return res.status(500).json({ error: "Failed to retrieve system theme settings." });
@@ -13557,16 +13732,61 @@ router17.get("/system-theme", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]),
 });
 router17.post("/system-theme", authenticate, authorize(["SUPER_ADMIN"]), async (req, res) => {
   try {
-    const { festivalModeEnabled, activeFestival, festivalGreeting, customMessage } = req.body;
-    if (activeFestival !== void 0 && !["holi", "dashain", "tihar"].includes(activeFestival)) {
-      return res.status(400).json({ error: "Invalid festival. Allowed values: 'holi', 'dashain', 'tihar'." });
+    const {
+      activeTheme,
+      festivalGreeting,
+      customMessage,
+      schedule,
+      festivalModeEnabled,
+      activeFestival
+    } = req.body;
+    const allowedThemes = [
+      "light",
+      "dark",
+      "night",
+      "neutral-default",
+      "dashain",
+      "tihar",
+      "holi",
+      "nepali-new-year"
+    ];
+    if (activeTheme !== void 0 && !allowedThemes.includes(activeTheme)) {
+      return res.status(400).json({
+        error: `Invalid theme '${activeTheme}'. Allowed themes: ${allowedThemes.join(", ")}.`
+      });
+    }
+    if (activeFestival !== void 0 && !allowedThemes.includes(activeFestival)) {
+      return res.status(400).json({
+        error: `Invalid festival '${activeFestival}'. Allowed themes: ${allowedThemes.join(", ")}.`
+      });
+    }
+    if (schedule && schedule.enabled) {
+      if (schedule.themeId && !allowedThemes.includes(schedule.themeId)) {
+        return res.status(400).json({
+          error: `Invalid schedule theme '${schedule.themeId}'. Must be one of: ${allowedThemes.join(", ")}.`
+        });
+      }
+      if (!schedule.startDate || !schedule.endDate) {
+        return res.status(400).json({
+          error: "Both startDate and endDate are required when festival scheduling is enabled."
+        });
+      }
+      const startMs = new Date(schedule.startDate).getTime();
+      const endMs = new Date(schedule.endDate).getTime();
+      if (isNaN(startMs) || isNaN(endMs) || startMs >= endMs) {
+        return res.status(400).json({
+          error: "Invalid schedule timeframe. Start date must be earlier than end date."
+        });
+      }
     }
     const updated = await updateSystemThemeConfig(
       {
-        festivalModeEnabled: typeof festivalModeEnabled === "boolean" ? festivalModeEnabled : void 0,
-        activeFestival: activeFestival || void 0,
+        activeTheme: activeTheme || void 0,
         festivalGreeting: festivalGreeting !== void 0 ? String(festivalGreeting).trim() : void 0,
-        customMessage: customMessage !== void 0 ? String(customMessage).trim() : void 0
+        customMessage: customMessage !== void 0 ? String(customMessage).trim() : void 0,
+        schedule: schedule !== void 0 ? schedule : void 0,
+        festivalModeEnabled: typeof festivalModeEnabled === "boolean" ? festivalModeEnabled : void 0,
+        activeFestival: activeFestival || void 0
       },
       {
         id: req.user?.id,
@@ -13577,17 +13797,30 @@ router17.post("/system-theme", authenticate, authorize(["SUPER_ADMIN"]), async (
     await logAudit({
       userId: req.user?.id || "system",
       userEmail: req.user?.email || "superadmin@mtslab.com",
-      action: "SUPERADMIN_FESTIVAL_THEME_UPDATE",
+      action: "SUPERADMIN_THEME_UPDATE",
       resource: "SystemTheme",
       details: {
-        festivalModeEnabled: updated.festivalModeEnabled,
-        activeFestival: updated.activeFestival,
-        festivalGreeting: updated.festivalGreeting
+        activeTheme: updated.activeTheme,
+        effectiveTheme: updated.effectiveTheme,
+        festivalGreeting: updated.festivalGreeting,
+        isScheduledActive: updated.isScheduledActive,
+        schedule: updated.schedule
       }
     });
+    const themeNameMap = {
+      light: "Light Mode",
+      dark: "Dark Mode",
+      night: "Night Mode",
+      "neutral-default": "Neutral Default",
+      dashain: "Dashain Festival",
+      tihar: "Tihar Festival",
+      holi: "Holi Festival",
+      "nepali-new-year": "Nepali New Year"
+    };
+    const label = themeNameMap[updated.effectiveTheme] || updated.effectiveTheme;
     return res.json({
       success: true,
-      message: updated.festivalModeEnabled ? `Festival Mode (${updated.activeFestival.toUpperCase()}) globally activated for all staff!` : "Festival Mode globally disabled. Normal Dark/Light preferences restored.",
+      message: `Global theme '${label}' successfully applied across all staff workspaces & public pages!`,
       themeConfig: updated
     });
   } catch (err) {
@@ -15510,10 +15743,10 @@ router21.get("/dashboard/stats", authenticate, async (req, res) => {
     return res.status(500).json({ error: "Failed to retrieve dashboard overview." });
   }
 });
-var handleGetSystemTheme = (_req, res) => {
+var handleGetSystemTheme = async (_req, res) => {
   try {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
-    const themeConfig = getSystemThemeConfig();
+    const themeConfig = await getSystemThemeConfigAsync();
     return res.json(themeConfig);
   } catch (err) {
     return res.status(500).json({ error: "Failed to read system theme configuration." });
@@ -15929,32 +16162,122 @@ function injectSeoIntoTemplate(template, options) {
   }
   return html;
 }
-router22.get("/sitemap.xml", async (req, res) => {
+var STATIC_PAGE_FILES = {
+  "/": "src/pages/Home.tsx",
+  "/services": "src/pages/Services.tsx",
+  "/about": "src/pages/About.tsx",
+  "/contact": "src/pages/Contact.tsx",
+  "/track": "src/pages/Tracking.tsx",
+  "/shop": "src/pages/Shop.tsx",
+  "/terms": "src/pages/Terms.tsx",
+  "/privacy": "src/pages/Privacy.tsx"
+};
+function getStaticPageLastmod(routePath) {
+  const relFile = STATIC_PAGE_FILES[routePath];
+  if (relFile) {
+    try {
+      const fullPath = path11.join(process.cwd(), relFile);
+      if (fs11.existsSync(fullPath)) {
+        const stat = fs11.statSync(fullPath);
+        if (stat.mtime && !isNaN(stat.mtime.getTime())) {
+          return stat.mtime.toISOString().split("T")[0];
+        }
+      }
+    } catch (_) {
+    }
+  }
+  return "2026-10-18";
+}
+function getValidW3cDate(val) {
+  if (!val) return null;
   try {
-    const services = await getAuthoritativeActiveServices();
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split("T")[0];
+    }
+  } catch (_) {
+  }
+  return null;
+}
+router22.get("/robots.txt", (req, res) => {
+  try {
+    const publicRobots = path11.join(process.cwd(), "public", "robots.txt");
+    if (fs11.existsSync(publicRobots)) {
+      const content = fs11.readFileSync(publicRobots, "utf8");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
+      return res.status(200).send(content);
+    }
+    const distRobots = path11.join(process.cwd(), "dist", "robots.txt");
+    if (fs11.existsSync(distRobots)) {
+      const content = fs11.readFileSync(distRobots, "utf8");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
+      return res.status(200).send(content);
+    }
+  } catch (err) {
+    console.warn("[SEO ROUTER ROBOTS.TXT READ WARN]", err);
+  }
+  const fallbackRobots = `# MTS Lab Kathmandu Robots Configuration
+User-agent: *
+Allow: /
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /pending-approval
+Disallow: /rejected-access
+Disallow: /api/
+
+User-agent: OAI-SearchBot
+Allow: /
+Allow: /api/public/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /api/
+
+Sitemap: ${SITE_URL}/sitemap.xml
+`;
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
+  return res.status(200).send(fallbackRobots);
+});
+router22.get(["/sitemap.xml", "/sitemap"], async (req, res) => {
+  try {
+    let services = [];
+    try {
+      services = await getAuthoritativeActiveServices();
+    } catch (dbErr) {
+      console.warn("[SITEMAP NOTICE] Database services unavailable, emitting static canonical URLs:", dbErr);
+    }
     const { slugToService } = buildSlugMap(services);
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     const staticUrls = [
-      { loc: `${SITE_URL}/`, priority: "1.0", changefreq: "weekly" },
-      { loc: `${SITE_URL}/services`, priority: "0.9", changefreq: "daily" },
-      { loc: `${SITE_URL}/about`, priority: "0.8", changefreq: "monthly" },
-      { loc: `${SITE_URL}/contact`, priority: "0.8", changefreq: "monthly" },
-      { loc: `${SITE_URL}/track`, priority: "0.7", changefreq: "monthly" },
-      { loc: `${SITE_URL}/shop`, priority: "0.7", changefreq: "weekly" },
-      { loc: `${SITE_URL}/terms`, priority: "0.4", changefreq: "yearly" },
-      { loc: `${SITE_URL}/privacy`, priority: "0.4", changefreq: "yearly" }
+      { path: "/", loc: `${SITE_URL}/`, priority: "1.0", changefreq: "weekly" },
+      { path: "/services", loc: `${SITE_URL}/services`, priority: "0.9", changefreq: "daily" },
+      { path: "/about", loc: `${SITE_URL}/about`, priority: "0.8", changefreq: "monthly" },
+      { path: "/contact", loc: `${SITE_URL}/contact`, priority: "0.8", changefreq: "monthly" },
+      { path: "/track", loc: `${SITE_URL}/track`, priority: "0.7", changefreq: "monthly" },
+      { path: "/shop", loc: `${SITE_URL}/shop`, priority: "0.7", changefreq: "weekly" },
+      { path: "/terms", loc: `${SITE_URL}/terms`, priority: "0.4", changefreq: "yearly" },
+      { path: "/privacy", loc: `${SITE_URL}/privacy`, priority: "0.4", changefreq: "yearly" }
     ];
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
 `;
     xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 `;
     for (const item of staticUrls) {
+      const lastmod = getStaticPageLastmod(item.path);
       xml += `  <url>
 `;
       xml += `    <loc>${escapeHtml2(item.loc)}</loc>
 `;
-      xml += `    <lastmod>${nowIso}</lastmod>
+      if (lastmod) {
+        xml += `    <lastmod>${lastmod}</lastmod>
 `;
+      }
       xml += `    <changefreq>${item.changefreq}</changefreq>
 `;
       xml += `    <priority>${item.priority}</priority>
@@ -15963,13 +16286,19 @@ router22.get("/sitemap.xml", async (req, res) => {
 `;
     }
     slugToService.forEach((svc, slug) => {
-      const lastmod = svc.updatedAt ? new Date(svc.updatedAt).toISOString().split("T")[0] : nowIso;
+      if (!svc || !svc.serviceName || !svc.brand || !svc.model) return;
+      if (svc.status && svc.status !== "ACTIVE") return;
+      const cleanSlug = slug.trim().toLowerCase();
+      if (!cleanSlug || cleanSlug === "service" || cleanSlug.includes("?") || cleanSlug.includes("#")) return;
+      const serviceLastmod = getValidW3cDate(svc.updatedAt) || getValidW3cDate(svc.createdAt);
       xml += `  <url>
 `;
-      xml += `    <loc>${escapeHtml2(`${SITE_URL}/services/${slug}`)}</loc>
+      xml += `    <loc>${escapeHtml2(`${SITE_URL}/services/${cleanSlug}`)}</loc>
 `;
-      xml += `    <lastmod>${lastmod}</lastmod>
+      if (serviceLastmod) {
+        xml += `    <lastmod>${serviceLastmod}</lastmod>
 `;
+      }
       xml += `    <changefreq>weekly</changefreq>
 `;
       xml += `    <priority>0.8</priority>
@@ -15985,6 +16314,20 @@ router22.get("/sitemap.xml", async (req, res) => {
     console.error("[SITEMAP GENERATION ERROR]", err);
     return res.status(500).type("text/plain").send("Failed to generate sitemap.xml");
   }
+});
+router22.get("/sitemap-index.xml", (req, res) => {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>${SITE_URL}/sitemap.xml</loc>
+  </sitemap>
+</sitemapindex>`;
+  res.setHeader("Content-Type", "application/xml; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600");
+  return res.status(200).send(xml);
+});
+router22.get("/price-finder", (req, res) => {
+  return res.redirect(301, "/services");
 });
 router22.get("/services", async (req, res) => {
   try {
@@ -16218,6 +16561,52 @@ router22.get("/contact", (req, res) => {
     return res.status(500).send("Unable to render page");
   }
 });
+router22.get("/track", (req, res) => {
+  try {
+    const seoConfig = STATIC_PAGES_SEO["/track"];
+    const template = getHtmlTemplate();
+    const hasCustomerQuery = Boolean(
+      req.query.repairNumber || req.query.phone || req.query.ticket || req.query.number
+    );
+    const bodyHtml = `
+      <main style="max-width:800px; margin:0 auto; padding:32px 16px; font-family:system-ui,-apple-system,sans-serif;">
+        <nav aria-label="Breadcrumb" style="font-size:14px; color:#64748b; margin-bottom:16px;">
+          <a href="/" style="color:#64748b; text-decoration:none;">Home</a> &gt; 
+          <span style="color:#0f172a; font-weight:600;">Track Repair</span>
+        </nav>
+        <header style="margin-bottom:24px;">
+          <h1 style="font-size:28px; font-weight:800; color:#0f172a;">${escapeHtml2(seoConfig.title)}</h1>
+          <p style="font-size:16px; color:#475569; line-height:1.6; margin-top:8px;">${escapeHtml2(seoConfig.description)}</p>
+        </header>
+        <section style="background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:24px; margin-bottom:24px;">
+          <h2 style="font-size:20px; font-weight:700; color:#0f172a; margin:0 0 12px;">Live Laboratory Repair Tracking</h2>
+          <p style="color:#334155; font-size:15px; line-height:1.6; margin:0 0 16px;">
+            MTS Lab Kathmandu provides live repair journey tracking for smartphone hardware restorations, laser line fixes, OCA glass laminations, and chip-level motherboard IC repairs.
+          </p>
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; font-size:14px; color:#334155;">
+            <p style="margin:0 0 6px;"><strong>How to Track:</strong> Enter your 4-to-6 digit Repair Ticket Number (found on your intake receipt) or your registered Mobile Phone Number.</p>
+            <p style="margin:0;"><strong>Hotline Support:</strong> <a href="tel:${BUSINESS_PHONE}" style="color:#059669; font-weight:700;">${BUSINESS_PHONE}</a> | <strong>Landline:</strong> ${BUSINESS_LANDLINE}</p>
+          </div>
+        </section>
+      </main>
+    `;
+    const html = injectSeoIntoTemplate(template, {
+      title: seoConfig.title,
+      description: seoConfig.description,
+      canonicalUrl: seoConfig.canonical,
+      noindex: hasCustomerQuery,
+      // Strictly noindex if individual customer query parameters exist
+      jsonLd: getLocalBusinessJsonLd(),
+      bodyHtml
+    });
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", hasCustomerQuery ? "no-store, max-age=0" : "public, max-age=3600, s-maxage=3600");
+    return res.status(200).send(html);
+  } catch (err) {
+    console.error("[SEO /track ERROR]", err);
+    return res.status(500).send("Unable to render tracking page");
+  }
+});
 var seo_default = router22;
 
 // api/_server/app.ts
@@ -16226,6 +16615,8 @@ function createApp() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
   app.use(cookieParser());
+  getSystemThemeConfigAsync().catch(() => {
+  });
   const uploadsDir = path12.join(process.cwd(), "uploads");
   if (!fs12.existsSync(uploadsDir)) {
     try {
