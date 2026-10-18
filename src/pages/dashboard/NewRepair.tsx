@@ -737,22 +737,22 @@ export default function NewRepair() {
             variant="outline" 
             size="icon" 
             onClick={() => navigate(-1)} 
-            className="rounded-full h-10 w-10 border-slate-200 hover:bg-slate-50 transition-colors shrink-0"
+            className="rounded-full h-10 w-10 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shrink-0"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <Breadcrumb className="min-w-0">
             <BreadcrumbList className="flex-wrap text-xs md:text-sm">
               <BreadcrumbItem>
-                <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                <BreadcrumbLink href="/dashboard" className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">Dashboard</BreadcrumbLink>
               </BreadcrumbItem>
-              <BreadcrumbSeparator />
+              <BreadcrumbSeparator className="text-slate-400 dark:text-slate-600" />
               <BreadcrumbItem>
-                <BreadcrumbLink href="/dashboard/repairs">Repairs</BreadcrumbLink>
+                <BreadcrumbLink href="/dashboard/repairs" className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">Repairs</BreadcrumbLink>
               </BreadcrumbItem>
-              <BreadcrumbSeparator />
+              <BreadcrumbSeparator className="text-slate-400 dark:text-slate-600" />
               <BreadcrumbItem>
-                <BreadcrumbPage className="truncate font-semibold text-slate-800">
+                <BreadcrumbPage className="truncate font-semibold text-slate-800 dark:text-slate-200">
                   New Intake & Multi-Device Registration
                 </BreadcrumbPage>
               </BreadcrumbItem>
@@ -762,17 +762,17 @@ export default function NewRepair() {
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               New Repair Intake
             </h1>
-            <p className="text-sm text-slate-500 font-medium">
+            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
               Register walk-in or courier devices under unified customer profiles with unique repair numbers and warranty tracking.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="px-3 py-1.5 bg-blue-50 text-blue-700 border-blue-200 text-xs font-bold">
-              <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+            <Badge variant="outline" className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 text-xs font-bold">
+              <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-blue-600 dark:text-blue-400" />
               Multi-Device & Courier Active
             </Badge>
           </div>
@@ -782,21 +782,21 @@ export default function NewRepair() {
       <form onSubmit={handleSubmit} className="space-y-8">
 
         {/* 1. DEVICE RECEIVING METHOD SELECTOR */}
-        <Card className="rounded-2xl border-2 border-slate-200/90 shadow-sm bg-white overflow-hidden">
-          <CardHeader className="bg-slate-50/80 border-b border-slate-100 p-5 sm:p-6">
-            <div className="flex items-center justify-between">
+        <Card className="rounded-2xl border-2 border-slate-200/90 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+          <CardHeader className="bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 p-5 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Truck className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                  <Truck className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
                   <span>Device Receiving Method</span>
                 </CardTitle>
-                <CardDescription className="text-xs sm:text-sm text-slate-500">
+                <CardDescription className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
                   Select whether the customer delivered the device in person or sent it remotely through courier logistics.
                 </CardDescription>
               </div>
               <Badge className={cn(
-                "px-3 py-1 font-bold text-xs",
-                receivingMethod === 'COURIER' ? "bg-amber-600 text-white" : "bg-slate-900 text-white"
+                "px-3 py-1 font-bold text-xs shrink-0 self-start sm:self-auto",
+                receivingMethod === 'COURIER' ? "bg-amber-600 text-white" : "bg-slate-900 dark:bg-slate-800 text-white dark:text-slate-100 border border-transparent dark:border-slate-700"
               )}>
                 {receivingMethod === 'COURIER' ? 'Courier Delivery' : 'Walk-in Customer'}
               </Badge>
@@ -858,7 +858,7 @@ export default function NewRepair() {
                       <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5">Courier Mode</Badge>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                     Customer sent smartphone from another district/city via courier parcel (Sundar, Pathao, Post, etc.).
                   </p>
                 </div>
@@ -877,15 +877,15 @@ export default function NewRepair() {
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.25 }}
             >
-              <Card className="rounded-2xl border-2 border-amber-300 shadow-md bg-white overflow-hidden">
-                <CardHeader className="bg-amber-50/80 border-b border-amber-200 p-5 sm:p-6">
+              <Card className="rounded-2xl border-2 border-amber-300 dark:border-amber-700/60 shadow-md bg-white dark:bg-slate-900 overflow-hidden">
+                <CardHeader className="bg-amber-50/80 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-900/60 p-5 sm:p-6">
                   <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-amber-500 text-white rounded-xl shadow-xs">
                       <Package className="h-5 w-5" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg font-bold text-amber-950">Incoming Courier Consignment Details</CardTitle>
-                      <CardDescription className="text-xs sm:text-sm text-amber-800">
+                      <CardTitle className="text-lg font-bold text-amber-950 dark:text-amber-100">Incoming Courier Consignment Details</CardTitle>
+                      <CardDescription className="text-xs sm:text-sm text-amber-800 dark:text-amber-300">
                         Record the courier partner, consignment tracking number, and sender details for remote accountability.
                       </CardDescription>
                     </div>
@@ -897,14 +897,14 @@ export default function NewRepair() {
                     
                     {/* Courier Company */}
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-slate-700">
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                         Courier Partner <span className="text-rose-500">*</span>
                       </Label>
                       <Select
                         value={courierIn.courierCompany}
                         onValueChange={(v) => setCourierIn(prev => ({ ...prev, courierCompany: v }))}
                       >
-                        <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 font-semibold text-sm">
+                        <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold text-sm text-slate-900 dark:text-white">
                           <SelectValue placeholder="Select Courier" />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl shadow-xl">
@@ -918,7 +918,7 @@ export default function NewRepair() {
                           placeholder="Specify Courier Name"
                           value={courierIn.customCourierCompany}
                           onChange={(e) => setCourierIn(prev => ({ ...prev, customCourierCompany: e.target.value }))}
-                          className="h-10 rounded-xl border-slate-200 bg-white text-xs mt-1.5"
+                          className="h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs mt-1.5"
                           required
                         />
                       )}
@@ -926,16 +926,16 @@ export default function NewRepair() {
 
                     {/* Consignment / Tracking Number */}
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-slate-700">
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                         Consignment / Tracking # <span className="text-rose-500">*</span>
                       </Label>
                       <div className="relative">
-                        <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                         <Input
                           placeholder="e.g. SCN-982341, TRK-10293"
                           value={courierIn.courierTrackingNumber}
                           onChange={(e) => setCourierIn(prev => ({ ...prev, courierTrackingNumber: e.target.value }))}
-                          className="h-11 pl-10 rounded-xl border-slate-200 bg-slate-50 font-mono text-sm font-bold"
+                          className="h-11 pl-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-sm font-bold text-slate-900 dark:text-white"
                           required
                         />
                       </div>
@@ -943,62 +943,62 @@ export default function NewRepair() {
 
                     {/* Courier Sent Date */}
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-slate-700">Sender Dispatch Date</Label>
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Sender Dispatch Date</Label>
                       <div className="relative">
-                        <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                         <Input
                           type="date"
                           value={courierIn.courierDate}
                           onChange={(e) => setCourierIn(prev => ({ ...prev, courierDate: e.target.value }))}
-                          className="h-11 pl-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                          className="h-11 pl-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium"
                         />
                       </div>
                     </div>
 
                     {/* Lab Received Date */}
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-slate-700">Lab Received Date</Label>
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Lab Received Date</Label>
                       <div className="relative">
-                        <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                         <Input
                           type="date"
                           value={courierIn.courierReceivedDate}
                           onChange={(e) => setCourierIn(prev => ({ ...prev, courierReceivedDate: e.target.value }))}
-                          className="h-11 pl-10 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                          className="h-11 pl-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium"
                         />
                       </div>
                     </div>
 
                     {/* Sender Name */}
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-slate-700">Sender Name (on Package)</Label>
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Sender Name (on Package)</Label>
                       <Input
                         placeholder="Leave blank to use customer name"
                         value={courierIn.senderName}
                         onChange={(e) => setCourierIn(prev => ({ ...prev, senderName: e.target.value }))}
-                        className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs"
+                        className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
                       />
                     </div>
 
                     {/* Sender Phone */}
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-slate-700">Sender Phone (on Package)</Label>
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Sender Phone (on Package)</Label>
                       <Input
                         placeholder="Leave blank to use customer phone"
                         value={courierIn.senderPhone}
                         onChange={(e) => setCourierIn(prev => ({ ...prev, senderPhone: e.target.value }))}
-                        className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs font-mono"
+                        className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono"
                       />
                     </div>
 
                     {/* Origin District */}
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-slate-700">Origin District</Label>
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Origin District</Label>
                       <Select
                         value={courierIn.originDistrict}
                         onValueChange={(v) => setCourierIn(prev => ({ ...prev, originDistrict: v }))}
                       >
-                        <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs font-semibold">
+                        <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold">
                           <SelectValue placeholder="Select Origin District" />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl shadow-xl max-h-60">
@@ -1011,12 +1011,12 @@ export default function NewRepair() {
 
                     {/* Courier Notes */}
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-slate-700">Courier Package Notes</Label>
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Courier Package Notes</Label>
                       <Input
                         placeholder="e.g. Bubble wrapped, sealed box"
                         value={courierIn.courierNotes}
                         onChange={(e) => setCourierIn(prev => ({ ...prev, courierNotes: e.target.value }))}
-                        className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs"
+                        className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
                       />
                     </div>
 
@@ -1028,24 +1028,24 @@ export default function NewRepair() {
         </AnimatePresence>
 
         {/* 3. CUSTOMER INFORMATION CARD (Master Entity with Deduplication) */}
-        <Card className="rounded-2xl border border-slate-200 shadow-md bg-white overflow-hidden">
-          <CardHeader className="bg-slate-50/70 border-b border-slate-100 p-5 sm:p-6">
+        <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md bg-white dark:bg-slate-900 overflow-hidden">
+          <CardHeader className="bg-slate-50/70 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 p-5 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className={cn("p-2.5 rounded-xl text-white shadow-sm shrink-0", customer.id ? "bg-emerald-600" : "bg-slate-900")}>
+                <div className={cn("p-2.5 rounded-xl text-white shadow-sm shrink-0", customer.id ? "bg-emerald-600" : "bg-slate-900 dark:bg-slate-800")}>
                   <User className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     Customer Identification
                     {customer.id && (
-                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-mono text-[10px] px-2 py-0.5">
-                        <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" />
+                      <Badge className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 font-mono text-[10px] px-2 py-0.5">
+                        <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600 dark:text-emerald-400" />
                         {customer.customerId}
                       </Badge>
                     )}
                   </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm text-slate-500">
+                  <CardDescription className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                     {customer.id
                       ? 'Existing customer profile linked — this repair will be added to their history.'
                       : 'Entering phone number searches the database to reuse existing profile and prevent duplicate records.'}
@@ -1059,20 +1059,20 @@ export default function NewRepair() {
 
             {/* Existing Customer Detected Banner (not yet confirmed) */}
             {matchedExistingCustomer && !customer.id && (
-              <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+              <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
                     <User className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-blue-900 flex items-center gap-2 flex-wrap">
+                    <div className="text-xs font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2 flex-wrap">
                       <span>Existing Customer Found:</span>
-                      <span className="text-slate-900 font-extrabold">{matchedExistingCustomer.name}</span>
-                      <Badge variant="outline" className="bg-white text-blue-800 text-[10px] font-mono">
+                      <span className="text-slate-900 dark:text-white font-extrabold">{matchedExistingCustomer.name}</span>
+                      <Badge variant="outline" className="bg-white dark:bg-slate-800 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-700 text-[10px] font-mono">
                         {matchedExistingCustomer.customerId}
                       </Badge>
                     </div>
-                    <p className="text-[11px] text-blue-700">
+                    <p className="text-[11px] text-blue-700 dark:text-blue-300">
                       Phone: {matchedExistingCustomer.phone} • {matchedExistingCustomer.address || matchedExistingCustomer.district || 'Nepal'} • {matchedExistingCustomer.repairs?.length || matchedExistingCustomer.totalRepairs || 0} previous repairs
                     </p>
                   </div>
@@ -1093,7 +1093,7 @@ export default function NewRepair() {
                     variant="outline"
                     size="sm"
                     onClick={() => setMatchedExistingCustomer(null)}
-                    className="h-8 px-2.5 text-xs text-slate-600 border-slate-300 cursor-pointer"
+                    className="h-8 px-2.5 text-xs text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                   >
                     Dismiss
                   </Button>
@@ -1103,21 +1103,21 @@ export default function NewRepair() {
 
             {/* Returning Customer Banner — shown when customer is confirmed / pre-filled */}
             {customer.id && (
-              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-lg shrink-0 shadow-sm">
                     {customer.name?.charAt(0)?.toUpperCase() || 'C'}
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-extrabold text-emerald-900">{customer.name}</span>
+                      <span className="text-sm font-extrabold text-emerald-900 dark:text-emerald-200">{customer.name}</span>
                       <Badge className="text-[9px] px-1.5 py-0.5 bg-emerald-600 text-white font-bold border-0">
                         Existing Customer
                       </Badge>
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                      <span className="text-xs font-mono text-emerald-700">{customer.phone}</span>
-                      <span className="text-xs font-mono text-emerald-500">{customer.customerId}</span>
+                      <span className="text-xs font-mono text-emerald-700 dark:text-emerald-300">{customer.phone}</span>
+                      <span className="text-xs font-mono text-emerald-500 dark:text-emerald-400">{customer.customerId}</span>
                     </div>
                   </div>
                 </div>
@@ -1127,7 +1127,7 @@ export default function NewRepair() {
                     variant="outline"
                     size="sm"
                     onClick={() => navigate(`/dashboard/customers/${customer.id}`)}
-                    className="h-8 px-3 text-xs font-bold border-emerald-200 text-emerald-700 hover:bg-emerald-100 rounded-xl cursor-pointer"
+                    className="h-8 px-3 text-xs font-bold border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-xl cursor-pointer"
                   >
                     <History className="w-3.5 h-3.5 mr-1.5" />
                     View History
@@ -1137,7 +1137,7 @@ export default function NewRepair() {
                     variant="ghost"
                     size="sm"
                     onClick={clearSelectedCustomer}
-                    className="h-8 px-2 text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl cursor-pointer"
+                    className="h-8 px-2 text-xs text-slate-400 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl cursor-pointer"
                   >
                     Unlink
                   </Button>
@@ -1149,28 +1149,28 @@ export default function NewRepair() {
               
               {/* Phone Number Input with Auto-search */}
               <div className="space-y-1.5 relative">
-                <Label className="text-xs font-bold text-slate-700">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                   Customer Primary Phone <span className="text-rose-500">*</span>
                 </Label>
                 <div className="relative">
-                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                   <Input
                     id="customer-phone-input"
                     placeholder="98XXXXXXXX"
                     value={customer.phone}
                     onChange={handleCustomerPhoneChange}
-                    className="h-11 pl-10 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-semibold"
+                    className="h-11 pl-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white text-sm font-semibold"
                     required
                   />
                   {searchingCustomer && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-slate-400" />
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-slate-400 dark:text-slate-500" />
                   )}
                 </div>
 
                 {/* Autocomplete Dropdown */}
                 {showDropdown && searchResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-xl border border-slate-200 shadow-xl z-50 overflow-hidden divide-y divide-slate-100 max-h-60 overflow-y-auto">
-                    <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <div className="absolute top-full left-0 right-0 mt-1.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl z-50 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800 max-h-60 overflow-y-auto">
+                    <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                       Existing Customers Found
                     </div>
                     {searchResults.map((c) => (
@@ -1178,13 +1178,13 @@ export default function NewRepair() {
                         key={c.id}
                         type="button"
                         onClick={() => selectExistingCustomer(c)}
-                        className="w-full px-3.5 py-2.5 text-left hover:bg-blue-50 transition-colors flex items-center justify-between gap-2"
+                        className="w-full px-3.5 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-between gap-2"
                       >
                         <div>
-                          <div className="font-bold text-slate-900 text-sm">{c.name}</div>
-                          <div className="text-xs text-slate-500 font-mono">{c.phone} • {c.customerId}</div>
+                          <div className="font-bold text-slate-900 dark:text-white text-sm">{c.name}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">{c.phone} • {c.customerId}</div>
                         </div>
-                        <Badge variant="outline" className="text-[10px] bg-slate-100">
+                        <Badge variant="outline" className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700">
                           {c.repairs?.length || 0} repairs
                         </Badge>
                       </button>
@@ -1195,17 +1195,17 @@ export default function NewRepair() {
 
               {/* Customer Name */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                   Customer Full Name <span className="text-rose-500">*</span>
                 </Label>
                 <div className="relative">
-                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                   <Input
                     id="customer-name-input"
                     placeholder="e.g. Ram Sharma"
                     value={customer.name}
                     onChange={handleCustomerNameChange}
-                    className="h-11 pl-10 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-semibold"
+                    className="h-11 pl-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white text-sm font-semibold"
                     required
                   />
                 </div>
@@ -1213,43 +1213,43 @@ export default function NewRepair() {
 
               {/* Alternative Phone */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Alternative Phone / WhatsApp</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Alternative Phone / WhatsApp</Label>
                 <div className="relative">
-                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                   <Input
                     placeholder="Optional secondary phone"
                     value={customer.alternativePhone}
                     onChange={(e) => setCustomer(prev => ({ ...prev, alternativePhone: e.target.value }))}
-                    className="h-11 pl-10 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+                    className="h-11 pl-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white text-sm font-medium"
                   />
                 </div>
               </div>
 
               {/* Email */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Email Address</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Email Address</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                   <Input
                     type="email"
                     placeholder="customer@example.com"
                     value={customer.email}
                     onChange={(e) => setCustomer(prev => ({ ...prev, email: e.target.value }))}
-                    className="h-11 pl-10 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+                    className="h-11 pl-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white text-sm"
                   />
                 </div>
               </div>
 
               {/* District */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                   District <span className="text-rose-500">*</span>
                 </Label>
                 <Select
                   value={customer.district}
                   onValueChange={(v) => setCustomer(prev => ({ ...prev, district: v }))}
                 >
-                  <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 font-semibold text-sm">
+                  <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold text-sm">
                     <SelectValue placeholder="Select District" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl shadow-xl max-h-60">
@@ -1262,30 +1262,30 @@ export default function NewRepair() {
 
               {/* Municipality / City */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Municipality / City</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Municipality / City</Label>
                 <div className="relative">
-                  <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                   <Input
                     placeholder="e.g. Kathmandu Metro, Pokhara Ward 5"
                     value={customer.municipality}
                     onChange={(e) => setCustomer(prev => ({ ...prev, municipality: e.target.value }))}
-                    className="h-11 pl-10 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+                    className="h-11 pl-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white text-sm"
                   />
                 </div>
               </div>
 
               {/* Full Address */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                   Full Permanent Address <span className="text-rose-500">*</span>
                 </Label>
                 <div className="relative">
-                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                   <Input
                     placeholder="e.g. New Road, Kathmandu"
                     value={customer.address}
                     onChange={(e) => setCustomer(prev => ({ ...prev, address: e.target.value }))}
-                    className="h-11 pl-10 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+                    className="h-11 pl-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white text-sm"
                     required
                   />
                 </div>
@@ -1293,14 +1293,14 @@ export default function NewRepair() {
 
               {/* Landmark / Delivery Notes */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700">Landmark / Delivery Direction</Label>
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Landmark / Delivery Direction</Label>
                 <div className="relative">
-                  <Compass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Compass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                   <Input
                     placeholder="e.g. Opposite Sankata Temple"
                     value={customer.landmark}
                     onChange={(e) => setCustomer(prev => ({ ...prev, landmark: e.target.value }))}
-                    className="h-11 pl-10 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm"
+                    className="h-11 pl-10 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white text-sm"
                   />
                 </div>
               </div>
@@ -1316,8 +1316,8 @@ export default function NewRepair() {
           <div className="lg:col-span-2 space-y-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Smartphone className="w-5 h-5 text-slate-800" />
-                <h2 className="text-xl font-extrabold text-slate-900">
+                <Smartphone className="w-5 h-5 text-slate-800 dark:text-slate-200" />
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">
                   Devices in this Intake ({devices.length})
                 </h2>
               </div>
@@ -1326,9 +1326,9 @@ export default function NewRepair() {
                 type="button"
                 onClick={addAnotherDevice}
                 variant="outline"
-                className="rounded-xl border-slate-300 text-slate-800 font-bold hover:bg-slate-100 flex items-center gap-1.5 shadow-sm"
+                className="rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1.5 shadow-sm"
               >
-                <Plus className="w-4 h-4 text-blue-600" />
+                <Plus className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <span>Add Another Device</span>
               </Button>
             </div>
@@ -1341,10 +1341,10 @@ export default function NewRepair() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Card className="rounded-2xl border border-slate-200 shadow-md bg-white overflow-hidden relative">
+                  <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md bg-white dark:bg-slate-900 overflow-hidden relative">
                     
                     {/* Device Header */}
-                    <div className="bg-slate-900 text-white px-6 py-3.5 flex items-center justify-between">
+                    <div className="bg-slate-900 dark:bg-slate-950 text-white px-6 py-3.5 flex items-center justify-between border-b border-slate-800">
                       <div className="flex items-center gap-3">
                         <span className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-inner">
                           {idx + 1}
@@ -1367,7 +1367,7 @@ export default function NewRepair() {
                           variant="ghost"
                           size="sm"
                           onClick={() => removeDevice(idx)}
-                          className="text-rose-300 hover:text-rose-100 hover:bg-rose-950/50 h-8 px-2.5 text-xs font-semibold rounded-lg"
+                          className="text-rose-300 hover:text-rose-100 hover:bg-rose-950/50 h-8 px-2.5 text-xs font-semibold rounded-lg cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5 mr-1" />
                           Remove
@@ -1380,12 +1380,12 @@ export default function NewRepair() {
                       {/* Brand, Model, IMEI & Color */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-bold text-slate-700">Manufacturer Brand</Label>
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Manufacturer Brand</Label>
                           <Select
                             value={device.deviceBrand}
                             onValueChange={(v) => handleDeviceChange(idx, 'deviceBrand', v)}
                           >
-                            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 font-semibold text-sm">
+                            <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold text-sm">
                               <SelectValue placeholder="Brand" />
                             </SelectTrigger>
                             <SelectContent className="rounded-xl shadow-xl">
@@ -1404,51 +1404,51 @@ export default function NewRepair() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-bold text-slate-700">
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                             Model Name <span className="text-rose-500">*</span>
                           </Label>
                           <Input
                             placeholder="e.g. iPhone 15 Pro Max, S24 Ultra"
                             value={device.deviceModel}
                             onChange={(e) => handleDeviceChange(idx, 'deviceModel', e.target.value)}
-                            className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-semibold"
+                            className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white text-sm font-semibold"
                             required
                           />
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-bold text-slate-700">IMEI / Serial No.</Label>
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">IMEI / Serial No.</Label>
                           <div className="relative">
-                            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                             <Input
                               placeholder="15-digit IMEI"
                               value={device.imeiNumber}
                               onChange={(e) => handleDeviceChange(idx, 'imeiNumber', e.target.value)}
-                              className="h-11 pl-9 rounded-xl border-slate-200 bg-slate-50 font-mono text-xs font-bold"
+                              className="h-11 pl-9 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs font-bold"
                             />
                           </div>
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-bold text-slate-700">Device Color</Label>
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Device Color</Label>
                           <Input
                             placeholder="e.g. Titanium Black, Purple"
                             value={device.deviceColor}
                             onChange={(e) => handleDeviceChange(idx, 'deviceColor', e.target.value)}
-                            className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                            className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium"
                           />
                         </div>
                       </div>
 
                       {/* Device Receiving Condition Multi-Select Checklist */}
-                      <div className="space-y-3 p-4 sm:p-5 rounded-2xl border border-slate-200/90 bg-slate-50/70">
+                      <div className="space-y-3 p-4 sm:p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                          <Label className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                          <Label className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
                             <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                             <span>Device Physical Condition Upon Intake</span>
                             <span className="text-rose-500">*</span>
                           </Label>
-                          <span className="text-[11px] text-slate-500 font-medium">Select all conditions detected (Good is exclusive)</span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Select all conditions detected (Good is exclusive)</span>
                         </div>
 
                         <div className="flex flex-wrap gap-2 pt-1">
@@ -1466,14 +1466,14 @@ export default function NewRepair() {
                                 className={cn(
                                   "inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all duration-150 cursor-pointer select-none active:scale-[0.98]",
                                   isSelected 
-                                    ? "bg-slate-900 text-white border-slate-900 shadow-sm ring-2 ring-slate-900/10" 
-                                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/80 shadow-2xs"
+                                    ? "bg-slate-900 dark:bg-blue-600 text-white border-slate-900 dark:border-blue-500 shadow-sm ring-2 ring-slate-900/10 dark:ring-blue-500/20" 
+                                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100/80 dark:hover:bg-slate-700 shadow-2xs"
                                 )}
                               >
                                 {isSelected ? (
                                   <Check className="w-3.5 h-3.5 text-white shrink-0 stroke-[2.5] pointer-events-none" />
                                 ) : (
-                                  <Circle className="w-3.5 h-3.5 text-slate-300 shrink-0 stroke-[2] pointer-events-none" />
+                                  <Circle className="w-3.5 h-3.5 text-slate-300 dark:text-slate-500 shrink-0 stroke-[2] pointer-events-none" />
                                 )}
                                 <span className="pointer-events-none">{c}</span>
                               </button>
@@ -1486,7 +1486,7 @@ export default function NewRepair() {
                             placeholder="Describe custom damage or physical condition..."
                             value={device.otherConditionText || ''}
                             onChange={(e) => handleDeviceChange(idx, 'otherConditionText', e.target.value)}
-                            className="h-10 rounded-xl bg-white border-slate-300 text-xs mt-2"
+                            className="h-10 rounded-xl bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs mt-2"
                           />
                         )}
 
@@ -1495,19 +1495,19 @@ export default function NewRepair() {
                             placeholder="Additional Condition Notes (e.g. camera lens glass scratched, speaker grill clogged)"
                             value={device.conditionNotes || ''}
                             onChange={(e) => handleDeviceChange(idx, 'conditionNotes', e.target.value)}
-                            className="h-10 rounded-xl bg-white border-slate-200 text-xs placeholder:text-slate-400"
+                            className="h-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500"
                           />
                         </div>
                       </div>
 
                       {/* Accessories Received Multi-Select Checklist */}
-                      <div className="space-y-3 p-4 sm:p-5 rounded-2xl border border-slate-200/90 bg-slate-50/70">
+                      <div className="space-y-3 p-4 sm:p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                          <Label className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                          <Label className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
                             <Package className="w-4 h-4 text-amber-600 shrink-0" />
                             <span>Accessories Received with Device</span>
                           </Label>
-                          <span className="text-[11px] text-slate-500 font-medium">Recorded for accountability (No Accessories is exclusive)</span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Recorded for accountability (No Accessories is exclusive)</span>
                         </div>
 
                         <div className="flex flex-wrap gap-2 pt-1">
@@ -1525,14 +1525,14 @@ export default function NewRepair() {
                                 className={cn(
                                   "inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all duration-150 cursor-pointer select-none active:scale-[0.98]",
                                   isSelected 
-                                    ? "bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-600/10" 
-                                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/80 shadow-2xs"
+                                    ? "bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-600/10 dark:ring-blue-500/20" 
+                                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-100/80 dark:hover:bg-slate-700 shadow-2xs"
                                 )}
                               >
                                 {isSelected ? (
                                   <Check className="w-3.5 h-3.5 text-white shrink-0 stroke-[2.5] pointer-events-none" />
                                 ) : (
-                                  <Circle className="w-3.5 h-3.5 text-slate-300 shrink-0 stroke-[2] pointer-events-none" />
+                                  <Circle className="w-3.5 h-3.5 text-slate-300 dark:text-slate-500 shrink-0 stroke-[2] pointer-events-none" />
                                 )}
                                 <span className="pointer-events-none">{acc}</span>
                               </button>
@@ -1545,7 +1545,7 @@ export default function NewRepair() {
                             placeholder="Specify other accessory received (e.g. Stylus pen, MagSafe wallet)..."
                             value={device.otherAccessoryText || ''}
                             onChange={(e) => handleDeviceChange(idx, 'otherAccessoryText', e.target.value)}
-                            className="h-10 rounded-xl bg-white border-slate-300 text-xs mt-2"
+                            className="h-10 rounded-xl bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs mt-2"
                           />
                         )}
                       </div>
@@ -1553,7 +1553,7 @@ export default function NewRepair() {
                       {/* Problem Description & Remarks */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-bold text-slate-700">
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                             Problem / Customer Description <span className="text-rose-500">*</span>
                           </Label>
                           <Textarea
@@ -1561,89 +1561,89 @@ export default function NewRepair() {
                             placeholder="e.g. Display cracked, touch not responding on lower half, battery drains in 2 hours."
                             value={device.problemDescription}
                             onChange={(e) => handleDeviceChange(idx, 'problemDescription', e.target.value)}
-                            className="rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium"
+                            className="rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white text-xs font-medium"
                             required
                           />
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-bold text-slate-700">Internal Lab Remarks / Instructions</Label>
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Internal Lab Remarks / Instructions</Label>
                           <Textarea
                             rows={3}
                             placeholder="e.g. Customer requested original OLED panel; test front camera after assembly."
                             value={device.remarks}
                             onChange={(e) => handleDeviceChange(idx, 'remarks', e.target.value)}
-                            className="rounded-xl border-slate-200 bg-slate-50 focus:bg-white text-xs font-medium"
+                            className="rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white text-xs font-medium"
                           />
                         </div>
                       </div>
 
                       {/* Financials & Assignment */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 pt-2 border-t border-slate-100">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
                         
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-bold text-slate-700">Estimated Cost (Rs.)</Label>
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Estimated Cost (Rs.)</Label>
                           <div className="relative">
-                            <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                             <Input
                               type="number"
                               placeholder="0"
                               value={device.estimatedCost}
                               onChange={(e) => handleDeviceChange(idx, 'estimatedCost', e.target.value)}
-                              className="h-11 pl-9 rounded-xl border-slate-200 bg-slate-50 font-bold font-mono text-sm"
+                              className="h-11 pl-9 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold font-mono text-sm"
                             />
                           </div>
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-bold text-slate-700">Advance Deposit (Rs.)</Label>
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Advance Deposit (Rs.)</Label>
                           <div className="relative">
-                            <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
+                            <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                             <Input
                               type="number"
                               placeholder="0"
                               value={device.advancePaid}
                               onChange={(e) => handleDeviceChange(idx, 'advancePaid', e.target.value)}
-                              className="h-11 pl-9 rounded-xl border-slate-200 bg-slate-50 font-bold font-mono text-sm text-emerald-700"
+                              className="h-11 pl-9 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold font-mono text-sm text-emerald-700 dark:text-emerald-400"
                             />
                           </div>
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-bold text-slate-700">Queue Priority</Label>
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Queue Priority</Label>
                           <Select
                             value={device.priority || 'NORMAL'}
                             onValueChange={(v) => handleDeviceChange(idx, 'priority', v)}
                           >
                             <SelectTrigger className={cn(
                               "h-11 rounded-xl font-bold text-xs shadow-xs",
-                              device.priority === 'URGENT' ? "bg-rose-50 border-rose-300 text-rose-700 font-extrabold" :
-                              device.priority === 'HIGH' ? "bg-amber-50 border-amber-300 text-amber-700 font-bold" :
-                              device.priority === 'MEDIUM' ? "bg-yellow-50 border-yellow-300 text-yellow-800 font-bold" :
-                              "bg-slate-50 border-slate-200 text-slate-700"
+                              device.priority === 'URGENT' ? "bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 font-extrabold" :
+                              device.priority === 'HIGH' ? "bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-bold" :
+                              device.priority === 'MEDIUM' ? "bg-yellow-50 dark:bg-yellow-950/60 border-yellow-300 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300 font-bold" :
+                              "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200"
                             )}>
                               <SelectValue placeholder="Priority" />
                             </SelectTrigger>
                             <SelectContent className="rounded-xl shadow-xl">
                               <SelectItem value="NORMAL" className="text-xs font-semibold">⚪ Normal Priority</SelectItem>
-                              <SelectItem value="MEDIUM" className="text-xs font-bold text-yellow-700">🟡 Medium Priority</SelectItem>
-                              <SelectItem value="HIGH" className="text-xs font-bold text-amber-700">🟠 High Priority</SelectItem>
-                              <SelectItem value="URGENT" className="text-xs font-bold text-rose-700">🔴 Urgent / Expedited</SelectItem>
+                              <SelectItem value="MEDIUM" className="text-xs font-bold text-yellow-700 dark:text-yellow-400">🟡 Medium Priority</SelectItem>
+                              <SelectItem value="HIGH" className="text-xs font-bold text-amber-700 dark:text-amber-400">🟠 High Priority</SelectItem>
+                              <SelectItem value="URGENT" className="text-xs font-bold text-rose-700 dark:text-rose-400">🔴 Urgent / Expedited</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-bold text-slate-700">Assign Technician</Label>
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Assign Technician</Label>
                           <Select
                             value={device.technicianId || "unassigned"}
                             onValueChange={(v) => handleDeviceChange(idx, 'technicianId', v === "unassigned" ? "" : v)}
                           >
-                            <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium focus:ring-2 focus:ring-emerald-500/20">
+                            <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-emerald-500/20">
                               <SelectValue placeholder="Auto-assign / Unassigned" />
                             </SelectTrigger>
                             <SelectContent className="rounded-xl shadow-xl">
-                              <SelectItem value="unassigned" className="text-xs font-medium text-slate-500">
+                              <SelectItem value="unassigned" className="text-xs font-medium text-slate-500 dark:text-slate-400">
                                 ⚪ Auto-assign / Unassigned
                               </SelectItem>
                               {technicians.map((t) => (
@@ -1661,14 +1661,14 @@ export default function NewRepair() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-bold text-slate-700">Est. Ready Date</Label>
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Est. Ready Date</Label>
                           <div className="relative">
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                             <Input
                               type="date"
                               value={device.expectedCompletionDate}
                               onChange={(e) => handleDeviceChange(idx, 'expectedCompletionDate', e.target.value)}
-                              className="h-11 pl-9 rounded-xl border-slate-200 bg-slate-50 text-xs font-medium"
+                              className="h-11 pl-9 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium"
                             />
                           </div>
                         </div>
@@ -1676,20 +1676,20 @@ export default function NewRepair() {
                       </div>
 
                       {/* Optional Battery Replacement Warranty Section */}
-                      <div className="p-4 rounded-xl border border-slate-200/90 bg-slate-50/80 space-y-3">
+                      <div className="p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 space-y-3">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
                             <div className={cn(
                               "w-9 h-9 rounded-xl flex items-center justify-center transition-colors shadow-xs",
-                              device.hasBatteryWarranty ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"
+                              device.hasBatteryWarranty ? "bg-emerald-600 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
                             )}>
                               <BatteryCharging className="h-4 w-4" />
                             </div>
                             <div>
-                              <div className="text-xs font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+                              <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
                                 <span>Battery Replacement Warranty</span>
                                 {device.hasBatteryWarranty && (
-                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px] font-extrabold px-2 py-0.5">
+                                  <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[10px] font-extrabold px-2 py-0.5">
                                     {String(device.batteryWarrantyPeriod || '').includes('2') || String(device.batteryWarrantyPeriod || '').toUpperCase().includes('2_YEAR')
                                       ? '2 Years Warranty'
                                       : device.batteryWarrantyPeriod === '1_YEAR'
@@ -1698,7 +1698,7 @@ export default function NewRepair() {
                                   </Badge>
                                 )}
                               </div>
-                              <p className="text-[11px] text-slate-500">
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                                 Does this repair service include a warranted battery replacement?
                               </p>
                             </div>
@@ -1732,14 +1732,14 @@ export default function NewRepair() {
 
                         {/* If Warranty is selected */}
                         {device.hasBatteryWarranty && (
-                          <div className="pt-3 border-t border-slate-200/90 grid grid-cols-1 sm:grid-cols-3 gap-3.5 animate-in fade-in duration-200">
+                          <div className="pt-3 border-t border-slate-200/90 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-3.5 animate-in fade-in duration-200">
                             <div className="space-y-1.5">
-                              <Label className="text-xs font-bold text-slate-700">Warranty Duration</Label>
+                              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Warranty Duration</Label>
                               <Select
                                 value={device.batteryWarrantyPeriod || '6_MONTHS'}
                                 onValueChange={(v) => handleDeviceChange(idx, 'batteryWarrantyPeriod', v)}
                               >
-                                <SelectTrigger className="h-10 rounded-xl border-slate-300 bg-white text-xs font-bold shadow-xs">
+                                <SelectTrigger className="h-10 rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold shadow-xs">
                                   <SelectValue placeholder="Select Warranty Period" />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-xl">
@@ -1751,20 +1751,20 @@ export default function NewRepair() {
                             </div>
 
                             <div className="space-y-1.5">
-                              <Label className="text-xs font-bold text-slate-700">Battery Specification</Label>
+                              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Battery Specification</Label>
                               <Input
                                 placeholder="e.g. Original Apple Battery"
                                 value={device.batteryType || ''}
                                 onChange={(e) => handleDeviceChange(idx, 'batteryType', e.target.value)}
-                                className="h-10 rounded-xl border-slate-300 bg-white text-xs font-medium shadow-xs"
+                                className="h-10 rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium shadow-xs"
                               />
                             </div>
 
                             <div className="space-y-1.5">
-                              <Label className="text-xs font-bold text-slate-700">Calculated Expiry Date</Label>
-                              <div className="h-10 px-3 rounded-xl border border-emerald-200 bg-emerald-50/80 text-emerald-900 font-bold text-xs flex items-center justify-between shadow-xs">
+                              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Calculated Expiry Date</Label>
+                              <div className="h-10 px-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 font-bold text-xs flex items-center justify-between shadow-xs">
                                 <span className="truncate">{calculateWarrantyExpiryPreview(device.batteryWarrantyPeriod || '6_MONTHS')}</span>
-                                <Badge variant="outline" className="bg-emerald-100/80 text-emerald-800 border-emerald-300 text-[9px] font-bold shrink-0 ml-1.5">
+                                <Badge variant="outline" className="bg-emerald-100/80 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700 text-[9px] font-bold shrink-0 ml-1.5">
                                   Auto Date
                                 </Badge>
                               </div>
@@ -1783,9 +1783,9 @@ export default function NewRepair() {
                 type="button"
                 variant="outline"
                 onClick={addAnotherDevice}
-                className="w-full h-14 rounded-2xl border-2 border-dashed border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-50 font-bold text-sm flex items-center justify-center gap-2 transition-all"
+                className="w-full h-14 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/80 font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
-                <Plus className="w-5 h-5 text-blue-600" />
+                <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 <span>+ Add Another Device to This Customer Visit</span>
               </Button>
             </div>
@@ -1794,8 +1794,8 @@ export default function NewRepair() {
           {/* Right Column: Financial Summary & Confirmation */}
           <div className="space-y-6 lg:sticky lg:top-24">
             
-            <Card className="rounded-2xl border border-slate-200 shadow-lg bg-white overflow-hidden">
-              <CardHeader className="bg-slate-900 text-white p-6">
+            <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-lg bg-white dark:bg-slate-900 overflow-hidden">
+              <CardHeader className="bg-slate-900 dark:bg-slate-950 text-white p-6 border-b border-slate-800">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <CardTitle className="text-base font-bold text-white flex items-center gap-2">
@@ -1815,19 +1815,19 @@ export default function NewRepair() {
               <CardContent className="p-6 space-y-5">
                 
                 {/* Customer Snapshot */}
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 space-y-1 text-xs">
-                  <div className="font-bold text-slate-900 flex items-center justify-between">
+                <div className="bg-slate-50 dark:bg-slate-800/70 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-1 text-xs">
+                  <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between">
                     <span>{customer.name || 'Customer Name'}</span>
-                    <span className="font-mono text-slate-500">{customer.customerId || 'New Customer'}</span>
+                    <span className="font-mono text-slate-500 dark:text-slate-400">{customer.customerId || 'New Customer'}</span>
                   </div>
-                  <div className="text-slate-600 font-mono">{customer.phone || 'Phone Number'}</div>
-                  <div className="text-slate-500 text-[11px] flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-slate-400" />
+                  <div className="text-slate-600 dark:text-slate-300 font-mono">{customer.phone || 'Phone Number'}</div>
+                  <div className="text-slate-500 dark:text-slate-400 text-[11px] flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-slate-400 dark:text-slate-500" />
                     <span>{customer.address || customer.district || 'Location'}</span>
                   </div>
                   {receivingMethod === 'COURIER' && (
-                    <div className="pt-1 text-[11px] font-bold text-amber-700 flex items-center gap-1">
-                      <Package className="w-3 h-3 text-amber-600" />
+                    <div className="pt-1 text-[11px] font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                      <Package className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                       <span>Via {courierIn.courierCompany || 'Courier'} (Trk: {courierIn.courierTrackingNumber || 'Pending'})</span>
                     </div>
                   )}
@@ -1835,14 +1835,14 @@ export default function NewRepair() {
 
                 {/* Device Breakdown List */}
                 <div className="space-y-2">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Device List</div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Device List</div>
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {devices.map((d, i) => (
-                      <div key={d.id} className="text-xs flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
-                        <span className="font-medium text-slate-800 truncate max-w-[140px]">
+                      <div key={d.id} className="text-xs flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-800">
+                        <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[140px]">
                           {i + 1}. {d.deviceBrand.toUpperCase()} {d.deviceModel || 'Device'}
                         </span>
-                        <span className="font-mono font-bold text-slate-900">
+                        <span className="font-mono font-bold text-slate-900 dark:text-white">
                           {formatNPR(Number(d.estimatedCost) || 0)}
                         </span>
                       </div>
@@ -1850,25 +1850,25 @@ export default function NewRepair() {
                   </div>
                 </div>
 
-                <Separator className="bg-slate-100" />
+                <Separator className="bg-slate-100 dark:bg-slate-800" />
 
                 {/* Financial Totals */}
                 <div className="space-y-2.5 text-sm">
-                  <div className="flex items-center justify-between text-slate-600">
+                  <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
                     <span>Total Estimated Cost:</span>
-                    <span className="font-mono font-bold text-slate-900">{formatNPR(totalEstimatedCost)}</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">{formatNPR(totalEstimatedCost)}</span>
                   </div>
 
-                  <div className="flex items-center justify-between text-emerald-600">
+                  <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400">
                     <span>Total Advance Deposit:</span>
                     <span className="font-mono font-bold">{formatNPR(totalAdvancePaid)}</span>
                   </div>
 
-                  <Separator className="bg-slate-100" />
+                  <Separator className="bg-slate-100 dark:bg-slate-800" />
 
-                  <div className="flex items-center justify-between text-base font-extrabold text-slate-900">
+                  <div className="flex items-center justify-between text-base font-extrabold text-slate-900 dark:text-white">
                     <span>Est. Balance Due:</span>
-                    <span className="font-mono text-blue-600">{formatNPR(totalRemaining)}</span>
+                    <span className="font-mono text-blue-600 dark:text-blue-400">{formatNPR(totalRemaining)}</span>
                   </div>
                 </div>
 
@@ -1878,7 +1878,7 @@ export default function NewRepair() {
                     id="submit-repair-intake-btn"
                     type="submit"
                     disabled={loading}
-                    className="w-full h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+                    className="w-full h-12 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {loading ? (
                       <>
@@ -1897,7 +1897,7 @@ export default function NewRepair() {
                     type="button"
                     variant="outline"
                     onClick={() => navigate('/dashboard/repairs')}
-                    className="w-full h-10 rounded-xl text-slate-600 border-slate-200 text-xs font-semibold"
+                    className="w-full h-10 rounded-xl text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold cursor-pointer"
                   >
                     Cancel & Return
                   </Button>
@@ -1907,8 +1907,8 @@ export default function NewRepair() {
             </Card>
 
             {/* Note & Policy */}
-            <div className="bg-blue-50/70 border border-blue-200/60 rounded-xl p-4 flex items-start gap-3 text-xs text-blue-900">
-              <AlertCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div className="bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-900/60 rounded-xl p-4 flex items-start gap-3 text-xs text-blue-900 dark:text-blue-200">
+              <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
               <p className="leading-relaxed">
                 All registered devices receive a unique <strong>Repair Number (e.g. MTS-2026-0001)</strong> while being linked directly to this customer's profile.
               </p>

@@ -31,12 +31,19 @@ function Card({
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+  const hasDarkBg = className?.includes('dark:bg-');
+  const hasLightBg = className?.includes('bg-slate-50') || className?.includes('bg-gray-50') || className?.includes('bg-zinc-50') || className?.includes('bg-slate-100') || className?.includes('bg-gray-100') || className?.includes('bg-white');
+  const hasLightBorder = className?.includes('border-slate-100') || className?.includes('border-slate-200') || className?.includes('border-gray-100') || className?.includes('border-gray-200');
+  const hasDarkBorder = className?.includes('dark:border-');
+
   return (
     <div
       data-slot="card-header"
       className={cn(
         "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-xl px-4 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-4 group-data-[size=sm]/card:[.border-b]:pb-3",
-        className
+        className,
+        hasLightBg && !hasDarkBg && "dark:bg-slate-900/90",
+        hasLightBorder && !hasDarkBorder && "dark:border-slate-800"
       )}
       {...props}
     />

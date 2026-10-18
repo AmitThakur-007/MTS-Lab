@@ -424,19 +424,25 @@
 
   /* Unthemed slate-50 / gray-50 / zinc-50 light backgrounds transform to elevated dark surface */
   .bg-slate-50:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *),
+  [class*="bg-slate-50/"]:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *),
   .bg-gray-50:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *),
-  .bg-zinc-50:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *) {
+  [class*="bg-gray-50/"]:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *),
+  .bg-zinc-50:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *),
+  [class*="bg-zinc-50/"]:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *) {
     background-color: #1e293b;
   }
 
   .bg-slate-100:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *),
+  [class*="bg-slate-100/"]:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *),
   .bg-gray-100:not([class*="dark:bg-"]):not(.keep-white):not(.service-slip-root *) {
     background-color: #1e293b;
   }
 
   /* Light borders become subtle, high-contrast dark borders */
   .border-slate-200:not([class*="dark:border-"]):not(.service-slip-root *),
+  [class*="border-slate-200/"]:not([class*="dark:border-"]):not(.service-slip-root *),
   .border-slate-100:not([class*="dark:border-"]):not(.service-slip-root *),
+  [class*="border-slate-100/"]:not([class*="dark:border-"]):not(.service-slip-root *),
   .border-gray-200:not([class*="dark:border-"]):not(.service-slip-root *),
   .border-gray-100:not([class*="dark:border-"]):not(.service-slip-root *) {
     border-color: rgba(255, 255, 255, 0.1);
