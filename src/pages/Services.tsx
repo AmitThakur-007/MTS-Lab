@@ -5,16 +5,22 @@ import {
   Search, 
   Smartphone, 
   Tablet,
+  Laptop,
+  Tv,
+  LayoutGrid,
   Wrench, 
   Clock, 
   ShieldCheck, 
   AlertCircle, 
   SlidersHorizontal, 
+  Filter,
   PhoneCall, 
   MessageCircle, 
   RotateCcw, 
   ChevronRight, 
   ChevronLeft,
+  ChevronDown,
+  ChevronUp,
   Info, 
   CheckCircle2, 
   Zap, 
@@ -32,7 +38,6 @@ import {
   X, 
   ScanLine, 
   Cable, 
-  Tv,
   ArrowUpDown,
   Phone,
   Droplets,
@@ -119,20 +124,40 @@ const POPULAR_CATEGORIES = [
   { id: 'Network', label: 'Network & Signal', icon: Wifi }
 ];
 
-// Brand list for quick filter
-const BRANDS_LIST = [
-  'All Brands',
-  'Apple',
-  'Samsung',
-  'Xiaomi',
-  'Redmi',
-  'OnePlus',
-  'Google',
-  'Vivo',
-  'Oppo',
-  'Realme',
-  'Nothing'
+// Supported Device Forms
+export type DeviceTypeId = 'all' | 'smartphone' | 'laptop' | 'tablet' | 'tv';
+
+export const DEVICE_OPTIONS: { id: DeviceTypeId; label: string; icon: React.ElementType; description: string }[] = [
+  { id: 'all', label: 'All Devices', icon: LayoutGrid, description: 'All eligible hardware repair services' },
+  { id: 'smartphone', label: 'Smartphones & iPhones', icon: Smartphone, description: 'Smartphones, iPhones & cellular models' },
+  { id: 'laptop', label: 'Laptops', icon: Laptop, description: 'MacBooks, Windows laptops & ultrabooks' },
+  { id: 'tablet', label: 'Tablets & iPads', icon: Tablet, description: 'Apple iPads & Android tablets' },
+  { id: 'tv', label: 'Smart TVs', icon: Tv, description: 'Smart TVs & digital display panels' },
 ];
+
+// Curated brand compatibility dictionary per device form
+export const DEVICE_BRAND_MAPPINGS: Record<DeviceTypeId, string[]> = {
+  all: [
+    'Apple', 'Samsung', 'Xiaomi', 'Redmi', 'OnePlus', 'Google',
+    'Vivo', 'Oppo', 'Realme', 'Nothing', 'Dell', 'HP', 'Lenovo', 'ASUS', 'Acer', 'Sony', 'LG'
+  ],
+  smartphone: [
+    'Apple', 'Samsung', 'Xiaomi', 'Redmi', 'OnePlus', 'Google',
+    'Vivo', 'Oppo', 'Realme', 'Nothing'
+  ],
+  laptop: [
+    'Apple', 'Dell', 'HP', 'Lenovo', 'ASUS', 'Acer', 'Samsung'
+  ],
+  tablet: [
+    'Apple', 'Samsung', 'Xiaomi', 'Lenovo'
+  ],
+  tv: [
+    'Samsung', 'Sony', 'LG', 'Xiaomi'
+  ]
+};
+
+// Default fallback brands list
+export const BRANDS_LIST = DEVICE_BRAND_MAPPINGS.all;
 
 // Items displayed per catalog page
 const ITEMS_PER_PAGE = 32;
@@ -489,8 +514,17 @@ export default function Services() {
   const [activeQuery, setActiveQuery] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('All Brands');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedDeviceType, setSelectedDeviceType] = useState<'all' | 'smartphone' | 'tablet' | 'ipad'>('all');
+  const [selectedDeviceType, setSelectedDeviceType] = useState<DeviceTypeId>('all');
   const [sortBy, setSortBy] = useState<'recommended' | 'priceLow' | 'priceHigh' | 'deviceAsc'>('recommended');
+
+  // Filter expansion state (for desktop/tablet collapsible) & mobile bottom sheet state
+  const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
+  const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
+
+  // Category horizontal scroll controls & state
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
 
   // Autocomplete suggestions state
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
@@ -539,6 +573,121 @@ export default function Services() {
     fetchPrices();
   });
 
+  // Dynamic brand list reflecting selected device form + actual catalog data
+  const availableBrands = useMemo(() => {
+    const baseBrands = DEVICE_BRAND_MAPPINGS[selectedDeviceType] || DEVICE_BRAND_MAPPINGS.all;
+    const dynamicBrandsSet = new Set<string>();
+
+    for (const item of prices) {
+      if (!item.brand) continue;
+      const itemType = (item.deviceType || '').toLowerCase();
+      const fullText = `${item.brand} ${item.model} ${item.serviceName || ''} ${item.category || ''} ${item.notes || ''}`.toLowerCase();
+      
+      let matchesDev = true;
+      if (selectedDeviceType === 'smartphone') {
+        matchesDev = itemType === 'smartphone' || itemType === 'phone' || (!itemType && !fullText.includes('macbook') && !fullText.includes('laptop') && !fullText.includes('ipad') && !fullText.includes('tablet') && !fullText.includes('tv'));
+      } else if (selectedDeviceType === 'laptop') {
+        matchesDev = itemType === 'laptop' || fullText.includes('macbook') || fullText.includes('laptop') || fullText.includes('notebook') || fullText.includes('thinkpad');
+      } else if (selectedDeviceType === 'tablet') {
+        matchesDev = itemType === 'tablet' || itemType === 'ipad' || fullText.includes('ipad') || fullText.includes('tablet') || fullText.includes('galaxy tab');
+      } else if (selectedDeviceType === 'tv') {
+        matchesDev = itemType === 'smart tv' || itemType === 'tv' || fullText.includes('smart tv') || fullText.includes('television') || fullText.includes('oled tv') || fullText.includes('bravia');
+      }
+
+      if (matchesDev) {
+        const b = item.brand.trim();
+        if (b.toLowerCase() === 'iphone') {
+          dynamicBrandsSet.add('Apple');
+        } else {
+          dynamicBrandsSet.add(b.charAt(0).toUpperCase() + b.slice(1));
+        }
+      }
+    }
+
+    const combined = ['All Brands'];
+    const seen = new Set<string>(['all brands']);
+    
+    for (const b of baseBrands) {
+      if (!seen.has(b.toLowerCase())) {
+        seen.add(b.toLowerCase());
+        combined.push(b);
+      }
+    }
+
+    for (const b of dynamicBrandsSet) {
+      if (!seen.has(b.toLowerCase())) {
+        seen.add(b.toLowerCase());
+        combined.push(b);
+      }
+    }
+
+    return combined;
+  }, [prices, selectedDeviceType]);
+
+  // Reconcile brand selection when device type changes so user isn't stuck with invalid selection
+  useEffect(() => {
+    if (selectedBrand !== 'All Brands') {
+      const isStillAvailable = availableBrands.some(
+        b => b.toLowerCase() === selectedBrand.toLowerCase() ||
+        (selectedBrand.toLowerCase() === 'apple' && b.toLowerCase() === 'iphone') ||
+        (selectedBrand.toLowerCase() === 'iphone' && b.toLowerCase() === 'apple')
+      );
+      if (!isStillAvailable) {
+        setSelectedBrand('All Brands');
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('brand');
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [selectedDeviceType, availableBrands]);
+
+  // Count of active advanced filters (categories + brands)
+  const activeAdvancedFilterCount = useMemo(() => {
+    let count = 0;
+    if (selectedCategory !== 'all') count++;
+    if (selectedBrand !== 'All Brands') count++;
+    return count;
+  }, [selectedCategory, selectedBrand]);
+
+  // Total active filters count including device type and query
+  const totalActiveFilterCount = useMemo(() => {
+    let count = 0;
+    if (selectedDeviceType !== 'all') count++;
+    if (selectedCategory !== 'all') count++;
+    if (selectedBrand !== 'All Brands') count++;
+    if (activeQuery) count++;
+    return count;
+  }, [selectedDeviceType, selectedCategory, selectedBrand, activeQuery]);
+
+  // Check category scroll capability
+  const checkCategoryScroll = () => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 5);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 5);
+  };
+
+  useEffect(() => {
+    checkCategoryScroll();
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', checkCategoryScroll, { passive: true });
+    window.addEventListener('resize', checkCategoryScroll);
+    return () => {
+      el.removeEventListener('scroll', checkCategoryScroll);
+      window.removeEventListener('resize', checkCategoryScroll);
+    };
+  }, [isFiltersExpanded]);
+
+  const handleScrollCategories = (direction: 'left' | 'right') => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    const delta = direction === 'left' ? -280 : 280;
+    el.scrollBy({ left: delta, behavior: 'smooth' });
+    setTimeout(checkCategoryScroll, 300);
+  };
+
   // Handle URL query parameters
   useEffect(() => {
     const q = searchParams.get('q');
@@ -546,13 +695,23 @@ export default function Services() {
       setSearchInput(q);
       setActiveQuery(q);
     }
+    const dev = searchParams.get('deviceType') as DeviceTypeId | null;
+    if (dev && ['all', 'smartphone', 'laptop', 'tablet', 'tv'].includes(dev)) {
+      setSelectedDeviceType(dev);
+    }
     const brand = searchParams.get('brand');
-    if (brand && BRANDS_LIST.includes(brand)) {
+    if (brand) {
       setSelectedBrand(brand);
+      setIsFiltersExpanded(true);
     }
     const category = searchParams.get('category');
     if (category) {
       setSelectedCategory(category);
+      setIsFiltersExpanded(true);
+    }
+    const sortParam = searchParams.get('sort');
+    if (sortParam && ['recommended', 'priceLow', 'priceHigh', 'deviceAsc'].includes(sortParam)) {
+      setSortBy(sortParam as any);
     }
     const pageParam = searchParams.get('page');
     if (pageParam && !isNaN(parseInt(pageParam))) {
@@ -565,6 +724,25 @@ export default function Services() {
       }
     }
   }, [location.search]);
+
+  // Mobile bottom sheet escape listener and body scroll lock
+  useEffect(() => {
+    if (isMobileSheetOpen) {
+      document.body.style.overflow = 'hidden';
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          setIsMobileSheetOpen(false);
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [isMobileSheetOpen]);
 
   // Execute search function
   const executeSearch = (searchTerm: string) => {
@@ -719,6 +897,30 @@ export default function Services() {
     setSearchParams(newParams, { replace: true });
   };
 
+  const handleDeviceTypeClick = (devId: DeviceTypeId) => {
+    setSelectedDeviceType(devId);
+    setCurrentPage(1);
+    const newParams = new URLSearchParams(searchParams);
+    if (devId === 'all') {
+      newParams.delete('deviceType');
+    } else {
+      newParams.set('deviceType', devId);
+    }
+    newParams.delete('page');
+    setSearchParams(newParams, { replace: true });
+  };
+
+  const handleClearAdvancedFilters = () => {
+    setSelectedBrand('All Brands');
+    setSelectedCategory('all');
+    setCurrentPage(1);
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('brand');
+    newParams.delete('category');
+    newParams.delete('page');
+    setSearchParams(newParams, { replace: true });
+  };
+
   // Open Service Detail Dialog
   const handleOpenDetail = (item: RepairPriceItem) => {
     setSelectedService(item);
@@ -743,19 +945,50 @@ export default function Services() {
   const filteredAndRankedPrices = useMemo(() => {
     let list = prices;
 
-    // 0. Filter by Device Type (Smartphone, Tablet, iPad)
+    // 0. Filter by Device Type (All, Smartphone & iPhone, Laptop, Tablet & iPad, Smart TV)
     if (selectedDeviceType !== 'all') {
       list = list.filter(item => {
-        const itemType = (item.deviceType || 'Smartphone').toLowerCase();
-        return itemType === selectedDeviceType;
+        const itemType = (item.deviceType || '').toLowerCase();
+        const fullText = `${item.brand || ''} ${item.model || ''} ${item.serviceName || ''} ${item.category || ''} ${item.notes || ''}`.toLowerCase();
+
+        if (selectedDeviceType === 'smartphone') {
+          if (itemType === 'smartphone' || itemType === 'phone') return true;
+          const isLaptop = fullText.includes('macbook') || fullText.includes('laptop') || fullText.includes('notebook') || fullText.includes('thinkpad');
+          const isTablet = fullText.includes('ipad') || fullText.includes('tablet') || fullText.includes('galaxy tab');
+          const isTv = fullText.includes('tv') || fullText.includes('smart tv') || fullText.includes('television') || fullText.includes('oled tv');
+          if (!itemType && !isLaptop && !isTablet && !isTv) return true;
+          return false;
+        }
+
+        if (selectedDeviceType === 'laptop') {
+          if (itemType === 'laptop') return true;
+          return fullText.includes('macbook') || fullText.includes('laptop') || fullText.includes('notebook') || fullText.includes('thinkpad');
+        }
+
+        if (selectedDeviceType === 'tablet') {
+          if (itemType === 'tablet' || itemType === 'ipad') return true;
+          return fullText.includes('ipad') || fullText.includes('tablet') || fullText.includes('galaxy tab');
+        }
+
+        if (selectedDeviceType === 'tv') {
+          if (itemType === 'smart tv' || itemType === 'tv') return true;
+          return fullText.includes('smart tv') || fullText.includes('television') || fullText.includes('oled tv') || fullText.includes('bravia');
+        }
+
+        return false;
       });
     }
 
-    // 1. Filter by Brand
+    // 1. Filter by Brand (with smart alias matching, e.g. Apple <-> Iphone)
     if (selectedBrand !== 'All Brands') {
-      list = list.filter(item => 
-        item.brand.toLowerCase() === selectedBrand.toLowerCase()
-      );
+      list = list.filter(item => {
+        const b = (item.brand || '').toLowerCase().trim();
+        const sel = selectedBrand.toLowerCase().trim();
+        if (b === sel) return true;
+        if (sel === 'apple' && (b === 'iphone' || b.includes('apple'))) return true;
+        if (sel === 'iphone' && (b === 'apple' || b.includes('iphone'))) return true;
+        return false;
+      });
     }
 
     // 2. Filter by Category
@@ -974,7 +1207,7 @@ export default function Services() {
     }
 
     return matchingItems;
-  }, [prices, selectedBrand, selectedCategory, activeQuery, sortBy]);
+  }, [prices, selectedBrand, selectedCategory, activeQuery, sortBy, selectedDeviceType]);
 
   function sortList(list: RepairPriceItem[], sortKey: string): RepairPriceItem[] {
     const copy = [...list];
@@ -1052,8 +1285,8 @@ export default function Services() {
     if (item.priceType === 'ON_INSPECTION') {
       return (
         <div className="flex flex-col min-w-0">
-          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Estimate</span>
-          <span className="text-[10px] sm:text-xs md:text-sm font-extrabold text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg inline-block w-fit mt-0.5 truncate max-w-full">
+          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">Estimate</span>
+          <span className="text-[10px] sm:text-xs md:text-sm font-extrabold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/80 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg inline-block w-fit mt-0.5 truncate max-w-full">
             On Inspection
           </span>
         </div>
@@ -1063,8 +1296,8 @@ export default function Services() {
     if (item.priceType === 'CONTACT_FOR_PRICE' || (!item.price && item.priceType !== 'FIXED')) {
       return (
         <div className="flex flex-col min-w-0">
-          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Quotation</span>
-          <span className="text-[10px] sm:text-xs md:text-sm font-extrabold text-slate-700 bg-slate-100 border border-slate-200 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg inline-block w-fit mt-0.5 truncate max-w-full">
+          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">Quotation</span>
+          <span className="text-[10px] sm:text-xs md:text-sm font-extrabold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg inline-block w-fit mt-0.5 truncate max-w-full">
             Contact
           </span>
         </div>
@@ -1074,17 +1307,17 @@ export default function Services() {
     if (item.priceType === 'STARTING_FROM') {
       return (
         <div className="flex flex-col min-w-0">
-          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400">From</span>
+          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">From</span>
           <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
-            <span className="text-[11px] sm:text-sm md:text-base font-black text-slate-950 tracking-tight truncate">
+            <span className="text-[11px] sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight truncate">
               NPR {item.price.toLocaleString()}
             </span>
             {hasDiscount && (
               <>
-                <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 line-through">
+                <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 dark:text-slate-500 line-through">
                   NPR {item.originalPrice!.toLocaleString()}
                 </span>
-                <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1 py-0.2 rounded">
+                <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 px-1 py-0.2 rounded">
                   -{discountPercent}%
                 </span>
               </>
@@ -1097,17 +1330,17 @@ export default function Services() {
     // Default FIXED
     return (
       <div className="flex flex-col min-w-0">
-        <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Price</span>
+        <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">Price</span>
         <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
-          <span className="text-[11px] sm:text-sm md:text-base font-black text-slate-950 tracking-tight truncate">
+          <span className="text-[11px] sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight truncate">
             NPR {item.price.toLocaleString()}
           </span>
           {hasDiscount && (
             <>
-              <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 line-through">
+              <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 dark:text-slate-500 line-through">
                 NPR {item.originalPrice!.toLocaleString()}
               </span>
-              <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1 py-0.2 rounded">
+              <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 px-1 py-0.2 rounded">
                 -{discountPercent}%
               </span>
             </>
@@ -1273,11 +1506,11 @@ export default function Services() {
                           {item.type === 'service' && <Wrench className="w-4 h-4 text-amber-500 shrink-0" />}
                           {item.type === 'category' && <Layers className="w-4 h-4 text-emerald-600 shrink-0" />}
                           <div className="min-w-0">
-                            <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">{item.title}</p>
-                            <p className="text-[10px] sm:text-xs text-slate-500 truncate">{item.subtitle}</p>
+                            <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">{item.title}</p>
+                            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">{item.subtitle}</p>
                           </div>
                         </div>
-                        <span className="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-0.5 rounded shrink-0">
+                        <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded shrink-0">
                           {item.type}
                         </span>
                       </div>
@@ -1289,7 +1522,7 @@ export default function Services() {
 
             {/* Popular Search Suggestions Chips */}
             <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-2.5 text-xs">
-              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] mr-0.5">
+              <span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-[10px] mr-0.5">
                 Trending:
               </span>
               {SEARCH_SUGGESTIONS.map((suggestion) => (
@@ -1299,8 +1532,8 @@ export default function Services() {
                   onClick={() => executeSearch(suggestion)}
                   className={`px-2.5 py-0.5 sm:py-1 rounded-full text-xs font-bold transition-all cursor-pointer border ${
                     activeQuery.toLowerCase() === suggestion.toLowerCase()
-                      ? 'bg-slate-950 text-white border-slate-950 shadow-2xs'
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 hover:text-slate-950'
+                      ? 'bg-slate-950 dark:bg-indigo-600 text-white border-slate-950 dark:border-indigo-600 shadow-2xs'
+                      : 'bg-white dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-950 dark:hover:text-white'
                   }`}
                 >
                   {suggestion}
@@ -1326,136 +1559,271 @@ export default function Services() {
         </section>
 
         {/* ========================================================= */}
-        {/* 2. CATEGORY HORIZONTAL BROWSER & BRAND SELECTOR           */}
+        {/* 2. DEVICE FORM SELECTOR & COLLAPSIBLE FILTERS BAR         */}
         {/* ========================================================= */}
-        <section className="space-y-3.5 bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xs">
-          
-          {/* Hardware Platform Filter (Smartphones, Android Tablets, Apple iPads) */}
-          <div className="space-y-1.5 pb-2 border-b border-slate-100 dark:border-slate-800">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-              <Smartphone className="w-3.5 h-3.5 text-slate-400" />
-              <span>Hardware Device Form</span>
-            </span>
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-              {[
-                { id: 'all', label: 'All Devices', icon: Smartphone },
-                { id: 'smartphone', label: 'Smartphones', icon: Smartphone },
-                { id: 'tablet', label: 'Android Tablets', icon: Tablet },
-                { id: 'ipad', label: 'Apple iPads', icon: Tablet },
-              ].map((dev) => {
-                const isSelected = selectedDeviceType === dev.id;
-                const Icon = dev.icon;
-                return (
+        <section 
+          id="service-filters-section"
+          aria-label="Service Filters and Hardware Navigation"
+          className="space-y-3 bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xs"
+        >
+          {/* Main Top Bar: Device Selector + Filters & Brands Toggle */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+            
+            {/* Left: Hardware Device Form Tabs */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1.5 sm:hidden">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Hardware Device</span>
+                </span>
+                {selectedDeviceType !== 'all' && (
                   <button
-                    key={dev.id}
-                    id={`device-type-${dev.id}`}
                     type="button"
-                    onClick={() => {
-                      setSelectedDeviceType(dev.id as any);
-                      setCurrentPage(1);
-                      const newParams = new URLSearchParams(searchParams);
-                      if (dev.id === 'all') {
-                        newParams.delete('deviceType');
-                      } else {
-                        newParams.set('deviceType', dev.id);
-                      }
-                      newParams.delete('page');
-                      setSearchParams(newParams, { replace: true });
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer border ${
-                      isSelected
-                        ? 'bg-slate-950 dark:bg-indigo-600 text-white border-slate-950 dark:border-indigo-600 shadow-xs'
-                        : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-950 dark:hover:text-white active:scale-95'
-                    }`}
+                    onClick={() => handleDeviceTypeClick('all')}
+                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
                   >
-                    <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-400' : 'text-slate-400'}`} />
-                    <span>{dev.label}</span>
+                    All Devices
                   </button>
-                );
-              })}
+                )}
+              </div>
+
+              <div 
+                role="tablist" 
+                aria-label="Hardware Device Form"
+                className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none"
+              >
+                {DEVICE_OPTIONS.map((dev) => {
+                  const isSelected = selectedDeviceType === dev.id;
+                  const Icon = dev.icon;
+                  return (
+                    <button
+                      key={dev.id}
+                      id={`device-type-${dev.id}`}
+                      role="tab"
+                      aria-selected={isSelected}
+                      aria-controls="services-catalog-results"
+                      type="button"
+                      onClick={() => handleDeviceTypeClick(dev.id)}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 dark:focus-visible:ring-indigo-400 select-none ${
+                        isSelected
+                          ? 'bg-slate-950 dark:bg-indigo-600 text-white border-slate-950 dark:border-indigo-600 shadow-xs'
+                          : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-950 dark:hover:text-white active:scale-95'
+                      }`}
+                      title={dev.description}
+                    >
+                      <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-400' : 'text-slate-400'}`} />
+                      <span>{dev.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-          
-          {/* Category Filter Navigation with Icons */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-slate-400" />
-                <span>Service Categories</span>
-              </span>
-              {selectedCategory !== 'all' && (
+
+            {/* Right: Filters & Brands Toggle Button (Desktop & Mobile triggers) */}
+            <div className="flex items-center gap-2 shrink-0 pt-1 lg:pt-0 border-t border-slate-100 dark:border-slate-800 lg:border-t-0">
+              
+              {/* Dynamic Toggle Button */}
+              <button
+                type="button"
+                id="toggle-filters-brands-btn"
+                aria-expanded={isFiltersExpanded}
+                aria-controls="advanced-filters-panel"
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                    setIsMobileSheetOpen(true);
+                  } else {
+                    setIsFiltersExpanded(prev => !prev);
+                  }
+                }}
+                className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 h-10 px-3.5 rounded-xl font-bold text-xs transition-all cursor-pointer border select-none ${
+                  activeAdvancedFilterCount > 0 || isFiltersExpanded
+                    ? 'bg-slate-900 dark:bg-slate-800 text-white border-slate-900 dark:border-slate-700 shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200/80 dark:hover:bg-slate-700'
+                }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Filters & Brands</span>
+                
+                {/* Active Filter Counter Badge */}
+                {activeAdvancedFilterCount > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 text-[11px] font-black rounded-full bg-amber-400 text-slate-950 shrink-0 shadow-2xs">
+                    {activeAdvancedFilterCount}
+                  </span>
+                )}
+
+                {/* Desktop Chevron Indicator */}
+                <span className="hidden md:inline-block ml-0.5">
+                  {isFiltersExpanded ? (
+                    <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  )}
+                </span>
+              </button>
+
+              {/* Reset/Clear All Shortcut if any filter is active */}
+              {totalActiveFilterCount > 0 && (
                 <button
                   type="button"
-                  onClick={() => handleCategoryClick('all')}
-                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                  onClick={handleResetAllFilters}
+                  title="Clear all active filters"
+                  className="h-10 px-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1 cursor-pointer shrink-0"
                 >
-                  View All ({prices.length})
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Clear All</span>
                 </button>
               )}
             </div>
-            
-            {/* Scrollable Category Chips */}
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-              {POPULAR_CATEGORIES.map((cat) => {
-                const IconComponent = cat.icon;
-                const isSelected = selectedCategory === cat.id;
-                const catElementId = `category-chip-${cat.id.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-                
-                return (
-                  <button
-                    key={cat.id}
-                    id={catElementId}
-                    type="button"
-                    onClick={() => handleCategoryClick(cat.id)}
-                    className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer border ${
-                      isSelected
-                        ? 'bg-slate-950 text-white border-slate-950 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100 hover:text-slate-950 active:scale-95'
-                    }`}
-                  >
-                    <IconComponent className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-400' : 'text-slate-500'}`} />
-                    <span>{cat.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+
           </div>
 
-          {/* Quick Brand Filter */}
-          <div className="space-y-1.5 pt-2.5 border-t border-slate-100">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <Smartphone className="w-3.5 h-3.5 text-slate-400" />
-                <span>Filter by Brand</span>
-              </span>
-              {selectedBrand !== 'All Brands' && (
-                <button
-                  type="button"
-                  onClick={() => handleBrandClick('All Brands')}
-                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
-                >
-                  Reset Brand
-                </button>
-              )}
+          {/* ========================================================= */}
+          {/* ADVANCED FILTER PANEL (Desktop & Tablet Collapsible)       */}
+          {/* ========================================================= */}
+          {isFiltersExpanded && (
+            <div 
+              id="advanced-filters-panel"
+              role="region"
+              aria-label="Service Categories and Brand Filters"
+              className="pt-3 space-y-4 border-t border-slate-100 dark:border-slate-800 animate-in fade-in-50 slide-in-from-top-2 duration-200"
+            >
+              
+              {/* Service Categories Horizontal Browser */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Service Categories</span>
+                    {selectedCategory !== 'all' && (
+                      <Badge variant="outline" className="text-[10px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 py-0 px-1.5">
+                        {selectedCategory}
+                      </Badge>
+                    )}
+                  </span>
+                  
+                  <div className="flex items-center gap-2">
+                    {selectedCategory !== 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCategoryClick('all')}
+                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                      >
+                        All Categories
+                      </button>
+                    )}
+
+                    {/* Scroll Buttons for Categories */}
+                    <div className="hidden sm:flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label="Scroll categories left"
+                        onClick={() => handleScrollCategories('left')}
+                        disabled={!canScrollLeft}
+                        className="w-7 h-7 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Scroll categories right"
+                        onClick={() => handleScrollCategories('right')}
+                        disabled={!canScrollRight}
+                        className="w-7 h-7 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Horizontal Scrollable Categories Container with Fade Masks */}
+                <div className="relative group/scroll">
+                  {canScrollLeft && (
+                    <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white dark:from-slate-900 to-transparent pointer-events-none z-10 hidden sm:block" />
+                  )}
+                  {canScrollRight && (
+                    <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white dark:from-slate-900 to-transparent pointer-events-none z-10 hidden sm:block" />
+                  )}
+
+                  <div 
+                    ref={categoryScrollRef}
+                    className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin scroll-smooth"
+                  >
+                    {POPULAR_CATEGORIES.map((cat) => {
+                      const IconComponent = cat.icon;
+                      const isSelected = selectedCategory === cat.id;
+                      const catElementId = `category-chip-${cat.id.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+
+                      return (
+                        <button
+                          key={cat.id}
+                          id={catElementId}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => handleCategoryClick(cat.id)}
+                          className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 dark:focus-visible:ring-indigo-400 select-none ${
+                            isSelected
+                              ? 'bg-slate-950 dark:bg-indigo-600 text-white border-slate-950 dark:border-indigo-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-950 dark:hover:text-white active:scale-95'
+                          }`}
+                        >
+                          <IconComponent className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-400' : 'text-slate-500 dark:text-slate-400'}`} />
+                          <span>{cat.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic Brand Filter tailored to device selection */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Filter by Brand</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      ({availableBrands.length - 1} compatible)
+                    </span>
+                  </span>
+
+                  {selectedBrand !== 'All Brands' && (
+                    <button
+                      type="button"
+                      onClick={() => handleBrandClick('All Brands')}
+                      className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                    >
+                      Reset Brand
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                  {availableBrands.map((brand) => {
+                    const isSelected = selectedBrand.toLowerCase() === brand.toLowerCase() ||
+                      (selectedBrand.toLowerCase() === 'all brands' && brand === 'All Brands');
+
+                    return (
+                      <button
+                        key={brand}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => handleBrandClick(brand)}
+                        className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 dark:focus-visible:ring-indigo-400 select-none ${
+                          isSelected
+                            ? 'bg-slate-900 dark:bg-indigo-600 text-white border-slate-900 dark:border-indigo-600 shadow-2xs'
+                            : 'bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        {brand}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
             </div>
-            
-            <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-thin">
-              {BRANDS_LIST.map((brand) => (
-                <button
-                  key={brand}
-                  type="button"
-                  onClick={() => handleBrandClick(brand)}
-                  className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer border ${
-                    selectedBrand === brand
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
-                      : 'bg-slate-50 text-slate-600 border-slate-200/80 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
-                >
-                  {brand}
-                </button>
-              ))}
-            </div>
-          </div>
+          )}
 
         </section>
 
@@ -1467,43 +1835,43 @@ export default function Services() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 px-1">
             <div className="space-y-0.5">
               <div className="flex items-center gap-2.5">
-                <h2 className="text-lg sm:text-xl md:text-2xl font-black text-slate-950 tracking-tight">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-black text-slate-950 dark:text-white tracking-tight">
                   {activeQuery ? 'Search Results' : 'Available Services'}
                 </h2>
-                <Badge variant="outline" className="font-extrabold text-slate-800 bg-white border-slate-300 text-xs px-2 py-0.5">
+                <Badge variant="outline" className="font-extrabold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-xs px-2 py-0.5 shadow-2xs">
                   {totalItems} {totalItems === 1 ? 'service' : 'services'}
                 </Badge>
               </div>
               {activeQuery && (
-                <p className="text-xs font-semibold text-slate-500">
-                  Showing results for <span className="font-bold text-slate-950">"{activeQuery}"</span>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Showing results for <span className="font-bold text-slate-950 dark:text-white">"{activeQuery}"</span>
                 </p>
               )}
             </div>
 
             {/* Sorting & Reset Controls */}
             <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 shadow-2xs">
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-2xs">
                 <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-[11px] text-slate-400 font-normal">Sort:</span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 font-normal">Sort:</span>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-transparent border-0 font-bold text-slate-800 focus:outline-none cursor-pointer pr-1 text-base md:text-xs"
+                  className="bg-transparent border-0 font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-1 text-base md:text-xs"
                 >
-                  <option value="recommended">Recommended</option>
-                  <option value="priceLow">Price: Low to High</option>
-                  <option value="priceHigh">Price: High to Low</option>
-                  <option value="deviceAsc">Device: A to Z</option>
+                  <option value="recommended" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Recommended</option>
+                  <option value="priceLow" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Price: Low to High</option>
+                  <option value="priceHigh" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Price: High to Low</option>
+                  <option value="deviceAsc" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Device: A to Z</option>
                 </select>
               </div>
 
-              {(activeQuery || selectedBrand !== 'All Brands' || selectedCategory !== 'all') && (
+              {totalActiveFilterCount > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleResetAllFilters}
-                  className="text-xs font-bold text-slate-600 hover:text-slate-950 hover:bg-slate-200/60 rounded-xl cursor-pointer h-8 px-2.5"
+                  className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl cursor-pointer h-8 px-2.5"
                 >
                   <RotateCcw className="w-3.5 h-3.5 mr-1" />
                   Reset
@@ -1511,6 +1879,84 @@ export default function Services() {
               )}
             </div>
           </div>
+
+          {/* Active Filter Chips Bar */}
+          {totalActiveFilterCount > 0 && (
+            <div className="flex flex-wrap items-center gap-2 pt-1 pb-0.5">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1 flex items-center gap-1">
+                <Filter className="w-3 h-3" />
+                <span>Active Filters:</span>
+              </span>
+
+              {/* Device Chip */}
+              {selectedDeviceType !== 'all' && (
+                <span className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold">
+                  <span>Device: {DEVICE_OPTIONS.find(d => d.id === selectedDeviceType)?.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeviceTypeClick('all')}
+                    aria-label="Remove device filter"
+                    className="p-0.5 hover:bg-indigo-200/60 dark:hover:bg-indigo-900 rounded-md transition-colors cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+
+              {/* Category Chip */}
+              {selectedCategory !== 'all' && (
+                <span className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold">
+                  <span>Category: {selectedCategory}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCategoryClick('all')}
+                    aria-label="Remove category filter"
+                    className="p-0.5 hover:bg-emerald-200/60 dark:hover:bg-emerald-900 rounded-md transition-colors cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+
+              {/* Brand Chip */}
+              {selectedBrand !== 'All Brands' && (
+                <span className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-bold">
+                  <span>Brand: {selectedBrand}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleBrandClick('All Brands')}
+                    aria-label="Remove brand filter"
+                    className="p-0.5 hover:bg-amber-200/60 dark:hover:bg-amber-900 rounded-md transition-colors cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+
+              {/* Search Query Chip */}
+              {activeQuery && (
+                <span className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold">
+                  <span>Search: "{activeQuery}"</span>
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    aria-label="Remove search query filter"
+                    className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={handleResetAllFilters}
+                className="text-xs font-bold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white underline ml-1 cursor-pointer"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
 
           {/* ========================================================= */}
           {/* 4. LOADING STATE (SKELETON CARDS)                         */}
@@ -1576,29 +2022,65 @@ export default function Services() {
           {/* 6. EMPTY STATE                                            */}
           {/* ========================================================= */}
           {!loading && !error && paginatedItems.length === 0 && (
-            <div className="p-8 sm:p-12 text-center bg-white rounded-3xl border border-slate-200 space-y-6 shadow-xs max-w-2xl mx-auto">
-              <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto text-amber-600">
+            <div className="p-8 sm:p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-6 shadow-xs max-w-2xl mx-auto">
+              <div className="w-14 h-14 bg-amber-50 dark:bg-amber-950/60 border border-amber-200/60 dark:border-amber-800/80 rounded-2xl flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400">
                 <Search className="w-7 h-7" />
               </div>
               
               <div className="space-y-2">
-                <h3 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
-                  {activeQuery ? `No repair services found for "${activeQuery}"` : 'No matching services found'}
+                <h3 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white tracking-tight">
+                  {activeQuery 
+                    ? `No repair services found for "${activeQuery}"` 
+                    : selectedDeviceType !== 'all' || selectedCategory !== 'all' || selectedBrand !== 'All Brands'
+                      ? `No services found matching current filters`
+                      : 'No matching services found'
+                  }
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed max-w-md mx-auto">
-                  We could not find an exact match in our online catalog. Contact MTS Lab directly for an immediate free quotation on unlisted models.
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-medium leading-relaxed max-w-md mx-auto">
+                  {selectedDeviceType === 'laptop'
+                    ? 'No laptop services are currently cataloged online. MTS Lab Kathmandu provides comprehensive chip-level MacBook & laptop hardware repair upon physical inspection.'
+                    : selectedDeviceType === 'tv'
+                      ? 'No smart TV panel services are currently cataloged online. MTS Lab provides laser line bonding and TV panel recovery at our Kathmandu Hub.'
+                      : 'We could not find an exact match in our online catalog. Contact MTS Lab directly for an immediate free quotation on unlisted models.'
+                  }
                 </p>
+
+                {/* Active Filter Chips in Empty State */}
+                {(selectedDeviceType !== 'all' || selectedCategory !== 'all' || selectedBrand !== 'All Brands' || activeQuery) && (
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
+                    {selectedDeviceType !== 'all' && (
+                      <Badge variant="outline" className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 font-bold">
+                        Device: {DEVICE_OPTIONS.find(d => d.id === selectedDeviceType)?.label}
+                      </Badge>
+                    )}
+                    {selectedCategory !== 'all' && (
+                      <Badge variant="outline" className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 font-bold">
+                        Category: {selectedCategory}
+                      </Badge>
+                    )}
+                    {selectedBrand !== 'All Brands' && (
+                      <Badge variant="outline" className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 font-bold">
+                        Brand: {selectedBrand}
+                      </Badge>
+                    )}
+                    {activeQuery && (
+                      <Badge variant="outline" className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 font-bold">
+                        Query: "{activeQuery}"
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Suggestions Box */}
-              <div className="text-left bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-2.5">
-                <span className="text-xs font-black text-slate-900 uppercase tracking-wider block">
+              <div className="text-left bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 rounded-2xl p-4 sm:p-5 space-y-2.5">
+                <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider block">
                   Search Tips & Suggestions:
                 </span>
-                <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
-                  <li>Check your spelling or try synonyms (e.g., <span className="font-semibold text-slate-800">"screen"</span> instead of <span className="font-semibold text-slate-800">"display"</span>, <span className="font-semibold text-slate-800">"battery"</span> instead of <span className="font-semibold text-slate-800">"charging"</span>).</li>
-                  <li>Search by specific device model (e.g., <span className="font-semibold text-slate-800">"iPhone 13"</span>, <span className="font-semibold text-slate-800">"S23 Ultra"</span>, <span className="font-semibold text-slate-800">"Pixel 7"</span>).</li>
-                  <li>Search by issue or component (e.g., <span className="font-semibold text-slate-800">"camera"</span>, <span className="font-semibold text-slate-800">"speaker"</span>, <span className="font-semibold text-slate-800">"water damage"</span>).</li>
+                <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5 list-disc list-inside">
+                  <li>Check your spelling or try synonyms (e.g., <span className="font-semibold text-slate-800 dark:text-slate-200">"screen"</span> instead of <span className="font-semibold text-slate-800 dark:text-slate-200">"display"</span>, <span className="font-semibold text-slate-800 dark:text-slate-200">"battery"</span> instead of <span className="font-semibold text-slate-800 dark:text-slate-200">"charging"</span>).</li>
+                  <li>Search by specific device model (e.g., <span className="font-semibold text-slate-800 dark:text-slate-200">"iPhone 13"</span>, <span className="font-semibold text-slate-800 dark:text-slate-200">"S23 Ultra"</span>, <span className="font-semibold text-slate-800 dark:text-slate-200">"Pixel 7"</span>).</li>
+                  <li>Search by issue or component (e.g., <span className="font-semibold text-slate-800 dark:text-slate-200">"camera"</span>, <span className="font-semibold text-slate-800 dark:text-slate-200">"speaker"</span>, <span className="font-semibold text-slate-800 dark:text-slate-200">"water damage"</span>).</li>
                 </ul>
               </div>
 
@@ -1628,10 +2110,10 @@ export default function Services() {
                     variant="ghost"
                     size="sm"
                     onClick={handleResetAllFilters}
-                    className="text-xs font-bold text-slate-500 hover:text-slate-950 cursor-pointer"
+                    className="text-xs font-bold text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-                    Clear Search & Reset Filters
+                    Clear Search & Reset All Filters
                   </Button>
                 </div>
               </div>
@@ -1652,6 +2134,8 @@ export default function Services() {
                   const fullDeviceName = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`;
                   const shortDescription = item.description || item.notes || (item.problem && item.problem !== item.serviceName ? `Addresses: ${item.problem}` : `Original-grade laboratory repair for ${fullDeviceName}.`);
                   const isTablet = item.deviceType === 'Tablet' || item.deviceType === 'iPad';
+                  const isLaptop = item.deviceType === 'Laptop';
+                  const isTv = item.deviceType === 'Smart TV' || item.deviceType === 'TV';
                   const serviceSlug = serviceIdToSlug.get(item.id);
                   const serviceUrl = serviceSlug ? `/services/${serviceSlug}` : '/services';
 
@@ -1688,6 +2172,10 @@ export default function Services() {
                           <div className="flex items-center gap-1 text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400">
                             {isTablet ? (
                               <Tablet className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-500 shrink-0" />
+                            ) : isLaptop ? (
+                              <Laptop className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500 shrink-0" />
+                            ) : isTv ? (
+                              <Tv className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 shrink-0" />
                             ) : (
                               <Smartphone className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
                             )}
@@ -1851,7 +2339,7 @@ export default function Services() {
         <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
           <DialogContent 
             showCloseButton={false}
-            className="sm:max-w-3xl md:max-w-4xl lg:max-w-5xl w-[95vw] p-0 overflow-hidden border border-slate-200/90 rounded-3xl shadow-2xl bg-white focus:outline-none"
+            className="sm:max-w-3xl md:max-w-4xl lg:max-w-5xl w-[95vw] p-0 overflow-hidden border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-2xl bg-white dark:bg-slate-900 focus:outline-none"
           >
             {selectedService && (() => {
               const catInfo = getCategoryInfo(selectedService.category, selectedService.serviceName);
@@ -1967,15 +2455,15 @@ export default function Services() {
                   </div>
 
                   {/* Right Column (Specifications, Procedures & High-Conversion Action Buttons) */}
-                  <div className="md:w-[58%] lg:w-[62%] p-6 sm:p-7 flex flex-col justify-between bg-white overflow-y-auto max-h-[88vh] space-y-5">
+                  <div className="md:w-[58%] lg:w-[62%] p-6 sm:p-7 flex flex-col justify-between bg-white dark:bg-slate-900 overflow-y-auto max-h-[88vh] space-y-5">
                     
                     {/* Header Row with Single Sleek Close Button */}
-                    <div className="flex items-start justify-between gap-3 pb-2 border-b border-slate-100">
+                    <div className="flex items-start justify-between gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
                       <div className="space-y-0.5">
-                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                           Hardware Diagnosis & Specifications
                         </span>
-                        <h3 className="text-base sm:text-lg font-black text-slate-900">
+                        <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
                           {selectedService.serviceName}
                         </h3>
                       </div>
@@ -1984,7 +2472,7 @@ export default function Services() {
                       <button
                         type="button"
                         onClick={() => setIsDetailOpen(false)}
-                        className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-950 flex items-center justify-center transition-all cursor-pointer shrink-0"
+                        className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white flex items-center justify-center transition-all cursor-pointer shrink-0"
                         title="Close details"
                       >
                         <X className="w-4 h-4" />
@@ -1996,11 +2484,11 @@ export default function Services() {
                       
                       {/* Problem Scope */}
                       <div className="space-y-1.5">
-                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                           <Wrench className="w-3.5 h-3.5 text-slate-400" />
                           <span>Identified Hardware Symptom & Fault</span>
                         </span>
-                        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs sm:text-sm font-bold text-slate-800 leading-relaxed">
+                        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 leading-relaxed">
                           {selectedService.problem || 'Diagnostic inspection and hardware component restoration.'}
                         </div>
                       </div>
@@ -2008,11 +2496,11 @@ export default function Services() {
                       {/* Detailed Laboratory Notes / Procedure */}
                       {selectedService.notes && (
                         <div className="space-y-1.5">
-                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                             <Wrench className="w-3.5 h-3.5 text-amber-500" />
                             <span>Laboratory Procedure & Technical Details</span>
                           </span>
-                          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs sm:text-sm font-medium text-slate-700 leading-relaxed">
+                          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">
                             {selectedService.notes}
                           </div>
                         </div>
@@ -2020,22 +2508,22 @@ export default function Services() {
 
                       {/* Lab Standard Guarantees */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                        <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-2xl space-y-0.5">
-                          <div className="flex items-center gap-1.5 text-xs font-black text-emerald-900">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <div className="p-3 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 rounded-2xl space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-xs font-black text-emerald-900 dark:text-emerald-300">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                             <span>Laboratory Verified</span>
                           </div>
-                          <p className="text-[11px] text-emerald-700 font-medium leading-normal">
+                          <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium leading-normal">
                             Multi-point diagnostic inspection and calibrated touch response.
                           </p>
                         </div>
 
-                        <div className="p-3 bg-sky-50/80 border border-sky-200/80 rounded-2xl space-y-0.5">
-                          <div className="flex items-center gap-1.5 text-xs font-black text-sky-900">
-                            <MapPin className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                        <div className="p-3 bg-sky-50/80 dark:bg-sky-950/40 border border-sky-200/80 dark:border-sky-800/60 rounded-2xl space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-xs font-black text-sky-900 dark:text-sky-300">
+                            <MapPin className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
                             <span>Kathmandu Service Hub</span>
                           </div>
-                          <p className="text-[11px] text-sky-700 font-medium leading-normal">
+                          <p className="text-[11px] text-sky-700 dark:text-sky-400 font-medium leading-normal">
                             Pakosadak, New Road (Opposite People's Plaza back gate).
                           </p>
                         </div>
@@ -2044,7 +2532,7 @@ export default function Services() {
                     </div>
 
                     {/* Bottom Action Bar */}
-                    <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                       
                       {/* Copy Info Action & Full Page Link */}
                       <div className="flex flex-wrap items-center gap-2">
@@ -2053,10 +2541,10 @@ export default function Services() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleShareService(selectedService)}
-                          className="text-xs font-bold text-slate-600 hover:text-slate-900 rounded-xl h-10 px-3 shrink-0"
+                          className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-xl h-10 px-3 shrink-0"
                         >
                           {copiedLink ? (
-                            <span className="flex items-center gap-1.5 text-emerald-600">
+                            <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
                               <Check className="w-4 h-4" />
                               <span>Copied to Clipboard!</span>
                             </span>
@@ -2071,7 +2559,7 @@ export default function Services() {
                         {serviceSlug && (
                           <Link
                             to={`/services/${serviceSlug}`}
-                            className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors py-2 px-3 rounded-xl hover:bg-blue-50/80 shrink-0"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors py-2 px-3 rounded-xl hover:bg-blue-50/80 dark:hover:bg-blue-950/40 shrink-0"
                           >
                             <span>View full page for this service</span>
                             <ArrowRight className="w-3.5 h-3.5" />
@@ -2217,6 +2705,200 @@ export default function Services() {
             Listed prices represent standard laboratory estimates for genuine component replacement and technician labor. Actual pricing may vary slightly based on specific regional hardware variants, hidden liquid corrosion, frame warpage, or secondary IC board failures. A definitive quotation is verified after a complimentary 10-minute physical inspection at MTS Lab Kathmandu Hub.
           </p>
         </section>
+
+        {/* ========================================================= */}
+        {/* MOBILE BOTTOM SHEET FOR ADVANCED FILTERS & BRANDS         */}
+        {/* ========================================================= */}
+        {isMobileSheetOpen && (
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mobile-sheet-title"
+            className="fixed inset-0 z-50 flex items-end justify-center md:hidden"
+          >
+            {/* Backdrop Blur Overlay */}
+            <div 
+              onClick={() => setIsMobileSheetOpen(false)}
+              className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs transition-opacity animate-in fade-in-0 duration-200"
+            />
+
+            {/* Bottom Sheet Card */}
+            <div className="relative w-full max-h-[85vh] bg-white dark:bg-slate-900 rounded-t-3xl border-t border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col z-10 overflow-hidden outline-none animate-in slide-in-from-bottom duration-250">
+              
+              {/* Drag Handle Bar */}
+              <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mt-3 mb-1 shrink-0" />
+
+              {/* Sheet Header */}
+              <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-amber-500" />
+                  <h3 id="mobile-sheet-title" className="text-base font-black text-slate-900 dark:text-white">
+                    Filters & Brands
+                  </h3>
+                  {activeAdvancedFilterCount > 0 && (
+                    <Badge className="bg-amber-400 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded-full">
+                      {activeAdvancedFilterCount}
+                    </Badge>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  aria-label="Close filters"
+                  onClick={() => setIsMobileSheetOpen(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Sheet Scrollable Body */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+                
+                {/* 1. Device Form Selector in Mobile Sheet */}
+                <div className="space-y-2">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Hardware Device Form</span>
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {DEVICE_OPTIONS.map((dev) => {
+                      const isSelected = selectedDeviceType === dev.id;
+                      const Icon = dev.icon;
+                      return (
+                        <button
+                          key={dev.id}
+                          type="button"
+                          onClick={() => handleDeviceTypeClick(dev.id)}
+                          className={`flex items-center gap-2 p-2.5 rounded-xl text-xs font-bold transition-all border text-left cursor-pointer ${
+                            isSelected
+                              ? 'bg-slate-950 dark:bg-indigo-600 text-white border-slate-950 dark:border-indigo-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700'
+                          }`}
+                        >
+                          <Icon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-amber-400' : 'text-slate-400'}`} />
+                          <span className="truncate">{dev.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Service Categories in Mobile Sheet */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Service Categories</span>
+                    </span>
+                    {selectedCategory !== 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCategoryClick('all')}
+                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                      >
+                        Reset Category
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {POPULAR_CATEGORIES.map((cat) => {
+                      const IconComponent = cat.icon;
+                      const isSelected = selectedCategory === cat.id;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => handleCategoryClick(cat.id)}
+                          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                            isSelected
+                              ? 'bg-slate-950 dark:bg-indigo-600 text-white border-slate-950 dark:border-indigo-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700 active:scale-95'
+                          }`}
+                        >
+                          <IconComponent className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-400' : 'text-slate-400'}`} />
+                          <span>{cat.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. Filter by Brand in Mobile Sheet */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Smartphone className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Filter by Brand</span>
+                    </span>
+                    {selectedBrand !== 'All Brands' && (
+                      <button
+                        type="button"
+                        onClick={() => handleBrandClick('All Brands')}
+                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                      >
+                        Reset Brand
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {availableBrands.map((brand) => {
+                      const isSelected = selectedBrand.toLowerCase() === brand.toLowerCase() ||
+                        (selectedBrand.toLowerCase() === 'all brands' && brand === 'All Brands');
+                      return (
+                        <button
+                          key={brand}
+                          type="button"
+                          onClick={() => handleBrandClick(brand)}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                            isSelected
+                              ? 'bg-slate-900 dark:bg-indigo-600 text-white border-slate-900 dark:border-indigo-600'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700'
+                          }`}
+                        >
+                          {brand}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Sheet Sticky Footer Action Bar */}
+              <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 shrink-0 pb-6 sm:pb-4">
+                {totalActiveFilterCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleClearAdvancedFilters();
+                    }}
+                    className="px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileSheetOpen(false);
+                    if (catalogSectionRef.current) {
+                      const navOffset = 80;
+                      const targetTop = catalogSectionRef.current.getBoundingClientRect().top + window.pageYOffset - navOffset;
+                      window.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+                    }
+                  }}
+                  className="flex-1 py-3 px-4 rounded-xl bg-slate-950 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Show {totalItems} {totalItems === 1 ? 'Service' : 'Services'}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
 
       </main>
 

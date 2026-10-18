@@ -73,7 +73,11 @@ export function parseServiceItem(item: any, isPublic: boolean = false) {
   // Automatic smart deviceType detection if not explicitly set
   if (!deviceType) {
     const text = `${item.brand || ''} ${item.model || ''} ${item.serviceName || ''} ${item.category || ''}`.toLowerCase();
-    if (text.includes('ipad')) {
+    if (text.includes('macbook') || text.includes('laptop') || text.includes('notebook') || text.includes('thinkpad')) {
+      deviceType = 'Laptop';
+    } else if (text.includes('smart tv') || text.includes('television') || text.includes('oled tv') || text.includes('bravia')) {
+      deviceType = 'Smart TV';
+    } else if (text.includes('ipad')) {
       deviceType = 'iPad';
     } else if (text.includes('tablet') || text.includes('tab ') || text.includes('tab-')) {
       deviceType = 'Tablet';
@@ -428,7 +432,16 @@ const handleGetPrices = async (req: Request, res: Response) => {
     // Optional deviceType filtering
     if (deviceType && deviceType !== 'ALL' && deviceType !== 'all') {
       const targetDevice = String(deviceType).toLowerCase().trim();
-      parsedPrices = parsedPrices.filter((item: any) => (item.deviceType || '').toLowerCase() === targetDevice);
+      parsedPrices = parsedPrices.filter((item: any) => {
+        const itemType = (item.deviceType || 'Smartphone').toLowerCase();
+        if (targetDevice === 'tablet') {
+          return itemType === 'tablet' || itemType === 'ipad';
+        }
+        if (targetDevice === 'tv' || targetDevice === 'smart tv') {
+          return itemType === 'smart tv' || itemType === 'tv';
+        }
+        return itemType === targetDevice;
+      });
     }
 
     return res.json(parsedPrices);
