@@ -212,8 +212,29 @@ export function getServiceSeoDescription(service: ServiceLike): string {
   return desc.slice(0, 158);
 }
 
+import {
+  checkWarrantyEligibility,
+  isServiceEligibleForWarranty,
+  getServiceFaqSubtitle,
+  generateContextAwareDirectAnswer,
+  generateContextAwareFaqs,
+  sanitizeServiceDescription,
+  WarrantyEligibilityResult,
+} from './warrantyPolicy';
+
+export {
+  checkWarrantyEligibility,
+  isServiceEligibleForWarranty,
+  getServiceFaqSubtitle,
+  generateContextAwareDirectAnswer,
+  generateContextAwareFaqs,
+  sanitizeServiceDescription,
+};
+export type { WarrantyEligibilityResult };
+
 /**
  * Generate direct answer text for Answer Engines (AEO - Google AI Mode, ChatGPT, Gemini)
+ * Enforces the global warranty rule: only verified original battery replacements may claim warranty.
  */
 export function getServiceDirectAnswer(service: ServiceLike): string {
   const device = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ''}`.trim();
@@ -221,35 +242,28 @@ export function getServiceDirectAnswer(service: ServiceLike): string {
   const timeStr = service.estimatedTime ? ` Estimated turnaround time is ${service.estimatedTime}.` : '';
   const problem = service.problem ? ` Solves: ${service.problem}.` : '';
 
-  return `${service.serviceName} for ${device} is performed at MTS Lab in Pakosadak, New Road, Kathmandu. The verified cost is ${priceStr}.${timeStr}${problem} Genuine quality parts, laser calibration, and warranty coverage are provided.`;
+  return generateContextAwareDirectAnswer(service, {
+    device,
+    priceStr,
+    timeStr,
+    problemStr: problem,
+  });
 }
 
 /**
  * Generate verified FAQs for a service
+ * Enforces the global warranty rule: only verified original battery replacements may feature warranty FAQs.
  */
 export function getServiceFaqs(service: ServiceLike): { question: string; answer: string }[] {
   const device = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ''}`.trim();
   const priceStr = formatNprPrice(service.price, service.priceType);
   const estTime = service.estimatedTime || '1 to 2 hours';
 
-  return [
-    {
-      question: `How much does ${service.serviceName} for ${device} cost at MTS Lab?`,
-      answer: `The verified laboratory fee for ${service.serviceName} on ${device} at MTS Lab Kathmandu is ${priceStr}. Free multi-point diagnostic inspection is included.`,
-    },
-    {
-      question: `How long does ${service.serviceName} for ${device} take?`,
-      answer: `Estimated service turnaround time is ${estTime} at our New Road Kathmandu laboratory under standard queue conditions.`,
-    },
-    {
-      question: `Where is MTS Lab located for ${device} hardware repairs?`,
-      answer: `MTS Lab is located at Pakosadak, New Road (directly opposite the back gate of People's Plaza), Kathmandu 44600, Nepal. Call 9869276668 or 015364307 for directions.`,
-    },
-    {
-      question: `Does MTS Lab provide testing and warranty for ${service.serviceName}?`,
-      answer: `Yes, all repairs undergo pre- and post-repair quality diagnostics, display calibration, and component testing with dedicated warranty coverage.`,
-    },
-  ];
+  return generateContextAwareFaqs(service, {
+    device,
+    priceStr,
+    estTime,
+  });
 }
 
 /**

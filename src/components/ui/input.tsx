@@ -4,18 +4,27 @@ import { Input as InputPrimitive } from "@base-ui/react/input"
 import { cn } from "@/lib/utils"
 
 /**
- * Sanitizes input class names so that any unqualified text-xs or text-sm
- * sizes are promoted to text-base (16px) on mobile viewports (< 768px) and deferred
- * to md:text-xs / md:text-sm on desktop, permanently preventing iOS Safari auto-zoom.
+ * Sanitizes input and form-control class names so that any sub-16px font sizes
+ * (text-xs, text-sm, text-[11px-15px], sm:text-xs, etc.) are promoted to text-base
+ * (16px) on mobile viewports (< 768px / md) and deferred to md:text-sm / md:text-xs
+ * on desktop, permanently preventing iOS Safari, Chrome for iOS, and mobile WebKit auto-zoom.
  */
 export function sanitizeInputClassName(className?: string): string {
   if (!className) return "text-base md:text-sm";
   const tokens = className.split(/\s+/).filter(Boolean);
   const adjusted = tokens.map(t => {
+    // Unprefixed sub-16px font sizes
     if (t === 'text-xs') return 'text-base md:text-xs';
     if (t === 'text-sm') return 'text-base md:text-sm';
-    if (t === 'sm:text-xs') return 'md:text-xs';
-    if (t === 'sm:text-sm') return 'md:text-sm';
+    const customPx = t.match(/^text-\[(1[0-5]|[1-9])px\]$/);
+    if (customPx) return `text-base md:${t}`;
+
+    // Small-breakpoint prefixed sub-16px font sizes (e.g. sm:text-xs, sm:text-sm)
+    if (t === 'sm:text-xs' || t === 'xs:text-xs') return 'md:text-xs';
+    if (t === 'sm:text-sm' || t === 'xs:text-sm') return 'md:text-sm';
+    const customSmPx = t.match(/^(?:sm|xs):text-\[(1[0-5]|[1-9])px\]$/);
+    if (customSmPx) return `md:text-[${customSmPx[1]}px]`;
+
     return t;
   });
   return cn("text-base md:text-sm", ...adjusted);

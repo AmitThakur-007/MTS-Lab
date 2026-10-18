@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
+import { sanitizeServiceDescription } from '../../../src/lib/warrantyPolicy';
 
 const router = Router();
 
@@ -99,6 +100,12 @@ export function parseServiceItem(item: any, isPublic: boolean = false) {
   if (isPublic) {
     delete result.createdBy;
     delete result.updatedBy;
+    if (result.description) {
+      result.description = sanitizeServiceDescription(result, result.description);
+    }
+    if (result.problem) {
+      result.problem = sanitizeServiceDescription(result, result.problem);
+    }
   }
 
   return result;

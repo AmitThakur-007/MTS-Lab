@@ -38,6 +38,8 @@ import {
   getServiceDirectAnswer,
   getServiceFaqs,
   getServicePageJsonLd,
+  getServiceFaqSubtitle,
+  sanitizeServiceDescription,
 } from '@/lib/seo';
 import { toast } from 'sonner';
 
@@ -376,7 +378,7 @@ export default function ServiceDetail() {
             </p>
             {service.description && (
               <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm pt-2 border-t border-slate-200/60 dark:border-slate-700 leading-relaxed">
-                {service.description}
+                {sanitizeServiceDescription(service, service.description)}
               </p>
             )}
           </div>
@@ -432,7 +434,7 @@ export default function ServiceDetail() {
                   <HelpCircle className="w-5 h-5 text-slate-700 dark:text-slate-300" />
                   <span>Frequently Asked Questions</span>
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Verified laboratory turnaround, pricing, and warranty policies</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{getServiceFaqSubtitle(service)}</p>
               </div>
 
               <div className="space-y-4 divide-y divide-slate-100 dark:divide-slate-800 pt-1">

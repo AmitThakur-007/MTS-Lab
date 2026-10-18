@@ -330,9 +330,13 @@
     }
   body {
     @apply bg-background text-foreground;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     }
   html {
     @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     }
 }
 
@@ -344,31 +348,54 @@
    form control is focused IF its computed font-size is below 16px.
 
    The following rules enforce an authoritative minimum 16px (1rem) computed
-   font size on all text-entry controls on mobile screen widths (< 768px) and
-   iOS touch devices, permanently eliminating unwanted auto-zoom while:
+   font size on all text-entry controls on mobile screen widths (< 768px),
+   touch devices, and iOS touch viewports, permanently eliminating unwanted
+   auto-zoom while:
    1. Preserving normal user-controlled pinch-to-zoom accessibility.
-   2. Preserving compact desktop typography (>= 768px).
+   2. Preserving compact desktop typography (>= 768px on fine pointer devices).
    3. Leaving non-text-entry controls (checkboxes, radios, range sliders, buttons)
       untouched.
    ========================================================================== */
-@media screen and (max-width: 767px) {
+@media screen and (max-width: 767px),
+       screen and (max-width: 1024px) and (pointer: coarse),
+       screen and (max-width: 1024px) and (hover: none) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="hidden"]):not([type="image"]):not([type="file"]),
+  input:not([type]),
   textarea,
   select,
   [contenteditable="true"],
   [contenteditable=""] {
     font-size: 16px !important;
   }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="hidden"]):not([type="image"]):not([type="file"]):focus,
+  input:not([type]):focus,
+  textarea:focus,
+  select:focus,
+  [contenteditable="true"]:focus,
+  [contenteditable=""]:focus {
+    font-size: 16px !important;
+  }
 }
 
-/* Extended protection for iOS devices in landscape or tablet touch viewports */
+/* WebKit-specific iOS check for Safari, Chrome for iOS, and WKWebView */
 @supports (-webkit-touch-callout: none) {
   @media screen and (max-width: 1024px) {
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="hidden"]):not([type="image"]):not([type="file"]),
+    input:not([type]),
     textarea,
     select,
     [contenteditable="true"],
     [contenteditable=""] {
+      font-size: 16px !important;
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="hidden"]):not([type="image"]):not([type="file"]):focus,
+    input:not([type]):focus,
+    textarea:focus,
+    select:focus,
+    [contenteditable="true"]:focus,
+    [contenteditable=""]:focus {
       font-size: 16px !important;
     }
   }

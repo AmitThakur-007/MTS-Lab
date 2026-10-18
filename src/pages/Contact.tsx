@@ -904,10 +904,10 @@ export default function Contact() {
             <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs space-y-2 min-w-0">
               <div className="flex items-center gap-2">
                 <HelpCircle className="h-4 w-4 text-amber-600 shrink-0" />
-                <h3 className="text-sm font-bold text-slate-900">What warranty is provided on replaced batteries and displays?</h3>
+                <h3 className="text-sm font-bold text-slate-900">What warranty or quality verification is provided on repairs?</h3>
               </div>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Batteries carry our verifiable 6-month or 1-year battery warranty card with serial registration. Restored original displays are verified through a 24-point hardware check before handover.
+                Original replacement batteries carry our verifiable 6-month or 1-year battery warranty card with serial registration. All other hardware repairs (including displays, screens, motherboards, and charging flex) undergo thorough multi-point laboratory diagnostic testing and quality verification before handover.
               </p>
             </div>
           </div>

@@ -20,6 +20,8 @@ import {
   getServiceFaqs,
   getLocalBusinessJsonLd,
   getServicePageJsonLd,
+  getServiceFaqSubtitle,
+  sanitizeServiceDescription,
   STATIC_PAGES_SEO,
   escapeHtml,
   safeJsonLdString,
@@ -418,6 +420,7 @@ router.get('/services/:slug', async (req: Request, res: Response) => {
     const canonicalUrl = `${SITE_URL}/services/${reqSlug}`;
     const directAnswer = getServiceDirectAnswer(service);
     const faqs = getServiceFaqs(service);
+    const faqSubtitle = getServiceFaqSubtitle(service);
     const pageJsonLd = getServicePageJsonLd(service, reqSlug);
     const priceDisplay = formatNprPrice(service.price, service.priceType);
     const fullDeviceName = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ''}`.trim();
@@ -468,7 +471,8 @@ router.get('/services/:slug', async (req: Request, res: Response) => {
           ` : ''}
 
           <div style="margin:24px 0; padding-top:16px; border-top:1px solid #e2e8f0;">
-            <h2 style="font-size:20px; font-weight:800; color:#0f172a; margin:0 0 12px 0;">Frequently Asked Questions</h2>
+            <h2 style="font-size:20px; font-weight:800; color:#0f172a; margin:0 0 4px 0;">Frequently Asked Questions</h2>
+            <p style="font-size:13px; color:#64748b; margin:0 0 12px 0;">${escapeHtml(faqSubtitle)}</p>
             ${faqHtml}
           </div>
 
