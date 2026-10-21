@@ -10,14 +10,78 @@ export interface HomeSlideRecord {
   title: string;
   description: string | null;
   imageUrl: string;
+  mobileImageUrl?: string | null;
+  category?: string | null;
+  badgeIcon?: string | null;
+  features?: string[] | string | null;
   buttonText: string;
   buttonLink: string;
+  buttonSecondaryText?: string | null;
+  buttonSecondaryLink?: string | null;
+  focalPoint?: string | null;
+  overlayIntensity?: 'heavy' | 'medium' | 'subtle' | null;
   displayOrder: number;
   status: 'ACTIVE' | 'INACTIVE';
   createdBy?: string | null;
   updatedBy?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export function deriveSlideDefaults(slide: Partial<HomeSlideRecord>): {
+  category: string;
+  badgeIcon: string;
+  features: string[];
+  buttonSecondaryText: string;
+  buttonSecondaryLink: string;
+  focalPoint: string;
+  overlayIntensity: 'heavy' | 'medium' | 'subtle';
+} {
+  const title = (slide.title || '').toLowerCase();
+  let defaultCategory = 'MTS LAB — SMARTPHONE REPAIR';
+  let defaultIcon = 'wrench';
+  let defaultFeatures = ['24-Point Tested', '60-Min Express Fix', 'Certified Techs'];
+
+  if (title.includes('battery') || title.includes('port') || title.includes('charging')) {
+    defaultCategory = 'MTS LAB — BATTERY & CHARGING';
+    defaultIcon = 'battery';
+    defaultFeatures = ['100% Health restored', '1-Year Warranty', 'Fast Charge Tested'];
+  } else if (title.includes('front glass') || title.includes('oca')) {
+    defaultCategory = 'MTS LAB — SMARTPHONE REPAIR';
+    defaultIcon = 'wrench';
+    defaultFeatures = ['24-Point Tested', '60-Min Express Fix', 'Certified Techs'];
+  } else if (title.includes('display') || title.includes('screen')) {
+    defaultCategory = 'MTS LAB — 120HZ AMOLED DISPLAY';
+    defaultIcon = 'screen';
+    defaultFeatures = ['True Tone Retained', '120Hz ProMotion', 'Zero Dead Pixels'];
+  } else if (title.includes('back') || title.includes('panel') || title.includes('laser')) {
+    defaultCategory = 'MTS LAB — LASER HOUSING RESTORATION';
+    defaultIcon = 'layers';
+    defaultFeatures = ['High-Precision Laser', 'Original Magnet Array', 'Factory Finish'];
+  } else if (title.includes('motherboard') || title.includes('ic') || title.includes('chip')) {
+    defaultCategory = 'MTS LAB — MASTER IC REPAIR';
+    defaultIcon = 'cpu';
+    defaultFeatures = ['Micro-Soldering', 'Schematic Traced', 'Component Level'];
+  }
+
+  let finalFeatures: string[] = defaultFeatures;
+  if (Array.isArray(slide.features) && slide.features.length > 0) {
+    finalFeatures = slide.features.filter(Boolean);
+  } else if (typeof slide.features === 'string' && slide.features.trim()) {
+    finalFeatures = slide.features.includes(',')
+      ? slide.features.split(',').map(f => f.trim()).filter(Boolean)
+      : [slide.features.trim()];
+  }
+
+  return {
+    category: slide.category || defaultCategory,
+    badgeIcon: slide.badgeIcon || defaultIcon,
+    features: finalFeatures,
+    buttonSecondaryText: slide.buttonSecondaryText || 'Track Repair Status',
+    buttonSecondaryLink: slide.buttonSecondaryLink || '/track',
+    focalPoint: slide.focalPoint || 'center',
+    overlayIntensity: slide.overlayIntensity || 'heavy',
+  };
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -32,28 +96,61 @@ if (!fs.existsSync(DATA_DIR)) {
   }
 }
 
-// Initial Preset Slides (safe default fallback)
+// Initial Preset Slides (safe default fallback matching reference mockups)
 const INITIAL_PRESET_SLIDES: HomeSlideRecord[] = [
   {
     id: '51a6593c-8b46-4b18-ba7f-9fe1eefc7f21',
     title: 'Front Glass Change',
+    category: 'MTS LAB — SMARTPHONE REPAIR',
+    badgeIcon: 'wrench',
     description: 'Specialized outer glass replacement preserving your original AMOLED / OLED display and touch responsiveness.',
     imageUrl: '/assets/images/front_glass_repair_1786719176945.jpg',
+    features: ['24-Point Tested', '60-Min Express Fix', 'Certified Techs'],
     buttonText: 'Check Repair Price',
     buttonLink: '/services?focus=search&q=Front+Glass',
+    buttonSecondaryText: 'Track Repair Status',
+    buttonSecondaryLink: '/track',
+    focalPoint: 'center',
+    overlayIntensity: 'heavy',
     displayOrder: 1,
     status: 'ACTIVE',
     createdAt: '2026-08-18T11:06:14.238Z',
     updatedAt: '2026-10-04T07:27:11.774Z'
   },
   {
+    id: 'b4439128-6477-421e-9492-f8c7478ad7e6',
+    title: 'Battery & Port Replacement',
+    category: 'MTS LAB — BATTERY & CHARGING',
+    badgeIcon: 'battery',
+    description: 'OEM high-capacity battery installation with battery health calibration and high-speed charging port replacement.',
+    imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
+    features: ['100% Health restored', '1-Year Warranty', 'Fast Charge Tested'],
+    buttonText: 'Check Repair Price',
+    buttonLink: '/services?focus=search&q=Battery',
+    buttonSecondaryText: 'Track Repair Status',
+    buttonSecondaryLink: '/track',
+    focalPoint: 'center',
+    overlayIntensity: 'heavy',
+    displayOrder: 2,
+    status: 'ACTIVE',
+    createdAt: '2026-08-18T11:06:14.247Z',
+    updatedAt: '2026-10-04T07:27:11.774Z'
+  },
+  {
     id: 'fd9650d0-7ecf-4268-972a-205164cddbe4',
     title: 'Display Replacement',
+    category: 'MTS LAB — 120HZ AMOLED DISPLAY',
+    badgeIcon: 'screen',
     description: '100% Genuine original quality screen restoration with True Tone, 120Hz ProMotion, and vibrant clarity.',
     imageUrl: '/assets/images/display_replace_1786719191504.jpg',
+    features: ['True Tone Retained', '120Hz ProMotion', 'Zero Dead Pixels'],
     buttonText: 'Check Repair Price',
     buttonLink: '/services?focus=search&q=Display',
-    displayOrder: 2,
+    buttonSecondaryText: 'Track Repair Status',
+    buttonSecondaryLink: '/track',
+    focalPoint: 'center',
+    overlayIntensity: 'heavy',
+    displayOrder: 3,
     status: 'ACTIVE',
     createdAt: '2026-08-18T11:06:14.242Z',
     updatedAt: '2026-10-04T07:27:11.774Z'
@@ -61,25 +158,20 @@ const INITIAL_PRESET_SLIDES: HomeSlideRecord[] = [
   {
     id: 'f7b4fc3d-1648-45c0-8bc7-88ce85c13289',
     title: 'Back Panel / Back Glass Change',
+    category: 'MTS LAB — LASER HOUSING RESTORATION',
+    badgeIcon: 'layers',
     description: 'Factory finish laser back panel replacement and frame restoration for Apple, Samsung, and flagship devices.',
-    imageUrl: '/assets/images/back_glass_fix_178671907185.jpg',
+    imageUrl: '/assets/images/back_glass_fix_1786719207185.jpg',
+    features: ['High-Precision Laser', 'Original Magnet Array', 'Factory Finish'],
     buttonText: 'Check Repair Price',
     buttonLink: '/services?focus=search&q=Back+Glass',
-    displayOrder: 3,
-    status: 'ACTIVE',
-    createdAt: '2026-08-18T11:06:14.245Z',
-    updatedAt: '2026-10-04T07:27:11.774Z'
-  },
-  {
-    id: 'b4439128-6477-421e-9492-f8c7478ad7e6',
-    title: 'Professional Smartphone Repair',
-    description: 'Advanced IC-level micro-soldering, green/white screen laser line repair, and specialized liquid damage restoration.',
-    imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
-    buttonText: 'Check Repair Price',
-    buttonLink: '/services?focus=search',
+    buttonSecondaryText: 'Track Repair Status',
+    buttonSecondaryLink: '/track',
+    focalPoint: 'center',
+    overlayIntensity: 'heavy',
     displayOrder: 4,
     status: 'ACTIVE',
-    createdAt: '2026-08-18T11:06:14.247Z',
+    createdAt: '2026-08-18T11:06:14.245Z',
     updatedAt: '2026-10-04T07:27:11.774Z'
   }
 ];
@@ -146,20 +238,43 @@ export async function getSlides(onlyActive: boolean = false): Promise<HomeSlideR
     const { data: supaSlides, error } = await query;
 
     if (!error && Array.isArray(supaSlides)) {
-      const normalized: HomeSlideRecord[] = supaSlides.map((s: any) => ({
-        id: String(s.id),
-        title: String(s.title || ''),
-        description: s.description ? String(s.description) : null,
-        imageUrl: String(s.imageUrl || ''),
-        buttonText: s.buttonText ? String(s.buttonText) : 'Check Repair Price',
-        buttonLink: s.buttonLink ? String(s.buttonLink) : '/services?focus=search',
-        displayOrder: Number(s.displayOrder) || 1,
-        status: (s.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE') as 'ACTIVE' | 'INACTIVE',
-        createdBy: s.createdBy || null,
-        updatedBy: s.updatedBy || null,
-        createdAt: s.createdAt || new Date().toISOString(),
-        updatedAt: s.updatedAt || new Date().toISOString(),
-      }));
+      const localMap = new Map(loadLocalFile().map(s => [s.id, s]));
+      const normalized: HomeSlideRecord[] = supaSlides.map((s: any) => {
+        const local = localMap.get(String(s.id));
+        const derived = deriveSlideDefaults({
+          title: s.title,
+          category: local?.category,
+          badgeIcon: local?.badgeIcon,
+          features: local?.features,
+          buttonSecondaryText: local?.buttonSecondaryText,
+          buttonSecondaryLink: local?.buttonSecondaryLink,
+          focalPoint: local?.focalPoint,
+          overlayIntensity: local?.overlayIntensity,
+        });
+
+        return {
+          id: String(s.id),
+          title: String(s.title || ''),
+          description: s.description ? String(s.description) : null,
+          imageUrl: String(s.imageUrl || ''),
+          mobileImageUrl: local?.mobileImageUrl || null,
+          category: local?.category || derived.category,
+          badgeIcon: local?.badgeIcon || derived.badgeIcon,
+          features: local?.features || derived.features,
+          buttonText: s.buttonText ? String(s.buttonText) : 'Check Repair Price',
+          buttonLink: s.buttonLink ? String(s.buttonLink) : '/services?focus=search',
+          buttonSecondaryText: local?.buttonSecondaryText || derived.buttonSecondaryText,
+          buttonSecondaryLink: local?.buttonSecondaryLink || derived.buttonSecondaryLink,
+          focalPoint: local?.focalPoint || derived.focalPoint,
+          overlayIntensity: local?.overlayIntensity || derived.overlayIntensity,
+          displayOrder: Number(s.displayOrder) || 1,
+          status: (s.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE') as 'ACTIVE' | 'INACTIVE',
+          createdBy: s.createdBy || null,
+          updatedBy: s.updatedBy || null,
+          createdAt: s.createdAt || new Date().toISOString(),
+          updatedAt: s.updatedAt || new Date().toISOString(),
+        };
+      });
 
       // When requesting all slides (CMS view), keep local cache and disk backup in complete sync with Supabase
       if (!onlyActive) {
@@ -207,13 +322,33 @@ export async function getSlideById(id: string): Promise<HomeSlideRecord | null> 
       .maybeSingle();
 
     if (!error && data) {
+      const local = slidesCache.get(id) || loadLocalFile().find(s => s.id === id);
+      const derived = deriveSlideDefaults({
+        title: data.title,
+        category: local?.category,
+        badgeIcon: local?.badgeIcon,
+        features: local?.features,
+        buttonSecondaryText: local?.buttonSecondaryText,
+        buttonSecondaryLink: local?.buttonSecondaryLink,
+        focalPoint: local?.focalPoint,
+        overlayIntensity: local?.overlayIntensity,
+      });
+
       const record: HomeSlideRecord = {
         id: String(data.id),
         title: String(data.title || ''),
         description: data.description ? String(data.description) : null,
         imageUrl: String(data.imageUrl || ''),
+        mobileImageUrl: local?.mobileImageUrl || null,
+        category: local?.category || derived.category,
+        badgeIcon: local?.badgeIcon || derived.badgeIcon,
+        features: local?.features || derived.features,
         buttonText: data.buttonText ? String(data.buttonText) : 'Check Repair Price',
         buttonLink: data.buttonLink ? String(data.buttonLink) : '/services?focus=search',
+        buttonSecondaryText: local?.buttonSecondaryText || derived.buttonSecondaryText,
+        buttonSecondaryLink: local?.buttonSecondaryLink || derived.buttonSecondaryLink,
+        focalPoint: local?.focalPoint || derived.focalPoint,
+        overlayIntensity: local?.overlayIntensity || derived.overlayIntensity,
         displayOrder: Number(data.displayOrder) || 1,
         status: (data.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE') as 'ACTIVE' | 'INACTIVE',
         createdBy: data.createdBy || null,
@@ -251,14 +386,23 @@ export async function createSlide(slideData: Partial<HomeSlideRecord>, userId?: 
 
   const id = slideData.id || uuidv4();
   const now = new Date().toISOString();
+  const derived = deriveSlideDefaults(slideData);
 
   const newSlide: HomeSlideRecord = {
     id,
     title: String(slideData.title || '').trim(),
     description: slideData.description ? String(slideData.description).trim() : null,
     imageUrl: String(slideData.imageUrl || '').trim(),
+    mobileImageUrl: slideData.mobileImageUrl ? String(slideData.mobileImageUrl).trim() : null,
+    category: slideData.category ? String(slideData.category).trim() : derived.category,
+    badgeIcon: slideData.badgeIcon || derived.badgeIcon,
+    features: slideData.features || derived.features,
     buttonText: slideData.buttonText ? String(slideData.buttonText).trim() : 'Check Repair Price',
     buttonLink: slideData.buttonLink ? String(slideData.buttonLink).trim() : '/services?focus=search',
+    buttonSecondaryText: slideData.buttonSecondaryText ? String(slideData.buttonSecondaryText).trim() : derived.buttonSecondaryText,
+    buttonSecondaryLink: slideData.buttonSecondaryLink ? String(slideData.buttonSecondaryLink).trim() : derived.buttonSecondaryLink,
+    focalPoint: slideData.focalPoint || derived.focalPoint,
+    overlayIntensity: slideData.overlayIntensity || derived.overlayIntensity,
     displayOrder: parseInt(String(slideData.displayOrder || 1), 10) || 1,
     status: (slideData.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE') as 'ACTIVE' | 'INACTIVE',
     createdBy: userId || null,
@@ -267,9 +411,23 @@ export async function createSlide(slideData: Partial<HomeSlideRecord>, userId?: 
     updatedAt: now,
   };
 
-  // 1. Authoritative persist in Supabase
+  // 1. Authoritative persist in Supabase (known columns only)
   try {
-    const { error } = await supabaseAdmin.from('HomeSlide').upsert([newSlide]);
+    const supaPayload = {
+      id: newSlide.id,
+      title: newSlide.title,
+      description: newSlide.description,
+      imageUrl: newSlide.imageUrl,
+      buttonText: newSlide.buttonText,
+      buttonLink: newSlide.buttonLink,
+      displayOrder: newSlide.displayOrder,
+      status: newSlide.status,
+      createdBy: newSlide.createdBy,
+      updatedBy: newSlide.updatedBy,
+      createdAt: newSlide.createdAt,
+      updatedAt: newSlide.updatedAt,
+    };
+    const { error } = await supabaseAdmin.from('HomeSlide').upsert([supaPayload]);
     if (error) {
       console.error('[SUPABASE SLIDE CREATE ERROR]', error);
     }
@@ -277,7 +435,7 @@ export async function createSlide(slideData: Partial<HomeSlideRecord>, userId?: 
     console.warn('[SUPABASE SLIDE CREATE EXCEPTION]', err?.message || err);
   }
 
-  // 2. Update memory cache and local file
+  // 2. Update memory cache and local file with full rich object
   slidesCache.set(id, newSlide);
   saveLocalFile(Array.from(slidesCache.values()));
 
@@ -304,8 +462,16 @@ export async function updateSlide(id: string, updates: Partial<HomeSlideRecord>,
   if (updates.title !== undefined) sanitizedUpdates.title = String(updates.title).trim();
   if (updates.description !== undefined) sanitizedUpdates.description = updates.description ? String(updates.description).trim() : null;
   if (updates.imageUrl !== undefined) sanitizedUpdates.imageUrl = String(updates.imageUrl).trim();
+  if (updates.mobileImageUrl !== undefined) sanitizedUpdates.mobileImageUrl = updates.mobileImageUrl ? String(updates.mobileImageUrl).trim() : null;
+  if (updates.category !== undefined) sanitizedUpdates.category = updates.category ? String(updates.category).trim() : null;
+  if (updates.badgeIcon !== undefined) sanitizedUpdates.badgeIcon = updates.badgeIcon || null;
+  if (updates.features !== undefined) sanitizedUpdates.features = updates.features;
   if (updates.buttonText !== undefined) sanitizedUpdates.buttonText = updates.buttonText ? String(updates.buttonText).trim() : 'Check Repair Price';
   if (updates.buttonLink !== undefined) sanitizedUpdates.buttonLink = updates.buttonLink ? String(updates.buttonLink).trim() : '/services?focus=search';
+  if (updates.buttonSecondaryText !== undefined) sanitizedUpdates.buttonSecondaryText = updates.buttonSecondaryText ? String(updates.buttonSecondaryText).trim() : null;
+  if (updates.buttonSecondaryLink !== undefined) sanitizedUpdates.buttonSecondaryLink = updates.buttonSecondaryLink ? String(updates.buttonSecondaryLink).trim() : null;
+  if (updates.focalPoint !== undefined) sanitizedUpdates.focalPoint = updates.focalPoint;
+  if (updates.overlayIntensity !== undefined) sanitizedUpdates.overlayIntensity = updates.overlayIntensity;
   if (updates.displayOrder !== undefined) sanitizedUpdates.displayOrder = parseInt(String(updates.displayOrder), 10) || 1;
   if (updates.status !== undefined) sanitizedUpdates.status = (updates.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE') as 'ACTIVE' | 'INACTIVE';
 
@@ -317,7 +483,7 @@ export async function updateSlide(id: string, updates: Partial<HomeSlideRecord>,
     updatedBy: userId || existing.updatedBy || null,
   };
 
-  // 1. Authoritative update in Supabase database FIRST
+  // 1. Authoritative update in Supabase database FIRST (known columns only)
   try {
     const { error } = await supabaseAdmin
       .from('HomeSlide')
@@ -341,7 +507,7 @@ export async function updateSlide(id: string, updates: Partial<HomeSlideRecord>,
     console.warn('[SUPABASE SLIDE UPDATE EXCEPTION]', err?.message || err);
   }
 
-  // 2. Synchronize local cache and disk file
+  // 2. Synchronize local cache and disk file with full rich object
   slidesCache.set(id, updated);
   saveLocalFile(Array.from(slidesCache.values()));
 

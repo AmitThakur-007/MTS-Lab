@@ -106,9 +106,14 @@ export default function Navbar() {
     },
   ];
 
+  const isHomePage = location.pathname === '/';
+  const isHeroOverlay = isHomePage && !isScrolled;
+
   const glassStyle = isScrolled 
     ? "bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800 shadow-xs py-2.5 sm:py-3.5" 
-    : "bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-800/60 shadow-2xs py-3 sm:py-4";
+    : isHeroOverlay
+      ? "bg-transparent border-b border-transparent py-3 sm:py-5"
+      : "bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-800/60 shadow-2xs py-3 sm:py-4";
 
   return (
     <>
@@ -117,30 +122,40 @@ export default function Navbar() {
         glassStyle
       )}>
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
-          {/* Brand Logo & Wordmark */}
+          {/* Brand Logo & Wordmark - Matched to reference screenshots on both Mobile & Desktop */}
           <Link 
             to="/" 
             className="flex items-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 dark:focus-visible:ring-white focus-visible:ring-offset-2 rounded-lg py-1 transition-opacity hover:opacity-90 cursor-pointer"
             aria-label="MTS Lab - Home"
           >
-            {/* Mobile View (Smartphones < 640px): Professional, clean MTS Lab wordmark */}
-            <span className="sm:hidden text-lg font-bold tracking-tight text-slate-950 dark:text-white flex items-center select-none leading-none shrink-0">
-              MTS<span className="text-slate-500 dark:text-slate-400 font-semibold ml-1">Lab</span>
-            </span>
-
-            {/* Desktop & Tablet View (>= 640px): Preserved Brand Icon + MTSLAB */}
-            <div className="hidden sm:flex items-center gap-3 shrink-0">
-              <div className="w-10 h-10 bg-black dark:bg-slate-800 border border-transparent dark:border-slate-700 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-black/20 shrink-0">
+            <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+              <div className={cn(
+                "w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white font-black text-lg sm:text-xl shadow-lg shrink-0 select-none",
+                isHeroOverlay 
+                  ? "bg-black border border-white/20 shadow-black/40" 
+                  : "bg-black dark:bg-slate-800 border border-transparent dark:border-slate-700 shadow-black/20"
+              )}>
                 M
               </div>
-              <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white shrink-0">
-                MTS<span className="text-slate-400 font-medium">LAB</span>
+              <span className={cn(
+                "text-lg sm:text-xl font-bold tracking-tight shrink-0 flex items-center",
+                isHeroOverlay ? "text-white drop-shadow-sm" : "text-slate-900 dark:text-white"
+              )}>
+                MTS<span className={cn(
+                  "font-medium ml-1",
+                  isHeroOverlay ? "text-slate-300/80" : "text-slate-400"
+                )}>LAB</span>
               </span>
             </div>
           </Link>
 
           {/* Desktop Nav */}
-          <div className="hidden lg:flex items-center gap-1.5 bg-slate-100/80 dark:bg-slate-900/80 p-1.5 rounded-full border border-slate-200/60 dark:border-slate-800 backdrop-blur-md">
+          <div className={cn(
+            "hidden lg:flex items-center gap-1.5 p-1.5 rounded-full border backdrop-blur-md transition-all shadow-sm",
+            isHeroOverlay
+              ? "bg-white/85 dark:bg-slate-900/85 border-white/30 dark:border-white/10 shadow-black/15"
+              : "bg-slate-100/80 dark:bg-slate-900/80 border-slate-200/60 dark:border-slate-800"
+          )}>
             {navLinks.map((link) => {
               const isActive = location.pathname === link.path;
               return (
@@ -150,7 +165,7 @@ export default function Navbar() {
                   className={`text-xs font-extrabold px-4 py-2 rounded-full transition-all ${
                     isActive 
                       ? 'bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-950 shadow-sm' 
-                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60'
+                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/60'
                   }`}
                 >
                   {link.name}
@@ -165,7 +180,12 @@ export default function Navbar() {
               id="navbar-search-repair-button"
               onClick={() => navigate('/services?focus=search')}
               aria-label="Search Repair Prices"
-              className="p-2 sm:p-2.5 text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all cursor-pointer shrink-0"
+              className={cn(
+                "p-2 sm:p-2.5 rounded-full transition-all cursor-pointer shrink-0",
+                isHeroOverlay
+                  ? "bg-white/80 dark:bg-slate-900/80 hover:bg-white text-slate-800 dark:text-slate-200 border border-white/20 backdrop-blur-md shadow-sm"
+                  : "text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+              )}
             >
               <Search className="h-4.5 w-4.5" />
             </button>
@@ -174,15 +194,25 @@ export default function Navbar() {
               {!isAuthenticated ? (
                 <Button 
                   onClick={() => navigate('/login')}
-                  className="rounded-full bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer"
+                  className={cn(
+                    "rounded-full font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer",
+                    isHeroOverlay
+                      ? "bg-slate-950/90 hover:bg-slate-900 text-white border border-white/20 shadow-md"
+                      : "bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950"
+                  )}
                 >
-                  Staff Portal
+                  Login
                 </Button>
               ) : (
                 <Button 
                   onClick={() => navigate('/dashboard')}
                   variant="outline"
-                  className="rounded-full border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer"
+                  className={cn(
+                    "rounded-full font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer",
+                    isHeroOverlay
+                      ? "border-white/30 text-white bg-slate-900/70 hover:bg-slate-900/90 backdrop-blur-md"
+                      : "border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  )}
                 >
                   Dashboard
                 </Button>
@@ -191,7 +221,12 @@ export default function Navbar() {
 
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2 sm:p-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white rounded-full cursor-pointer relative z-[70] shrink-0"
+              className={cn(
+                "lg:hidden p-2 sm:p-2.5 rounded-full cursor-pointer relative z-[70] shrink-0",
+                isHeroOverlay
+                  ? "bg-slate-950/70 text-white border border-white/20 backdrop-blur-md"
+                  : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white"
+              )}
               aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -263,7 +298,7 @@ export default function Navbar() {
                     onClick={() => navigate('/login')}
                     className="w-full h-12 rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-base shadow-sm cursor-pointer"
                   >
-                    Login to Account
+                    Login
                   </Button>
                 ) : (
                   <Button 

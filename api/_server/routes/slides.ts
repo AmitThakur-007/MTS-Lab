@@ -205,6 +205,7 @@ router.post('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: 
 
     const created = await createSlide(
       {
+        ...req.body,
         title,
         description,
         imageUrl,

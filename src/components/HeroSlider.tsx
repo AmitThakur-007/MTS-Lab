@@ -5,9 +5,18 @@ import {
   Search, 
   ShieldCheck, 
   Wrench, 
-  ArrowRight,
-  Clock,
-  Sparkles
+  ArrowRight, 
+  Clock, 
+  Battery, 
+  Zap, 
+  Layers, 
+  Tv, 
+  Cpu, 
+  CheckCircle2, 
+  Smartphone,
+  Sparkles,
+  Activity,
+  Award
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'motion/react';
@@ -21,8 +30,16 @@ export interface SlideData {
   title: string;
   description: string;
   imageUrl: string;
+  mobileImageUrl?: string | null;
+  category?: string | null;
+  badgeIcon?: string | null;
+  features?: string[] | string | null;
   buttonText?: string;
   buttonLink?: string;
+  buttonSecondaryText?: string | null;
+  buttonSecondaryLink?: string | null;
+  focalPoint?: string | null;
+  overlayIntensity?: 'heavy' | 'medium' | 'subtle' | null;
   displayOrder?: number;
   status?: string;
 }
@@ -31,46 +48,124 @@ const FALLBACK_SLIDES: SlideData[] = [
   {
     id: 'default-1',
     title: 'Front Glass Change',
+    category: 'MTS LAB — SMARTPHONE REPAIR',
+    badgeIcon: 'wrench',
     description: 'Specialized outer glass replacement preserving your original AMOLED / OLED display and touch responsiveness.',
-    imageUrl: '/assets/images/front-glass-change.jpg',
+    imageUrl: '/assets/images/front_glass_repair_1786719176945.jpg',
+    features: ['24-Point Tested', '60-Min Express Fix', 'Certified Techs'],
     buttonText: 'Check Repair Price',
-    buttonLink: '/services?focus=search&q=Front+Glass'
+    buttonLink: '/services?focus=search&q=Front+Glass',
+    buttonSecondaryText: 'Track Repair Status',
+    buttonSecondaryLink: '/track',
+    focalPoint: 'center',
+    overlayIntensity: 'heavy',
+    displayOrder: 1,
+    status: 'ACTIVE'
   },
   {
     id: 'default-2',
-    title: 'Display Replacement',
-    description: '100% Genuine original quality screen restoration with True Tone, 120Hz ProMotion, and vibrant clarity.',
-    imageUrl: '/assets/images/display-replacement.jpg',
+    title: 'Battery & Port Replacement',
+    category: 'MTS LAB — BATTERY & CHARGING',
+    badgeIcon: 'battery',
+    description: 'OEM high-capacity battery installation with battery health calibration and high-speed charging port replacement.',
+    imageUrl: '/assets/images/phone_repair_lab_1786719222650.jpg',
+    features: ['100% Health restored', '1-Year Warranty', 'Fast Charge Tested'],
     buttonText: 'Check Repair Price',
-    buttonLink: '/services?focus=search&q=Display'
+    buttonLink: '/services?focus=search&q=Battery',
+    buttonSecondaryText: 'Track Repair Status',
+    buttonSecondaryLink: '/track',
+    focalPoint: 'center',
+    overlayIntensity: 'heavy',
+    displayOrder: 2,
+    status: 'ACTIVE'
   },
   {
     id: 'default-3',
-    title: 'Back Panel / Back Glass Change',
-    description: 'Factory finish laser back panel replacement and frame restoration for Apple, Samsung, and flagship devices.',
-    imageUrl: '/assets/images/back-glass-change.jpg',
+    title: 'Display Replacement',
+    category: 'MTS LAB — 120HZ AMOLED DISPLAY',
+    badgeIcon: 'screen',
+    description: '100% Genuine original quality screen restoration with True Tone, 120Hz ProMotion, and vibrant clarity.',
+    imageUrl: '/assets/images/display_replace_1786719191504.jpg',
+    features: ['True Tone Retained', '120Hz ProMotion', 'Zero Dead Pixels'],
     buttonText: 'Check Repair Price',
-    buttonLink: '/services?focus=search&q=Back+Glass'
+    buttonLink: '/services?focus=search&q=Display',
+    buttonSecondaryText: 'Track Repair Status',
+    buttonSecondaryLink: '/track',
+    focalPoint: 'center',
+    overlayIntensity: 'heavy',
+    displayOrder: 3,
+    status: 'ACTIVE'
   },
   {
     id: 'default-4',
-    title: 'Professional Smartphone Repair',
-    description: 'Advanced IC-level micro-soldering, green/white screen laser line repair, and specialized liquid damage restoration.',
-    imageUrl: '/assets/images/motherboard-repair.jpg',
+    title: 'Back Panel / Back Glass Change',
+    category: 'MTS LAB — LASER HOUSING RESTORATION',
+    badgeIcon: 'layers',
+    description: 'Factory finish laser back panel replacement and frame restoration for Apple, Samsung, and flagship devices.',
+    imageUrl: '/assets/images/back_glass_fix_1786719207185.jpg',
+    features: ['High-Precision Laser', 'Original Magnet Array', 'Factory Finish'],
     buttonText: 'Check Repair Price',
-    buttonLink: '/services?focus=search'
+    buttonLink: '/services?focus=search&q=Back+Glass',
+    buttonSecondaryText: 'Track Repair Status',
+    buttonSecondaryLink: '/track',
+    focalPoint: 'center',
+    overlayIntensity: 'heavy',
+    displayOrder: 4,
+    status: 'ACTIVE'
   }
 ];
 
+function getBadgeIcon(iconName?: string | null, title?: string) {
+  const norm = (iconName || title || '').toLowerCase();
+  if (norm.includes('battery')) return Battery;
+  if (norm.includes('charging') || norm.includes('zap') || norm.includes('port')) return Zap;
+  if (norm.includes('screen') || norm.includes('display')) return Smartphone;
+  if (norm.includes('laser') || norm.includes('layer') || norm.includes('back')) return Layers;
+  if (norm.includes('tv')) return Tv;
+  if (norm.includes('cpu') || norm.includes('motherboard') || norm.includes('ic')) return Cpu;
+  if (norm.includes('shield')) return ShieldCheck;
+  if (norm.includes('clock') || norm.includes('express')) return Clock;
+  return Wrench;
+}
+
+function getFeatureIcon(featureText: string): React.ElementType {
+  const norm = (featureText || '').toLowerCase();
+  if (norm.includes('health') || norm.includes('pulse') || norm.includes('restored')) return Activity;
+  if (norm.includes('warrant') || norm.includes('guarantee') || norm.includes('shield')) return ShieldCheck;
+  if (norm.includes('charge') || norm.includes('fast') || norm.includes('zap') || norm.includes('speed') || norm.includes('power')) return Zap;
+  if (norm.includes('min') || norm.includes('express') || norm.includes('clock') || norm.includes('time') || norm.includes('hour')) return Clock;
+  if (norm.includes('certif') || norm.includes('tech') || norm.includes('award') || norm.includes('pro') || norm.includes('expert')) return Award;
+  if (norm.includes('tone') || norm.includes('oled') || norm.includes('pixel') || norm.includes('120hz') || norm.includes('sparkle') || norm.includes('screen')) return Sparkles;
+  if (norm.includes('battery')) return Battery;
+  return CheckCircle2;
+}
+
+function parseFeatures(features?: string[] | string | null, title?: string): string[] {
+  if (Array.isArray(features) && features.length > 0) {
+    return features.filter(Boolean);
+  }
+  if (typeof features === 'string' && features.trim()) {
+    return features.includes(',')
+      ? features.split(',').map(f => f.trim()).filter(Boolean)
+      : [features.trim()];
+  }
+  const norm = (title || '').toLowerCase();
+  if (norm.includes('battery')) return ['100% Health restored', '1-Year Warranty', 'Fast Charge Tested'];
+  if (norm.includes('display')) return ['True Tone Retained', '120Hz ProMotion', 'Zero Dead Pixels'];
+  if (norm.includes('back')) return ['High-Precision Laser', 'Original Magnet Array', 'Factory Finish'];
+  if (norm.includes('motherboard')) return ['Micro-Soldering', 'Schematic Traced', 'Component Level'];
+  return ['24-Point Tested', '60-Min Express Fix', 'Certified Techs'];
+}
+
 export default function HeroSlider() {
   const [slides, setSlides] = useState<SlideData[]>(FALLBACK_SLIDES);
-  const [hasLoadedFromApi, setHasLoadedFromApi] = useState(false);
   const [current, setCurrent] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [progressKey, setProgressKey] = useState(0);
   const navigate = useNavigate();
 
-  // Unified Pointer Swipe Tracking for Multi-device Responsiveness (Mobile, Tablet, Desktop, Stylus)
+  // Unified Pointer Swipe Tracking for Multi-device Responsiveness
   const pointerStartX = useRef<number | null>(null);
   const pointerStartY = useRef<number | null>(null);
   const isDragging = useRef(false);
@@ -80,9 +175,8 @@ export default function HeroSlider() {
     try {
       setLoading(true);
       const data = await api.get('/slides');
-      if (Array.isArray(data)) {
+      if (Array.isArray(data) && data.length > 0) {
         setSlides(data);
-        setHasLoadedFromApi(true);
       }
     } catch (err) {
       console.warn('[HERO SLIDER] Could not fetch live slides, keeping current view:', err);
@@ -91,7 +185,6 @@ export default function HeroSlider() {
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
     loadSlides();
   }, [loadSlides]);
@@ -101,7 +194,6 @@ export default function HeroSlider() {
     loadSlides();
   });
 
-  // Re-check on window focus to ensure fresh state across tabs
   useEffect(() => {
     const handleFocus = () => loadSlides();
     window.addEventListener('focus', handleFocus);
@@ -112,7 +204,7 @@ export default function HeroSlider() {
     };
   }, [loadSlides]);
 
-  // Safely clamp active index whenever slides list changes
+  // Clamp active index safely
   useEffect(() => {
     if (slides.length > 0 && current >= slides.length) {
       setCurrent(0);
@@ -124,19 +216,26 @@ export default function HeroSlider() {
   const next = useCallback(() => {
     if (total <= 1) return;
     setCurrent((prev) => (prev === total - 1 ? 0 : prev + 1));
+    setProgressKey(prev => prev + 1);
   }, [total]);
 
   const prev = useCallback(() => {
     if (total <= 1) return;
     setCurrent((prev) => (prev === 0 ? total - 1 : prev - 1));
+    setProgressKey(prev => prev + 1);
   }, [total]);
 
-  // Auto-play interval
+  const goToSlide = (index: number) => {
+    setCurrent(index);
+    setProgressKey(prev => prev + 1);
+  };
+
+  // Auto-play interval (6 seconds)
   useEffect(() => {
     if (isPaused || total <= 1) return;
     const timer = setInterval(next, 6000);
     return () => clearInterval(timer);
-  }, [next, isPaused, total]);
+  }, [next, isPaused, total, current]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -148,9 +247,8 @@ export default function HeroSlider() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [next, prev]);
 
-  // Unified Pointer Swipe Handlers (Seamless on Mobile Touch, iPad, Stylus, and Desktop Mouse Drag)
+  // Unified Pointer Swipe Handlers
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    // For mouse interactions, only respond to primary left-click
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     pointerStartX.current = e.clientX;
     pointerStartY.current = e.clientY;
@@ -158,27 +256,16 @@ export default function HeroSlider() {
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging.current || pointerStartX.current === null || pointerStartY.current === null) {
-      pointerStartX.current = null;
-      pointerStartY.current = null;
-      isDragging.current = false;
-      return;
+    if (!isDragging.current || pointerStartX.current === null) return;
+    const diffX = e.clientX - pointerStartX.current;
+    const diffY = pointerStartY.current !== null ? Math.abs(e.clientY - pointerStartY.current) : 0;
+    
+    // Swipe threshold 45px, ensure horizontal motion dominates vertical scrolling
+    if (Math.abs(diffX) > 45 && Math.abs(diffX) > diffY) {
+      if (diffX < 0) next();
+      else prev();
     }
-
-    const diffX = pointerStartX.current - e.clientX;
-    const diffY = pointerStartY.current - e.clientY;
-    const absDiffX = Math.abs(diffX);
-    const absDiffY = Math.abs(diffY);
-
-    // Intentional horizontal swipe threshold: minimum 40px and dominant horizontal angle
-    if (absDiffX > 40 && absDiffX > absDiffY * 1.1) {
-      if (diffX > 0) {
-        next(); // Dragged/swiped left -> advance to next slide
-      } else {
-        prev(); // Dragged/swiped right -> go to previous slide
-      }
-    }
-
+    
     pointerStartX.current = null;
     pointerStartY.current = null;
     isDragging.current = false;
@@ -190,51 +277,16 @@ export default function HeroSlider() {
     isDragging.current = false;
   };
 
-  // If database explicitly returned empty active slides list
-  if (hasLoadedFromApi && slides.length === 0) {
-    return (
-      <div className="relative w-full overflow-hidden rounded-[28px] sm:rounded-[40px] md:rounded-[48px] shadow-2xl shadow-slate-950/20 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 min-h-[480px] sm:min-h-[520px] flex items-center justify-center p-8 sm:p-14 text-center">
-        <div className="max-w-2xl mx-auto space-y-6 text-white">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs font-bold uppercase tracking-widest">
-            <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-            <span>MTS Lab — Master Repair Center</span>
-          </div>
-
-          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
-            Nepal's Premier Smartphone Repair Specialists
-          </h1>
-
-          <p className="text-base sm:text-lg text-slate-300 max-w-xl mx-auto leading-relaxed">
-            From cracked AMOLED screens and laser back glass to motherboard IC micro-soldering, our central lab restores your device to factory perfection.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-            <Button
-              onClick={() => navigate('/services?focus=search')}
-              className="h-12 px-7 rounded-2xl bg-white text-slate-950 hover:bg-slate-100 font-extrabold text-sm shadow-lg flex items-center gap-2"
-            >
-              <Search className="h-4 w-4" />
-              <span>Find Repair Rate</span>
-            </Button>
-            <Button
-              onClick={() => navigate('/track')}
-              variant="outline"
-              className="h-12 px-7 rounded-2xl border-white/30 bg-white/10 hover:bg-white/20 text-white font-bold text-sm"
-            >
-              Track Device Status
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const activeIndex = Math.min(current, Math.max(0, slides.length - 1));
   const currentSlide = slides[activeIndex] || FALLBACK_SLIDES[0];
 
+  const BadgeIcon = getBadgeIcon(currentSlide.badgeIcon, currentSlide.title);
+  const featuresList = parseFeatures(currentSlide.features, currentSlide.title);
+  const categoryText = currentSlide.category || 'MTS LAB — SMARTPHONE REPAIR';
+
   return (
     <div 
-      className="relative w-full overflow-hidden rounded-[28px] sm:rounded-[40px] md:rounded-[48px] shadow-2xl shadow-slate-950/20 bg-slate-950 min-h-[560px] sm:min-h-[620px] lg:min-h-[660px] flex items-center select-none touch-pan-y cursor-grab active:cursor-grabbing"
+      className="relative w-full h-[100dvh] min-h-[580px] sm:min-h-[660px] lg:min-h-[720px] max-h-[1050px] overflow-hidden bg-slate-950 isolate select-none touch-pan-y"
       style={{ touchAction: 'pan-y' }}
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
@@ -243,7 +295,7 @@ export default function HeroSlider() {
       onPointerCancel={handlePointerCancel}
       role="region"
       aria-roledescription="carousel"
-      aria-label="MTS Lab Featured Highlights Slideshow"
+      aria-label="MTS Lab Featured Highlights Hero Slideshow"
       aria-live={isPaused ? 'polite' : 'off'}
     >
       <AnimatePresence mode="wait">
@@ -252,122 +304,181 @@ export default function HeroSlider() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.6, ease: "easeInOut" }}
+          transition={{ duration: 0.65, ease: "easeInOut" }}
           className="absolute inset-0"
         >
-          {/* Background Image with subtle zoom */}
+          {/* Background Image Layer with Zoom effect and Responsive Picture */}
           <motion.div 
             initial={{ scale: 1.05 }}
             animate={{ scale: 1 }}
             transition={{ duration: 7, ease: "easeOut" }}
-            className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${currentSlide.imageUrl})` }}
-          />
+            className="absolute inset-0"
+          >
+            <picture className="w-full h-full block">
+              {currentSlide.mobileImageUrl && (
+                <source media="(max-width: 640px)" srcSet={currentSlide.mobileImageUrl} />
+              )}
+              <img 
+                src={currentSlide.imageUrl} 
+                alt={currentSlide.title}
+                className="w-full h-full object-cover"
+                style={{ objectPosition: currentSlide.focalPoint || 'center' }}
+                loading={activeIndex === 0 ? 'eager' : 'lazy'}
+              />
+            </picture>
+          </motion.div>
 
-          {/* High-grade Multilayer Gradient Overlay for pristine text legibility */}
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-950/40 md:bg-gradient-to-r md:from-slate-950 md:via-slate-950/85 md:to-transparent" />
-          <div className="absolute inset-0 bg-black/25 backdrop-blur-[0.5px]" />
+          {/* Top Vignette Overlay for Header Contrast */}
+          <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-slate-950/85 via-slate-950/45 to-transparent pointer-events-none z-1" />
 
-          {/* Slide Content */}
-          <div className="relative h-full flex flex-col justify-center px-6 sm:px-12 md:px-16 lg:px-20 py-16 max-w-3xl z-10">
+          {/* Desktop Left-to-Right Dark Gradient Overlay (Cinematic contrast behind content) */}
+          <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent pointer-events-none z-1" />
+
+          {/* Mobile Bottom-to-Top Dark Gradient Overlay (Optimized for Portrait Screens) */}
+          <div className="md:hidden absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-slate-950/30 pointer-events-none z-1" />
+
+          {/* Bottom Vignette Overlay */}
+          <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent pointer-events-none z-1" />
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Hero Content Container */}
+      <div className="max-w-7xl mx-auto px-5 sm:px-10 lg:px-12 w-full h-full flex flex-col justify-between pt-28 sm:pt-36 pb-8 sm:pb-12 relative z-10">
+        
+        {/* Main Slide Content */}
+        <div className="flex-1 flex flex-col justify-center max-w-2xl lg:max-w-3xl my-auto">
+          <AnimatePresence mode="wait">
             <motion.div
-              initial={{ y: 20, opacity: 0 }}
+              key={currentSlide.id || activeIndex}
+              initial={{ y: 24, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.12, duration: 0.45 }}
-              className="space-y-6"
+              exit={{ y: -16, opacity: 0 }}
+              transition={{ delay: 0.1, duration: 0.45, ease: "easeOut" }}
+              className="space-y-4 sm:space-y-5"
             >
-              {/* Badge */}
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs font-bold uppercase tracking-widest">
-                <Wrench className="h-3.5 w-3.5 text-amber-400" />
-                <span>MTS Lab — Smartphone Repair</span>
+              {/* Category Badge */}
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/70 dark:bg-slate-900/80 backdrop-blur-md border border-slate-700/60 text-slate-200 text-[11px] sm:text-xs font-bold uppercase tracking-wider shadow-sm">
+                <BadgeIcon className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>{categoryText}</span>
               </div>
 
               {/* Title */}
-              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-[1.15] text-balance">
+              <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[1.06] text-balance drop-shadow-md">
                 {currentSlide.title}
               </h1>
 
               {/* Description */}
-              <p className="text-base sm:text-lg lg:text-xl text-slate-200/90 font-medium leading-relaxed max-w-2xl text-balance">
+              <p className="text-sm sm:text-base lg:text-lg text-slate-200/90 font-normal leading-relaxed max-w-xl text-balance drop-shadow-xs">
                 {currentSlide.description}
               </p>
 
-              {/* Features Pill Row */}
-              <div className="flex flex-wrap gap-2 pt-1 text-xs font-semibold text-slate-300">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/5 border border-white/10 backdrop-blur-xs">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> 24-Point Tested
-                </span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/5 border border-white/10 backdrop-blur-xs">
-                  <Clock className="h-3.5 w-3.5 text-sky-400" /> 60-Min Express Fix
-                </span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/5 border border-white/10 backdrop-blur-xs">
-                  <Wrench className="h-3.5 w-3.5 text-amber-400" /> Certified Techs
-                </span>
-              </div>
+              {/* Feature Pills */}
+              {featuresList.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {featuresList.map((feat, idx) => {
+                    const FeatIcon = getFeatureIcon(feat);
+                    return (
+                      <span 
+                        key={idx} 
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/70 backdrop-blur-md border border-slate-700/60 text-xs font-semibold text-slate-200 shadow-2xs"
+                      >
+                        <FeatIcon className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <span>{feat}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-3">
                 <Button 
                   onClick={() => navigate(currentSlide.buttonLink || '/services?focus=search')}
-                  className="h-13 sm:h-14 px-7 sm:px-8 rounded-2xl bg-white text-slate-950 hover:bg-slate-100 font-extrabold text-base shadow-xl shadow-black/30 flex items-center justify-center gap-2 group cursor-pointer"
+                  className="h-12 sm:h-13 px-7 sm:px-8 rounded-full bg-white text-slate-950 hover:bg-slate-100 font-extrabold text-sm sm:text-base shadow-xl shadow-black/40 flex items-center justify-center gap-2 group transition-all active:scale-95 cursor-pointer"
                 >
-                  <Search className="h-4 w-4" />
                   <span>{currentSlide.buttonText || 'Check Repair Price'}</span>
-                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform shrink-0" />
                 </Button>
 
                 <Button 
-                  onClick={() => navigate('/track')}
-                  variant="outline" 
-                  className="h-13 sm:h-14 px-7 sm:px-8 rounded-2xl border-white/30 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-bold text-base flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={() => navigate(currentSlide.buttonSecondaryLink || '/track')}
+                  className="h-12 sm:h-13 px-7 sm:px-8 rounded-full bg-slate-900/80 hover:bg-slate-800/95 backdrop-blur-md border border-slate-700/70 text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-md"
                 >
-                  Track Repair Status
+                  <span>{currentSlide.buttonSecondaryText || 'Track Repair Status'}</span>
                 </Button>
               </div>
             </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Bottom Carousel Controls: Counter, Progress Indicators, and Previous/Next Buttons */}
+        <div className="flex items-center justify-between w-full pt-4">
+          
+          {/* Left: Numeric Slide Counter & Segmented Progress Bar */}
+          <div className="flex items-center gap-3 sm:gap-5">
+            {/* Numeric Counter e.g. 04 / 04 */}
+            <div className="flex items-baseline gap-1 font-mono select-none">
+              <span className="font-black text-white text-base sm:text-lg tracking-tight">
+                {String(activeIndex + 1).padStart(2, '0')}
+              </span>
+              <span className="text-slate-500 font-bold text-xs sm:text-sm">
+                / {String(total).padStart(2, '0')}
+              </span>
+            </div>
+
+            {/* Segmented Progress Indicators */}
+            {total > 1 && (
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {slides.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => goToSlide(i)}
+                    aria-label={`Go to slide ${i + 1}`}
+                    className={cn(
+                      "h-1.5 sm:h-2 rounded-full transition-all duration-300 cursor-pointer overflow-hidden relative",
+                      activeIndex === i 
+                        ? "w-8 sm:w-11 bg-white/30" 
+                        : "w-4 sm:w-6 bg-white/20 hover:bg-white/40"
+                    )}
+                  >
+                    {activeIndex === i && (
+                      <motion.div
+                        key={`progress-${i}-${progressKey}`}
+                        initial={{ width: '0%' }}
+                        animate={{ width: isPaused ? '100%' : '100%' }}
+                        transition={{ duration: 6, ease: 'linear' }}
+                        className="h-full bg-white rounded-full"
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        </motion.div>
-      </AnimatePresence>
 
-      {/* Navigation Arrows (rendered if more than 1 slide) */}
-      {total > 1 && (
-        <div className="absolute bottom-8 right-6 sm:right-10 flex items-center gap-3 z-20">
-          <button 
-            onClick={prev}
-            aria-label="Previous Slide"
-            className="w-12 h-12 rounded-full bg-slate-900/80 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white hover:text-slate-950 transition-all shadow-lg active:scale-95 cursor-pointer"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <button 
-            onClick={next}
-            aria-label="Next Slide"
-            className="w-12 h-12 rounded-full bg-slate-900/80 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white hover:text-slate-950 transition-all shadow-lg active:scale-95 cursor-pointer"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-      )}
+          {/* Right: Circular Navigation Previous & Next Buttons */}
+          {total > 1 && (
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button 
+                onClick={prev}
+                aria-label="Previous Slide"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 text-white flex items-center justify-center transition-all shadow-md active:scale-95 cursor-pointer"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={next}
+                aria-label="Next Slide"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 text-white flex items-center justify-center transition-all shadow-md active:scale-95 cursor-pointer"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          )}
 
-      {/* Progress Dots Indicators */}
-      {total > 1 && (
-        <div className="absolute bottom-8 left-6 sm:left-12 flex items-center gap-2.5 z-20">
-          {slides.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrent(i)}
-              aria-label={`Go to slide ${i + 1}`}
-              className={cn(
-                "h-2 rounded-full transition-all duration-300 cursor-pointer",
-                activeIndex === i 
-                  ? "w-8 sm:w-10 bg-white shadow-sm" 
-                  : "w-2 sm:w-2.5 bg-white/40 hover:bg-white/70"
-              )}
-            />
-          ))}
         </div>
-      )}
+
+      </div>
     </div>
   );
 }
-

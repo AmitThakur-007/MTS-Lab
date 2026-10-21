@@ -225,21 +225,22 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fafafa] text-slate-900 selection:bg-slate-900 selection:text-white">
+    <div className="min-h-screen bg-[#fafafa] dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-slate-900 selection:text-white">
       <Navbar />
 
-      <main className="pt-24 sm:pt-28 px-4 sm:px-8 lg:px-12 pb-24">
-        <div className="max-w-7xl mx-auto space-y-20 sm:space-y-28">
+      {/* ========================================================= */}
+      {/* 1. HERO SECTION & DYNAMIC SMARTPHONE REPAIR SLIDESHOW     */}
+      {/* ========================================================= */}
+      <section className="relative w-full">
+        <HeroSlider />
+      </section>
 
-          {/* ========================================================= */}
-          {/* 1. HERO SECTION & DYNAMIC SMARTPHONE REPAIR SLIDESHOW     */}
-          {/* ========================================================= */}
-          <section className="space-y-6">
-            <FestivalDecorations />
-            <HeroSlider />
+      <main className="px-4 sm:px-8 lg:px-12 pb-24">
+        <div className="max-w-7xl mx-auto space-y-20 sm:space-y-28 pt-8 sm:pt-12">
+          <FestivalDecorations />
 
-            {/* Quick Actions Bar below Hero: Price Finder & Track Repair */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Quick Actions Bar below Hero: Price Finder & Track Repair */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
               {/* Quick Price Finder Bar */}
               <div className="lg:col-span-8 p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/80 shadow-lg shadow-slate-900/5 flex flex-col justify-center">
@@ -309,7 +310,6 @@ export default function Home() {
               </div>
 
             </div>
-          </section>
 
           {/* ========================================================= */}
           {/* 2. POPULAR REPAIR SERVICES (12 ESSENTIAL CATEGORIES)      */}

@@ -139,7 +139,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link to="/login" className="text-slate-400 hover:text-indigo-400 transition-colors flex items-center gap-1.5">
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-600" /> Staff Portal
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-600" /> Login
                 </Link>
               </li>
             </ul>
