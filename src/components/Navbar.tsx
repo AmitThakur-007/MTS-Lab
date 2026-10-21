@@ -4,7 +4,6 @@ import {
   Menu, 
   X, 
   Search, 
-  User, 
   Smartphone, 
   ShoppingBag, 
   History,
@@ -17,14 +16,28 @@ import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import type { SlideTheme } from './HeroSlider';
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeHeroTheme, setActiveHeroTheme] = useState<SlideTheme | null>(null);
   const { user, token } = useAuthStore();
   const isAuthenticated = !!token;
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Listen to dynamic hero slide changes to blend header seamlessly
+  useEffect(() => {
+    const handleHeroSlideChange = (e: Event) => {
+      const custom = e as CustomEvent<{ theme: SlideTheme }>;
+      if (custom.detail?.theme) {
+        setActiveHeroTheme(custom.detail.theme);
+      }
+    };
+    window.addEventListener('mts-hero-slide-change', handleHeroSlideChange);
+    return () => window.removeEventListener('mts-hero-slide-change', handleHeroSlideChange);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -38,6 +51,17 @@ export default function Navbar() {
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location]);
+
+  // Support closing mobile menu via Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isMobileMenuOpen) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMobileMenuOpen]);
 
   const navLinks = [
     { name: 'Home', path: '/', icon: HomeIcon },
@@ -110,62 +134,74 @@ export default function Navbar() {
   const isHeroOverlay = isHomePage && !isScrolled;
 
   const glassStyle = isScrolled 
-    ? "bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800 shadow-xs py-2.5 sm:py-3.5" 
+    ? "bg-white/95 dark:bg-[#0a0f1d]/95 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800 shadow-xs py-2.5 sm:py-3" 
     : isHeroOverlay
-      ? "bg-transparent border-b border-transparent py-3 sm:py-5"
-      : "bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-800/60 shadow-2xs py-3 sm:py-4";
+      ? "bg-transparent border-b-0 py-3.5 sm:py-5 transition-all duration-500 ease-in-out"
+      : "bg-white/90 dark:bg-[#0a0f1d]/90 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-800/60 shadow-2xs py-3 sm:py-4";
 
   return (
     <>
-      <nav className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-3.5 sm:px-8 lg:px-12",
-        glassStyle
-      )}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
-          {/* Brand Logo & Wordmark - Matched to reference screenshots on both Mobile & Desktop */}
+      <nav 
+        className={cn(
+          "fixed top-0 left-0 right-0 w-full z-50 transition-all duration-500 ease-in-out px-4 sm:px-8 lg:px-12",
+          glassStyle
+        )}
+      >
+        <div className="max-w-7xl 2xl:max-w-[1600px] mx-auto flex items-center justify-between gap-3">
+          
+          {/* Brand Logo & Wordmark - Official MTS LAB Emblem and Typography */}
           <Link 
             to="/" 
-            className="flex items-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 dark:focus-visible:ring-white focus-visible:ring-offset-2 rounded-lg py-1 transition-opacity hover:opacity-90 cursor-pointer"
-            aria-label="MTS Lab - Home"
+            className="site-logo flex items-center gap-2.5 sm:gap-3 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 rounded-xl py-1 transition-opacity hover:opacity-95 cursor-pointer group"
+            aria-label="MTS LAB — Mobile Technology Station"
           >
-            <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-              <div className={cn(
-                "w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white font-black text-lg sm:text-xl shadow-lg shrink-0 select-none",
-                isHeroOverlay 
-                  ? "bg-black border border-white/20 shadow-black/40" 
-                  : "bg-black dark:bg-slate-800 border border-transparent dark:border-slate-700 shadow-black/20"
-              )}>
-                M
-              </div>
+            <img 
+              src="/images/mts-lab-logo.png"
+              alt="MTS LAB — Mobile Technology Station"
+              className="site-logo-image w-8 h-8 sm:w-9 sm:h-9 max-h-12 object-contain shrink-0 drop-shadow-md select-none transition-transform group-hover:scale-105"
+              loading="eager"
+            />
+            <div className="flex items-baseline tracking-tight select-none">
               <span className={cn(
-                "text-lg sm:text-xl font-bold tracking-tight shrink-0 flex items-center",
+                "font-black text-xl sm:text-2xl tracking-tight transition-colors duration-500",
                 isHeroOverlay ? "text-white drop-shadow-sm" : "text-slate-900 dark:text-white"
               )}>
-                MTS<span className={cn(
-                  "font-medium ml-1",
-                  isHeroOverlay ? "text-slate-300/80" : "text-slate-400"
-                )}>LAB</span>
+                MTS
+              </span>
+              <span className={cn(
+                "font-normal text-xl sm:text-2xl tracking-tight ml-1.5 transition-colors duration-500",
+                isHeroOverlay ? "text-slate-400" : "text-slate-500 dark:text-slate-400"
+              )}>
+                LAB
               </span>
             </div>
           </Link>
 
-          {/* Desktop Nav */}
-          <div className={cn(
-            "hidden lg:flex items-center gap-1.5 p-1.5 rounded-full border backdrop-blur-md transition-all shadow-sm",
-            isHeroOverlay
-              ? "bg-white/85 dark:bg-slate-900/85 border-white/30 dark:border-white/10 shadow-black/15"
-              : "bg-slate-100/80 dark:bg-slate-900/80 border-slate-200/60 dark:border-slate-800"
-          )}>
+          {/* Desktop Nav - Floating Translucent Capsule with subtle blue-to-purple border glow */}
+          <div 
+            className={cn(
+              "hidden lg:flex items-center gap-1 p-1 rounded-full border backdrop-blur-xl transition-all duration-700 shadow-lg",
+              isHeroOverlay
+                ? "bg-[#0b101b]/80 border-blue-500/25 shadow-[0_4px_24px_-4px_rgba(59,130,246,0.25),0_0_16px_-4px_rgba(147,51,234,0.18)]"
+                : "bg-slate-100/90 dark:bg-[#0b101b]/85 border-slate-200/80 dark:border-blue-500/20 dark:shadow-[0_4px_20px_-4px_rgba(59,130,246,0.2)]"
+            )}
+            style={isHeroOverlay && activeHeroTheme ? {
+              borderColor: activeHeroTheme.pillBorder,
+              boxShadow: `0 4px 24px -4px ${activeHeroTheme.accentGlow}, 0 0 16px -4px rgba(147, 51, 234, 0.18)`
+            } : undefined}
+          >
             {navLinks.map((link) => {
               const isActive = location.pathname === link.path;
               return (
                 <Link 
                   key={link.name} 
                   to={link.path}
-                  className={`text-xs font-extrabold px-4 py-2 rounded-full transition-all ${
+                  className={`text-xs sm:text-sm font-semibold px-4 sm:px-4.5 py-1.5 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
                     isActive 
-                      ? 'bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-950 shadow-sm' 
-                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/60'
+                      ? 'bg-white text-slate-950 font-bold shadow-md' 
+                      : isHeroOverlay
+                        ? 'text-slate-200 hover:text-white hover:bg-white/10'
+                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10'
                   }`}
                 >
                   {link.name}
@@ -174,43 +210,52 @@ export default function Navbar() {
             })}
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* Right Action Utility Group: Search & Sign In & Mobile Menu Toggle */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Search Button */}
             <button 
               id="navbar-search-repair-button"
               onClick={() => navigate('/services?focus=search')}
               aria-label="Search Repair Prices"
               className={cn(
-                "p-2 sm:p-2.5 rounded-full transition-all cursor-pointer shrink-0",
+                "w-10 h-10 rounded-full transition-all duration-500 cursor-pointer shrink-0 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
                 isHeroOverlay
-                  ? "bg-white/80 dark:bg-slate-900/80 hover:bg-white text-slate-800 dark:text-slate-200 border border-white/20 backdrop-blur-md shadow-sm"
-                  : "text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+                  ? "bg-[#0b101b]/80 hover:bg-slate-800 text-white border border-blue-500/25 backdrop-blur-xl shadow-[0_2px_12px_-2px_rgba(59,130,246,0.2)]"
+                  : "text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
               )}
+              style={isHeroOverlay && activeHeroTheme ? {
+                borderColor: activeHeroTheme.pillBorder,
+                boxShadow: `0 2px 12px -2px ${activeHeroTheme.accentGlow}`
+              } : undefined}
             >
               <Search className="h-4.5 w-4.5" />
             </button>
             
-            <div className="hidden sm:flex gap-2 shrink-0">
+            {/* Sign In / Dashboard Button */}
+            <div className="flex gap-2 shrink-0">
               {!isAuthenticated ? (
                 <Button 
                   onClick={() => navigate('/login')}
                   className={cn(
-                    "rounded-full font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer",
+                    "rounded-full font-bold text-xs sm:text-sm h-10 px-5 sm:px-6 shadow-lg shadow-black/20 cursor-pointer transition-all duration-500 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
                     isHeroOverlay
-                      ? "bg-slate-950/90 hover:bg-slate-900 text-white border border-white/20 shadow-md"
+                      ? "bg-white hover:bg-slate-100 text-slate-950 shadow-md"
                       : "bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950"
                   )}
+                  style={isHeroOverlay && activeHeroTheme ? {
+                    boxShadow: `0 4px 16px -2px ${activeHeroTheme.accentGlow}`
+                  } : undefined}
                 >
-                  Login
+                  Sign In
                 </Button>
               ) : (
                 <Button 
                   onClick={() => navigate('/dashboard')}
                   variant="outline"
                   className={cn(
-                    "rounded-full font-bold text-xs h-9 sm:h-10 px-4 sm:px-5 shadow-sm cursor-pointer",
+                    "rounded-full font-bold text-xs sm:text-sm h-10 px-5 sm:px-6 shadow-sm cursor-pointer transition-all duration-500",
                     isHeroOverlay
-                      ? "border-white/30 text-white bg-slate-900/70 hover:bg-slate-900/90 backdrop-blur-md"
+                      ? "border-blue-500/30 text-white bg-[#0b101b]/80 hover:bg-slate-800 backdrop-blur-xl"
                       : "border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                   )}
                 >
@@ -219,23 +264,28 @@ export default function Navbar() {
               )}
             </div>
 
+            {/* Mobile Menu Hamburger Button */}
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className={cn(
-                "lg:hidden p-2 sm:p-2.5 rounded-full cursor-pointer relative z-[70] shrink-0",
+                "lg:hidden w-10 h-10 rounded-full cursor-pointer relative z-[70] shrink-0 transition-all duration-500 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
                 isHeroOverlay
-                  ? "bg-slate-950/70 text-white border border-white/20 backdrop-blur-md"
+                  ? "bg-[#0b101b]/80 text-white border border-blue-500/25 backdrop-blur-xl"
                   : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white"
               )}
+              style={isHeroOverlay && activeHeroTheme ? {
+                borderColor: activeHeroTheme.pillBorder
+              } : undefined}
               aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
+
         </div>
       </nav>
 
-      {/* Mobile Menu */}
+      {/* Mobile Menu Drawer */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -246,7 +296,7 @@ export default function Navbar() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-[55] lg:hidden cursor-pointer"
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[55] lg:hidden cursor-pointer"
               aria-hidden="true"
             />
 
@@ -255,7 +305,7 @@ export default function Navbar() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 right-0 w-full max-w-sm bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl z-[60] shadow-2xl lg:hidden flex flex-col p-6 sm:p-8 pt-20 sm:pt-24 overflow-y-auto overscroll-contain border-l border-transparent dark:border-slate-800"
+              className="fixed inset-y-0 right-0 w-full max-w-sm bg-white/95 dark:bg-[#0a0f1d]/95 backdrop-blur-2xl z-[60] shadow-2xl lg:hidden flex flex-col p-6 sm:p-8 pt-20 sm:pt-24 overflow-y-auto overscroll-contain border-l border-slate-200/50 dark:border-slate-800"
             >
               <div className="flex flex-col gap-1">
                 {navLinks.map((link) => {
@@ -264,10 +314,11 @@ export default function Navbar() {
                     <Link 
                       key={link.name} 
                       to={link.path}
+                      onClick={() => setIsMobileMenuOpen(false)}
                       className={cn(
-                        "flex items-center justify-between p-3.5 rounded-2xl transition-all group",
+                        "flex items-center justify-between p-3.5 rounded-2xl transition-all group min-h-[48px]",
                         isActive 
-                          ? "bg-slate-900 dark:bg-slate-800 text-white font-bold shadow-sm" 
+                          ? "bg-slate-900 dark:bg-blue-600 text-white font-bold shadow-sm" 
                           : "hover:bg-slate-100/80 dark:hover:bg-slate-800/80 text-slate-900 dark:text-slate-100"
                       )}
                     >
@@ -295,14 +346,20 @@ export default function Navbar() {
               <div className="mt-6 pt-6 border-t border-slate-200/70 dark:border-slate-800 space-y-5">
                 {!isAuthenticated ? (
                   <Button 
-                    onClick={() => navigate('/login')}
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      navigate('/login');
+                    }}
                     className="w-full h-12 rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-base shadow-sm cursor-pointer"
                   >
-                    Login
+                    Sign In
                   </Button>
                 ) : (
                   <Button 
-                    onClick={() => navigate('/dashboard')}
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      navigate('/dashboard');
+                    }}
                     className="w-full h-12 rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-base shadow-sm cursor-pointer"
                   >
                     Go to Dashboard
@@ -351,4 +408,3 @@ export default function Navbar() {
     </>
   );
 }
-

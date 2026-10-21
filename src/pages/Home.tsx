@@ -225,13 +225,13 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fafafa] dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-slate-900 selection:text-white">
+    <div className="min-h-screen bg-[#fafafa] dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-slate-900 selection:text-white overflow-x-hidden">
       <Navbar />
 
       {/* ========================================================= */}
       {/* 1. HERO SECTION & DYNAMIC SMARTPHONE REPAIR SLIDESHOW     */}
       {/* ========================================================= */}
-      <section className="relative w-full">
+      <section className="relative w-full p-0 m-0 border-none overflow-hidden">
         <HeroSlider />
       </section>
 

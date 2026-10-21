@@ -550,3 +550,16 @@
     color: #f8fafc;
   }
 }
+
+/* Official MTS LAB Brand Logo */
+.site-logo {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.site-logo-image {
+  display: block;
+  object-fit: contain;
+}

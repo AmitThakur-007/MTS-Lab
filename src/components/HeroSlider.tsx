@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
-  Search, 
   ShieldCheck, 
   Wrench, 
   ArrowRight, 
@@ -14,9 +13,10 @@ import {
   Cpu, 
   CheckCircle2, 
   Smartphone,
-  Sparkles,
   Activity,
-  Award
+  Award,
+  Play,
+  Pause
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'motion/react';
@@ -24,6 +24,17 @@ import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
 import { useRealtimeSync } from '@/services/realtime';
+
+export const AUTOPLAY_INTERVAL = 6000; // Exactly 6000ms (6 seconds) as required
+
+export interface SlideTheme {
+  accentColor: string;
+  accentGlow: string;
+  pillBorder: string;
+  glassBg: string;
+  headerBorder: string;
+  textColor: string;
+}
 
 export interface SlideData {
   id?: string;
@@ -115,6 +126,64 @@ const FALLBACK_SLIDES: SlideData[] = [
   }
 ];
 
+export function getSlideTheme(slide?: SlideData | null): SlideTheme {
+  const norm = ((slide?.category || '') + ' ' + (slide?.title || '')).toLowerCase();
+  
+  if (norm.includes('battery') || norm.includes('charging') || norm.includes('port')) {
+    return {
+      accentColor: '#10b981', // Emerald
+      accentGlow: 'rgba(16, 185, 129, 0.28)',
+      pillBorder: 'rgba(16, 185, 129, 0.35)',
+      glassBg: 'rgba(6, 78, 59, 0.35)',
+      headerBorder: 'rgba(16, 185, 129, 0.25)',
+      textColor: '#ecfdf5',
+    };
+  }
+  
+  if (norm.includes('display') || norm.includes('amoled') || norm.includes('120hz') || norm.includes('screen')) {
+    return {
+      accentColor: '#6366f1', // Indigo
+      accentGlow: 'rgba(99, 102, 241, 0.28)',
+      pillBorder: 'rgba(99, 102, 241, 0.35)',
+      glassBg: 'rgba(30, 27, 75, 0.35)',
+      headerBorder: 'rgba(99, 102, 241, 0.25)',
+      textColor: '#eef2ff',
+    };
+  }
+  
+  if (norm.includes('laser') || norm.includes('housing') || norm.includes('back')) {
+    return {
+      accentColor: '#ec4899', // Pink / Rose
+      accentGlow: 'rgba(236, 72, 153, 0.28)',
+      pillBorder: 'rgba(236, 72, 153, 0.35)',
+      glassBg: 'rgba(80, 7, 36, 0.35)',
+      headerBorder: 'rgba(236, 72, 153, 0.25)',
+      textColor: '#fdf2f8',
+    };
+  }
+  
+  if (norm.includes('ic') || norm.includes('motherboard') || norm.includes('soldering') || norm.includes('chip')) {
+    return {
+      accentColor: '#f59e0b', // Amber
+      accentGlow: 'rgba(245, 158, 11, 0.28)',
+      pillBorder: 'rgba(245, 158, 11, 0.35)',
+      glassBg: 'rgba(69, 26, 3, 0.35)',
+      headerBorder: 'rgba(245, 158, 11, 0.25)',
+      textColor: '#fffbeb',
+    };
+  }
+  
+  // Default: MTS Technical Sky Blue
+  return {
+    accentColor: '#38bdf8', // Sky
+    accentGlow: 'rgba(56, 189, 248, 0.28)',
+    pillBorder: 'rgba(56, 189, 248, 0.35)',
+    glassBg: 'rgba(15, 23, 42, 0.45)',
+    headerBorder: 'rgba(56, 189, 248, 0.22)',
+    textColor: '#f0f9ff',
+  };
+}
+
 function getBadgeIcon(iconName?: string | null, title?: string) {
   const norm = (iconName || title || '').toLowerCase();
   if (norm.includes('battery')) return Battery;
@@ -135,7 +204,7 @@ function getFeatureIcon(featureText: string): React.ElementType {
   if (norm.includes('charge') || norm.includes('fast') || norm.includes('zap') || norm.includes('speed') || norm.includes('power')) return Zap;
   if (norm.includes('min') || norm.includes('express') || norm.includes('clock') || norm.includes('time') || norm.includes('hour')) return Clock;
   if (norm.includes('certif') || norm.includes('tech') || norm.includes('award') || norm.includes('pro') || norm.includes('expert')) return Award;
-  if (norm.includes('tone') || norm.includes('oled') || norm.includes('pixel') || norm.includes('120hz') || norm.includes('sparkle') || norm.includes('screen')) return Sparkles;
+  if (norm.includes('tone') || norm.includes('oled') || norm.includes('pixel') || norm.includes('120hz') || norm.includes('screen')) return Smartphone;
   if (norm.includes('battery')) return Battery;
   return CheckCircle2;
 }
@@ -160,9 +229,17 @@ function parseFeatures(features?: string[] | string | null, title?: string): str
 export default function HeroSlider() {
   const [slides, setSlides] = useState<SlideData[]>(FALLBACK_SLIDES);
   const [current, setCurrent] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [progressKey, setProgressKey] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // Interaction & Autoplay Pause State
+  const [isHovered, setIsHovered] = useState(false);
+  const [isTouching, setIsTouching] = useState(false);
+  const [isFocusWithin, setIsFocusWithin] = useState(false);
+  const [isTabHidden, setIsTabHidden] = useState(false);
+  const [isManuallyPaused, setIsManuallyPaused] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
   const navigate = useNavigate();
 
   // Unified Pointer Swipe Tracking for Multi-device Responsiveness
@@ -204,6 +281,26 @@ export default function HeroSlider() {
     };
   }, [loadSlides]);
 
+  // Detect prefers-reduced-motion
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mediaQuery.matches);
+    const listener = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', listener);
+    return () => mediaQuery.removeEventListener('change', listener);
+  }, []);
+
+  // Detect Tab Visibility
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const handleVisibility = () => {
+      setIsTabHidden(document.hidden);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
   // Clamp active index safely
   useEffect(() => {
     if (slides.length > 0 && current >= slides.length) {
@@ -212,6 +309,22 @@ export default function HeroSlider() {
   }, [slides.length, current]);
 
   const total = slides.length;
+  const activeIndex = Math.min(current, Math.max(0, slides.length - 1));
+  const currentSlide = slides[activeIndex] || FALLBACK_SLIDES[0];
+
+  // Broadcast current slide theme to Navbar so it smoothly blends with active slide
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const theme = getSlideTheme(currentSlide);
+    window.dispatchEvent(new CustomEvent('mts-hero-slide-change', {
+      detail: {
+        slideId: currentSlide.id,
+        title: currentSlide.title,
+        theme,
+        index: activeIndex,
+      }
+    }));
+  }, [currentSlide, activeIndex]);
 
   const next = useCallback(() => {
     if (total <= 1) return;
@@ -230,12 +343,23 @@ export default function HeroSlider() {
     setProgressKey(prev => prev + 1);
   };
 
-  // Auto-play interval (6 seconds)
+  // Determine effective paused state
+  const isEffectivelyPaused = 
+    isHovered || 
+    isTouching || 
+    isFocusWithin || 
+    isTabHidden || 
+    isManuallyPaused || 
+    prefersReducedMotion;
+
+  // Single authoritative 6000ms timer
   useEffect(() => {
-    if (isPaused || total <= 1) return;
-    const timer = setInterval(next, 6000);
+    if (isEffectivelyPaused || total <= 1) return;
+    const timer = setInterval(() => {
+      next();
+    }, AUTOPLAY_INTERVAL);
     return () => clearInterval(timer);
-  }, [next, isPaused, total, current]);
+  }, [next, isEffectivelyPaused, total, current]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -253,9 +377,11 @@ export default function HeroSlider() {
     pointerStartX.current = e.clientX;
     pointerStartY.current = e.clientY;
     isDragging.current = true;
+    setIsTouching(true);
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    setIsTouching(false);
     if (!isDragging.current || pointerStartX.current === null) return;
     const diffX = e.clientX - pointerStartX.current;
     const diffY = pointerStartY.current !== null ? Math.abs(e.clientY - pointerStartY.current) : 0;
@@ -272,32 +398,45 @@ export default function HeroSlider() {
   };
 
   const handlePointerCancel = () => {
+    setIsTouching(false);
     pointerStartX.current = null;
     pointerStartY.current = null;
     isDragging.current = false;
   };
 
-  const activeIndex = Math.min(current, Math.max(0, slides.length - 1));
-  const currentSlide = slides[activeIndex] || FALLBACK_SLIDES[0];
-
   const BadgeIcon = getBadgeIcon(currentSlide.badgeIcon, currentSlide.title);
   const featuresList = parseFeatures(currentSlide.features, currentSlide.title);
   const categoryText = currentSlide.category || 'MTS LAB — SMARTPHONE REPAIR';
+  const currentTheme = getSlideTheme(currentSlide);
 
   return (
     <div 
-      className="relative w-full h-[100dvh] min-h-[580px] sm:min-h-[660px] lg:min-h-[720px] max-h-[1050px] overflow-hidden bg-slate-950 isolate select-none touch-pan-y"
+      className="relative w-full h-[100dvh] min-h-[580px] sm:min-h-[640px] lg:min-h-[720px] max-h-[1050px] overflow-hidden bg-slate-950 isolate select-none touch-pan-y"
       style={{ touchAction: 'pan-y' }}
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
+      onFocus={() => setIsFocusWithin(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setIsFocusWithin(false);
+        }
+      }}
       role="region"
       aria-roledescription="carousel"
       aria-label="MTS Lab Featured Highlights Hero Slideshow"
-      aria-live={isPaused ? 'polite' : 'off'}
+      aria-live={isEffectivelyPaused ? 'polite' : 'off'}
     >
+      {/* Keyframe animation definition for synchronized 6000ms progress */}
+      <style>{`
+        @keyframes heroSlideProgressAnim {
+          0% { width: 0%; }
+          100% { width: 100%; }
+        }
+      `}</style>
+
       <AnimatePresence mode="wait">
         <motion.div
           key={currentSlide.id || activeIndex}
@@ -329,7 +468,7 @@ export default function HeroSlider() {
           </motion.div>
 
           {/* Top Vignette Overlay for Header Contrast */}
-          <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-slate-950/85 via-slate-950/45 to-transparent pointer-events-none z-1" />
+          <div className="absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-slate-950/90 via-slate-950/50 to-transparent pointer-events-none z-1" />
 
           {/* Desktop Left-to-Right Dark Gradient Overlay (Cinematic contrast behind content) */}
           <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent pointer-events-none z-1" />
@@ -338,12 +477,12 @@ export default function HeroSlider() {
           <div className="md:hidden absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-slate-950/30 pointer-events-none z-1" />
 
           {/* Bottom Vignette Overlay */}
-          <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent pointer-events-none z-1" />
+          <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent pointer-events-none z-1" />
         </motion.div>
       </AnimatePresence>
 
       {/* Hero Content Container */}
-      <div className="max-w-7xl mx-auto px-5 sm:px-10 lg:px-12 w-full h-full flex flex-col justify-between pt-28 sm:pt-36 pb-8 sm:pb-12 relative z-10">
+      <div className="max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 2xl:px-16 w-full h-full flex flex-col justify-between pt-24 sm:pt-32 lg:pt-36 pb-6 sm:pb-10 relative z-10">
         
         {/* Main Slide Content */}
         <div className="flex-1 flex flex-col justify-center max-w-2xl lg:max-w-3xl my-auto">
@@ -357,8 +496,14 @@ export default function HeroSlider() {
               className="space-y-4 sm:space-y-5"
             >
               {/* Category Badge */}
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/70 dark:bg-slate-900/80 backdrop-blur-md border border-slate-700/60 text-slate-200 text-[11px] sm:text-xs font-bold uppercase tracking-wider shadow-sm">
-                <BadgeIcon className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <div 
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/75 dark:bg-slate-900/85 backdrop-blur-md border text-slate-200 text-[11px] sm:text-xs font-bold uppercase tracking-wider shadow-sm transition-all duration-500"
+                style={{ borderColor: currentTheme.pillBorder }}
+              >
+                <BadgeIcon 
+                  className="w-3.5 h-3.5 shrink-0 transition-colors duration-500" 
+                  style={{ color: currentTheme.accentColor }}
+                />
                 <span>{categoryText}</span>
               </div>
 
@@ -380,9 +525,12 @@ export default function HeroSlider() {
                     return (
                       <span 
                         key={idx} 
-                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/70 backdrop-blur-md border border-slate-700/60 text-xs font-semibold text-slate-200 shadow-2xs"
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/75 backdrop-blur-md border border-slate-700/60 text-xs font-semibold text-slate-200 shadow-2xs transition-all duration-300"
                       >
-                        <FeatIcon className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <FeatIcon 
+                          className="w-3.5 h-3.5 shrink-0" 
+                          style={{ color: currentTheme.accentColor }}
+                        />
                         <span>{feat}</span>
                       </span>
                     );
@@ -395,6 +543,9 @@ export default function HeroSlider() {
                 <Button 
                   onClick={() => navigate(currentSlide.buttonLink || '/services?focus=search')}
                   className="h-12 sm:h-13 px-7 sm:px-8 rounded-full bg-white text-slate-950 hover:bg-slate-100 font-extrabold text-sm sm:text-base shadow-xl shadow-black/40 flex items-center justify-center gap-2 group transition-all active:scale-95 cursor-pointer"
+                  style={{
+                    boxShadow: `0 10px 30px -5px ${currentTheme.accentGlow}`
+                  }}
                 >
                   <span>{currentSlide.buttonText || 'Check Repair Price'}</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform shrink-0" />
@@ -411,10 +562,10 @@ export default function HeroSlider() {
           </AnimatePresence>
         </div>
 
-        {/* Bottom Carousel Controls: Counter, Progress Indicators, and Previous/Next Buttons */}
+        {/* Bottom Carousel Controls: Counter, Progress Indicators, Play/Pause, and Previous/Next Buttons */}
         <div className="flex items-center justify-between w-full pt-4">
           
-          {/* Left: Numeric Slide Counter & Segmented Progress Bar */}
+          {/* Left: Numeric Slide Counter & Segmented Progress Bar & Accessible Pause Toggle */}
           <div className="flex items-center gap-3 sm:gap-5">
             {/* Numeric Counter e.g. 04 / 04 */}
             <div className="flex items-baseline gap-1 font-mono select-none">
@@ -429,30 +580,55 @@ export default function HeroSlider() {
             {/* Segmented Progress Indicators */}
             {total > 1 && (
               <div className="flex items-center gap-1.5 sm:gap-2">
-                {slides.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => goToSlide(i)}
-                    aria-label={`Go to slide ${i + 1}`}
-                    className={cn(
-                      "h-1.5 sm:h-2 rounded-full transition-all duration-300 cursor-pointer overflow-hidden relative",
-                      activeIndex === i 
-                        ? "w-8 sm:w-11 bg-white/30" 
-                        : "w-4 sm:w-6 bg-white/20 hover:bg-white/40"
-                    )}
-                  >
-                    {activeIndex === i && (
-                      <motion.div
-                        key={`progress-${i}-${progressKey}`}
-                        initial={{ width: '0%' }}
-                        animate={{ width: isPaused ? '100%' : '100%' }}
-                        transition={{ duration: 6, ease: 'linear' }}
-                        className="h-full bg-white rounded-full"
-                      />
-                    )}
-                  </button>
-                ))}
+                {slides.map((_, i) => {
+                  const isActive = activeIndex === i;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => goToSlide(i)}
+                      aria-label={`Go to slide ${i + 1}`}
+                      className={cn(
+                        "h-1.5 sm:h-2 rounded-full transition-all duration-300 cursor-pointer overflow-hidden relative",
+                        isActive 
+                          ? "w-8 sm:w-11 bg-white/30" 
+                          : "w-4 sm:w-6 bg-white/20 hover:bg-white/40"
+                      )}
+                    >
+                      {isActive && (
+                        <div
+                          key={`progress-${activeIndex}-${progressKey}`}
+                          className="h-full bg-white rounded-full"
+                          style={{
+                            animationName: prefersReducedMotion ? 'none' : 'heroSlideProgressAnim',
+                            animationDuration: `${AUTOPLAY_INTERVAL}ms`,
+                            animationTimingFunction: 'linear',
+                            animationFillMode: 'forwards',
+                            animationPlayState: isEffectivelyPaused ? 'paused' : 'running',
+                            width: prefersReducedMotion ? '100%' : undefined
+                          }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
+            )}
+
+            {/* Accessible WCAG 2.2.2 Pause / Play Autoplay Toggle */}
+            {total > 1 && (
+              <button
+                type="button"
+                onClick={() => setIsManuallyPaused(prev => !prev)}
+                aria-label={isManuallyPaused ? "Resume automatic slideshow" : "Pause automatic slideshow"}
+                className="w-8 h-8 rounded-full bg-slate-900/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                title={isManuallyPaused ? "Resume slideshow" : "Pause slideshow"}
+              >
+                {isManuallyPaused ? (
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                ) : (
+                  <Pause className="w-3.5 h-3.5" />
+                )}
+              </button>
             )}
           </div>
 
@@ -462,14 +638,14 @@ export default function HeroSlider() {
               <button 
                 onClick={prev}
                 aria-label="Previous Slide"
-                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 text-white flex items-center justify-center transition-all shadow-md active:scale-95 cursor-pointer"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 text-white flex items-center justify-center transition-all shadow-md active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button 
                 onClick={next}
                 aria-label="Next Slide"
-                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 text-white flex items-center justify-center transition-all shadow-md active:scale-95 cursor-pointer"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 text-white flex items-center justify-center transition-all shadow-md active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
