@@ -90,12 +90,13 @@ function loadLocalFile<T>(filePath: string, defaultValue: T): T {
 }
 
 function saveLocalFile(filePath: string, data: any): void {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) return;
   try {
     const tempPath = `${filePath}.tmp.${Date.now()}`;
     fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
     fs.renameSync(tempPath, filePath);
   } catch (err) {
-    console.error(`[STORAGE WRITE ERROR: ${filePath}]`, err);
+    console.warn(`[STORAGE LOCAL WRITE WARN: ${filePath}]`, (err as any)?.message || err);
   }
 }
 

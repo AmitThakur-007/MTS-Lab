@@ -74,12 +74,13 @@ function loadLocalFile(): SmsNotificationRecord[] {
 }
 
 function saveLocalFile(data: SmsNotificationRecord[]): void {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) return;
   try {
     const tempPath = `${SMS_FILE}.tmp.${Date.now()}`;
     fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
     fs.renameSync(tempPath, SMS_FILE);
   } catch (err) {
-    console.error(`[SMS WRITE ERROR: ${SMS_FILE}]`, err);
+    console.warn(`[SMS LOCAL WRITE WARN: ${SMS_FILE}]`, (err as any)?.message || err);
   }
 }
 

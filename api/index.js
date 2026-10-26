@@ -1,8 +1,8 @@
 // api/_server/app.ts
 import express from "express";
 import cookieParser from "cookie-parser";
-import path12 from "path";
-import fs12 from "fs";
+import path10 from "path";
+import fs10 from "fs";
 
 // api/_server/routes/auth.ts
 import { Router } from "express";
@@ -1664,82 +1664,7 @@ function parseExcelBuffer(buffer) {
 }
 
 // api/_server/services/notificationStorage.ts
-import fs from "fs";
-import path from "path";
 import { v4 as uuidv44 } from "uuid";
-var DATA_DIR = path.join(process.cwd(), "data");
-var NOTIFICATIONS_FILE = path.join(DATA_DIR, "notifications.json");
-if (!fs.existsSync(DATA_DIR)) {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  } catch (e) {
-    console.warn("[NOTIFICATIONS STORAGE DIR WARN]", e);
-  }
-}
-var notificationCache = /* @__PURE__ */ new Map();
-var isInitialized = false;
-function loadLocalFile() {
-  try {
-    if (fs.existsSync(NOTIFICATIONS_FILE)) {
-      const content = fs.readFileSync(NOTIFICATIONS_FILE, "utf-8");
-      const parsed = JSON.parse(content);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    }
-  } catch (err) {
-    console.error(`[NOTIFICATIONS READ ERROR: ${NOTIFICATIONS_FILE}]`, err);
-  }
-  return [];
-}
-function saveLocalFile(data) {
-  try {
-    const tempPath = `${NOTIFICATIONS_FILE}.tmp.${Date.now()}`;
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
-    fs.renameSync(tempPath, NOTIFICATIONS_FILE);
-  } catch (err) {
-    console.error(`[NOTIFICATIONS WRITE ERROR: ${NOTIFICATIONS_FILE}]`, err);
-  }
-}
-async function initializeNotificationStorage() {
-  if (isInitialized) return;
-  const localRecords = loadLocalFile();
-  localRecords.forEach((n) => notificationCache.set(n.id, n));
-  try {
-    const { data: supaRecords, error } = await supabaseAdmin.from("Notification").select("*").order("createdAt", { ascending: false }).limit(200);
-    if (!error && supaRecords && supaRecords.length > 0) {
-      supaRecords.forEach((n) => {
-        const existing = notificationCache.get(n.id);
-        if (!existing || new Date(n.updatedAt || n.createdAt || 0) >= new Date(existing.updatedAt || existing.createdAt || 0)) {
-          notificationCache.set(n.id, {
-            id: n.id,
-            userId: n.userId || null,
-            targetRole: n.targetRole || null,
-            title: n.title,
-            message: n.message,
-            type: n.type || "GENERAL",
-            repairId: n.repairId || null,
-            repairNumber: n.repairNumber || null,
-            senderId: n.senderId || null,
-            senderName: n.senderName || null,
-            senderRole: n.senderRole || null,
-            priority: n.priority || "NORMAL",
-            link: n.link || (n.repairId ? `/dashboard/repairs/${n.repairId}` : null),
-            metadata: typeof n.metadata === "string" ? safeJsonParse(n.metadata) : n.metadata || null,
-            isRead: Boolean(n.isRead),
-            readAt: n.readAt || null,
-            createdAt: n.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
-            updatedAt: n.updatedAt || n.createdAt || (/* @__PURE__ */ new Date()).toISOString()
-          });
-        }
-      });
-      saveLocalFile(Array.from(notificationCache.values()));
-    }
-  } catch (err) {
-    console.warn("[SUPABASE NOTIFICATIONS SYNC WARN - USING LOCAL CACHE]", err);
-  }
-  isInitialized = true;
-}
 function safeJsonParse(str) {
   try {
     return JSON.parse(str);
@@ -1747,155 +1672,193 @@ function safeJsonParse(str) {
     return str;
   }
 }
+function formatNotificationRecord(row) {
+  const metadata = typeof row.metadata === "string" ? safeJsonParse(row.metadata) : row.metadata || {};
+  return {
+    id: row.id,
+    userId: row.userId || null,
+    targetRole: row.targetRole || metadata?.targetRole || null,
+    title: row.title || "",
+    message: row.message || "",
+    type: row.type || "GENERAL",
+    repairId: row.repairId || null,
+    repairNumber: row.repairNumber || null,
+    senderId: row.senderId || null,
+    senderName: row.senderName || null,
+    senderRole: row.senderRole || metadata?.senderRole || null,
+    priority: row.priority || "NORMAL",
+    link: row.link || metadata?.link || (row.repairId ? `/dashboard/repairs/${row.repairId}` : null),
+    metadata: metadata || null,
+    isRead: Boolean(row.isRead),
+    readAt: row.readAt || null,
+    createdAt: row.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+    updatedAt: row.updatedAt || row.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
 async function getUserNotifications(user, options = {}) {
-  await initializeNotificationStorage();
   const { unreadOnly = false, limit = 50, type } = options;
-  const allNotifications = Array.from(notificationCache.values());
-  const userNotifications = allNotifications.filter((n) => {
-    if (n.userId && n.userId === user.id) return true;
-    if (n.targetRole && (n.targetRole === user.role || n.targetRole === "ADMIN" && user.role === "SUPER_ADMIN")) {
-      return true;
-    }
-    if (!n.userId && !n.targetRole) return true;
-    return false;
-  });
-  const unreadCount = userNotifications.filter((n) => !n.isRead).length;
-  let filtered = userNotifications;
+  let query = supabaseAdmin.from("Notification").select("*").eq("userId", user.id);
   if (unreadOnly) {
-    filtered = filtered.filter((n) => !n.isRead);
+    query = query.eq("isRead", false);
   }
   if (type) {
-    filtered = filtered.filter((n) => n.type === type);
+    query = query.eq("type", type);
   }
-  filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  query = query.order("createdAt", { ascending: false }).limit(limit);
+  const { data: rows, error } = await query;
+  if (error) {
+    console.error("[SUPABASE GET USER NOTIFICATIONS ERROR]", error);
+    throw new Error(`Failed to retrieve notifications: ${error.message}`);
+  }
+  const { count: unreadCount, error: countErr } = await supabaseAdmin.from("Notification").select("id", { count: "exact", head: true }).eq("userId", user.id).eq("isRead", false);
+  if (countErr) {
+    console.warn("[SUPABASE UNREAD COUNT WARN]", countErr);
+  }
   return {
-    notifications: filtered.slice(0, limit),
-    unreadCount
+    notifications: (rows || []).map(formatNotificationRecord),
+    unreadCount: unreadCount || 0
   };
 }
 async function createNotification(data) {
-  await initializeNotificationStorage();
-  const id = uuidv44();
-  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const title = String(data.title || "").trim();
+  const message = String(data.message || "").trim();
+  const type = data.type || "GENERAL";
   let link = data.link;
   if (!link && data.repairId) {
     link = `/dashboard/repairs/${data.repairId}`;
-  } else if (!link && (data.type === "ATTENDANCE_REQUEST" || data.type === "ATTENDANCE_APPROVED" || data.type === "ATTENDANCE_REJECTED")) {
+  } else if (!link && (type === "ATTENDANCE_REQUEST" || type === "ATTENDANCE_APPROVED" || type === "ATTENDANCE_REJECTED")) {
     link = "/dashboard/attendance";
-  } else if (!link && (data.type === "ACCESS_REQUEST" || data.type === "ACCESS_APPROVED" || data.type === "ACCESS_REJECTED")) {
+  } else if (!link && (type === "ACCESS_REQUEST" || type === "ACCESS_APPROVED" || type === "ACCESS_REJECTED")) {
     link = "/dashboard/access-requests";
-  } else if (!link && data.type === "COURIER_UPDATE") {
+  } else if (!link && type === "COURIER_UPDATE") {
     link = "/dashboard/courier";
-  } else if (!link && data.type === "WARRANTY_ALERT") {
+  } else if (!link && type === "WARRANTY_ALERT") {
     link = "/dashboard/battery-warranty";
   }
-  const newRecord = {
-    id,
-    userId: data.userId || null,
-    targetRole: data.targetRole || null,
-    title: String(data.title || "").trim(),
-    message: String(data.message || "").trim(),
-    type: data.type || "GENERAL",
+  let targetUserIds = [];
+  if (data.userId) {
+    targetUserIds = [data.userId];
+  } else if (data.targetRole) {
+    try {
+      let roleFilter = [data.targetRole];
+      if (data.targetRole === "ADMIN") {
+        roleFilter = ["ADMIN", "SUPER_ADMIN"];
+      } else if (data.targetRole === "MANAGER") {
+        roleFilter = ["MANAGER", "ADMIN", "SUPER_ADMIN"];
+      }
+      const { data: matchedUsers, error: userErr } = await supabaseAdmin.from("User").select("id").is("deletedAt", null).in("role", roleFilter);
+      if (!userErr && matchedUsers && matchedUsers.length > 0) {
+        targetUserIds = matchedUsers.map((u) => u.id);
+      }
+    } catch (uErr) {
+      console.warn("[NOTIF RESOLVE TARGET ROLE WARN]", uErr);
+    }
+  }
+  if (targetUserIds.length === 0) {
+    try {
+      const { data: admins } = await supabaseAdmin.from("User").select("id").is("deletedAt", null).in("role", ["SUPER_ADMIN", "ADMIN"]).limit(5);
+      if (admins && admins.length > 0) {
+        targetUserIds = admins.map((u) => u.id);
+      }
+    } catch (_) {
+    }
+  }
+  if (targetUserIds.length === 0) {
+    console.warn("[CREATE NOTIFICATION WARN]: No target recipients found. Skipping notification insert.");
+    return {
+      id: uuidv44(),
+      userId: null,
+      title,
+      message,
+      type,
+      priority: data.priority || "NORMAL",
+      link: link || null,
+      isRead: false,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const metaObj = {
+    ...typeof data.metadata === "object" && data.metadata !== null ? data.metadata : {},
+    ...link ? { link } : {},
+    ...data.targetRole ? { targetRole: data.targetRole } : {},
+    ...data.senderRole ? { senderRole: data.senderRole } : {}
+  };
+  const metadataStr = JSON.stringify(metaObj);
+  const rowsToInsert = targetUserIds.map((uid) => ({
+    id: uuidv44(),
+    userId: uid,
+    title,
+    message,
+    type,
     repairId: data.repairId || null,
     repairNumber: data.repairNumber || null,
     senderId: data.senderId || null,
     senderName: data.senderName || null,
-    senderRole: data.senderRole || null,
     priority: data.priority || "NORMAL",
-    link: link || null,
-    metadata: data.metadata || null,
+    metadata: metadataStr,
     isRead: false,
     readAt: null,
-    createdAt: now,
-    updatedAt: now
-  };
-  notificationCache.set(id, newRecord);
-  saveLocalFile(Array.from(notificationCache.values()));
-  try {
-    await supabaseAdmin.from("Notification").upsert([
-      {
-        id: newRecord.id,
-        userId: newRecord.userId,
-        title: newRecord.title,
-        message: newRecord.message,
-        type: newRecord.type,
-        repairId: newRecord.repairId,
-        repairNumber: newRecord.repairNumber,
-        senderId: newRecord.senderId,
-        senderName: newRecord.senderName,
-        priority: newRecord.priority,
-        metadata: typeof newRecord.metadata === "object" ? JSON.stringify(newRecord.metadata) : newRecord.metadata,
-        isRead: false,
-        createdAt: newRecord.createdAt
-      }
-    ]);
-  } catch (err) {
-    console.warn("[SUPABASE NOTIFICATION INSERT WARN]", err);
+    createdAt: now
+  }));
+  const { data: inserted, error } = await supabaseAdmin.from("Notification").insert(rowsToInsert).select("*");
+  if (error) {
+    console.error("[SUPABASE NOTIFICATION INSERT ERROR]", error);
+    throw new Error(`Failed to create notification: ${error.message}`);
   }
-  await broadcastServerChange("Notification", "CREATE", id, newRecord);
-  return newRecord;
+  const primaryRecord = formatNotificationRecord(inserted?.[0] || rowsToInsert[0]);
+  for (const rec of inserted || rowsToInsert) {
+    const formatted = formatNotificationRecord(rec);
+    broadcastServerChange("Notification", "CREATE", formatted.id, formatted).catch(() => {
+    });
+  }
+  return primaryRecord;
 }
 async function markNotificationRead(id, userId) {
-  await initializeNotificationStorage();
-  const record = notificationCache.get(id);
-  if (!record) return null;
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  record.isRead = true;
-  record.readAt = now;
-  record.updatedAt = now;
-  notificationCache.set(id, record);
-  saveLocalFile(Array.from(notificationCache.values()));
-  try {
-    await supabaseAdmin.from("Notification").update({ isRead: true, readAt: now }).eq("id", id);
-  } catch (err) {
-    console.warn("[SUPABASE NOTIFICATION MARK READ WARN]", err);
+  const { data, error } = await supabaseAdmin.from("Notification").update({ isRead: true, readAt: now }).eq("id", id).eq("userId", userId).select("*").maybeSingle();
+  if (error) {
+    console.error("[SUPABASE NOTIFICATION MARK READ ERROR]", error);
+    throw error;
   }
-  await broadcastServerChange("Notification", "UPDATE", id, record);
+  if (!data) return null;
+  const record = formatNotificationRecord(data);
+  broadcastServerChange("Notification", "UPDATE", id, record).catch(() => {
+  });
   return record;
 }
 async function markAllNotificationsRead(user) {
-  await initializeNotificationStorage();
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  let updatedCount = 0;
-  notificationCache.forEach((record, id) => {
-    const isTarget = record.userId && record.userId === user.id || record.targetRole && record.targetRole === user.role || !record.userId && !record.targetRole;
-    if (isTarget && !record.isRead) {
-      record.isRead = true;
-      record.readAt = now;
-      record.updatedAt = now;
-      notificationCache.set(id, record);
-      updatedCount++;
-    }
-  });
-  if (updatedCount > 0) {
-    saveLocalFile(Array.from(notificationCache.values()));
-    try {
-      await supabaseAdmin.from("Notification").update({ isRead: true, readAt: now }).or(`userId.eq.${user.id},userId.is.null`);
-    } catch (err) {
-      console.warn("[SUPABASE NOTIFICATION MARK ALL READ WARN]", err);
-    }
-    await broadcastServerChange("Notification", "UPDATE", "bulk", { userId: user.id });
+  const { data, error } = await supabaseAdmin.from("Notification").update({ isRead: true, readAt: now }).eq("userId", user.id).eq("isRead", false).select("id");
+  if (error) {
+    console.error("[SUPABASE NOTIFICATION MARK ALL READ ERROR]", error);
+    throw error;
   }
-  return updatedCount;
+  const count = data?.length || 0;
+  if (count > 0) {
+    broadcastServerChange("Notification", "UPDATE", "bulk", { userId: user.id }).catch(() => {
+    });
+  }
+  return count;
 }
 async function deleteNotification(id, user) {
-  await initializeNotificationStorage();
-  const record = notificationCache.get(id);
-  if (!record) return false;
+  let query = supabaseAdmin.from("Notification").delete().eq("id", id);
   const isSuperAdminOrAdmin = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
-  const isRecipient = record.userId === user.id || !record.userId && record.targetRole === user.role;
-  if (!isSuperAdminOrAdmin && !isRecipient) {
-    throw new Error("Unauthorized to delete this notification.");
+  if (!isSuperAdminOrAdmin) {
+    query = query.eq("userId", user.id);
   }
-  notificationCache.delete(id);
-  saveLocalFile(Array.from(notificationCache.values()));
-  try {
-    await supabaseAdmin.from("Notification").delete().eq("id", id);
-  } catch (err) {
-    console.warn("[SUPABASE NOTIFICATION DELETE WARN]", err);
+  const { data, error } = await query.select("id");
+  if (error) {
+    console.error("[SUPABASE NOTIFICATION DELETE ERROR]", error);
+    throw error;
   }
-  await broadcastServerChange("Notification", "DELETE", id);
-  return true;
+  const deleted = Boolean(data && data.length > 0);
+  if (deleted) {
+    broadcastServerChange("Notification", "DELETE", id).catch(() => {
+    });
+  }
+  return deleted;
 }
 
 // api/_server/services/repairTransferService.ts
@@ -2648,24 +2611,24 @@ async function computeRepairDashboardStats(params) {
 }
 
 // api/_server/services/smsStorage.ts
-import fs2 from "fs";
-import path2 from "path";
+import fs from "fs";
+import path from "path";
 import { v4 as uuidv46 } from "uuid";
-var DATA_DIR2 = path2.join(process.cwd(), "data");
-var SMS_FILE = path2.join(DATA_DIR2, "sms_notifications.json");
-if (!fs2.existsSync(DATA_DIR2)) {
+var DATA_DIR = path.join(process.cwd(), "data");
+var SMS_FILE = path.join(DATA_DIR, "sms_notifications.json");
+if (!fs.existsSync(DATA_DIR)) {
   try {
-    fs2.mkdirSync(DATA_DIR2, { recursive: true });
+    fs.mkdirSync(DATA_DIR, { recursive: true });
   } catch (e) {
     console.warn("[SMS STORAGE DIR WARN]", e);
   }
 }
 var smsCache = /* @__PURE__ */ new Map();
-var isInitialized2 = false;
-function loadLocalFile2() {
+var isInitialized = false;
+function loadLocalFile() {
   try {
-    if (fs2.existsSync(SMS_FILE)) {
-      const content = fs2.readFileSync(SMS_FILE, "utf-8");
+    if (fs.existsSync(SMS_FILE)) {
+      const content = fs.readFileSync(SMS_FILE, "utf-8");
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed)) {
         return parsed;
@@ -2676,25 +2639,26 @@ function loadLocalFile2() {
   }
   return [];
 }
-function saveLocalFile2(data) {
+function saveLocalFile(data) {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) return;
   try {
     const tempPath = `${SMS_FILE}.tmp.${Date.now()}`;
-    fs2.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
-    fs2.renameSync(tempPath, SMS_FILE);
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
+    fs.renameSync(tempPath, SMS_FILE);
   } catch (err) {
-    console.error(`[SMS WRITE ERROR: ${SMS_FILE}]`, err);
+    console.warn(`[SMS LOCAL WRITE WARN: ${SMS_FILE}]`, err?.message || err);
   }
 }
 function initializeSmsStorage() {
-  if (isInitialized2) return;
-  const localItems = loadLocalFile2();
+  if (isInitialized) return;
+  const localItems = loadLocalFile();
   smsCache.clear();
   for (const item of localItems) {
     if (item.id) {
       smsCache.set(item.id, item);
     }
   }
-  isInitialized2 = true;
+  isInitialized = true;
 }
 function validateAndNormalizeNepalPhone(rawPhone) {
   if (!rawPhone || typeof rawPhone !== "string" || !rawPhone.trim()) {
@@ -2764,7 +2728,7 @@ async function recordSmsNotification(data) {
     updatedAt: now
   };
   smsCache.set(id, record);
-  saveLocalFile2(Array.from(smsCache.values()));
+  saveLocalFile(Array.from(smsCache.values()));
   try {
     await supabaseAdmin.from("SmsNotification").insert([
       {
@@ -2805,7 +2769,7 @@ async function updateSmsNotification(id, updates) {
     updatedAt: now
   };
   smsCache.set(id, updated);
-  saveLocalFile2(Array.from(smsCache.values()));
+  saveLocalFile(Array.from(smsCache.values()));
   try {
     await supabaseAdmin.from("SmsNotification").update({
       status: updated.status,
@@ -2922,6 +2886,17 @@ function hasRecentSmsNotification(repairId) {
 var router3 = Router3();
 var upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 var ALLOWED_SMS_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGER", "RECEPTIONIST"];
+function enrichRepairTimeline(repair) {
+  if (!repair) return repair;
+  const isCourier = Boolean(repair.isCourierIn || repair.receivingMethod === "COURIER");
+  const receivedAt = repair.receivedAt || (isCourier && repair.courierReceivedDate ? repair.courierReceivedDate : repair.createdAt) || (/* @__PURE__ */ new Date()).toISOString();
+  const assignedAt = repair.technicianId ? repair.assignedAt || null : null;
+  return {
+    ...repair,
+    receivedAt,
+    assignedAt
+  };
+}
 var ALLOWED_REPAIR_COLUMNS = /* @__PURE__ */ new Set([
   "customerId",
   "customerName",
@@ -3222,20 +3197,23 @@ router3.get("/", authenticate, async (req, res) => {
     res.setHeader("X-Limit", String(limitNum));
     res.setHeader("X-Total-Pages", String(totalPages));
     const smsSummaries = getAllRepairSmsSummaries();
-    const repairsWithSms = (repairs || []).map((r) => ({
-      ...r,
-      smsSummary: smsSummaries[r.id] || (r.repairNumber ? smsSummaries[r.repairNumber] : null) || {
-        repairId: r.id,
-        repairNumber: r.repairNumber,
-        status: "NOT_SENT",
-        count: 0,
-        totalAttempts: 0,
-        lastSentAt: null,
-        lastChannel: null,
-        lastStaffName: null,
-        lastRecordId: null
-      }
-    }));
+    const repairsWithSms = (repairs || []).map((r) => {
+      const enriched = enrichRepairTimeline(r);
+      return {
+        ...enriched,
+        smsSummary: smsSummaries[r.id] || (r.repairNumber ? smsSummaries[r.repairNumber] : null) || {
+          repairId: r.id,
+          repairNumber: r.repairNumber,
+          status: "NOT_SENT",
+          count: 0,
+          totalAttempts: 0,
+          lastSentAt: null,
+          lastChannel: null,
+          lastStaffName: null,
+          lastRecordId: null
+        }
+      };
+    });
     if (isPaginatedRequest) {
       return res.json({
         data: repairsWithSms,
@@ -3444,7 +3422,7 @@ router3.get("/:id", authenticate, async (req, res) => {
           }
         }
         return res.json({
-          ...byNum,
+          ...enrichRepairTimeline(byNum),
           smsSummary: getRepairSmsSummary(byNum.id)
         });
       }
@@ -3458,7 +3436,7 @@ router3.get("/:id", authenticate, async (req, res) => {
       }
     }
     return res.json({
-      ...repair,
+      ...enrichRepairTimeline(repair),
       smsSummary: getRepairSmsSummary(repair.id)
     });
   } catch (err) {
@@ -3697,7 +3675,7 @@ router3.post("/", authenticate, async (req, res) => {
       }
     }
     await broadcastServerChange("Repair", "CREATE", created.id, created);
-    return res.status(201).json(created);
+    return res.status(201).json(enrichRepairTimeline(created));
   } catch (err) {
     console.error("[CREATE REPAIR ERROR]", err);
     return res.status(500).json({ error: "Failed to register repair ticket." });
@@ -3925,7 +3903,7 @@ var handleBatchRepairIntake = async (req, res) => {
           totalDevices: devices.length
         }
       });
-      createdRepairs.push(created);
+      createdRepairs.push(enrichRepairTimeline(created));
     }
     return res.status(201).json({
       success: true,
@@ -4637,7 +4615,7 @@ router3.post("/:id/assign", authenticate, authorize(["SUPER_ADMIN", "ADMIN", "MA
       }
     }
     await broadcastServerChange("Repair", "UPDATE", id, updated);
-    return res.json(updated);
+    return res.json(enrichRepairTimeline(updated));
   } catch (err) {
     return res.status(500).json({ error: "Failed to assign technician." });
   }
@@ -8221,121 +8199,58 @@ var batteryWarranties_default = router8;
 import { Router as Router9 } from "express";
 
 // api/_server/services/attendanceStorage.ts
-import fs3 from "fs";
-import path3 from "path";
 import { v4 as uuidv412 } from "uuid";
-var DATA_DIR3 = path3.join(process.cwd(), "data");
-var ATTENDANCE_FILE = path3.join(DATA_DIR3, "attendance_records.json");
-var AUDIT_FILE = path3.join(DATA_DIR3, "attendance_audit_logs.json");
-if (!fs3.existsSync(DATA_DIR3)) {
+function safeJsonParse2(str) {
   try {
-    fs3.mkdirSync(DATA_DIR3, { recursive: true });
-  } catch (e) {
-    console.warn("[STORAGE DIR INIT WARN]", e);
+    return JSON.parse(str);
+  } catch {
+    return str;
   }
 }
-var attendanceCache = /* @__PURE__ */ new Map();
-var auditCache = [];
-var isInitialized3 = false;
-function loadLocalFile3(filePath, defaultValue) {
+function formatAttendanceRecord(rec) {
+  return {
+    id: rec.id,
+    userId: rec.userId,
+    date: rec.date,
+    status: rec.status || "PRESENT",
+    checkInTime: rec.checkInTime || rec.markedAt?.slice(11, 19) || null,
+    checkOutTime: rec.checkOutTime || null,
+    markedById: rec.markedById || "SYSTEM",
+    markedByName: rec.markedByName || "System",
+    markedByRole: rec.markedByRole || "ADMIN",
+    markedAt: rec.markedAt || rec.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+    method: rec.method || "DIRECT_ADMIN",
+    requestStatus: rec.requestStatus || "DIRECT",
+    respondedAt: rec.respondedAt || null,
+    rejectionReason: rec.rejectionReason || null,
+    notes: rec.notes || null,
+    correctionReason: rec.correctionReason || null,
+    branchId: rec.branchId || null,
+    isArchived: Boolean(rec.isArchived),
+    createdAt: rec.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+    updatedAt: rec.updatedAt || (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function formatAuditRecord(l) {
+  return {
+    id: l.id,
+    attendanceId: l.attendanceId,
+    action: l.action || "UPDATED",
+    performedById: l.performedById,
+    performedByName: l.performedByName || null,
+    performedByRole: l.performedByRole || null,
+    previousStatus: l.previousStatus || null,
+    newStatus: l.newStatus || null,
+    reason: l.reason || null,
+    metadata: typeof l.metadata === "string" ? safeJsonParse2(l.metadata) : l.metadata || null,
+    createdAt: l.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+async function writeAuditLogSafe(auditLog) {
   try {
-    if (fs3.existsSync(filePath)) {
-      const content = fs3.readFileSync(filePath, "utf-8");
-      return JSON.parse(content);
-    }
+    await supabaseAdmin.from("AttendanceAuditLog").insert([auditLog]);
   } catch (err) {
-    console.error(`[STORAGE READ ERROR: ${filePath}]`, err);
-  }
-  return defaultValue;
-}
-function saveLocalFile3(filePath, data) {
-  try {
-    const tempPath = `${filePath}.tmp.${Date.now()}`;
-    fs3.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
-    fs3.renameSync(tempPath, filePath);
-  } catch (err) {
-    console.error(`[STORAGE WRITE ERROR: ${filePath}]`, err);
-  }
-}
-async function initAttendanceStorage() {
-  if (isInitialized3) return;
-  const localAttendance = loadLocalFile3(ATTENDANCE_FILE, []);
-  localAttendance.forEach((rec) => {
-    if (rec && rec.id) {
-      attendanceCache.set(rec.id, rec);
-    }
-  });
-  const localAudit = loadLocalFile3(AUDIT_FILE, []);
-  auditCache = localAudit;
-  try {
-    const { data: remoteData, error } = await supabaseAdmin.from("Attendance").select("*").order("date", { ascending: false });
-    if (!error && remoteData && remoteData.length > 0) {
-      remoteData.forEach((rec) => {
-        if (rec && rec.id) {
-          attendanceCache.set(rec.id, {
-            id: rec.id,
-            userId: rec.userId,
-            date: rec.date,
-            status: rec.status || "PRESENT",
-            checkInTime: rec.checkInTime || rec.markedAt?.slice(11, 19) || null,
-            checkOutTime: rec.checkOutTime || null,
-            markedById: rec.markedById || "SYSTEM",
-            markedByName: rec.markedByName || "System",
-            markedByRole: rec.markedByRole || "ADMIN",
-            markedAt: rec.markedAt || rec.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
-            method: rec.method || "DIRECT_ADMIN",
-            requestStatus: rec.requestStatus || "DIRECT",
-            respondedAt: rec.respondedAt || null,
-            rejectionReason: rec.rejectionReason || null,
-            notes: rec.notes || null,
-            correctionReason: rec.correctionReason || null,
-            branchId: rec.branchId || null,
-            isArchived: !!rec.isArchived,
-            createdAt: rec.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
-            updatedAt: rec.updatedAt || (/* @__PURE__ */ new Date()).toISOString()
-          });
-        }
-      });
-    }
-  } catch (e) {
-    console.warn("[SUPABASE ATTENDANCE PREFETCH WARN]", e);
-  }
-  isInitialized3 = true;
-  saveLocalFile3(ATTENDANCE_FILE, Array.from(attendanceCache.values()));
-}
-function syncAttendanceDisk() {
-  saveLocalFile3(ATTENDANCE_FILE, Array.from(attendanceCache.values()));
-}
-function syncAuditDisk() {
-  saveLocalFile3(AUDIT_FILE, auditCache);
-}
-async function trySupabaseUpsert(record) {
-  try {
-    await supabaseAdmin.from("Attendance").upsert({
-      id: record.id,
-      userId: record.userId,
-      date: record.date,
-      status: record.status,
-      markedById: record.markedById,
-      markedByName: record.markedByName,
-      markedByRole: record.markedByRole,
-      markedAt: record.markedAt,
-      method: record.method,
-      requestStatus: record.requestStatus,
-      respondedAt: record.respondedAt,
-      rejectionReason: record.rejectionReason,
-      notes: record.notes,
-      branchId: record.branchId,
-      isArchived: record.isArchived,
-      updatedAt: record.updatedAt
-    });
-  } catch (e) {
-  }
-}
-async function trySupabaseDelete(recordId) {
-  try {
-    await supabaseAdmin.from("Attendance").delete().eq("id", recordId);
-  } catch (e) {
+    console.warn("[ATTENDANCE AUDIT LOG INSERT WARN]", err);
   }
 }
 async function getAuthorizedStaffList() {
@@ -8416,54 +8331,55 @@ function getNepalBusinessTime() {
   };
 }
 async function getAllAttendanceRecords(filters) {
-  await initAttendanceStorage();
-  let records = Array.from(attendanceCache.values()).filter((r) => !r.isArchived);
+  let query = supabaseAdmin.from("Attendance").select("*").eq("isArchived", false);
   if (filters?.date) {
-    records = records.filter((r) => r.date === filters.date);
+    query = query.eq("date", filters.date);
   }
   if (filters?.month) {
-    records = records.filter((r) => r.date.startsWith(filters.month));
+    query = query.like("date", `${filters.month}%`);
   }
   if (filters?.userId) {
-    records = records.filter((r) => r.userId === filters.userId);
+    query = query.eq("userId", filters.userId);
   }
   if (filters?.status && filters.status !== "ALL") {
-    records = records.filter((r) => r.status === filters.status);
+    query = query.eq("status", filters.status);
   }
-  records.sort((a, b) => {
-    if (b.date !== a.date) return b.date.localeCompare(a.date);
-    return (b.markedAt || "").localeCompare(a.markedAt || "");
-  });
-  return records;
+  query = query.order("date", { ascending: false }).order("markedAt", { ascending: false });
+  const { data, error } = await query;
+  if (error) {
+    console.error("[SUPABASE ATTENDANCE FETCH ERROR]", error);
+    throw new Error(`Failed to fetch attendance records: ${error.message}`);
+  }
+  return (data || []).map(formatAttendanceRecord);
 }
 async function getAttendanceRecordById(id) {
-  await initAttendanceStorage();
-  return attendanceCache.get(id) || null;
+  const { data, error } = await supabaseAdmin.from("Attendance").select("*").eq("id", id).maybeSingle();
+  if (error) {
+    console.error("[SUPABASE ATTENDANCE BY ID ERROR]", error);
+    return null;
+  }
+  return data ? formatAttendanceRecord(data) : null;
 }
 async function getAttendanceRecordByUserAndDate(userId, date) {
-  await initAttendanceStorage();
-  for (const rec of attendanceCache.values()) {
-    if (rec.userId === userId && rec.date === date && !rec.isArchived) {
-      return rec;
-    }
+  const { data, error } = await supabaseAdmin.from("Attendance").select("*").eq("userId", userId).eq("date", date).eq("isArchived", false).maybeSingle();
+  if (error) {
+    console.error("[SUPABASE ATTENDANCE BY USER AND DATE ERROR]", error);
+    return null;
   }
-  return null;
+  return data ? formatAttendanceRecord(data) : null;
 }
 async function upsertAttendanceRecord(data, actor) {
-  await initAttendanceStorage();
   const existing = await getAttendanceRecordByUserAndDate(data.userId, data.date);
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
   const time = getNepalBusinessTime();
   let finalRecord;
   if (existing) {
     const prevStatus = existing.status;
-    finalRecord = {
-      ...existing,
+    const updatePayload = {
       status: data.status,
       checkInTime: data.checkInTime !== void 0 ? data.checkInTime : existing.checkInTime || time.timeString,
       checkOutTime: data.checkOutTime !== void 0 ? data.checkOutTime : existing.checkOutTime,
       notes: data.notes !== void 0 ? data.notes : existing.notes,
-      correctionReason: data.correctionReason !== void 0 ? data.correctionReason : existing.correctionReason,
       method: data.method || existing.method,
       requestStatus: data.requestStatus || existing.requestStatus,
       rejectionReason: data.rejectionReason !== void 0 ? data.rejectionReason : existing.rejectionReason,
@@ -8472,7 +8388,12 @@ async function upsertAttendanceRecord(data, actor) {
       markedByRole: actor.role,
       updatedAt: nowIso
     };
-    attendanceCache.set(finalRecord.id, finalRecord);
+    const { data: updated, error } = await supabaseAdmin.from("Attendance").update(updatePayload).eq("id", existing.id).select("*").single();
+    if (error) {
+      console.error("[SUPABASE ATTENDANCE UPDATE ERROR]", error);
+      throw new Error(`Failed to update attendance record: ${error.message}`);
+    }
+    finalRecord = formatAttendanceRecord(updated);
     const auditLog = {
       id: uuidv412(),
       attendanceId: finalRecord.id,
@@ -8485,12 +8406,15 @@ async function upsertAttendanceRecord(data, actor) {
       reason: data.correctionReason || data.notes || "Attendance record modified",
       createdAt: nowIso
     };
-    auditCache.unshift(auditLog);
-    syncAuditDisk();
-    await broadcastServerChange("AttendanceAuditLog", "CREATE", auditLog.id, auditLog);
+    writeAuditLogSafe(auditLog);
+    broadcastServerChange("AttendanceAuditLog", "CREATE", auditLog.id, auditLog).catch(() => {
+    });
+    broadcastServerChange("Attendance", "UPDATE", finalRecord.id, finalRecord).catch(() => {
+    });
   } else {
-    finalRecord = {
-      id: uuidv412(),
+    const newId = uuidv412();
+    const insertPayload = {
+      id: newId,
       userId: data.userId,
       date: data.date,
       status: data.status,
@@ -8504,13 +8428,17 @@ async function upsertAttendanceRecord(data, actor) {
       requestStatus: data.requestStatus || "DIRECT",
       rejectionReason: data.rejectionReason || null,
       notes: data.notes || null,
-      correctionReason: data.correctionReason || null,
       branchId: data.branchId || null,
       isArchived: false,
       createdAt: nowIso,
       updatedAt: nowIso
     };
-    attendanceCache.set(finalRecord.id, finalRecord);
+    const { data: created, error } = await supabaseAdmin.from("Attendance").insert([insertPayload]).select("*").single();
+    if (error) {
+      console.error("[SUPABASE ATTENDANCE INSERT ERROR]", error);
+      throw new Error(`Failed to insert attendance record: ${error.message}`);
+    }
+    finalRecord = formatAttendanceRecord(created);
     const auditLog = {
       id: uuidv412(),
       attendanceId: finalRecord.id,
@@ -8523,13 +8451,12 @@ async function upsertAttendanceRecord(data, actor) {
       reason: data.notes || `Attendance marked as ${data.status}`,
       createdAt: nowIso
     };
-    auditCache.unshift(auditLog);
-    syncAuditDisk();
-    await broadcastServerChange("AttendanceAuditLog", "CREATE", auditLog.id, auditLog);
+    writeAuditLogSafe(auditLog);
+    broadcastServerChange("AttendanceAuditLog", "CREATE", auditLog.id, auditLog).catch(() => {
+    });
+    broadcastServerChange("Attendance", "CREATE", finalRecord.id, finalRecord).catch(() => {
+    });
   }
-  syncAttendanceDisk();
-  trySupabaseUpsert(finalRecord);
-  await broadcastServerChange("Attendance", existing ? "UPDATE" : "CREATE", finalRecord.id, finalRecord);
   return finalRecord;
 }
 async function bulkUpsertAttendance(items, actor) {
@@ -8541,12 +8468,13 @@ async function bulkUpsertAttendance(items, actor) {
   return results;
 }
 async function deleteAttendanceRecord(id, actor) {
-  await initAttendanceStorage();
-  const existing = attendanceCache.get(id);
+  const existing = await getAttendanceRecordById(id);
   if (!existing) return false;
-  attendanceCache.delete(id);
-  syncAttendanceDisk();
-  trySupabaseDelete(id);
+  const { error } = await supabaseAdmin.from("Attendance").delete().eq("id", id);
+  if (error) {
+    console.error("[SUPABASE ATTENDANCE DELETE ERROR]", error);
+    throw new Error(`Failed to delete attendance record: ${error.message}`);
+  }
   const auditLog = {
     id: uuidv412(),
     attendanceId: id,
@@ -8559,48 +8487,53 @@ async function deleteAttendanceRecord(id, actor) {
     reason: "Record deleted by administrator",
     createdAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  auditCache.unshift(auditLog);
-  syncAuditDisk();
-  await broadcastServerChange("Attendance", "DELETE", id, { id });
+  writeAuditLogSafe(auditLog);
+  broadcastServerChange("Attendance", "DELETE", id, { id }).catch(() => {
+  });
   return true;
 }
 async function purgeUserAttendance(userId, actor) {
-  await initAttendanceStorage();
-  let count = 0;
-  for (const [id, rec] of attendanceCache.entries()) {
-    if (rec.userId === userId) {
-      attendanceCache.delete(id);
-      trySupabaseDelete(id);
-      count++;
-    }
+  const { data: toDelete, error: selectErr } = await supabaseAdmin.from("Attendance").select("id").eq("userId", userId);
+  if (selectErr) {
+    console.error("[SUPABASE PURGE SELECT ERROR]", selectErr);
+    throw selectErr;
   }
-  if (count > 0) {
-    syncAttendanceDisk();
-    const auditLog = {
-      id: uuidv412(),
-      attendanceId: `PURGE_${userId}`,
-      action: "PURGED",
-      performedById: actor.id,
-      performedByName: actor.name,
-      performedByRole: actor.role,
-      reason: `Purged ${count} attendance records for user ${userId}`,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    auditCache.unshift(auditLog);
-    syncAuditDisk();
+  const count = toDelete?.length || 0;
+  if (count === 0) return 0;
+  const { error: delErr } = await supabaseAdmin.from("Attendance").delete().eq("userId", userId);
+  if (delErr) {
+    console.error("[SUPABASE PURGE DELETE ERROR]", delErr);
+    throw delErr;
   }
+  const auditLog = {
+    id: uuidv412(),
+    attendanceId: `PURGE_${userId}`,
+    action: "PURGED",
+    performedById: actor.id,
+    performedByName: actor.name,
+    performedByRole: actor.role,
+    reason: `Purged ${count} attendance records for user ${userId}`,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  writeAuditLogSafe(auditLog);
+  broadcastServerChange("Attendance", "DELETE", `PURGE_${userId}`, { userId }).catch(() => {
+  });
   return count;
 }
 async function getAttendanceAuditLogs(filters) {
-  await initAttendanceStorage();
-  let logs = [...auditCache];
+  let query = supabaseAdmin.from("AttendanceAuditLog").select("*").order("createdAt", { ascending: false });
   if (filters?.attendanceId) {
-    logs = logs.filter((l) => l.attendanceId === filters.attendanceId);
+    query = query.eq("attendanceId", filters.attendanceId);
   }
   if (filters?.limit) {
-    logs = logs.slice(0, filters.limit);
+    query = query.limit(filters.limit);
   }
-  return logs;
+  const { data, error } = await query;
+  if (error) {
+    console.error("[SUPABASE ATTENDANCE AUDIT LOGS ERROR]", error);
+    return [];
+  }
+  return (data || []).map(formatAuditRecord);
 }
 
 // api/_server/routes/attendance.ts
@@ -9548,26 +9481,26 @@ var attendance_default = router9;
 import { Router as Router10 } from "express";
 
 // api/_server/services/damageStorage.ts
-import fs4 from "fs";
-import path4 from "path";
+import fs2 from "fs";
+import path2 from "path";
 import { v4 as uuidv413 } from "uuid";
-var DATA_DIR4 = path4.join(process.cwd(), "data");
-var DAMAGE_FILE = path4.join(DATA_DIR4, "repair_damage_records.json");
-var AUDIT_FILE2 = path4.join(DATA_DIR4, "repair_damage_audit_logs.json");
-if (!fs4.existsSync(DATA_DIR4)) {
+var DATA_DIR2 = path2.join(process.cwd(), "data");
+var DAMAGE_FILE = path2.join(DATA_DIR2, "repair_damage_records.json");
+var AUDIT_FILE = path2.join(DATA_DIR2, "repair_damage_audit_logs.json");
+if (!fs2.existsSync(DATA_DIR2)) {
   try {
-    fs4.mkdirSync(DATA_DIR4, { recursive: true });
+    fs2.mkdirSync(DATA_DIR2, { recursive: true });
   } catch (e) {
     console.warn("[STORAGE DIR INIT WARN]", e);
   }
 }
 var damageCache = /* @__PURE__ */ new Map();
-var auditCache2 = [];
-var isInitialized4 = false;
-function loadLocalFile4(filePath, defaultValue) {
+var auditCache = [];
+var isInitialized2 = false;
+function loadLocalFile2(filePath, defaultValue) {
   try {
-    if (fs4.existsSync(filePath)) {
-      const content = fs4.readFileSync(filePath, "utf-8");
+    if (fs2.existsSync(filePath)) {
+      const content = fs2.readFileSync(filePath, "utf-8");
       return JSON.parse(content);
     }
   } catch (err) {
@@ -9575,13 +9508,14 @@ function loadLocalFile4(filePath, defaultValue) {
   }
   return defaultValue;
 }
-function saveLocalFile4(filePath, data) {
+function saveLocalFile2(filePath, data) {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) return;
   try {
     const tempPath = `${filePath}.tmp.${Date.now()}`;
-    fs4.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
-    fs4.renameSync(tempPath, filePath);
+    fs2.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
+    fs2.renameSync(tempPath, filePath);
   } catch (err) {
-    console.error(`[STORAGE WRITE ERROR: ${filePath}]`, err);
+    console.warn(`[STORAGE LOCAL WRITE WARN: ${filePath}]`, err?.message || err);
   }
 }
 function getNepalDateTime() {
@@ -9603,11 +9537,11 @@ function getNepalDateTime() {
   };
 }
 async function initializeDamageStorage() {
-  if (isInitialized4) return;
-  const localDamages = loadLocalFile4(DAMAGE_FILE, []);
-  const localAudits = loadLocalFile4(AUDIT_FILE2, []);
+  if (isInitialized2) return;
+  const localDamages = loadLocalFile2(DAMAGE_FILE, []);
+  const localAudits = loadLocalFile2(AUDIT_FILE, []);
   localDamages.forEach((d) => damageCache.set(d.id, d));
-  auditCache2 = localAudits;
+  auditCache = localAudits;
   try {
     const { data: supaDamages, error: dErr } = await supabaseAdmin.from("RepairRelatedDamage").select("*").order("createdAt", { ascending: false });
     if (!dErr && supaDamages && supaDamages.length > 0) {
@@ -9618,17 +9552,17 @@ async function initializeDamageStorage() {
           inventoryDeducted: Boolean(d.inventoryDeducted)
         });
       });
-      saveLocalFile4(DAMAGE_FILE, Array.from(damageCache.values()));
+      saveLocalFile2(DAMAGE_FILE, Array.from(damageCache.values()));
     }
     const { data: supaAudits, error: aErr } = await supabaseAdmin.from("RepairRelatedDamageAudit").select("*").order("createdAt", { ascending: false }).limit(500);
     if (!aErr && supaAudits && supaAudits.length > 0) {
-      auditCache2 = supaAudits;
-      saveLocalFile4(AUDIT_FILE2, auditCache2);
+      auditCache = supaAudits;
+      saveLocalFile2(AUDIT_FILE, auditCache);
     }
   } catch (err) {
     console.warn("[SUPABASE DAMAGE SYNC WARN - USING LOCAL CACHE]", err);
   }
-  isInitialized4 = true;
+  isInitialized2 = true;
 }
 async function generateDamageRecordNumber() {
   await initializeDamageStorage();
@@ -9709,7 +9643,7 @@ async function queryDamageRecords(options) {
       data.forEach((d) => {
         damageCache.set(d.id, d);
       });
-      saveLocalFile4(DAMAGE_FILE, Array.from(damageCache.values()));
+      saveLocalFile2(DAMAGE_FILE, Array.from(damageCache.values()));
       return { records: data, total: count ?? data.length };
     }
   } catch (err) {
@@ -9811,7 +9745,7 @@ async function getDamageRecordById(id) {
   }
   const cached = damageCache.get(id);
   if (cached) {
-    const relatedAudits = auditCache2.filter((a) => a.damageRecordId === id);
+    const relatedAudits = auditCache.filter((a) => a.damageRecordId === id);
     return {
       ...cached,
       auditLogs: relatedAudits
@@ -9872,7 +9806,7 @@ async function createDamageRecord(data, actor) {
     }
   };
   damageCache.set(recordId, newRecord);
-  saveLocalFile4(DAMAGE_FILE, Array.from(damageCache.values()));
+  saveLocalFile2(DAMAGE_FILE, Array.from(damageCache.values()));
   const auditId = uuidv413();
   const auditRecord = {
     id: auditId,
@@ -9887,8 +9821,8 @@ async function createDamageRecord(data, actor) {
     notes: data.notes || null,
     createdAt: nptIso
   };
-  auditCache2.unshift(auditRecord);
-  saveLocalFile4(AUDIT_FILE2, auditCache2);
+  auditCache.unshift(auditRecord);
+  saveLocalFile2(AUDIT_FILE, auditCache);
   try {
     const dbPayload = { ...newRecord };
     delete dbPayload.staff;
@@ -9927,7 +9861,7 @@ async function updateDamageRecord(id, updates, actor) {
     updatedAt: nowIso
   };
   damageCache.set(id, updatedRecord);
-  saveLocalFile4(DAMAGE_FILE, Array.from(damageCache.values()));
+  saveLocalFile2(DAMAGE_FILE, Array.from(damageCache.values()));
   const auditId = uuidv413();
   const auditRecord = {
     id: auditId,
@@ -9942,8 +9876,8 @@ async function updateDamageRecord(id, updates, actor) {
     notes: updates.notes || null,
     createdAt: nowIso
   };
-  auditCache2.unshift(auditRecord);
-  saveLocalFile4(AUDIT_FILE2, auditCache2);
+  auditCache.unshift(auditRecord);
+  saveLocalFile2(AUDIT_FILE, auditCache);
   try {
     const dbPayload = { ...updatedRecord };
     delete dbPayload.staff;
@@ -9974,7 +9908,7 @@ async function archiveDamageRecord(id, actor, reason) {
     updatedAt: nowIso
   };
   damageCache.set(id, archivedRecord);
-  saveLocalFile4(DAMAGE_FILE, Array.from(damageCache.values()));
+  saveLocalFile2(DAMAGE_FILE, Array.from(damageCache.values()));
   const auditId = uuidv413();
   const auditRecord = {
     id: auditId,
@@ -9988,8 +9922,8 @@ async function archiveDamageRecord(id, actor, reason) {
     reason: reason || "Record archived by administrator",
     createdAt: nowIso
   };
-  auditCache2.unshift(auditRecord);
-  saveLocalFile4(AUDIT_FILE2, auditCache2);
+  auditCache.unshift(auditRecord);
+  saveLocalFile2(AUDIT_FILE, auditCache);
   try {
     await supabaseAdmin.from("RepairRelatedDamage").update({
       isArchived: true,
@@ -10345,6 +10279,253 @@ var repairDamage_default = router10;
 // api/_server/routes/repairPrices.ts
 import { Router as Router11 } from "express";
 import { v4 as uuidv414 } from "uuid";
+
+// src/lib/warrantyPolicy.ts
+var NON_WARRANTY_CATEGORY_KEYWORDS = [
+  "display",
+  "screen",
+  "glass",
+  "front glass",
+  "back glass",
+  "back panel",
+  "panel",
+  "oled",
+  "lcd",
+  "lining",
+  "laser",
+  "flex",
+  "charging",
+  "charging flex",
+  "speaker",
+  "audio",
+  "earpiece",
+  "camera",
+  "lens",
+  "housing",
+  "body",
+  "motherboard",
+  "ic",
+  "mic",
+  "microphone",
+  "software",
+  "water damage",
+  "cleaning",
+  "face id",
+  "network"
+];
+var THIRD_PARTY_OR_COPY_KEYWORDS = [
+  "market original",
+  "market",
+  "copy",
+  "third-party",
+  "third party",
+  "3rd party",
+  "compatible",
+  "aftermarket",
+  "generic",
+  "high copy",
+  "grade a",
+  "grade b",
+  "gx",
+  "zy",
+  "rj",
+  "jk"
+];
+var ORIGINAL_KEYWORDS = [
+  "original",
+  "orginal",
+  // handle common typo in catalog
+  "genuine",
+  "oem",
+  "apple original",
+  "service center original"
+];
+function checkWarrantyEligibility(service) {
+  if (!service || !service.serviceName) {
+    return {
+      isEligible: false,
+      reason: "Missing service specification",
+      normalizedCategory: "unknown",
+      isBatteryCategory: false,
+      isOriginalPart: false,
+      isThirdPartyOrMarket: false,
+      hasConfiguredPolicy: false
+    };
+  }
+  const rawCat = (service.category || "").trim().toLowerCase();
+  const rawName = (service.serviceName || "").trim().toLowerCase();
+  const rawDesc = (service.description || "").trim().toLowerCase();
+  const rawProblem = (service.problem || "").trim().toLowerCase();
+  const rawNotes = (service.notes || "").trim().toLowerCase();
+  const fullText = `${rawName} ${rawDesc} ${rawProblem} ${rawNotes}`;
+  const isBatteryCategory = rawCat === "battery" || rawCat === "battery replacement";
+  const hasDisqualifyingKeyword = NON_WARRANTY_CATEGORY_KEYWORDS.some(
+    (kw) => rawCat.includes(kw) || rawName.includes(kw)
+  );
+  if (!isBatteryCategory || hasDisqualifyingKeyword) {
+    return {
+      isEligible: false,
+      reason: `Non-battery service category (${rawCat || "unspecified"}). Warranty is restricted to original battery replacement only.`,
+      normalizedCategory: rawCat || "repair",
+      isBatteryCategory: false,
+      isOriginalPart: false,
+      isThirdPartyOrMarket: false,
+      hasConfiguredPolicy: false
+    };
+  }
+  const isThirdPartyOrMarket = THIRD_PARTY_OR_COPY_KEYWORDS.some((kw) => fullText.includes(kw));
+  if (isThirdPartyOrMarket) {
+    return {
+      isEligible: false,
+      reason: "Third-party or market-grade battery replacement. Warranty display is not permitted under MTS Lab policy.",
+      normalizedCategory: "battery",
+      isBatteryCategory: true,
+      isOriginalPart: false,
+      isThirdPartyOrMarket: true,
+      hasConfiguredPolicy: false
+    };
+  }
+  const isOriginalPart = ORIGINAL_KEYWORDS.some((kw) => rawName.includes(kw) || rawDesc.includes(kw));
+  if (!isOriginalPart) {
+    return {
+      isEligible: false,
+      reason: "Ambiguous battery grade. Must be explicitly certified as original battery replacement.",
+      normalizedCategory: "battery",
+      isBatteryCategory: true,
+      isOriginalPart: false,
+      isThirdPartyOrMarket: false,
+      hasConfiguredPolicy: false
+    };
+  }
+  let verifiedDuration;
+  let policyDetails;
+  if (/\b(2[\s-]?(?:years?|yrs?)|24[\s-]?(?:months?|mos?))\b/i.test(fullText)) {
+    verifiedDuration = "2-Year Official Battery Warranty";
+    policyDetails = "24-month battery performance and health certificate";
+  } else if (/\b(1[\s-]?(?:year|yr)|12[\s-]?(?:months?|mos?))\b/i.test(fullText)) {
+    verifiedDuration = "1-Year Official Battery Warranty";
+    policyDetails = "12-month battery performance and health certificate";
+  } else if (/\b(6[\s-]?(?:months?|mos?))\b/i.test(fullText)) {
+    verifiedDuration = "6-Month Official Battery Warranty";
+    policyDetails = "6-month battery performance and health certificate";
+  }
+  const hasConfiguredPolicy = Boolean(verifiedDuration);
+  if (!hasConfiguredPolicy) {
+    return {
+      isEligible: false,
+      reason: "Original battery replacement without a confirmed warranty policy duration. Defaulting to quality testing claims.",
+      normalizedCategory: "battery",
+      isBatteryCategory: true,
+      isOriginalPart: true,
+      isThirdPartyOrMarket: false,
+      hasConfiguredPolicy: false
+    };
+  }
+  return {
+    isEligible: true,
+    reason: "Verified original battery replacement with confirmed warranty policy.",
+    normalizedCategory: "battery",
+    isBatteryCategory: true,
+    isOriginalPart: true,
+    isThirdPartyOrMarket: false,
+    hasConfiguredPolicy: true,
+    verifiedDuration,
+    policyDetails
+  };
+}
+function getServiceFaqSubtitle(service) {
+  const eligibility = checkWarrantyEligibility(service);
+  if (eligibility.isEligible && eligibility.verifiedDuration) {
+    return "Verified laboratory turnaround, pricing, quality testing, and warranty policies";
+  }
+  return "Verified laboratory turnaround, pricing, and quality testing policies";
+}
+function generateContextAwareDirectAnswer(service, options) {
+  const { device, priceStr, timeStr, problemStr } = options;
+  const eligibility = checkWarrantyEligibility(service);
+  if (eligibility.isEligible && eligibility.verifiedDuration) {
+    return `${service.serviceName} for ${device} is performed at MTS Lab in Pakosadak, New Road, Kathmandu. The verified cost is ${priceStr}.${timeStr}${problemStr} Genuine battery cells, battery health calibration, and ${eligibility.verifiedDuration} coverage are provided.`;
+  }
+  return `${service.serviceName} for ${device} is performed at MTS Lab in Pakosadak, New Road, Kathmandu. The verified cost is ${priceStr}.${timeStr}${problemStr} Genuine quality parts, laser calibration, and component quality verification are provided.`;
+}
+function generateContextAwareFaqs(service, options) {
+  const { device, priceStr, estTime } = options;
+  const eligibility = checkWarrantyEligibility(service);
+  const baseFaqs = [
+    {
+      question: `How much does ${service.serviceName} for ${device} cost at MTS Lab?`,
+      answer: `The verified laboratory fee for ${service.serviceName} on ${device} at MTS Lab Kathmandu is ${priceStr}. Free multi-point diagnostic inspection is included.`
+    },
+    {
+      question: `How long does ${service.serviceName} for ${device} take?`,
+      answer: `Estimated service turnaround time is ${estTime} at our New Road Kathmandu laboratory under standard queue conditions.`
+    },
+    {
+      question: `Where is MTS Lab located for ${device} hardware repairs?`,
+      answer: `MTS Lab is located at Pakosadak, New Road (directly opposite the back gate of People's Plaza), Kathmandu 44600, Nepal. Call 9869276668 or 015364307 for directions.`
+    }
+  ];
+  if (eligibility.isEligible && eligibility.verifiedDuration) {
+    baseFaqs.push({
+      question: `What warranty coverage is provided for ${service.serviceName}?`,
+      answer: `MTS Lab provides our verified ${eligibility.verifiedDuration} for this original battery replacement, including battery health calibration, serial card registration, and laboratory quality testing.`
+    });
+  } else {
+    baseFaqs.push({
+      question: `Does MTS Lab provide testing and quality verification for ${service.serviceName}?`,
+      answer: `Yes, the repair undergoes appropriate pre- and post-service diagnostic checks, component testing, and quality verification.`
+    });
+  }
+  return baseFaqs;
+}
+function sanitizeServiceDescription(service, description) {
+  if (!description) return "";
+  const text = String(description).trim();
+  const eligibility = checkWarrantyEligibility(service);
+  if (eligibility.isEligible) {
+    return text;
+  }
+  let sanitized = text;
+  sanitized = sanitized.replace(
+    /,\s*([^,]+),\s+and\s+(?:applicable\s+)?warranty\s+(?:terms|coverage|policies)\s+before\s+repair\./gi,
+    ", and $1 before repair."
+  );
+  sanitized = sanitized.replace(
+    /,?\s*and\s+applicable\s+warranty\s+terms\s+before\s+repair\./gi,
+    " before repair."
+  );
+  sanitized = sanitized.replace(
+    /,?\s*and\s+warranty\s+terms\s+before\s+repair\./gi,
+    " before repair."
+  );
+  sanitized = sanitized.replace(
+    /,?\s*and\s+warranty\s+coverage\s+before\s+repair\./gi,
+    " before repair."
+  );
+  sanitized = sanitized.replace(
+    /Please\s+confirm\s+battery\s+authenticity,\s+availability,\s+and\s+warranty\s+coverage\s+with\s+our\s+team\s+before\s+repair\./gi,
+    "Please confirm battery authenticity and availability with our team before repair."
+  );
+  sanitized = sanitized.replace(
+    /We\s+recommend\s+confirming\s+battery\s+specifications,\s+availability,\s+and\s+warranty\s+coverage\s+before\s+repair\./gi,
+    "We recommend confirming battery specifications and availability before repair."
+  );
+  sanitized = sanitized.replace(/Warranty:\s*[^.\n]+(?:at\s+the\s+time\s+of\s+service|terms)?[.\n]?/gi, "");
+  sanitized = sanitized.replace(/Includes\s+\d+[\s-]?(?:month|year|day)s?\s+warranty,?\s*/gi, "Includes ");
+  sanitized = sanitized.replace(/with\s+dedicated\s+warranty\s+coverage/gi, "with dedicated quality verification");
+  sanitized = sanitized.replace(/and\s+warranty\s+coverage\s+are\s+provided/gi, "and quality verification are provided");
+  sanitized = sanitized.replace(/,\s*laser\s+calibration,\s+and\s+warranty\s+coverage/gi, ", laser calibration, and component testing");
+  sanitized = sanitized.replace(/\b(?:dedicated\s+)?warranty\s+coverage\b/gi, "quality verification");
+  sanitized = sanitized.replace(/\bguaranteed\s+warranty\b/gi, "quality testing");
+  sanitized = sanitized.replace(/\bwarranty\s+policy\b/gi, "quality policy");
+  sanitized = sanitized.replace(/\b(?:under|with)\s+warranty\b/gi, "with quality verification");
+  sanitized = sanitized.replace(/\bwarranty\s+(?:period|duration|guarantee|claim|terms|details)\b/gi, "service verification");
+  sanitized = sanitized.replace(/\bwarrant(?:y|ies)\b/gi, "quality verification");
+  sanitized = sanitized.replace(/[ \t]{2,}/g, " ").replace(/\s*,\s*\./g, ".").replace(/\n{3,}/g, "\n\n").trim();
+  return sanitized;
+}
+
+// api/_server/routes/repairPrices.ts
 var router11 = Router11();
 var customRepairFoldersRegistry = /* @__PURE__ */ new Map();
 var inMemoryPricesOverlay = /* @__PURE__ */ new Map();
@@ -10419,6 +10600,12 @@ function parseServiceItem(item, isPublic = false) {
   if (isPublic) {
     delete result.createdBy;
     delete result.updatedBy;
+    if (result.description) {
+      result.description = sanitizeServiceDescription(result, result.description);
+    }
+    if (result.problem) {
+      result.problem = sanitizeServiceDescription(result, result.problem);
+    }
   }
   return result;
 }
@@ -10892,8 +11079,8 @@ var repairPrices_default = router11;
 // api/_server/routes/slides.ts
 import { Router as Router12 } from "express";
 import multer3 from "multer";
-import fs6 from "fs";
-import path6 from "path";
+import fs4 from "fs";
+import path4 from "path";
 
 // api/_server/services/cloudinaryService.ts
 import { v2 as cloudinary } from "cloudinary";
@@ -11115,14 +11302,56 @@ async function deleteFromCloudinary(publicIdOrUrl, resourceType = "image") {
 }
 
 // api/_server/services/slidesStorage.ts
-import fs5 from "fs";
-import path5 from "path";
+import fs3 from "fs";
+import path3 from "path";
 import { v4 as uuidv415 } from "uuid";
-var DATA_DIR5 = path5.join(process.cwd(), "data");
-var SLIDES_FILE = path5.join(DATA_DIR5, "home_slides.json");
-if (!fs5.existsSync(DATA_DIR5)) {
+function deriveSlideDefaults(slide) {
+  const title = (slide.title || "").toLowerCase();
+  let defaultCategory = "MTS LAB \u2014 SMARTPHONE REPAIR";
+  let defaultIcon = "wrench";
+  let defaultFeatures = ["24-Point Tested", "60-Min Express Fix", "Certified Techs"];
+  if (title.includes("battery") || title.includes("port") || title.includes("charging")) {
+    defaultCategory = "MTS LAB \u2014 BATTERY & CHARGING";
+    defaultIcon = "battery";
+    defaultFeatures = ["100% Health restored", "1-Year Warranty", "Fast Charge Tested"];
+  } else if (title.includes("front glass") || title.includes("oca")) {
+    defaultCategory = "MTS LAB \u2014 SMARTPHONE REPAIR";
+    defaultIcon = "wrench";
+    defaultFeatures = ["24-Point Tested", "60-Min Express Fix", "Certified Techs"];
+  } else if (title.includes("display") || title.includes("screen")) {
+    defaultCategory = "MTS LAB \u2014 120HZ AMOLED DISPLAY";
+    defaultIcon = "screen";
+    defaultFeatures = ["True Tone Retained", "120Hz ProMotion", "Zero Dead Pixels"];
+  } else if (title.includes("back") || title.includes("panel") || title.includes("laser")) {
+    defaultCategory = "MTS LAB \u2014 LASER HOUSING RESTORATION";
+    defaultIcon = "layers";
+    defaultFeatures = ["High-Precision Laser", "Original Magnet Array", "Factory Finish"];
+  } else if (title.includes("motherboard") || title.includes("ic") || title.includes("chip")) {
+    defaultCategory = "MTS LAB \u2014 MASTER IC REPAIR";
+    defaultIcon = "cpu";
+    defaultFeatures = ["Micro-Soldering", "Schematic Traced", "Component Level"];
+  }
+  let finalFeatures = defaultFeatures;
+  if (Array.isArray(slide.features) && slide.features.length > 0) {
+    finalFeatures = slide.features.filter(Boolean);
+  } else if (typeof slide.features === "string" && slide.features.trim()) {
+    finalFeatures = slide.features.includes(",") ? slide.features.split(",").map((f) => f.trim()).filter(Boolean) : [slide.features.trim()];
+  }
+  return {
+    category: slide.category || defaultCategory,
+    badgeIcon: slide.badgeIcon || defaultIcon,
+    features: finalFeatures,
+    buttonSecondaryText: slide.buttonSecondaryText || "Track Repair Status",
+    buttonSecondaryLink: slide.buttonSecondaryLink || "/track",
+    focalPoint: slide.focalPoint || "center",
+    overlayIntensity: slide.overlayIntensity || "heavy"
+  };
+}
+var DATA_DIR3 = path3.join(process.cwd(), "data");
+var SLIDES_FILE = path3.join(DATA_DIR3, "home_slides.json");
+if (!fs3.existsSync(DATA_DIR3)) {
   try {
-    fs5.mkdirSync(DATA_DIR5, { recursive: true });
+    fs3.mkdirSync(DATA_DIR3, { recursive: true });
   } catch (e) {
     console.warn("[STORAGE DIR INIT WARN]", e);
   }
@@ -11131,23 +11360,56 @@ var INITIAL_PRESET_SLIDES = [
   {
     id: "51a6593c-8b46-4b18-ba7f-9fe1eefc7f21",
     title: "Front Glass Change",
+    category: "MTS LAB \u2014 SMARTPHONE REPAIR",
+    badgeIcon: "wrench",
     description: "Specialized outer glass replacement preserving your original AMOLED / OLED display and touch responsiveness.",
     imageUrl: "/assets/images/front_glass_repair_1786719176945.jpg",
+    features: ["24-Point Tested", "60-Min Express Fix", "Certified Techs"],
     buttonText: "Check Repair Price",
     buttonLink: "/services?focus=search&q=Front+Glass",
+    buttonSecondaryText: "Track Repair Status",
+    buttonSecondaryLink: "/track",
+    focalPoint: "center",
+    overlayIntensity: "heavy",
     displayOrder: 1,
     status: "ACTIVE",
     createdAt: "2026-08-18T11:06:14.238Z",
     updatedAt: "2026-10-04T07:27:11.774Z"
   },
   {
+    id: "b4439128-6477-421e-9492-f8c7478ad7e6",
+    title: "Battery & Port Replacement",
+    category: "MTS LAB \u2014 BATTERY & CHARGING",
+    badgeIcon: "battery",
+    description: "OEM high-capacity battery installation with battery health calibration and high-speed charging port replacement.",
+    imageUrl: "/assets/images/phone_repair_lab_1786719222650.jpg",
+    features: ["100% Health restored", "1-Year Warranty", "Fast Charge Tested"],
+    buttonText: "Check Repair Price",
+    buttonLink: "/services?focus=search&q=Battery",
+    buttonSecondaryText: "Track Repair Status",
+    buttonSecondaryLink: "/track",
+    focalPoint: "center",
+    overlayIntensity: "heavy",
+    displayOrder: 2,
+    status: "ACTIVE",
+    createdAt: "2026-08-18T11:06:14.247Z",
+    updatedAt: "2026-10-04T07:27:11.774Z"
+  },
+  {
     id: "fd9650d0-7ecf-4268-972a-205164cddbe4",
     title: "Display Replacement",
+    category: "MTS LAB \u2014 120HZ AMOLED DISPLAY",
+    badgeIcon: "screen",
     description: "100% Genuine original quality screen restoration with True Tone, 120Hz ProMotion, and vibrant clarity.",
     imageUrl: "/assets/images/display_replace_1786719191504.jpg",
+    features: ["True Tone Retained", "120Hz ProMotion", "Zero Dead Pixels"],
     buttonText: "Check Repair Price",
     buttonLink: "/services?focus=search&q=Display",
-    displayOrder: 2,
+    buttonSecondaryText: "Track Repair Status",
+    buttonSecondaryLink: "/track",
+    focalPoint: "center",
+    overlayIntensity: "heavy",
+    displayOrder: 3,
     status: "ACTIVE",
     createdAt: "2026-08-18T11:06:14.242Z",
     updatedAt: "2026-10-04T07:27:11.774Z"
@@ -11155,25 +11417,20 @@ var INITIAL_PRESET_SLIDES = [
   {
     id: "f7b4fc3d-1648-45c0-8bc7-88ce85c13289",
     title: "Back Panel / Back Glass Change",
+    category: "MTS LAB \u2014 LASER HOUSING RESTORATION",
+    badgeIcon: "layers",
     description: "Factory finish laser back panel replacement and frame restoration for Apple, Samsung, and flagship devices.",
-    imageUrl: "/assets/images/back_glass_fix_178671907185.jpg",
+    imageUrl: "/assets/images/back_glass_fix_1786719207185.jpg",
+    features: ["High-Precision Laser", "Original Magnet Array", "Factory Finish"],
     buttonText: "Check Repair Price",
     buttonLink: "/services?focus=search&q=Back+Glass",
-    displayOrder: 3,
-    status: "ACTIVE",
-    createdAt: "2026-08-18T11:06:14.245Z",
-    updatedAt: "2026-10-04T07:27:11.774Z"
-  },
-  {
-    id: "b4439128-6477-421e-9492-f8c7478ad7e6",
-    title: "Professional Smartphone Repair",
-    description: "Advanced IC-level micro-soldering, green/white screen laser line repair, and specialized liquid damage restoration.",
-    imageUrl: "/assets/images/phone_repair_lab_1786719222650.jpg",
-    buttonText: "Check Repair Price",
-    buttonLink: "/services?focus=search",
+    buttonSecondaryText: "Track Repair Status",
+    buttonSecondaryLink: "/track",
+    focalPoint: "center",
+    overlayIntensity: "heavy",
     displayOrder: 4,
     status: "ACTIVE",
-    createdAt: "2026-08-18T11:06:14.247Z",
+    createdAt: "2026-08-18T11:06:14.245Z",
     updatedAt: "2026-10-04T07:27:11.774Z"
   }
 ];
@@ -11182,10 +11439,10 @@ function isPresetAsset(url) {
   if (!url) return false;
   return url.startsWith("/assets/") || url.includes("/assets/images/") || !url.includes("cloudinary.com") && !url.startsWith("http");
 }
-function loadLocalFile5() {
+function loadLocalFile3() {
   try {
-    if (fs5.existsSync(SLIDES_FILE)) {
-      const content = fs5.readFileSync(SLIDES_FILE, "utf-8");
+    if (fs3.existsSync(SLIDES_FILE)) {
+      const content = fs3.readFileSync(SLIDES_FILE, "utf-8");
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed;
@@ -11196,18 +11453,19 @@ function loadLocalFile5() {
   }
   return INITIAL_PRESET_SLIDES;
 }
-function saveLocalFile5(data) {
+function saveLocalFile3(data) {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) return;
   try {
     const tempPath = `${SLIDES_FILE}.tmp.${Date.now()}`;
-    fs5.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
-    fs5.renameSync(tempPath, SLIDES_FILE);
+    fs3.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
+    fs3.renameSync(tempPath, SLIDES_FILE);
   } catch (err) {
-    console.error(`[STORAGE WRITE ERROR: ${SLIDES_FILE}]`, err);
+    console.warn(`[STORAGE LOCAL WRITE WARN: ${SLIDES_FILE}]`, err?.message || err);
   }
 }
 async function initializeSlidesStorage() {
   if (slidesCache.size === 0) {
-    const local = loadLocalFile5();
+    const local = loadLocalFile3();
     local.forEach((s) => slidesCache.set(s.id, s));
   }
 }
@@ -11220,24 +11478,46 @@ async function getSlides(onlyActive = false) {
     }
     const { data: supaSlides, error } = await query;
     if (!error && Array.isArray(supaSlides)) {
-      const normalized = supaSlides.map((s) => ({
-        id: String(s.id),
-        title: String(s.title || ""),
-        description: s.description ? String(s.description) : null,
-        imageUrl: String(s.imageUrl || ""),
-        buttonText: s.buttonText ? String(s.buttonText) : "Check Repair Price",
-        buttonLink: s.buttonLink ? String(s.buttonLink) : "/services?focus=search",
-        displayOrder: Number(s.displayOrder) || 1,
-        status: s.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
-        createdBy: s.createdBy || null,
-        updatedBy: s.updatedBy || null,
-        createdAt: s.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
-        updatedAt: s.updatedAt || (/* @__PURE__ */ new Date()).toISOString()
-      }));
+      const localMap = new Map(loadLocalFile3().map((s) => [s.id, s]));
+      const normalized = supaSlides.map((s) => {
+        const local = localMap.get(String(s.id));
+        const derived = deriveSlideDefaults({
+          title: s.title,
+          category: local?.category,
+          badgeIcon: local?.badgeIcon,
+          features: local?.features,
+          buttonSecondaryText: local?.buttonSecondaryText,
+          buttonSecondaryLink: local?.buttonSecondaryLink,
+          focalPoint: local?.focalPoint,
+          overlayIntensity: local?.overlayIntensity
+        });
+        return {
+          id: String(s.id),
+          title: String(s.title || ""),
+          description: s.description ? String(s.description) : null,
+          imageUrl: String(s.imageUrl || ""),
+          mobileImageUrl: local?.mobileImageUrl || null,
+          category: local?.category || derived.category,
+          badgeIcon: local?.badgeIcon || derived.badgeIcon,
+          features: local?.features || derived.features,
+          buttonText: s.buttonText ? String(s.buttonText) : "Check Repair Price",
+          buttonLink: s.buttonLink ? String(s.buttonLink) : "/services?focus=search",
+          buttonSecondaryText: local?.buttonSecondaryText || derived.buttonSecondaryText,
+          buttonSecondaryLink: local?.buttonSecondaryLink || derived.buttonSecondaryLink,
+          focalPoint: local?.focalPoint || derived.focalPoint,
+          overlayIntensity: local?.overlayIntensity || derived.overlayIntensity,
+          displayOrder: Number(s.displayOrder) || 1,
+          status: s.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+          createdBy: s.createdBy || null,
+          updatedBy: s.updatedBy || null,
+          createdAt: s.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+          updatedAt: s.updatedAt || (/* @__PURE__ */ new Date()).toISOString()
+        };
+      });
       if (!onlyActive) {
         slidesCache.clear();
         normalized.forEach((s) => slidesCache.set(s.id, s));
-        saveLocalFile5(normalized);
+        saveLocalFile3(normalized);
       }
       return normalized;
     } else if (error) {
@@ -11248,7 +11528,7 @@ async function getSlides(onlyActive = false) {
   }
   let list = Array.from(slidesCache.values());
   if (list.length === 0) {
-    list = loadLocalFile5();
+    list = loadLocalFile3();
     list.forEach((s) => slidesCache.set(s.id, s));
   }
   if (onlyActive) {
@@ -11263,13 +11543,32 @@ async function getSlideById(id) {
   try {
     const { data, error } = await supabaseAdmin.from("HomeSlide").select("*").eq("id", id).maybeSingle();
     if (!error && data) {
+      const local = slidesCache.get(id) || loadLocalFile3().find((s) => s.id === id);
+      const derived = deriveSlideDefaults({
+        title: data.title,
+        category: local?.category,
+        badgeIcon: local?.badgeIcon,
+        features: local?.features,
+        buttonSecondaryText: local?.buttonSecondaryText,
+        buttonSecondaryLink: local?.buttonSecondaryLink,
+        focalPoint: local?.focalPoint,
+        overlayIntensity: local?.overlayIntensity
+      });
       const record = {
         id: String(data.id),
         title: String(data.title || ""),
         description: data.description ? String(data.description) : null,
         imageUrl: String(data.imageUrl || ""),
+        mobileImageUrl: local?.mobileImageUrl || null,
+        category: local?.category || derived.category,
+        badgeIcon: local?.badgeIcon || derived.badgeIcon,
+        features: local?.features || derived.features,
         buttonText: data.buttonText ? String(data.buttonText) : "Check Repair Price",
         buttonLink: data.buttonLink ? String(data.buttonLink) : "/services?focus=search",
+        buttonSecondaryText: local?.buttonSecondaryText || derived.buttonSecondaryText,
+        buttonSecondaryLink: local?.buttonSecondaryLink || derived.buttonSecondaryLink,
+        focalPoint: local?.focalPoint || derived.focalPoint,
+        overlayIntensity: local?.overlayIntensity || derived.overlayIntensity,
         displayOrder: Number(data.displayOrder) || 1,
         status: data.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
         createdBy: data.createdBy || null,
@@ -11285,7 +11584,7 @@ async function getSlideById(id) {
   }
   const cached = slidesCache.get(id);
   if (cached) return cached;
-  const localList = loadLocalFile5();
+  const localList = loadLocalFile3();
   const found = localList.find((s) => s.id === id);
   if (found) {
     slidesCache.set(found.id, found);
@@ -11297,13 +11596,22 @@ async function createSlide(slideData, userId) {
   await initializeSlidesStorage();
   const id = slideData.id || uuidv415();
   const now = (/* @__PURE__ */ new Date()).toISOString();
+  const derived = deriveSlideDefaults(slideData);
   const newSlide = {
     id,
     title: String(slideData.title || "").trim(),
     description: slideData.description ? String(slideData.description).trim() : null,
     imageUrl: String(slideData.imageUrl || "").trim(),
+    mobileImageUrl: slideData.mobileImageUrl ? String(slideData.mobileImageUrl).trim() : null,
+    category: slideData.category ? String(slideData.category).trim() : derived.category,
+    badgeIcon: slideData.badgeIcon || derived.badgeIcon,
+    features: slideData.features || derived.features,
     buttonText: slideData.buttonText ? String(slideData.buttonText).trim() : "Check Repair Price",
     buttonLink: slideData.buttonLink ? String(slideData.buttonLink).trim() : "/services?focus=search",
+    buttonSecondaryText: slideData.buttonSecondaryText ? String(slideData.buttonSecondaryText).trim() : derived.buttonSecondaryText,
+    buttonSecondaryLink: slideData.buttonSecondaryLink ? String(slideData.buttonSecondaryLink).trim() : derived.buttonSecondaryLink,
+    focalPoint: slideData.focalPoint || derived.focalPoint,
+    overlayIntensity: slideData.overlayIntensity || derived.overlayIntensity,
     displayOrder: parseInt(String(slideData.displayOrder || 1), 10) || 1,
     status: slideData.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
     createdBy: userId || null,
@@ -11312,7 +11620,21 @@ async function createSlide(slideData, userId) {
     updatedAt: now
   };
   try {
-    const { error } = await supabaseAdmin.from("HomeSlide").upsert([newSlide]);
+    const supaPayload = {
+      id: newSlide.id,
+      title: newSlide.title,
+      description: newSlide.description,
+      imageUrl: newSlide.imageUrl,
+      buttonText: newSlide.buttonText,
+      buttonLink: newSlide.buttonLink,
+      displayOrder: newSlide.displayOrder,
+      status: newSlide.status,
+      createdBy: newSlide.createdBy,
+      updatedBy: newSlide.updatedBy,
+      createdAt: newSlide.createdAt,
+      updatedAt: newSlide.updatedAt
+    };
+    const { error } = await supabaseAdmin.from("HomeSlide").upsert([supaPayload]);
     if (error) {
       console.error("[SUPABASE SLIDE CREATE ERROR]", error);
     }
@@ -11320,7 +11642,7 @@ async function createSlide(slideData, userId) {
     console.warn("[SUPABASE SLIDE CREATE EXCEPTION]", err?.message || err);
   }
   slidesCache.set(id, newSlide);
-  saveLocalFile5(Array.from(slidesCache.values()));
+  saveLocalFile3(Array.from(slidesCache.values()));
   await broadcastServerChange("HomeSlide", "CREATE", id, newSlide);
   return newSlide;
 }
@@ -11336,8 +11658,16 @@ async function updateSlide(id, updates, userId) {
   if (updates.title !== void 0) sanitizedUpdates.title = String(updates.title).trim();
   if (updates.description !== void 0) sanitizedUpdates.description = updates.description ? String(updates.description).trim() : null;
   if (updates.imageUrl !== void 0) sanitizedUpdates.imageUrl = String(updates.imageUrl).trim();
+  if (updates.mobileImageUrl !== void 0) sanitizedUpdates.mobileImageUrl = updates.mobileImageUrl ? String(updates.mobileImageUrl).trim() : null;
+  if (updates.category !== void 0) sanitizedUpdates.category = updates.category ? String(updates.category).trim() : null;
+  if (updates.badgeIcon !== void 0) sanitizedUpdates.badgeIcon = updates.badgeIcon || null;
+  if (updates.features !== void 0) sanitizedUpdates.features = updates.features;
   if (updates.buttonText !== void 0) sanitizedUpdates.buttonText = updates.buttonText ? String(updates.buttonText).trim() : "Check Repair Price";
   if (updates.buttonLink !== void 0) sanitizedUpdates.buttonLink = updates.buttonLink ? String(updates.buttonLink).trim() : "/services?focus=search";
+  if (updates.buttonSecondaryText !== void 0) sanitizedUpdates.buttonSecondaryText = updates.buttonSecondaryText ? String(updates.buttonSecondaryText).trim() : null;
+  if (updates.buttonSecondaryLink !== void 0) sanitizedUpdates.buttonSecondaryLink = updates.buttonSecondaryLink ? String(updates.buttonSecondaryLink).trim() : null;
+  if (updates.focalPoint !== void 0) sanitizedUpdates.focalPoint = updates.focalPoint;
+  if (updates.overlayIntensity !== void 0) sanitizedUpdates.overlayIntensity = updates.overlayIntensity;
   if (updates.displayOrder !== void 0) sanitizedUpdates.displayOrder = parseInt(String(updates.displayOrder), 10) || 1;
   if (updates.status !== void 0) sanitizedUpdates.status = updates.status === "INACTIVE" ? "INACTIVE" : "ACTIVE";
   const updated = {
@@ -11366,7 +11696,7 @@ async function updateSlide(id, updates, userId) {
     console.warn("[SUPABASE SLIDE UPDATE EXCEPTION]", err?.message || err);
   }
   slidesCache.set(id, updated);
-  saveLocalFile5(Array.from(slidesCache.values()));
+  saveLocalFile3(Array.from(slidesCache.values()));
   if (updates.imageUrl && oldImageUrl && updates.imageUrl !== oldImageUrl && oldImageUrl.includes("cloudinary.com") && !isPresetAsset(oldImageUrl)) {
     if (isCloudinaryConfigured()) {
       try {
@@ -11402,7 +11732,7 @@ async function reorderSlides(items) {
     } catch (_) {
     }
   }
-  saveLocalFile5(Array.from(slidesCache.values()));
+  saveLocalFile3(Array.from(slidesCache.values()));
   await broadcastServerChange("HomeSlide", "UPDATE", "reorder");
 }
 async function deleteSlide(id) {
@@ -11420,7 +11750,7 @@ async function deleteSlide(id) {
     console.warn("[SUPABASE SLIDE DELETE EXCEPTION]", err?.message || err);
   }
   slidesCache.delete(id);
-  saveLocalFile5(Array.from(slidesCache.values()));
+  saveLocalFile3(Array.from(slidesCache.values()));
   if (existing.imageUrl && existing.imageUrl.includes("cloudinary.com") && !isPresetAsset(existing.imageUrl)) {
     if (isCloudinaryConfigured()) {
       try {
@@ -11498,18 +11828,18 @@ router12.post(
             publicId: result.public_id
           });
         }
-        const uploadDir = path6.join(process.cwd(), "public", "assets", "images");
-        if (!fs6.existsSync(uploadDir)) {
-          fs6.mkdirSync(uploadDir, { recursive: true });
+        const uploadDir = path4.join(process.cwd(), "public", "assets", "images");
+        if (!fs4.existsSync(uploadDir)) {
+          fs4.mkdirSync(uploadDir, { recursive: true });
         }
         const safeOriginalName = uploadedFile.originalname.replace(/[^a-zA-Z0-9.-]/g, "_");
         const fileName = `slide_${Date.now()}_${safeOriginalName}`;
-        const filePath = path6.join(uploadDir, fileName);
-        fs6.writeFileSync(filePath, uploadedFile.buffer);
+        const filePath = path4.join(uploadDir, fileName);
+        fs4.writeFileSync(filePath, uploadedFile.buffer);
         try {
-          const generalUploadsDir = path6.join(process.cwd(), "uploads");
-          if (fs6.existsSync(generalUploadsDir)) {
-            fs6.writeFileSync(path6.join(generalUploadsDir, fileName), uploadedFile.buffer);
+          const generalUploadsDir = path4.join(process.cwd(), "uploads");
+          if (fs4.existsSync(generalUploadsDir)) {
+            fs4.writeFileSync(path4.join(generalUploadsDir, fileName), uploadedFile.buffer);
           }
         } catch (_) {
         }
@@ -11534,9 +11864,9 @@ router12.post(
             publicId: result.public_id
           });
         }
-        const uploadDir = path6.join(process.cwd(), "public", "assets", "images");
-        if (!fs6.existsSync(uploadDir)) {
-          fs6.mkdirSync(uploadDir, { recursive: true });
+        const uploadDir = path4.join(process.cwd(), "public", "assets", "images");
+        if (!fs4.existsSync(uploadDir)) {
+          fs4.mkdirSync(uploadDir, { recursive: true });
         }
         const matches = String(base64Data).match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
         let ext = "jpg";
@@ -11551,12 +11881,12 @@ router12.post(
           buffer = Buffer.from(base64Data, "base64");
         }
         const fileName = `slide_${Date.now()}.${ext}`;
-        const filePath = path6.join(uploadDir, fileName);
-        fs6.writeFileSync(filePath, buffer);
+        const filePath = path4.join(uploadDir, fileName);
+        fs4.writeFileSync(filePath, buffer);
         try {
-          const generalUploadsDir = path6.join(process.cwd(), "uploads");
-          if (fs6.existsSync(generalUploadsDir)) {
-            fs6.writeFileSync(path6.join(generalUploadsDir, fileName), buffer);
+          const generalUploadsDir = path4.join(process.cwd(), "uploads");
+          if (fs4.existsSync(generalUploadsDir)) {
+            fs4.writeFileSync(path4.join(generalUploadsDir, fileName), buffer);
           }
         } catch (_) {
         }
@@ -11585,6 +11915,7 @@ router12.post("/", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]), async (req
     }
     const created = await createSlide(
       {
+        ...req.body,
         title,
         description,
         imageUrl,
@@ -13152,14 +13483,14 @@ var revenue_default = router16;
 
 // api/_server/routes/superAdmin.ts
 import { Router as Router17 } from "express";
-import path8 from "path";
-import fs8 from "fs";
+import path6 from "path";
+import fs6 from "fs";
 import multer4 from "multer";
 import { v4 as uuidv418 } from "uuid";
 
 // api/_server/services/systemThemeService.ts
-import fs7 from "fs";
-import path7 from "path";
+import fs5 from "fs";
+import path5 from "path";
 var VALID_THEMES = [
   "light",
   "dark",
@@ -13204,12 +13535,12 @@ var cachedConfig = null;
 function getConfigCandidatePaths() {
   const paths = [];
   try {
-    paths.push(path7.join(process.cwd(), "data", "system_theme.json"));
+    paths.push(path5.join(process.cwd(), "data", "system_theme.json"));
   } catch (_) {
   }
   try {
     const tmpDir = process.env.TEMP || process.env.TMPDIR || "/tmp";
-    paths.push(path7.join(tmpDir, "system_theme.json"));
+    paths.push(path5.join(tmpDir, "system_theme.json"));
   } catch (_) {
   }
   return paths;
@@ -13218,11 +13549,11 @@ function persistToFile(config2) {
   const candidates = getConfigCandidatePaths();
   for (const filePath of candidates) {
     try {
-      const dir = path7.dirname(filePath);
-      if (!fs7.existsSync(dir)) {
-        fs7.mkdirSync(dir, { recursive: true });
+      const dir = path5.dirname(filePath);
+      if (!fs5.existsSync(dir)) {
+        fs5.mkdirSync(dir, { recursive: true });
       }
-      fs7.writeFileSync(filePath, JSON.stringify(config2, null, 2), "utf-8");
+      fs5.writeFileSync(filePath, JSON.stringify(config2, null, 2), "utf-8");
     } catch (_) {
     }
   }
@@ -13231,8 +13562,8 @@ function readFromFile() {
   const candidates = getConfigCandidatePaths();
   for (const filePath of candidates) {
     try {
-      if (fs7.existsSync(filePath)) {
-        const raw = fs7.readFileSync(filePath, "utf-8");
+      if (fs5.existsSync(filePath)) {
+        const raw = fs5.readFileSync(filePath, "utf-8");
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === "object") {
           return parsed;
@@ -13648,48 +13979,48 @@ router17.post(
         });
       }
       const filename = targetConfig.filename;
-      const publicDir = path8.join(process.cwd(), "public", "images", "team");
-      if (!fs8.existsSync(publicDir)) {
-        fs8.mkdirSync(publicDir, { recursive: true });
+      const publicDir = path6.join(process.cwd(), "public", "images", "team");
+      if (!fs6.existsSync(publicDir)) {
+        fs6.mkdirSync(publicDir, { recursive: true });
       }
-      const publicFilePath = path8.join(publicDir, filename);
+      const publicFilePath = path6.join(publicDir, filename);
       const tempFilename = `.${filename}.${Date.now()}-${uuidv418().substring(0, 8)}.tmp`;
-      const tempFilePath = path8.join(publicDir, tempFilename);
+      const tempFilePath = path6.join(publicDir, tempFilename);
       try {
-        fs8.writeFileSync(tempFilePath, fileBuffer);
-        if (!fs8.existsSync(tempFilePath) || fs8.statSync(tempFilePath).size !== fileBuffer.length) {
+        fs6.writeFileSync(tempFilePath, fileBuffer);
+        if (!fs6.existsSync(tempFilePath) || fs6.statSync(tempFilePath).size !== fileBuffer.length) {
           throw new Error("Verification of written temporary image failed.");
         }
-        fs8.renameSync(tempFilePath, publicFilePath);
+        fs6.renameSync(tempFilePath, publicFilePath);
       } catch (writeErr) {
-        if (fs8.existsSync(tempFilePath)) {
+        if (fs6.existsSync(tempFilePath)) {
           try {
-            fs8.unlinkSync(tempFilePath);
+            fs6.unlinkSync(tempFilePath);
           } catch (_) {
           }
         }
         console.error("[LEADERSHIP PHOTO STORAGE ERROR]", writeErr?.message || writeErr);
         return res.status(500).json({ error: "Failed to safely store the new leadership photo." });
       }
-      const distRoot = path8.join(process.cwd(), "dist");
-      if (fs8.existsSync(distRoot)) {
+      const distRoot = path6.join(process.cwd(), "dist");
+      if (fs6.existsSync(distRoot)) {
         try {
-          const distDir = path8.join(distRoot, "images", "team");
-          if (!fs8.existsSync(distDir)) {
-            fs8.mkdirSync(distDir, { recursive: true });
+          const distDir = path6.join(distRoot, "images", "team");
+          if (!fs6.existsSync(distDir)) {
+            fs6.mkdirSync(distDir, { recursive: true });
           }
-          const distFilePath = path8.join(distDir, filename);
-          const distTemp = path8.join(distDir, tempFilename);
-          fs8.writeFileSync(distTemp, fileBuffer);
-          fs8.renameSync(distTemp, distFilePath);
+          const distFilePath = path6.join(distDir, filename);
+          const distTemp = path6.join(distDir, tempFilename);
+          fs6.writeFileSync(distTemp, fileBuffer);
+          fs6.renameSync(distTemp, distFilePath);
         } catch (_) {
         }
       }
-      const assetDir = path8.join(process.cwd(), "src", "assets", "team");
-      if (fs8.existsSync(assetDir)) {
+      const assetDir = path6.join(process.cwd(), "src", "assets", "team");
+      if (fs6.existsSync(assetDir)) {
         try {
-          const assetFilePath = path8.join(assetDir, filename);
-          fs8.writeFileSync(assetFilePath, fileBuffer);
+          const assetFilePath = path6.join(assetDir, filename);
+          fs6.writeFileSync(assetFilePath, fileBuffer);
         } catch (_) {
         }
       }
@@ -13727,7 +14058,12 @@ router17.get("/system-theme", authenticate, authorize(["SUPER_ADMIN", "ADMIN"]),
     const config2 = await getSystemThemeConfigAsync();
     return res.json(config2);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to retrieve system theme settings." });
+    try {
+      const fallback = getSystemThemeConfig();
+      return res.json(fallback);
+    } catch (_) {
+      return res.status(500).json({ error: "Failed to retrieve system theme settings." });
+    }
   }
 });
 router17.post("/system-theme", authenticate, authorize(["SUPER_ADMIN"]), async (req, res) => {
@@ -13794,8 +14130,9 @@ router17.post("/system-theme", authenticate, authorize(["SUPER_ADMIN"]), async (
         role: req.user?.role
       }
     );
+    const validUserId = req.user?.id && typeof req.user.id === "string" && req.user.id.length === 36 ? req.user.id : null;
     await logAudit({
-      userId: req.user?.id || "system",
+      userId: validUserId,
       userEmail: req.user?.email || "superadmin@mtslab.com",
       action: "SUPERADMIN_THEME_UPDATE",
       resource: "SystemTheme",
@@ -14502,8 +14839,8 @@ var security_default = router18;
 // api/_server/routes/upload.ts
 import { Router as Router19 } from "express";
 import multer5 from "multer";
-import fs9 from "fs";
-import path9 from "path";
+import fs7 from "fs";
+import path7 from "path";
 import crypto2 from "crypto";
 var router19 = Router19();
 var ALLOWED_MIME_TYPES = /* @__PURE__ */ new Set([
@@ -14539,17 +14876,17 @@ var upload5 = multer5({
   }
 });
 function saveFileLocally(buffer, originalName, mimeType) {
-  const uploadsDir = path9.join(process.cwd(), "uploads");
-  if (!fs9.existsSync(uploadsDir)) {
+  const uploadsDir = path7.join(process.cwd(), "uploads");
+  if (!fs7.existsSync(uploadsDir)) {
     try {
-      fs9.mkdirSync(uploadsDir, { recursive: true });
+      fs7.mkdirSync(uploadsDir, { recursive: true });
     } catch (_) {
     }
   }
-  const ext = path9.extname(originalName) || (mimeType === "application/pdf" ? ".pdf" : ".jpg");
+  const ext = path7.extname(originalName) || (mimeType === "application/pdf" ? ".pdf" : ".jpg");
   const filename = `${Date.now()}-${crypto2.randomBytes(6).toString("hex")}${ext}`;
-  const filePath = path9.join(uploadsDir, filename);
-  fs9.writeFileSync(filePath, buffer);
+  const filePath = path7.join(uploadsDir, filename);
+  fs7.writeFileSync(filePath, buffer);
   return {
     url: `/uploads/${filename}`,
     secureUrl: `/uploads/${filename}`,
@@ -14560,10 +14897,10 @@ function saveFileLocally(buffer, originalName, mimeType) {
   };
 }
 function saveBase64Locally(base64Data) {
-  const uploadsDir = path9.join(process.cwd(), "uploads");
-  if (!fs9.existsSync(uploadsDir)) {
+  const uploadsDir = path7.join(process.cwd(), "uploads");
+  if (!fs7.existsSync(uploadsDir)) {
     try {
-      fs9.mkdirSync(uploadsDir, { recursive: true });
+      fs7.mkdirSync(uploadsDir, { recursive: true });
     } catch (_) {
     }
   }
@@ -14580,8 +14917,8 @@ function saveBase64Locally(base64Data) {
     buffer = Buffer.from(base64Data, "base64");
   }
   const filename = `${Date.now()}-${crypto2.randomBytes(6).toString("hex")}${ext}`;
-  const filePath = path9.join(uploadsDir, filename);
-  fs9.writeFileSync(filePath, buffer);
+  const filePath = path7.join(uploadsDir, filename);
+  fs7.writeFileSync(filePath, buffer);
   return {
     url: `/uploads/${filename}`,
     secureUrl: `/uploads/${filename}`,
@@ -14978,8 +15315,8 @@ function filterPubliclyTrackableRepairs(repairs, allLogs = [], referenceDate = /
 }
 
 // api/_server/routes/public.ts
-import fs10 from "fs";
-import path10 from "path";
+import fs8 from "fs";
+import path8 from "path";
 import crypto3 from "crypto";
 var router21 = Router21();
 var handlePublicSlides = async (req, res) => {
@@ -15427,24 +15764,24 @@ function checkInquiryRateLimit(ip, phone, messageHash) {
 function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
-var INQUIRIES_FILE = path10.join(process.cwd(), "data", "inquiries.json");
+var INQUIRIES_FILE = path8.join(process.cwd(), "data", "inquiries.json");
 function saveInquiryRecord(inquiry) {
   try {
-    const dataDir = path10.join(process.cwd(), "data");
-    if (!fs10.existsSync(dataDir)) {
-      fs10.mkdirSync(dataDir, { recursive: true });
+    const dataDir = path8.join(process.cwd(), "data");
+    if (!fs8.existsSync(dataDir)) {
+      fs8.mkdirSync(dataDir, { recursive: true });
     }
     let list = [];
-    if (fs10.existsSync(INQUIRIES_FILE)) {
+    if (fs8.existsSync(INQUIRIES_FILE)) {
       try {
-        list = JSON.parse(fs10.readFileSync(INQUIRIES_FILE, "utf8"));
+        list = JSON.parse(fs8.readFileSync(INQUIRIES_FILE, "utf8"));
       } catch {
         list = [];
       }
     }
     list.unshift(inquiry);
     if (list.length > 300) list = list.slice(0, 300);
-    fs10.writeFileSync(INQUIRIES_FILE, JSON.stringify(list, null, 2), "utf8");
+    fs8.writeFileSync(INQUIRIES_FILE, JSON.stringify(list, null, 2), "utf8");
   } catch (err) {
     console.warn("[INQUIRY STORAGE WARN]", err);
   }
@@ -15749,7 +16086,12 @@ var handleGetSystemTheme = async (_req, res) => {
     const themeConfig = await getSystemThemeConfigAsync();
     return res.json(themeConfig);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to read system theme configuration." });
+    try {
+      const fallback = getSystemThemeConfig();
+      return res.json(fallback);
+    } catch (_) {
+      return res.status(500).json({ error: "Failed to read system theme configuration." });
+    }
   }
 };
 router21.get("/system-theme", handleGetSystemTheme);
@@ -15758,8 +16100,8 @@ var public_default = router21;
 
 // api/_server/routes/seo.ts
 import { Router as Router22 } from "express";
-import fs11 from "fs";
-import path11 from "path";
+import fs9 from "fs";
+import path9 from "path";
 
 // src/lib/seo.ts
 var SITE_URL = "https://www.mobiletechnologystation.com.np";
@@ -15888,30 +16230,22 @@ function getServiceDirectAnswer(service) {
   const priceStr = formatNprPrice(service.price, service.priceType);
   const timeStr = service.estimatedTime ? ` Estimated turnaround time is ${service.estimatedTime}.` : "";
   const problem = service.problem ? ` Solves: ${service.problem}.` : "";
-  return `${service.serviceName} for ${device} is performed at MTS Lab in Pakosadak, New Road, Kathmandu. The verified cost is ${priceStr}.${timeStr}${problem} Genuine quality parts, laser calibration, and warranty coverage are provided.`;
+  return generateContextAwareDirectAnswer(service, {
+    device,
+    priceStr,
+    timeStr,
+    problemStr: problem
+  });
 }
 function getServiceFaqs(service) {
   const device = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ""}`.trim();
   const priceStr = formatNprPrice(service.price, service.priceType);
   const estTime = service.estimatedTime || "1 to 2 hours";
-  return [
-    {
-      question: `How much does ${service.serviceName} for ${device} cost at MTS Lab?`,
-      answer: `The verified laboratory fee for ${service.serviceName} on ${device} at MTS Lab Kathmandu is ${priceStr}. Free multi-point diagnostic inspection is included.`
-    },
-    {
-      question: `How long does ${service.serviceName} for ${device} take?`,
-      answer: `Estimated service turnaround time is ${estTime} at our New Road Kathmandu laboratory under standard queue conditions.`
-    },
-    {
-      question: `Where is MTS Lab located for ${device} hardware repairs?`,
-      answer: `MTS Lab is located at Pakosadak, New Road (directly opposite the back gate of People's Plaza), Kathmandu 44600, Nepal. Call 9869276668 or 015364307 for directions.`
-    },
-    {
-      question: `Does MTS Lab provide testing and warranty for ${service.serviceName}?`,
-      answer: `Yes, all repairs undergo pre- and post-repair quality diagnostics, display calibration, and component testing with dedicated warranty coverage.`
-    }
-  ];
+  return generateContextAwareFaqs(service, {
+    device,
+    priceStr,
+    estTime
+  });
 }
 function getLocalBusinessJsonLd() {
   return {
@@ -16106,13 +16440,13 @@ async function getAuthoritativeActiveServices() {
   return parsed;
 }
 function getHtmlTemplate() {
-  const prodPath = path11.join(process.cwd(), "dist", "index.html");
-  if (fs11.existsSync(prodPath)) {
-    return fs11.readFileSync(prodPath, "utf8");
+  const prodPath = path9.join(process.cwd(), "dist", "index.html");
+  if (fs9.existsSync(prodPath)) {
+    return fs9.readFileSync(prodPath, "utf8");
   }
-  const devPath = path11.join(process.cwd(), "index.html");
-  if (fs11.existsSync(devPath)) {
-    return fs11.readFileSync(devPath, "utf8");
+  const devPath = path9.join(process.cwd(), "index.html");
+  if (fs9.existsSync(devPath)) {
+    return fs9.readFileSync(devPath, "utf8");
   }
   throw new Error("HTML template not found");
 }
@@ -16176,9 +16510,9 @@ function getStaticPageLastmod(routePath) {
   const relFile = STATIC_PAGE_FILES[routePath];
   if (relFile) {
     try {
-      const fullPath = path11.join(process.cwd(), relFile);
-      if (fs11.existsSync(fullPath)) {
-        const stat = fs11.statSync(fullPath);
+      const fullPath = path9.join(process.cwd(), relFile);
+      if (fs9.existsSync(fullPath)) {
+        const stat = fs9.statSync(fullPath);
         if (stat.mtime && !isNaN(stat.mtime.getTime())) {
           return stat.mtime.toISOString().split("T")[0];
         }
@@ -16201,16 +16535,16 @@ function getValidW3cDate(val) {
 }
 router22.get("/robots.txt", (req, res) => {
   try {
-    const publicRobots = path11.join(process.cwd(), "public", "robots.txt");
-    if (fs11.existsSync(publicRobots)) {
-      const content = fs11.readFileSync(publicRobots, "utf8");
+    const publicRobots = path9.join(process.cwd(), "public", "robots.txt");
+    if (fs9.existsSync(publicRobots)) {
+      const content = fs9.readFileSync(publicRobots, "utf8");
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
       return res.status(200).send(content);
     }
-    const distRobots = path11.join(process.cwd(), "dist", "robots.txt");
-    if (fs11.existsSync(distRobots)) {
-      const content = fs11.readFileSync(distRobots, "utf8");
+    const distRobots = path9.join(process.cwd(), "dist", "robots.txt");
+    if (fs9.existsSync(distRobots)) {
+      const content = fs9.readFileSync(distRobots, "utf8");
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
       return res.status(200).send(content);
@@ -16419,6 +16753,7 @@ router22.get("/services/:slug", async (req, res) => {
     const canonicalUrl = `${SITE_URL}/services/${reqSlug}`;
     const directAnswer = getServiceDirectAnswer(service);
     const faqs = getServiceFaqs(service);
+    const faqSubtitle = getServiceFaqSubtitle(service);
     const pageJsonLd = getServicePageJsonLd(service, reqSlug);
     const priceDisplay = formatNprPrice(service.price, service.priceType);
     const fullDeviceName = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ""}`.trim();
@@ -16467,7 +16802,8 @@ router22.get("/services/:slug", async (req, res) => {
           ` : ""}
 
           <div style="margin:24px 0; padding-top:16px; border-top:1px solid #e2e8f0;">
-            <h2 style="font-size:20px; font-weight:800; color:#0f172a; margin:0 0 12px 0;">Frequently Asked Questions</h2>
+            <h2 style="font-size:20px; font-weight:800; color:#0f172a; margin:0 0 4px 0;">Frequently Asked Questions</h2>
+            <p style="font-size:13px; color:#64748b; margin:0 0 12px 0;">${escapeHtml2(faqSubtitle)}</p>
             ${faqHtml}
           </div>
 
@@ -16617,18 +16953,18 @@ function createApp() {
   app.use(cookieParser());
   getSystemThemeConfigAsync().catch(() => {
   });
-  const uploadsDir = path12.join(process.cwd(), "uploads");
-  if (!fs12.existsSync(uploadsDir)) {
+  const uploadsDir = path10.join(process.cwd(), "uploads");
+  if (!fs10.existsSync(uploadsDir)) {
     try {
-      fs12.mkdirSync(uploadsDir, { recursive: true });
+      fs10.mkdirSync(uploadsDir, { recursive: true });
     } catch (_) {
     }
   }
   app.use("/uploads", express.static(uploadsDir));
-  const publicAssetsImagesDir = path12.join(process.cwd(), "public", "assets", "images");
-  if (!fs12.existsSync(publicAssetsImagesDir)) {
+  const publicAssetsImagesDir = path10.join(process.cwd(), "public", "assets", "images");
+  if (!fs10.existsSync(publicAssetsImagesDir)) {
     try {
-      fs12.mkdirSync(publicAssetsImagesDir, { recursive: true });
+      fs10.mkdirSync(publicAssetsImagesDir, { recursive: true });
     } catch (_) {
     }
   }

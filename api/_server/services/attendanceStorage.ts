@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { broadcastServerChange } from './realtimeSync';
@@ -41,147 +39,76 @@ export interface AttendanceAuditRecord {
   createdAt: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const ATTENDANCE_FILE = path.join(DATA_DIR, 'attendance_records.json');
-const AUDIT_FILE = path.join(DATA_DIR, 'attendance_audit_logs.json');
-
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
+function safeJsonParse(str: string): any {
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  } catch (e) {
-    console.warn('[STORAGE DIR INIT WARN]', e);
+    return JSON.parse(str);
+  } catch {
+    return str;
   }
 }
 
-// In-Memory caches
-let attendanceCache: Map<string, AttendanceRecord> = new Map();
-let auditCache: AttendanceAuditRecord[] = [];
-let isInitialized = false;
+function formatAttendanceRecord(rec: any): AttendanceRecord {
+  return {
+    id: rec.id,
+    userId: rec.userId,
+    date: rec.date,
+    status: (rec.status as any) || 'PRESENT',
+    checkInTime: rec.checkInTime || rec.markedAt?.slice(11, 19) || null,
+    checkOutTime: rec.checkOutTime || null,
+    markedById: rec.markedById || 'SYSTEM',
+    markedByName: rec.markedByName || 'System',
+    markedByRole: rec.markedByRole || 'ADMIN',
+    markedAt: rec.markedAt || rec.createdAt || new Date().toISOString(),
+    method: (rec.method as any) || 'DIRECT_ADMIN',
+    requestStatus: (rec.requestStatus as any) || 'DIRECT',
+    respondedAt: rec.respondedAt || null,
+    rejectionReason: rec.rejectionReason || null,
+    notes: rec.notes || null,
+    correctionReason: rec.correctionReason || null,
+    branchId: rec.branchId || null,
+    isArchived: Boolean(rec.isArchived),
+    createdAt: rec.createdAt || new Date().toISOString(),
+    updatedAt: rec.updatedAt || new Date().toISOString(),
+  };
+}
 
-function loadLocalFile<T>(filePath: string, defaultValue: T): T {
+function formatAuditRecord(l: any): AttendanceAuditRecord {
+  return {
+    id: l.id,
+    attendanceId: l.attendanceId,
+    action: (l.action as any) || 'UPDATED',
+    performedById: l.performedById,
+    performedByName: l.performedByName || null,
+    performedByRole: l.performedByRole || null,
+    previousStatus: l.previousStatus || null,
+    newStatus: l.newStatus || null,
+    reason: l.reason || null,
+    metadata: typeof l.metadata === 'string' ? safeJsonParse(l.metadata) : (l.metadata || null),
+    createdAt: l.createdAt || new Date().toISOString(),
+  };
+}
+
+async function writeAuditLogSafe(auditLog: any): Promise<void> {
   try {
-    if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(content);
-    }
+    await supabaseAdmin.from('AttendanceAuditLog').insert([auditLog]);
   } catch (err) {
-    console.error(`[STORAGE READ ERROR: ${filePath}]`, err);
-  }
-  return defaultValue;
-}
-
-function saveLocalFile(filePath: string, data: any): void {
-  try {
-    const tempPath = `${filePath}.tmp.${Date.now()}`;
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tempPath, filePath);
-  } catch (err) {
-    console.error(`[STORAGE WRITE ERROR: ${filePath}]`, err);
+    console.warn('[ATTENDANCE AUDIT LOG INSERT WARN]', err);
   }
 }
 
+/**
+ * Initialize Attendance Storage.
+ * In production Supabase PostgreSQL is the authoritative store.
+ * Kept for signature compatibility with existing callers. Zero filesystem side-effects.
+ */
 export async function initAttendanceStorage(): Promise<void> {
-  if (isInitialized) return;
-
-  // Load from local storage first
-  const localAttendance = loadLocalFile<AttendanceRecord[]>(ATTENDANCE_FILE, []);
-  localAttendance.forEach((rec) => {
-    if (rec && rec.id) {
-      attendanceCache.set(rec.id, rec);
-    }
-  });
-
-  const localAudit = loadLocalFile<AttendanceAuditRecord[]>(AUDIT_FILE, []);
-  auditCache = localAudit;
-
-  // Try to load any existing from Supabase
-  try {
-    const { data: remoteData, error } = await supabaseAdmin
-      .from('Attendance')
-      .select('*')
-      .order('date', { ascending: false });
-
-    if (!error && remoteData && remoteData.length > 0) {
-      remoteData.forEach((rec: any) => {
-        if (rec && rec.id) {
-          attendanceCache.set(rec.id, {
-            id: rec.id,
-            userId: rec.userId,
-            date: rec.date,
-            status: rec.status || 'PRESENT',
-            checkInTime: rec.checkInTime || rec.markedAt?.slice(11, 19) || null,
-            checkOutTime: rec.checkOutTime || null,
-            markedById: rec.markedById || 'SYSTEM',
-            markedByName: rec.markedByName || 'System',
-            markedByRole: rec.markedByRole || 'ADMIN',
-            markedAt: rec.markedAt || rec.createdAt || new Date().toISOString(),
-            method: rec.method || 'DIRECT_ADMIN',
-            requestStatus: rec.requestStatus || 'DIRECT',
-            respondedAt: rec.respondedAt || null,
-            rejectionReason: rec.rejectionReason || null,
-            notes: rec.notes || null,
-            correctionReason: rec.correctionReason || null,
-            branchId: rec.branchId || null,
-            isArchived: !!rec.isArchived,
-            createdAt: rec.createdAt || new Date().toISOString(),
-            updatedAt: rec.updatedAt || new Date().toISOString(),
-          });
-        }
-      });
-    }
-  } catch (e) {
-    console.warn('[SUPABASE ATTENDANCE PREFETCH WARN]', e);
-  }
-
-  isInitialized = true;
-  saveLocalFile(ATTENDANCE_FILE, Array.from(attendanceCache.values()));
+  // Pure Supabase persistence - no local file operations required
+  return Promise.resolve();
 }
 
-// Persist single or multiple changes
-function syncAttendanceDisk(): void {
-  saveLocalFile(ATTENDANCE_FILE, Array.from(attendanceCache.values()));
-}
-
-function syncAuditDisk(): void {
-  saveLocalFile(AUDIT_FILE, auditCache);
-}
-
-// Attempt Supabase async write without blocking
-async function trySupabaseUpsert(record: AttendanceRecord): Promise<void> {
-  try {
-    await supabaseAdmin.from('Attendance').upsert({
-      id: record.id,
-      userId: record.userId,
-      date: record.date,
-      status: record.status,
-      markedById: record.markedById,
-      markedByName: record.markedByName,
-      markedByRole: record.markedByRole,
-      markedAt: record.markedAt,
-      method: record.method,
-      requestStatus: record.requestStatus,
-      respondedAt: record.respondedAt,
-      rejectionReason: record.rejectionReason,
-      notes: record.notes,
-      branchId: record.branchId,
-      isArchived: record.isArchived,
-      updatedAt: record.updatedAt,
-    });
-  } catch (e) {
-    // Supabase RLS fallback is normal in sandbox
-  }
-}
-
-async function trySupabaseDelete(recordId: string): Promise<void> {
-  try {
-    await supabaseAdmin.from('Attendance').delete().eq('id', recordId);
-  } catch (e) {
-    // Supabase delete fallback
-  }
-}
-
-// Safe Staff user list fetcher
+/**
+ * Fetch authorized staff list directly from Supabase User table
+ */
 export async function getAuthorizedStaffList(): Promise<any[]> {
   const AUTHORIZED_ROLES = [
     'SUPER_ADMIN',
@@ -205,7 +132,6 @@ export async function getAuthorizedStaffList(): Promise<any[]> {
 
     if (error) {
       console.error('[SUPABASE USER FETCH ERROR]', error);
-      // Fallback query without filter if needed
       const { data: fallbackUsers } = await supabaseAdmin.from('User').select('id, name, email, role');
       return (fallbackUsers || []).filter((u: any) => AUTHORIZED_ROLES.includes(u.role));
     }
@@ -217,7 +143,9 @@ export async function getAuthorizedStaffList(): Promise<any[]> {
   }
 }
 
-// NPT Business Time calculation
+/**
+ * Authoritative NPT Business Time calculation (Asia/Kathmandu timezone: UTC+05:45)
+ */
 export function getNepalBusinessTime() {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -250,7 +178,6 @@ export function getNepalBusinessTime() {
   const dateString = `${y}-${m}-${d}`;
   const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-  // Calculate seconds remaining in window or seconds until window opens
   let secondsRemainingInWindow = 0;
   let secondsUntilWindowOpens = 0;
 
@@ -280,7 +207,9 @@ export function getNepalBusinessTime() {
   };
 }
 
-// Attendance Query Operations
+/**
+ * Attendance Query Operations directly from Supabase PostgreSQL
+ */
 export async function getAllAttendanceRecords(filters?: {
   date?: string;
   month?: string; // YYYY-MM
@@ -288,51 +217,80 @@ export async function getAllAttendanceRecords(filters?: {
   status?: string;
   search?: string;
 }): Promise<AttendanceRecord[]> {
-  await initAttendanceStorage();
-
-  let records = Array.from(attendanceCache.values()).filter((r) => !r.isArchived);
+  let query = supabaseAdmin
+    .from('Attendance')
+    .select('*')
+    .eq('isArchived', false);
 
   if (filters?.date) {
-    records = records.filter((r) => r.date === filters.date);
+    query = query.eq('date', filters.date);
   }
 
   if (filters?.month) {
-    records = records.filter((r) => r.date.startsWith(filters.month!));
+    query = query.like('date', `${filters.month}%`);
   }
 
   if (filters?.userId) {
-    records = records.filter((r) => r.userId === filters.userId);
+    query = query.eq('userId', filters.userId);
   }
 
   if (filters?.status && filters.status !== 'ALL') {
-    records = records.filter((r) => r.status === filters.status);
+    query = query.eq('status', filters.status);
   }
 
-  // Sort descending by date, then by markedAt
-  records.sort((a, b) => {
-    if (b.date !== a.date) return b.date.localeCompare(a.date);
-    return (b.markedAt || '').localeCompare(a.markedAt || '');
-  });
+  query = query.order('date', { ascending: false }).order('markedAt', { ascending: false });
 
-  return records;
+  const { data, error } = await query;
+  if (error) {
+    console.error('[SUPABASE ATTENDANCE FETCH ERROR]', error);
+    throw new Error(`Failed to fetch attendance records: ${error.message}`);
+  }
+
+  return (data || []).map(formatAttendanceRecord);
 }
 
+/**
+ * Get attendance record by primary ID directly from Supabase
+ */
 export async function getAttendanceRecordById(id: string): Promise<AttendanceRecord | null> {
-  await initAttendanceStorage();
-  return attendanceCache.get(id) || null;
-}
+  const { data, error } = await supabaseAdmin
+    .from('Attendance')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
 
-export async function getAttendanceRecordByUserAndDate(userId: string, date: string): Promise<AttendanceRecord | null> {
-  await initAttendanceStorage();
-  for (const rec of attendanceCache.values()) {
-    if (rec.userId === userId && rec.date === date && !rec.isArchived) {
-      return rec;
-    }
+  if (error) {
+    console.error('[SUPABASE ATTENDANCE BY ID ERROR]', error);
+    return null;
   }
-  return null;
+
+  return data ? formatAttendanceRecord(data) : null;
 }
 
-// Upsert single record
+/**
+ * Get attendance record for a specific user and date directly from Supabase
+ */
+export async function getAttendanceRecordByUserAndDate(userId: string, date: string): Promise<AttendanceRecord | null> {
+  const { data, error } = await supabaseAdmin
+    .from('Attendance')
+    .select('*')
+    .eq('userId', userId)
+    .eq('date', date)
+    .eq('isArchived', false)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[SUPABASE ATTENDANCE BY USER AND DATE ERROR]', error);
+    return null;
+  }
+
+  return data ? formatAttendanceRecord(data) : null;
+}
+
+/**
+ * Upsert attendance record with audit logging directly into Supabase PostgreSQL.
+ * Atomic and persistent without local filesystem writes.
+ */
 export async function upsertAttendanceRecord(
   data: {
     userId: string;
@@ -353,8 +311,6 @@ export async function upsertAttendanceRecord(
     role: string;
   }
 ): Promise<AttendanceRecord> {
-  await initAttendanceStorage();
-
   const existing = await getAttendanceRecordByUserAndDate(data.userId, data.date);
   const nowIso = new Date().toISOString();
   const time = getNepalBusinessTime();
@@ -363,13 +319,11 @@ export async function upsertAttendanceRecord(
 
   if (existing) {
     const prevStatus = existing.status;
-    finalRecord = {
-      ...existing,
+    const updatePayload = {
       status: data.status,
       checkInTime: data.checkInTime !== undefined ? data.checkInTime : (existing.checkInTime || time.timeString),
       checkOutTime: data.checkOutTime !== undefined ? data.checkOutTime : existing.checkOutTime,
       notes: data.notes !== undefined ? data.notes : existing.notes,
-      correctionReason: data.correctionReason !== undefined ? data.correctionReason : existing.correctionReason,
       method: data.method || existing.method,
       requestStatus: data.requestStatus || existing.requestStatus,
       rejectionReason: data.rejectionReason !== undefined ? data.rejectionReason : existing.rejectionReason,
@@ -379,10 +333,22 @@ export async function upsertAttendanceRecord(
       updatedAt: nowIso,
     };
 
-    attendanceCache.set(finalRecord.id, finalRecord);
+    const { data: updated, error } = await supabaseAdmin
+      .from('Attendance')
+      .update(updatePayload)
+      .eq('id', existing.id)
+      .select('*')
+      .single();
 
-    // Audit Log
-    const auditLog: AttendanceAuditRecord = {
+    if (error) {
+      console.error('[SUPABASE ATTENDANCE UPDATE ERROR]', error);
+      throw new Error(`Failed to update attendance record: ${error.message}`);
+    }
+
+    finalRecord = formatAttendanceRecord(updated);
+
+    // Write Audit Log directly to Supabase
+    const auditLog = {
       id: uuidv4(),
       attendanceId: finalRecord.id,
       action: prevStatus !== data.status ? 'STATUS_CHANGED' : 'UPDATED',
@@ -394,12 +360,15 @@ export async function upsertAttendanceRecord(
       reason: data.correctionReason || data.notes || 'Attendance record modified',
       createdAt: nowIso,
     };
-    auditCache.unshift(auditLog);
-    syncAuditDisk();
-    await broadcastServerChange('AttendanceAuditLog', 'CREATE', auditLog.id, auditLog);
+
+    writeAuditLogSafe(auditLog);
+
+    broadcastServerChange('AttendanceAuditLog', 'CREATE', auditLog.id, auditLog).catch(() => {});
+    broadcastServerChange('Attendance', 'UPDATE', finalRecord.id, finalRecord).catch(() => {});
   } else {
-    finalRecord = {
-      id: uuidv4(),
+    const newId = uuidv4();
+    const insertPayload = {
+      id: newId,
       userId: data.userId,
       date: data.date,
       status: data.status,
@@ -413,17 +382,27 @@ export async function upsertAttendanceRecord(
       requestStatus: data.requestStatus || 'DIRECT',
       rejectionReason: data.rejectionReason || null,
       notes: data.notes || null,
-      correctionReason: data.correctionReason || null,
       branchId: data.branchId || null,
       isArchived: false,
       createdAt: nowIso,
       updatedAt: nowIso,
     };
 
-    attendanceCache.set(finalRecord.id, finalRecord);
+    const { data: created, error } = await supabaseAdmin
+      .from('Attendance')
+      .insert([insertPayload])
+      .select('*')
+      .single();
 
-    // Audit Log
-    const auditLog: AttendanceAuditRecord = {
+    if (error) {
+      console.error('[SUPABASE ATTENDANCE INSERT ERROR]', error);
+      throw new Error(`Failed to insert attendance record: ${error.message}`);
+    }
+
+    finalRecord = formatAttendanceRecord(created);
+
+    // Write Audit Log directly to Supabase
+    const auditLog = {
       id: uuidv4(),
       attendanceId: finalRecord.id,
       action: 'CREATED',
@@ -435,19 +414,19 @@ export async function upsertAttendanceRecord(
       reason: data.notes || `Attendance marked as ${data.status}`,
       createdAt: nowIso,
     };
-    auditCache.unshift(auditLog);
-    syncAuditDisk();
-    await broadcastServerChange('AttendanceAuditLog', 'CREATE', auditLog.id, auditLog);
-  }
 
-  syncAttendanceDisk();
-  trySupabaseUpsert(finalRecord);
-  await broadcastServerChange('Attendance', existing ? 'UPDATE' : 'CREATE', finalRecord.id, finalRecord);
+    writeAuditLogSafe(auditLog);
+
+    broadcastServerChange('AttendanceAuditLog', 'CREATE', auditLog.id, auditLog).catch(() => {});
+    broadcastServerChange('Attendance', 'CREATE', finalRecord.id, finalRecord).catch(() => {});
+  }
 
   return finalRecord;
 }
 
-// Bulk mark multiple staff
+/**
+ * Bulk mark multiple staff members in Supabase PostgreSQL
+ */
 export async function bulkUpsertAttendance(
   items: Array<{
     userId: string;
@@ -469,21 +448,23 @@ export async function bulkUpsertAttendance(
   return results;
 }
 
-// Delete attendance record
+/**
+ * Delete single attendance record from Supabase PostgreSQL
+ */
 export async function deleteAttendanceRecord(
   id: string,
   actor: { id: string; name: string; role: string }
 ): Promise<boolean> {
-  await initAttendanceStorage();
-  const existing = attendanceCache.get(id);
+  const existing = await getAttendanceRecordById(id);
   if (!existing) return false;
 
-  attendanceCache.delete(id);
-  syncAttendanceDisk();
-  trySupabaseDelete(id);
+  const { error } = await supabaseAdmin.from('Attendance').delete().eq('id', id);
+  if (error) {
+    console.error('[SUPABASE ATTENDANCE DELETE ERROR]', error);
+    throw new Error(`Failed to delete attendance record: ${error.message}`);
+  }
 
-  // Audit
-  const auditLog: AttendanceAuditRecord = {
+  const auditLog = {
     id: uuidv4(),
     attendanceId: id,
     action: 'DELETED',
@@ -495,64 +476,86 @@ export async function deleteAttendanceRecord(
     reason: 'Record deleted by administrator',
     createdAt: new Date().toISOString(),
   };
-  auditCache.unshift(auditLog);
-  syncAuditDisk();
 
-  await broadcastServerChange('Attendance', 'DELETE', id, { id });
+  writeAuditLogSafe(auditLog);
+  broadcastServerChange('Attendance', 'DELETE', id, { id }).catch(() => {});
+
   return true;
 }
 
-// Purge all attendance records for a user
+/**
+ * Purge all attendance records for a user from Supabase PostgreSQL
+ */
 export async function purgeUserAttendance(
   userId: string,
   actor: { id: string; name: string; role: string }
 ): Promise<number> {
-  await initAttendanceStorage();
-  let count = 0;
+  const { data: toDelete, error: selectErr } = await supabaseAdmin
+    .from('Attendance')
+    .select('id')
+    .eq('userId', userId);
 
-  for (const [id, rec] of attendanceCache.entries()) {
-    if (rec.userId === userId) {
-      attendanceCache.delete(id);
-      trySupabaseDelete(id);
-      count++;
-    }
+  if (selectErr) {
+    console.error('[SUPABASE PURGE SELECT ERROR]', selectErr);
+    throw selectErr;
   }
 
-  if (count > 0) {
-    syncAttendanceDisk();
-    const auditLog: AttendanceAuditRecord = {
-      id: uuidv4(),
-      attendanceId: `PURGE_${userId}`,
-      action: 'PURGED',
-      performedById: actor.id,
-      performedByName: actor.name,
-      performedByRole: actor.role,
-      reason: `Purged ${count} attendance records for user ${userId}`,
-      createdAt: new Date().toISOString(),
-    };
-    auditCache.unshift(auditLog);
-    syncAuditDisk();
+  const count = toDelete?.length || 0;
+  if (count === 0) return 0;
+
+  const { error: delErr } = await supabaseAdmin
+    .from('Attendance')
+    .delete()
+    .eq('userId', userId);
+
+  if (delErr) {
+    console.error('[SUPABASE PURGE DELETE ERROR]', delErr);
+    throw delErr;
   }
+
+  const auditLog = {
+    id: uuidv4(),
+    attendanceId: `PURGE_${userId}`,
+    action: 'PURGED',
+    performedById: actor.id,
+    performedByName: actor.name,
+    performedByRole: actor.role,
+    reason: `Purged ${count} attendance records for user ${userId}`,
+    createdAt: new Date().toISOString(),
+  };
+
+  writeAuditLogSafe(auditLog);
+  broadcastServerChange('Attendance', 'DELETE', `PURGE_${userId}`, { userId }).catch(() => {});
 
   return count;
 }
 
-// Get Audit Logs
+/**
+ * Get Attendance Audit Logs directly from Supabase PostgreSQL
+ */
 export async function getAttendanceAuditLogs(filters?: {
   attendanceId?: string;
   userId?: string;
   limit?: number;
 }): Promise<AttendanceAuditRecord[]> {
-  await initAttendanceStorage();
-  let logs = [...auditCache];
+  let query = supabaseAdmin
+    .from('AttendanceAuditLog')
+    .select('*')
+    .order('createdAt', { ascending: false });
 
   if (filters?.attendanceId) {
-    logs = logs.filter((l) => l.attendanceId === filters.attendanceId);
+    query = query.eq('attendanceId', filters.attendanceId);
   }
 
   if (filters?.limit) {
-    logs = logs.slice(0, filters.limit);
+    query = query.limit(filters.limit);
   }
 
-  return logs;
+  const { data, error } = await query;
+  if (error) {
+    console.error('[SUPABASE ATTENDANCE AUDIT LOGS ERROR]', error);
+    return [];
+  }
+
+  return (data || []).map(formatAuditRecord);
 }

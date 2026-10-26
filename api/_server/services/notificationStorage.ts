@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { supabaseAdmin } from '../config/supabase';
 import { broadcastServerChange } from './realtimeSync';
@@ -33,7 +31,7 @@ export type NotificationPriority = 'NORMAL' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
 export interface NotificationRecord {
   id: string;
-  userId: string | null; // Specific recipient user ID (null = role-based or system-wide)
+  userId: string | null; // Specific recipient user ID
   targetRole?: string | null; // e.g. 'SUPER_ADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST'
   title: string;
   message: string;
@@ -52,98 +50,6 @@ export interface NotificationRecord {
   updatedAt: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
-
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  } catch (e) {
-    console.warn('[NOTIFICATIONS STORAGE DIR WARN]', e);
-  }
-}
-
-let notificationCache: Map<string, NotificationRecord> = new Map();
-let isInitialized = false;
-
-function loadLocalFile(): NotificationRecord[] {
-  try {
-    if (fs.existsSync(NOTIFICATIONS_FILE)) {
-      const content = fs.readFileSync(NOTIFICATIONS_FILE, 'utf-8');
-      const parsed = JSON.parse(content);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    }
-  } catch (err) {
-    console.error(`[NOTIFICATIONS READ ERROR: ${NOTIFICATIONS_FILE}]`, err);
-  }
-  return [];
-}
-
-function saveLocalFile(data: NotificationRecord[]): void {
-  try {
-    const tempPath = `${NOTIFICATIONS_FILE}.tmp.${Date.now()}`;
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tempPath, NOTIFICATIONS_FILE);
-  } catch (err) {
-    console.error(`[NOTIFICATIONS WRITE ERROR: ${NOTIFICATIONS_FILE}]`, err);
-  }
-}
-
-/**
- * Initialize notification storage from local storage & Supabase
- */
-export async function initializeNotificationStorage(): Promise<void> {
-  if (isInitialized) return;
-
-  const localRecords = loadLocalFile();
-  localRecords.forEach((n) => notificationCache.set(n.id, n));
-
-  // Sync with Supabase if available
-  try {
-    const { data: supaRecords, error } = await supabaseAdmin
-      .from('Notification')
-      .select('*')
-      .order('createdAt', { ascending: false })
-      .limit(200);
-
-    if (!error && supaRecords && supaRecords.length > 0) {
-      supaRecords.forEach((n: any) => {
-        const existing = notificationCache.get(n.id);
-        if (!existing || new Date(n.updatedAt || n.createdAt || 0) >= new Date(existing.updatedAt || existing.createdAt || 0)) {
-          notificationCache.set(n.id, {
-            id: n.id,
-            userId: n.userId || null,
-            targetRole: n.targetRole || null,
-            title: n.title,
-            message: n.message,
-            type: (n.type as NotificationType) || 'GENERAL',
-            repairId: n.repairId || null,
-            repairNumber: n.repairNumber || null,
-            senderId: n.senderId || null,
-            senderName: n.senderName || null,
-            senderRole: n.senderRole || null,
-            priority: (n.priority as NotificationPriority) || 'NORMAL',
-            link: n.link || (n.repairId ? `/dashboard/repairs/${n.repairId}` : null),
-            metadata: typeof n.metadata === 'string' ? safeJsonParse(n.metadata) : n.metadata || null,
-            isRead: Boolean(n.isRead),
-            readAt: n.readAt || null,
-            createdAt: n.createdAt || new Date().toISOString(),
-            updatedAt: n.updatedAt || n.createdAt || new Date().toISOString(),
-          });
-        }
-      });
-      saveLocalFile(Array.from(notificationCache.values()));
-    }
-  } catch (err) {
-    console.warn('[SUPABASE NOTIFICATIONS SYNC WARN - USING LOCAL CACHE]', err);
-  }
-
-  isInitialized = true;
-}
-
 function safeJsonParse(str: string): any {
   try {
     return JSON.parse(str);
@@ -152,56 +58,90 @@ function safeJsonParse(str: string): any {
   }
 }
 
+function formatNotificationRecord(row: any): NotificationRecord {
+  const metadata = typeof row.metadata === 'string' ? safeJsonParse(row.metadata) : (row.metadata || {});
+  return {
+    id: row.id,
+    userId: row.userId || null,
+    targetRole: row.targetRole || metadata?.targetRole || null,
+    title: row.title || '',
+    message: row.message || '',
+    type: (row.type as NotificationType) || 'GENERAL',
+    repairId: row.repairId || null,
+    repairNumber: row.repairNumber || null,
+    senderId: row.senderId || null,
+    senderName: row.senderName || null,
+    senderRole: row.senderRole || metadata?.senderRole || null,
+    priority: (row.priority as NotificationPriority) || 'NORMAL',
+    link: row.link || metadata?.link || (row.repairId ? `/dashboard/repairs/${row.repairId}` : null),
+    metadata: metadata || null,
+    isRead: Boolean(row.isRead),
+    readAt: row.readAt || null,
+    createdAt: row.createdAt || new Date().toISOString(),
+    updatedAt: row.updatedAt || row.createdAt || new Date().toISOString(),
+  };
+}
+
 /**
- * Get notifications for a specific user and their role
+ * Initialize notification storage.
+ * In production Supabase PostgreSQL is the authoritative store.
+ * Kept for signature compatibility with existing callers. Zero filesystem side-effects.
+ */
+export async function initializeNotificationStorage(): Promise<void> {
+  // Pure Supabase persistence - no local file operations required
+  return Promise.resolve();
+}
+
+/**
+ * Get notifications for a specific user and their role directly from Supabase PostgreSQL.
+ * Securely scopes query to the authenticated recipient user.
  */
 export async function getUserNotifications(
   user: { id: string; role: string },
   options: { unreadOnly?: boolean; limit?: number; type?: string } = {}
 ): Promise<{ notifications: NotificationRecord[]; unreadCount: number }> {
-  await initializeNotificationStorage();
-
   const { unreadOnly = false, limit = 50, type } = options;
-  const allNotifications = Array.from(notificationCache.values());
 
-  // Filter notifications intended for this specific user OR their role OR global
-  const userNotifications = allNotifications.filter((n) => {
-    // Direct recipient match
-    if (n.userId && n.userId === user.id) return true;
-    
-    // Role-based recipient match (if userId is null or explicitly matches role)
-    if (n.targetRole && (n.targetRole === user.role || (n.targetRole === 'ADMIN' && user.role === 'SUPER_ADMIN'))) {
-      return true;
-    }
+  let query = supabaseAdmin
+    .from('Notification')
+    .select('*')
+    .eq('userId', user.id);
 
-    // Global broadcast notifications (both userId and targetRole are null)
-    if (!n.userId && !n.targetRole) return true;
-
-    return false;
-  });
-
-  // Calculate unread count for this user
-  const unreadCount = userNotifications.filter((n) => !n.isRead).length;
-
-  let filtered = userNotifications;
   if (unreadOnly) {
-    filtered = filtered.filter((n) => !n.isRead);
+    query = query.eq('isRead', false);
   }
   if (type) {
-    filtered = filtered.filter((n) => n.type === type);
+    query = query.eq('type', type);
   }
 
-  // Sort by createdAt descending
-  filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  query = query.order('createdAt', { ascending: false }).limit(limit);
+
+  const { data: rows, error } = await query;
+  if (error) {
+    console.error('[SUPABASE GET USER NOTIFICATIONS ERROR]', error);
+    throw new Error(`Failed to retrieve notifications: ${error.message}`);
+  }
+
+  // Exact unread count
+  const { count: unreadCount, error: countErr } = await supabaseAdmin
+    .from('Notification')
+    .select('id', { count: 'exact', head: true })
+    .eq('userId', user.id)
+    .eq('isRead', false);
+
+  if (countErr) {
+    console.warn('[SUPABASE UNREAD COUNT WARN]', countErr);
+  }
 
   return {
-    notifications: filtered.slice(0, limit),
-    unreadCount,
+    notifications: (rows || []).map(formatNotificationRecord),
+    unreadCount: unreadCount || 0,
   };
 }
 
 /**
- * Create a new notification and dispatch real-time events
+ * Create a new notification persisted directly in Supabase PostgreSQL and dispatch real-time events.
+ * Resolves recipient user IDs when targetRole is specified.
  */
 export async function createNotification(
   data: {
@@ -220,176 +160,204 @@ export async function createNotification(
     metadata?: any;
   }
 ): Promise<NotificationRecord> {
-  await initializeNotificationStorage();
-
-  const id = uuidv4();
-  const now = new Date().toISOString();
+  const title = String(data.title || '').trim();
+  const message = String(data.message || '').trim();
+  const type = data.type || 'GENERAL';
 
   // Smart link resolution if not explicitly provided
   let link = data.link;
   if (!link && data.repairId) {
     link = `/dashboard/repairs/${data.repairId}`;
-  } else if (!link && (data.type === 'ATTENDANCE_REQUEST' || data.type === 'ATTENDANCE_APPROVED' || data.type === 'ATTENDANCE_REJECTED')) {
+  } else if (!link && (type === 'ATTENDANCE_REQUEST' || type === 'ATTENDANCE_APPROVED' || type === 'ATTENDANCE_REJECTED')) {
     link = '/dashboard/attendance';
-  } else if (!link && (data.type === 'ACCESS_REQUEST' || data.type === 'ACCESS_APPROVED' || data.type === 'ACCESS_REJECTED')) {
+  } else if (!link && (type === 'ACCESS_REQUEST' || type === 'ACCESS_APPROVED' || type === 'ACCESS_REJECTED')) {
     link = '/dashboard/access-requests';
-  } else if (!link && data.type === 'COURIER_UPDATE') {
+  } else if (!link && type === 'COURIER_UPDATE') {
     link = '/dashboard/courier';
-  } else if (!link && data.type === 'WARRANTY_ALERT') {
+  } else if (!link && type === 'WARRANTY_ALERT') {
     link = '/dashboard/battery-warranty';
   }
 
-  const newRecord: NotificationRecord = {
-    id,
-    userId: data.userId || null,
-    targetRole: data.targetRole || null,
-    title: String(data.title || '').trim(),
-    message: String(data.message || '').trim(),
-    type: data.type || 'GENERAL',
+  // Resolve target user IDs (PostgreSQL Notification.userId constraint is NOT NULL)
+  let targetUserIds: string[] = [];
+
+  if (data.userId) {
+    targetUserIds = [data.userId];
+  } else if (data.targetRole) {
+    try {
+      let roleFilter: string[] = [data.targetRole];
+      if (data.targetRole === 'ADMIN') {
+        roleFilter = ['ADMIN', 'SUPER_ADMIN'];
+      } else if (data.targetRole === 'MANAGER') {
+        roleFilter = ['MANAGER', 'ADMIN', 'SUPER_ADMIN'];
+      }
+
+      const { data: matchedUsers, error: userErr } = await supabaseAdmin
+        .from('User')
+        .select('id')
+        .is('deletedAt', null)
+        .in('role', roleFilter);
+
+      if (!userErr && matchedUsers && matchedUsers.length > 0) {
+        targetUserIds = matchedUsers.map((u: any) => u.id);
+      }
+    } catch (uErr) {
+      console.warn('[NOTIF RESOLVE TARGET ROLE WARN]', uErr);
+    }
+  }
+
+  // If still no target user IDs, fallback to finding active admins or staff
+  if (targetUserIds.length === 0) {
+    try {
+      const { data: admins } = await supabaseAdmin
+        .from('User')
+        .select('id')
+        .is('deletedAt', null)
+        .in('role', ['SUPER_ADMIN', 'ADMIN'])
+        .limit(5);
+
+      if (admins && admins.length > 0) {
+        targetUserIds = admins.map((u: any) => u.id);
+      }
+    } catch (_) {}
+  }
+
+  if (targetUserIds.length === 0) {
+    console.warn('[CREATE NOTIFICATION WARN]: No target recipients found. Skipping notification insert.');
+    return {
+      id: uuidv4(),
+      userId: null,
+      title,
+      message,
+      type,
+      priority: data.priority || 'NORMAL',
+      link: link || null,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  const now = new Date().toISOString();
+  const metaObj = {
+    ...(typeof data.metadata === 'object' && data.metadata !== null ? data.metadata : {}),
+    ...(link ? { link } : {}),
+    ...(data.targetRole ? { targetRole: data.targetRole } : {}),
+    ...(data.senderRole ? { senderRole: data.senderRole } : {}),
+  };
+  const metadataStr = JSON.stringify(metaObj);
+
+  const rowsToInsert = targetUserIds.map((uid) => ({
+    id: uuidv4(),
+    userId: uid,
+    title,
+    message,
+    type,
     repairId: data.repairId || null,
     repairNumber: data.repairNumber || null,
     senderId: data.senderId || null,
     senderName: data.senderName || null,
-    senderRole: data.senderRole || null,
     priority: data.priority || 'NORMAL',
-    link: link || null,
-    metadata: data.metadata || null,
+    metadata: metadataStr,
     isRead: false,
     readAt: null,
     createdAt: now,
-    updatedAt: now,
-  };
+  }));
 
-  notificationCache.set(id, newRecord);
-  saveLocalFile(Array.from(notificationCache.values()));
+  const { data: inserted, error } = await supabaseAdmin
+    .from('Notification')
+    .insert(rowsToInsert)
+    .select('*');
 
-  // Attempt async sync to Supabase
-  try {
-    await supabaseAdmin.from('Notification').upsert([
-      {
-        id: newRecord.id,
-        userId: newRecord.userId,
-        title: newRecord.title,
-        message: newRecord.message,
-        type: newRecord.type,
-        repairId: newRecord.repairId,
-        repairNumber: newRecord.repairNumber,
-        senderId: newRecord.senderId,
-        senderName: newRecord.senderName,
-        priority: newRecord.priority,
-        metadata: typeof newRecord.metadata === 'object' ? JSON.stringify(newRecord.metadata) : newRecord.metadata,
-        isRead: false,
-        createdAt: newRecord.createdAt,
-      },
-    ]);
-  } catch (err) {
-    console.warn('[SUPABASE NOTIFICATION INSERT WARN]', err);
+  if (error) {
+    console.error('[SUPABASE NOTIFICATION INSERT ERROR]', error);
+    throw new Error(`Failed to create notification: ${error.message}`);
   }
 
-  // Broadcast realtime event to all connected clients & target channels
-  await broadcastServerChange('Notification', 'CREATE', id, newRecord);
+  const primaryRecord = formatNotificationRecord(inserted?.[0] || rowsToInsert[0]);
 
-  return newRecord;
+  // Broadcast realtime event for each created notification
+  for (const rec of (inserted || rowsToInsert)) {
+    const formatted = formatNotificationRecord(rec);
+    broadcastServerChange('Notification', 'CREATE', formatted.id, formatted).catch(() => {});
+  }
+
+  return primaryRecord;
 }
 
 /**
- * Mark a single notification as read
+ * Mark a single notification as read in Supabase PostgreSQL
  */
 export async function markNotificationRead(id: string, userId: string): Promise<NotificationRecord | null> {
-  await initializeNotificationStorage();
-
-  const record = notificationCache.get(id);
-  if (!record) return null;
-
   const now = new Date().toISOString();
-  record.isRead = true;
-  record.readAt = now;
-  record.updatedAt = now;
 
-  notificationCache.set(id, record);
-  saveLocalFile(Array.from(notificationCache.values()));
+  const { data, error } = await supabaseAdmin
+    .from('Notification')
+    .update({ isRead: true, readAt: now })
+    .eq('id', id)
+    .eq('userId', userId)
+    .select('*')
+    .maybeSingle();
 
-  try {
-    await supabaseAdmin
-      .from('Notification')
-      .update({ isRead: true, readAt: now })
-      .eq('id', id);
-  } catch (err) {
-    console.warn('[SUPABASE NOTIFICATION MARK READ WARN]', err);
+  if (error) {
+    console.error('[SUPABASE NOTIFICATION MARK READ ERROR]', error);
+    throw error;
   }
 
-  await broadcastServerChange('Notification', 'UPDATE', id, record);
+  if (!data) return null;
+
+  const record = formatNotificationRecord(data);
+  broadcastServerChange('Notification', 'UPDATE', id, record).catch(() => {});
   return record;
 }
 
 /**
- * Mark all notifications as read for a user
+ * Mark all notifications as read for a user in Supabase PostgreSQL
  */
 export async function markAllNotificationsRead(user: { id: string; role: string }): Promise<number> {
-  await initializeNotificationStorage();
-
   const now = new Date().toISOString();
-  let updatedCount = 0;
 
-  notificationCache.forEach((record, id) => {
-    const isTarget =
-      (record.userId && record.userId === user.id) ||
-      (record.targetRole && record.targetRole === user.role) ||
-      (!record.userId && !record.targetRole);
+  const { data, error } = await supabaseAdmin
+    .from('Notification')
+    .update({ isRead: true, readAt: now })
+    .eq('userId', user.id)
+    .eq('isRead', false)
+    .select('id');
 
-    if (isTarget && !record.isRead) {
-      record.isRead = true;
-      record.readAt = now;
-      record.updatedAt = now;
-      notificationCache.set(id, record);
-      updatedCount++;
-    }
-  });
-
-  if (updatedCount > 0) {
-    saveLocalFile(Array.from(notificationCache.values()));
-
-    try {
-      await supabaseAdmin
-        .from('Notification')
-        .update({ isRead: true, readAt: now })
-        .or(`userId.eq.${user.id},userId.is.null`);
-    } catch (err) {
-      console.warn('[SUPABASE NOTIFICATION MARK ALL READ WARN]', err);
-    }
-
-    await broadcastServerChange('Notification', 'UPDATE', 'bulk', { userId: user.id });
+  if (error) {
+    console.error('[SUPABASE NOTIFICATION MARK ALL READ ERROR]', error);
+    throw error;
   }
 
-  return updatedCount;
+  const count = data?.length || 0;
+  if (count > 0) {
+    broadcastServerChange('Notification', 'UPDATE', 'bulk', { userId: user.id }).catch(() => {});
+  }
+
+  return count;
 }
 
 /**
- * Delete a notification
+ * Delete a notification from Supabase PostgreSQL with role-based authorization check
  */
 export async function deleteNotification(id: string, user: { id: string; role: string }): Promise<boolean> {
-  await initializeNotificationStorage();
+  let query = supabaseAdmin.from('Notification').delete().eq('id', id);
 
-  const record = notificationCache.get(id);
-  if (!record) return false;
-
-  // Authorization check: User must be recipient, creator, or Super Admin/Admin
   const isSuperAdminOrAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
-  const isRecipient = record.userId === user.id || (!record.userId && record.targetRole === user.role);
-
-  if (!isSuperAdminOrAdmin && !isRecipient) {
-    throw new Error('Unauthorized to delete this notification.');
+  if (!isSuperAdminOrAdmin) {
+    query = query.eq('userId', user.id);
   }
 
-  notificationCache.delete(id);
-  saveLocalFile(Array.from(notificationCache.values()));
-
-  try {
-    await supabaseAdmin.from('Notification').delete().eq('id', id);
-  } catch (err) {
-    console.warn('[SUPABASE NOTIFICATION DELETE WARN]', err);
+  const { data, error } = await query.select('id');
+  if (error) {
+    console.error('[SUPABASE NOTIFICATION DELETE ERROR]', error);
+    throw error;
   }
 
-  await broadcastServerChange('Notification', 'DELETE', id);
-  return true;
+  const deleted = Boolean(data && data.length > 0);
+  if (deleted) {
+    broadcastServerChange('Notification', 'DELETE', id).catch(() => {});
+  }
+
+  return deleted;
 }

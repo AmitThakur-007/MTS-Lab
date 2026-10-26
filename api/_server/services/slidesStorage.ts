@@ -199,12 +199,13 @@ function loadLocalFile(): HomeSlideRecord[] {
 }
 
 function saveLocalFile(data: HomeSlideRecord[]): void {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) return;
   try {
     const tempPath = `${SLIDES_FILE}.tmp.${Date.now()}`;
     fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
     fs.renameSync(tempPath, SLIDES_FILE);
   } catch (err) {
-    console.error(`[STORAGE WRITE ERROR: ${SLIDES_FILE}]`, err);
+    console.warn(`[STORAGE LOCAL WRITE WARN: ${SLIDES_FILE}]`, (err as any)?.message || err);
   }
 }
 

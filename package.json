@@ -10,7 +10,9 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "tsx tests/storage-fix.test.ts",
+    "migrate:legacy-json": "tsx scripts/migrate-legacy-json-to-supabase.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
