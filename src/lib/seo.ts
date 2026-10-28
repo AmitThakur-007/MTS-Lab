@@ -207,13 +207,375 @@ export interface SlugResolutionResult {
   targetSlug?: string;
   targetUrl?: string;
   service?: ServiceLike;
+  matchStrategy?: 'EXACT_ACTIVE' | 'EXPLICIT_LEGACY' | 'AUTOMATED_LEGACY';
+}
+
+/**
+ * Known historical descriptive phrases and noise tokens found in legacy GSC URLs.
+ */
+export const KNOWN_LEGACY_NOISE_PHRASES: string[] = [
+  'all-storage-sizes-and-colors',
+  'all-compatible-variants-confirm-before-repair',
+  'confirm-before-repair',
+  'all-storage-sizes-and-all-colors',
+  'all-storage-sizes-and-color',
+  'all-storage-sizes',
+  'all-compatible-variants',
+  'all-storage-variants',
+  'all-standard-variants',
+  'all-colors-and-variants',
+  'all-colors',
+  'confirm-before-visiting',
+  'confirm-before-order',
+  'subject-to-availability',
+  'check-color-availability',
+  'contact-to-confirm-availability',
+  'standard-variants',
+  'all-variants',
+];
+
+/**
+ * Strips obsolete descriptive phrases without mutating model or service keywords.
+ */
+export function stripLegacyNoisePhrases(slug: string): string {
+  if (!slug) return '';
+  let cleaned = slug;
+  let changed = true;
+  let passes = 0;
+  while (changed && passes < 10) {
+    changed = false;
+    passes++;
+    for (const phrase of KNOWN_LEGACY_NOISE_PHRASES) {
+      const pattern = new RegExp(`(^|-)${phrase}(-|$)`, 'g');
+      if (pattern.test(cleaned)) {
+        cleaned = cleaned.replace(pattern, '$1-$2').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        changed = true;
+      }
+    }
+  }
+  return cleaned.replace(/-+/g, '-').replace(/^-|-$/g, '');
+}
+
+/**
+ * Reusable, deterministic slug normalizer:
+ * - Converts to lowercase and trims
+ * - Replaces separators (_, +, &) with hyphens
+ * - Collapses consecutive hyphens and trims edges
+ * - Removes known obsolete descriptive phrases
+ */
+export function normalizeLegacySlug(rawSlug: string | undefined | null): string {
+  if (!rawSlug) return '';
+  let slug = String(rawSlug).trim().toLowerCase();
+  slug = slug.replace(/[+/_&]/g, '-').replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  slug = stripLegacyNoisePhrases(slug);
+  return slug;
+}
+
+// Known device model patterns ordered by token specificity (longest / most specific first)
+const KNOWN_MODEL_PATTERNS = [
+  { id: 'iphone-15-pro-max', regex: /(?:^|-)iphone-15-pro-max(?:-|$)/, name: '15 pro max' },
+  { id: 'iphone-15-pro', regex: /(?:^|-)iphone-15-pro(?:-|$)(?!max)/, name: '15 pro' },
+  { id: 'iphone-15-plus', regex: /(?:^|-)iphone-15-plus(?:-|$)/, name: '15 plus' },
+  { id: 'iphone-15', regex: /(?:^|-)iphone-15(?:-|$)(?!pro|max|plus)/, name: '15' },
+  { id: 'iphone-14-pro-max', regex: /(?:^|-)iphone-14-pro-max(?:-|$)/, name: '14 pro max' },
+  { id: 'iphone-14-pro', regex: /(?:^|-)iphone-14-pro(?:-|$)(?!max)/, name: '14 pro' },
+  { id: 'iphone-14-plus', regex: /(?:^|-)iphone-14-plus(?:-|$)/, name: '14 plus' },
+  { id: 'iphone-14', regex: /(?:^|-)iphone-14(?:-|$)(?!pro|max|plus)/, name: '14' },
+  { id: 'iphone-13-pro-max', regex: /(?:^|-)iphone-13-pro-max(?:-|$)/, name: '13 pro max' },
+  { id: 'iphone-13-pro', regex: /(?:^|-)iphone-13-pro(?:-|$)(?!max)/, name: '13 pro' },
+  { id: 'iphone-13-mini', regex: /(?:^|-)iphone-13-mini(?:-|$)/, name: '13 mini' },
+  { id: 'iphone-13', regex: /(?:^|-)iphone-13(?:-|$)(?!pro|max|mini)/, name: '13' },
+  { id: 'iphone-12-pro-max', regex: /(?:^|-)iphone-12-pro-max(?:-|$)/, name: '12 pro max' },
+  { id: 'iphone-12-pro', regex: /(?:^|-)iphone-12-pro(?:-|$)(?!max)/, name: '12 pro' },
+  { id: 'iphone-12-mini', regex: /(?:^|-)iphone-12-mini(?:-|$)/, name: '12 mini' },
+  { id: 'iphone-12', regex: /(?:^|-)iphone-12(?:-|$)(?!pro|max|mini)/, name: '12' },
+  { id: 'iphone-11-pro-max', regex: /(?:^|-)iphone-11-pro-max(?:-|$)/, name: '11 pro max' },
+  { id: 'iphone-11-pro', regex: /(?:^|-)iphone-11-pro(?:-|$)(?!max)/, name: '11 pro' },
+  { id: 'iphone-11', regex: /(?:^|-)iphone-11(?:-|$)(?!pro|max)/, name: '11' },
+  { id: 'iphone-xs-max', regex: /(?:^|-)iphone-(?:xs-max|xsmax|xsmax-xs-max)(?:-|$)/, name: 'xsmax' },
+  { id: 'iphone-xr', regex: /(?:^|-)iphone-xr(?:-|$)/, name: 'xr' },
+  { id: 'iphone-xs', regex: /(?:^|-)iphone-xs(?:-|$)(?!max)/, name: 'xs' },
+  { id: 'iphone-x', regex: /(?:^|-)iphone-x(?:-|$)(?!r|s)/, name: 'x' },
+  { id: 'iphone-se', regex: /(?:^|-)iphone-se(?:-|$)/, name: 'se' },
+  { id: 'iphone-8-plus', regex: /(?:^|-)iphone-8-plus(?:-|$)/, name: '8 plus' },
+  { id: 'iphone-8', regex: /(?:^|-)iphone-8(?:-|$)(?!plus)/, name: '8' },
+  { id: 'iphone-7-plus', regex: /(?:^|-)iphone-7-plus(?:-|$)/, name: '7 plus' },
+  { id: 'iphone-7', regex: /(?:^|-)iphone-7(?:-|$)(?!plus)/, name: '7' },
+];
+
+/**
+ * Extracts normalized device model identifier with strict boundary checks
+ * to prevent confusion between models (e.g. X vs XR vs XS, 11 vs 11 Pro Max).
+ */
+export function extractModelIdentifier(slug: string): { id: string; name: string } | null {
+  for (const item of KNOWN_MODEL_PATTERNS) {
+    if (item.regex.test(slug)) {
+      return { id: item.id, name: item.name };
+    }
+  }
+  return null;
+}
+
+/**
+ * Automated legacy slug matching against active catalog services.
+ * Strict rules:
+ * 1. Checks noise-stripped slug against active catalog
+ * 2. Checks redundant model number tokens (e.g. iphone-11-11- -> iphone-11-)
+ * 3. Structured match on Device Model + Component Category + Grade/Subtype
+ * 4. Rejects ambiguous candidates (if multiple services remain plausible, returns null)
+ * 5. Returns active service only if confidence threshold is met
+ */
+export function normalizeAndMatchLegacySlug(
+  requestedSlug: string,
+  activeServices: ServiceLike[],
+  slugToServiceMap?: Map<string, ServiceLike>
+): { targetSlug: string; service: ServiceLike } | null {
+  const norm = normalizeLegacySlug(requestedSlug);
+  if (!norm) return null;
+
+  const slugToService = slugToServiceMap || buildSlugMap(activeServices).slugToService;
+
+  // 1. Direct match on normalized slug
+  if (slugToService.has(norm)) {
+    return { targetSlug: norm, service: slugToService.get(norm)! };
+  }
+
+  // 2. Redundant model number removed (e.g. iphone-11-11- -> iphone-11-)
+  const collapsed = norm.replace(/iphone-(\d+)-\1-/, 'iphone-$1-');
+  if (slugToService.has(collapsed)) {
+    return { targetSlug: collapsed, service: slugToService.get(collapsed)! };
+  }
+
+  // 3. Redundant model number inserted (e.g. iphone-14-pro-max- -> iphone-14-pro-max-14-)
+  const inserted = norm.replace(/iphone-(\d+)-(pro-max)-/, 'iphone-$1-$2-$1-');
+  if (slugToService.has(inserted)) {
+    return { targetSlug: inserted, service: slugToService.get(inserted)! };
+  }
+
+  // 4. Structured Model Extraction
+  const modelMatch = extractModelIdentifier(norm);
+  if (!modelMatch) return null;
+
+  // Filter services by matched model
+  const modelServices = activeServices.filter((s) => {
+    const sModel = (s.model || '').trim().toLowerCase();
+    if (modelMatch.id === 'iphone-xs-max') {
+      return sModel === 'xsmax' || sModel === 'xs max';
+    }
+    return sModel === modelMatch.name;
+  });
+
+  if (modelServices.length === 0) return null;
+
+  // Detect component category
+  const isDisplay = norm.includes('display') || norm.includes('screen') || norm.includes('lcd') || norm.includes('oled') || norm.includes('amoled');
+  const isBattery = norm.includes('battery');
+  const isCamera = norm.includes('camera');
+  const isBackPanel = norm.includes('back-panel') || norm.includes('back-cover') || norm.includes('back-glass') || norm.includes('rear-glass');
+  const isSpeaker = norm.includes('speaker') || norm.includes('buzzer') || norm.includes('ringer');
+  const isCharging = norm.includes('charging') || norm.includes('dock-flex') || norm.includes('charging-flex');
+
+  // A. DISPLAY MATCHING
+  if (isDisplay) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || '').toLowerCase() === 'display' || s.serviceName.toLowerCase().includes('display')
+    );
+    if (compServices.length === 0) return null;
+
+    const isOriginal = (norm.includes('original') || norm.includes('genuine')) &&
+      !norm.includes('copy') && !norm.includes('gx') && !norm.includes('dd') && !norm.includes('incell') && !norm.includes('in-cell');
+    const isCopy = norm.includes('copy') || norm.includes('aftermarket');
+    const isGx = norm.includes('gx');
+    const isDd = norm.includes('dd');
+    const isIncell = norm.includes('incell') || norm.includes('in-cell');
+
+    let filtered: ServiceLike[] = [];
+    if (isOriginal) {
+      filtered = compServices.filter(
+        (s) => s.serviceName.toLowerCase().includes('original') &&
+          !s.serviceName.toLowerCase().includes('gx') &&
+          !s.serviceName.toLowerCase().includes('dd') &&
+          !s.serviceName.toLowerCase().includes('copy')
+      );
+    } else if (isCopy) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('copy'));
+    } else if (isGx) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('gx'));
+    } else if (isDd) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('dd'));
+    } else if (isIncell) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('incell') || s.serviceName.toLowerCase().includes('in-cell'));
+    } else {
+      // Unspecified grade! If multiple display options exist, reject as ambiguous (Requirement 6 & Test J)
+      if (compServices.length > 1) return null;
+      filtered = compServices;
+    }
+
+    if (filtered.length === 1) {
+      const match = filtered[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+    return null;
+  }
+
+  // B. BATTERY MATCHING
+  if (isBattery) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || '').toLowerCase() === 'battery' || s.serviceName.toLowerCase().includes('battery')
+    );
+    if (compServices.length === 0) return null;
+
+    const isMarket = norm.includes('market');
+    const isCopy = norm.includes('copy');
+    const isOrig = (norm.includes('original') || norm.includes('1-year-warranty')) && !isMarket && !isCopy;
+
+    let filtered: ServiceLike[] = [];
+    if (isMarket) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('market'));
+    } else if (isCopy) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('copy'));
+    } else if (isOrig) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('original') && !s.serviceName.toLowerCase().includes('market'));
+    } else {
+      if (compServices.length > 1) return null;
+      filtered = compServices;
+    }
+
+    if (filtered.length === 1) {
+      const match = filtered[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+    return null;
+  }
+
+  // C. CAMERA MATCHING
+  if (isCamera) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || '').toLowerCase() === 'camera' || s.serviceName.toLowerCase().includes('camera')
+    );
+    if (compServices.length === 0) return null;
+
+    const isFront = norm.includes('front') || norm.includes('selfie');
+    const isBack = norm.includes('back') || norm.includes('rear');
+
+    if (isFront && !isBack) {
+      const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('front'));
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        return targetSlug ? { targetSlug, service: match } : null;
+      }
+    } else if (isBack && !isFront) {
+      const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('back'));
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        return targetSlug ? { targetSlug, service: match } : null;
+      }
+    }
+    return null;
+  }
+
+  // D. SPEAKER MATCHING
+  if (isSpeaker) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || '').toLowerCase() === 'speaker' ||
+        s.serviceName.toLowerCase().includes('speaker') ||
+        s.serviceName.toLowerCase().includes('buzzer')
+    );
+    if (compServices.length === 0) return null;
+
+    if (norm.includes('buzzer')) {
+      const buz = compServices.filter((s) => s.serviceName.toLowerCase().includes('buzzer'));
+      if (buz.length === 1) {
+        const match = buz[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        return targetSlug ? { targetSlug, service: match } : null;
+      }
+    }
+    if (compServices.length === 1) {
+      const match = compServices[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+    return null;
+  }
+
+  // E. CHARGING FLEX MATCHING
+  if (isCharging) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || '').toLowerCase().includes('charging') ||
+        s.serviceName.toLowerCase().includes('charging')
+    );
+    if (compServices.length === 0) return null;
+
+    if (compServices.length === 1) {
+      const match = compServices[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+
+    const isMarket = norm.includes('market');
+    const isGenuine = norm.includes('genuine');
+    let filtered: ServiceLike[] = [];
+    if (isMarket) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('market'));
+    } else if (isGenuine) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('genuine') || s.serviceName.toLowerCase().includes('original'));
+    }
+
+    if (filtered.length === 1) {
+      const match = filtered[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+    return null;
+  }
+
+  // F. BACK PANEL MATCHING
+  if (isBackPanel) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || '').toLowerCase().includes('back panel') ||
+        s.serviceName.toLowerCase().includes('back panel')
+    );
+    if (compServices.length === 0) return null;
+
+    const isHq = norm.includes('high-quality') || norm.includes('high quality');
+    const isCopy = norm.includes('copy');
+    const isOrig = norm.includes('original') && !isCopy;
+
+    let filtered: ServiceLike[] = [];
+    if (isHq) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('high quality') || s.serviceName.toLowerCase().includes('high-quality'));
+    } else if (isCopy) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('copy') && !s.serviceName.toLowerCase().includes('high quality'));
+    } else if (isOrig) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('original'));
+    } else {
+      if (compServices.length > 1) return null;
+      filtered = compServices;
+    }
+
+    if (filtered.length === 1) {
+      const match = filtered[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+    return null;
+  }
+
+  return null;
 }
 
 /**
  * Resolves a requested URL slug against active services and legacy redirects.
- * - Protects against circular redirect loops (max depth 5, cycle detection)
- * - Verifies the target slug actually exists in active services before recommending a redirect
- * - Normalizes case, leading/trailing slashes, and whitespace
+ * Follows strict priority order:
+ * 1. Exact active slug match
+ * 2. Explicit legacy dictionary lookup (LEGACY_SLUGS) with loop protection
+ * 3. Automated legacy matching (normalizeAndMatchLegacySlug)
+ * 4. NOT_FOUND (never redirects ambiguous or unknown requests)
  */
 export function resolveServiceSlug(
   rawRequestedSlug: string | undefined | null,
@@ -234,17 +596,22 @@ export function resolveServiceSlug(
     ? buildSlugMap(slugMapOrServices).slugToService
     : slugMapOrServices;
 
-  // 1. Direct active service match
+  const activeServices = Array.isArray(slugMapOrServices)
+    ? slugMapOrServices
+    : Array.from(slugToService.values());
+
+  // PRIORITY 1: Exact active service match
   if (slugToService.has(cleanSlug)) {
     return {
       type: 'ACTIVE',
       requestedSlug,
       cleanSlug,
       service: slugToService.get(cleanSlug),
+      matchStrategy: 'EXACT_ACTIVE',
     };
   }
 
-  // 2. Legacy slug lookup with loop protection
+  // PRIORITY 2: Explicit legacy mapping from dictionary with loop protection
   if (Object.prototype.hasOwnProperty.call(LEGACY_SLUGS, cleanSlug)) {
     let currentSlug = cleanSlug;
     const visited = new Set<string>([currentSlug]);
@@ -269,11 +636,26 @@ export function resolveServiceSlug(
         targetSlug: target,
         targetUrl: `/services/${target}`,
         service: slugToService.get(target),
+        matchStrategy: 'EXPLICIT_LEGACY',
       };
     }
   }
 
-  // 3. Not found in active catalog or legacy map
+  // PRIORITY 3: Automated legacy matching
+  const autoMatch = normalizeAndMatchLegacySlug(cleanSlug, activeServices, slugToService);
+  if (autoMatch && autoMatch.targetSlug && slugToService.has(autoMatch.targetSlug)) {
+    return {
+      type: 'REDIRECT',
+      requestedSlug,
+      cleanSlug,
+      targetSlug: autoMatch.targetSlug,
+      targetUrl: `/services/${autoMatch.targetSlug}`,
+      service: autoMatch.service,
+      matchStrategy: 'AUTOMATED_LEGACY',
+    };
+  }
+
+  // PRIORITY 4: Not found in active catalog or legacy map
   return {
     type: 'NOT_FOUND',
     requestedSlug,

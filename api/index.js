@@ -10400,13 +10400,13 @@ function checkWarrantyEligibility(service) {
   let verifiedDuration;
   let policyDetails;
   if (/\b(2[\s-]?(?:years?|yrs?)|24[\s-]?(?:months?|mos?))\b/i.test(fullText)) {
-    verifiedDuration = "2-Year Official Battery Warranty";
+    verifiedDuration = "2-Year Warranty";
     policyDetails = "24-month battery performance and health certificate";
   } else if (/\b(1[\s-]?(?:year|yr)|12[\s-]?(?:months?|mos?))\b/i.test(fullText)) {
-    verifiedDuration = "1-Year Official Battery Warranty";
+    verifiedDuration = "1-Year Warranty";
     policyDetails = "12-month battery performance and health certificate";
   } else if (/\b(6[\s-]?(?:months?|mos?))\b/i.test(fullText)) {
-    verifiedDuration = "6-Month Official Battery Warranty";
+    verifiedDuration = "6-Month Warranty";
     policyDetails = "6-month battery performance and health certificate";
   }
   const hasConfiguredPolicy = Boolean(verifiedDuration);
@@ -10444,7 +10444,7 @@ function generateContextAwareDirectAnswer(service, options) {
   const { device, priceStr, timeStr, problemStr } = options;
   const eligibility = checkWarrantyEligibility(service);
   if (eligibility.isEligible && eligibility.verifiedDuration) {
-    return `${service.serviceName} for ${device} is performed at MTS Lab in Pakosadak, New Road, Kathmandu. The verified cost is ${priceStr}.${timeStr}${problemStr} Genuine battery cells, battery health calibration, and ${eligibility.verifiedDuration} coverage are provided.`;
+    return `${service.serviceName} for ${device} is performed at MTS Lab in Pakosadak, New Road, Kathmandu. The verified cost is ${priceStr}.${timeStr}${problemStr} Genuine battery cells, battery health calibration, and verified ${eligibility.verifiedDuration} coverage are provided.`;
   }
   return `${service.serviceName} for ${device} is performed at MTS Lab in Pakosadak, New Road, Kathmandu. The verified cost is ${priceStr}.${timeStr}${problemStr} Genuine quality parts, laser calibration, and component quality verification are provided.`;
 }
@@ -16206,6 +16206,351 @@ function buildSlugMap(services) {
     allSlugs: Array.from(slugToService.keys())
   };
 }
+var LEGACY_SLUGS = {
+  // iPhone 14 Pro Max legacy/outdated variants
+  "iphone-14-pro-max-standard-original-standard": "iphone-14-pro-max-14-original-display-replacement",
+  "iphone-14-pro-max-standard-original": "iphone-14-pro-max-14-original-display-replacement",
+  "iphone-14-pro-max-original-display-replacement": "iphone-14-pro-max-14-original-display-replacement",
+  // iPhone 11 & 12 legacy slug variants without repetitive model tokens
+  "iphone-11-pro-max-original-display-replacement": "iphone-11-pro-max-11-original-display-replacement",
+  "iphone-12-pro-max-original-display-replacement": "iphone-12-pro-max-12-original-display-replacement"
+};
+var KNOWN_LEGACY_NOISE_PHRASES = [
+  "all-storage-sizes-and-colors",
+  "all-compatible-variants-confirm-before-repair",
+  "confirm-before-repair",
+  "all-storage-sizes-and-all-colors",
+  "all-storage-sizes-and-color",
+  "all-storage-sizes",
+  "all-compatible-variants",
+  "all-storage-variants",
+  "all-standard-variants",
+  "all-colors-and-variants",
+  "all-colors",
+  "confirm-before-visiting",
+  "confirm-before-order",
+  "subject-to-availability",
+  "check-color-availability",
+  "contact-to-confirm-availability",
+  "standard-variants",
+  "all-variants"
+];
+function stripLegacyNoisePhrases(slug) {
+  if (!slug) return "";
+  let cleaned = slug;
+  let changed = true;
+  let passes = 0;
+  while (changed && passes < 10) {
+    changed = false;
+    passes++;
+    for (const phrase of KNOWN_LEGACY_NOISE_PHRASES) {
+      const pattern = new RegExp(`(^|-)${phrase}(-|$)`, "g");
+      if (pattern.test(cleaned)) {
+        cleaned = cleaned.replace(pattern, "$1-$2").replace(/-+/g, "-").replace(/^-|-$/g, "");
+        changed = true;
+      }
+    }
+  }
+  return cleaned.replace(/-+/g, "-").replace(/^-|-$/g, "");
+}
+function normalizeLegacySlug(rawSlug) {
+  if (!rawSlug) return "";
+  let slug = String(rawSlug).trim().toLowerCase();
+  slug = slug.replace(/[+/_&]/g, "-").replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  slug = stripLegacyNoisePhrases(slug);
+  return slug;
+}
+var KNOWN_MODEL_PATTERNS = [
+  { id: "iphone-15-pro-max", regex: /(?:^|-)iphone-15-pro-max(?:-|$)/, name: "15 pro max" },
+  { id: "iphone-15-pro", regex: /(?:^|-)iphone-15-pro(?:-|$)(?!max)/, name: "15 pro" },
+  { id: "iphone-15-plus", regex: /(?:^|-)iphone-15-plus(?:-|$)/, name: "15 plus" },
+  { id: "iphone-15", regex: /(?:^|-)iphone-15(?:-|$)(?!pro|max|plus)/, name: "15" },
+  { id: "iphone-14-pro-max", regex: /(?:^|-)iphone-14-pro-max(?:-|$)/, name: "14 pro max" },
+  { id: "iphone-14-pro", regex: /(?:^|-)iphone-14-pro(?:-|$)(?!max)/, name: "14 pro" },
+  { id: "iphone-14-plus", regex: /(?:^|-)iphone-14-plus(?:-|$)/, name: "14 plus" },
+  { id: "iphone-14", regex: /(?:^|-)iphone-14(?:-|$)(?!pro|max|plus)/, name: "14" },
+  { id: "iphone-13-pro-max", regex: /(?:^|-)iphone-13-pro-max(?:-|$)/, name: "13 pro max" },
+  { id: "iphone-13-pro", regex: /(?:^|-)iphone-13-pro(?:-|$)(?!max)/, name: "13 pro" },
+  { id: "iphone-13-mini", regex: /(?:^|-)iphone-13-mini(?:-|$)/, name: "13 mini" },
+  { id: "iphone-13", regex: /(?:^|-)iphone-13(?:-|$)(?!pro|max|mini)/, name: "13" },
+  { id: "iphone-12-pro-max", regex: /(?:^|-)iphone-12-pro-max(?:-|$)/, name: "12 pro max" },
+  { id: "iphone-12-pro", regex: /(?:^|-)iphone-12-pro(?:-|$)(?!max)/, name: "12 pro" },
+  { id: "iphone-12-mini", regex: /(?:^|-)iphone-12-mini(?:-|$)/, name: "12 mini" },
+  { id: "iphone-12", regex: /(?:^|-)iphone-12(?:-|$)(?!pro|max|mini)/, name: "12" },
+  { id: "iphone-11-pro-max", regex: /(?:^|-)iphone-11-pro-max(?:-|$)/, name: "11 pro max" },
+  { id: "iphone-11-pro", regex: /(?:^|-)iphone-11-pro(?:-|$)(?!max)/, name: "11 pro" },
+  { id: "iphone-11", regex: /(?:^|-)iphone-11(?:-|$)(?!pro|max)/, name: "11" },
+  { id: "iphone-xs-max", regex: /(?:^|-)iphone-(?:xs-max|xsmax|xsmax-xs-max)(?:-|$)/, name: "xsmax" },
+  { id: "iphone-xr", regex: /(?:^|-)iphone-xr(?:-|$)/, name: "xr" },
+  { id: "iphone-xs", regex: /(?:^|-)iphone-xs(?:-|$)(?!max)/, name: "xs" },
+  { id: "iphone-x", regex: /(?:^|-)iphone-x(?:-|$)(?!r|s)/, name: "x" },
+  { id: "iphone-se", regex: /(?:^|-)iphone-se(?:-|$)/, name: "se" },
+  { id: "iphone-8-plus", regex: /(?:^|-)iphone-8-plus(?:-|$)/, name: "8 plus" },
+  { id: "iphone-8", regex: /(?:^|-)iphone-8(?:-|$)(?!plus)/, name: "8" },
+  { id: "iphone-7-plus", regex: /(?:^|-)iphone-7-plus(?:-|$)/, name: "7 plus" },
+  { id: "iphone-7", regex: /(?:^|-)iphone-7(?:-|$)(?!plus)/, name: "7" }
+];
+function extractModelIdentifier(slug) {
+  for (const item of KNOWN_MODEL_PATTERNS) {
+    if (item.regex.test(slug)) {
+      return { id: item.id, name: item.name };
+    }
+  }
+  return null;
+}
+function normalizeAndMatchLegacySlug(requestedSlug, activeServices, slugToServiceMap) {
+  const norm = normalizeLegacySlug(requestedSlug);
+  if (!norm) return null;
+  const slugToService = slugToServiceMap || buildSlugMap(activeServices).slugToService;
+  if (slugToService.has(norm)) {
+    return { targetSlug: norm, service: slugToService.get(norm) };
+  }
+  const collapsed = norm.replace(/iphone-(\d+)-\1-/, "iphone-$1-");
+  if (slugToService.has(collapsed)) {
+    return { targetSlug: collapsed, service: slugToService.get(collapsed) };
+  }
+  const inserted = norm.replace(/iphone-(\d+)-(pro-max)-/, "iphone-$1-$2-$1-");
+  if (slugToService.has(inserted)) {
+    return { targetSlug: inserted, service: slugToService.get(inserted) };
+  }
+  const modelMatch = extractModelIdentifier(norm);
+  if (!modelMatch) return null;
+  const modelServices = activeServices.filter((s) => {
+    const sModel = (s.model || "").trim().toLowerCase();
+    if (modelMatch.id === "iphone-xs-max") {
+      return sModel === "xsmax" || sModel === "xs max";
+    }
+    return sModel === modelMatch.name;
+  });
+  if (modelServices.length === 0) return null;
+  const isDisplay = norm.includes("display") || norm.includes("screen") || norm.includes("lcd") || norm.includes("oled") || norm.includes("amoled");
+  const isBattery = norm.includes("battery");
+  const isCamera = norm.includes("camera");
+  const isBackPanel = norm.includes("back-panel") || norm.includes("back-cover") || norm.includes("back-glass") || norm.includes("rear-glass");
+  const isSpeaker = norm.includes("speaker") || norm.includes("buzzer") || norm.includes("ringer");
+  const isCharging = norm.includes("charging") || norm.includes("dock-flex") || norm.includes("charging-flex");
+  if (isDisplay) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || "").toLowerCase() === "display" || s.serviceName.toLowerCase().includes("display")
+    );
+    if (compServices.length === 0) return null;
+    const isOriginal = (norm.includes("original") || norm.includes("genuine")) && !norm.includes("copy") && !norm.includes("gx") && !norm.includes("dd") && !norm.includes("incell") && !norm.includes("in-cell");
+    const isCopy = norm.includes("copy") || norm.includes("aftermarket");
+    const isGx = norm.includes("gx");
+    const isDd = norm.includes("dd");
+    const isIncell = norm.includes("incell") || norm.includes("in-cell");
+    let filtered = [];
+    if (isOriginal) {
+      filtered = compServices.filter(
+        (s) => s.serviceName.toLowerCase().includes("original") && !s.serviceName.toLowerCase().includes("gx") && !s.serviceName.toLowerCase().includes("dd") && !s.serviceName.toLowerCase().includes("copy")
+      );
+    } else if (isCopy) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("copy"));
+    } else if (isGx) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("gx"));
+    } else if (isDd) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("dd"));
+    } else if (isIncell) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("incell") || s.serviceName.toLowerCase().includes("in-cell"));
+    } else {
+      if (compServices.length > 1) return null;
+      filtered = compServices;
+    }
+    if (filtered.length === 1) {
+      const match = filtered[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+    return null;
+  }
+  if (isBattery) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || "").toLowerCase() === "battery" || s.serviceName.toLowerCase().includes("battery")
+    );
+    if (compServices.length === 0) return null;
+    const isMarket = norm.includes("market");
+    const isCopy = norm.includes("copy");
+    const isOrig = (norm.includes("original") || norm.includes("1-year-warranty")) && !isMarket && !isCopy;
+    let filtered = [];
+    if (isMarket) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("market"));
+    } else if (isCopy) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("copy"));
+    } else if (isOrig) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("original") && !s.serviceName.toLowerCase().includes("market"));
+    } else {
+      if (compServices.length > 1) return null;
+      filtered = compServices;
+    }
+    if (filtered.length === 1) {
+      const match = filtered[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+    return null;
+  }
+  if (isCamera) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || "").toLowerCase() === "camera" || s.serviceName.toLowerCase().includes("camera")
+    );
+    if (compServices.length === 0) return null;
+    const isFront = norm.includes("front") || norm.includes("selfie");
+    const isBack = norm.includes("back") || norm.includes("rear");
+    if (isFront && !isBack) {
+      const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("front"));
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        return targetSlug ? { targetSlug, service: match } : null;
+      }
+    } else if (isBack && !isFront) {
+      const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("back"));
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        return targetSlug ? { targetSlug, service: match } : null;
+      }
+    }
+    return null;
+  }
+  if (isSpeaker) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || "").toLowerCase() === "speaker" || s.serviceName.toLowerCase().includes("speaker") || s.serviceName.toLowerCase().includes("buzzer")
+    );
+    if (compServices.length === 0) return null;
+    if (norm.includes("buzzer")) {
+      const buz = compServices.filter((s) => s.serviceName.toLowerCase().includes("buzzer"));
+      if (buz.length === 1) {
+        const match = buz[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        return targetSlug ? { targetSlug, service: match } : null;
+      }
+    }
+    if (compServices.length === 1) {
+      const match = compServices[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+    return null;
+  }
+  if (isCharging) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || "").toLowerCase().includes("charging") || s.serviceName.toLowerCase().includes("charging")
+    );
+    if (compServices.length === 0) return null;
+    if (compServices.length === 1) {
+      const match = compServices[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+    const isMarket = norm.includes("market");
+    const isGenuine = norm.includes("genuine");
+    let filtered = [];
+    if (isMarket) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("market"));
+    } else if (isGenuine) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("genuine") || s.serviceName.toLowerCase().includes("original"));
+    }
+    if (filtered.length === 1) {
+      const match = filtered[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+    return null;
+  }
+  if (isBackPanel) {
+    const compServices = modelServices.filter(
+      (s) => (s.category || "").toLowerCase().includes("back panel") || s.serviceName.toLowerCase().includes("back panel")
+    );
+    if (compServices.length === 0) return null;
+    const isHq = norm.includes("high-quality") || norm.includes("high quality");
+    const isCopy = norm.includes("copy");
+    const isOrig = norm.includes("original") && !isCopy;
+    let filtered = [];
+    if (isHq) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("high quality") || s.serviceName.toLowerCase().includes("high-quality"));
+    } else if (isCopy) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("copy") && !s.serviceName.toLowerCase().includes("high quality"));
+    } else if (isOrig) {
+      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("original"));
+    } else {
+      if (compServices.length > 1) return null;
+      filtered = compServices;
+    }
+    if (filtered.length === 1) {
+      const match = filtered[0];
+      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+      return targetSlug ? { targetSlug, service: match } : null;
+    }
+    return null;
+  }
+  return null;
+}
+function resolveServiceSlug(rawRequestedSlug, slugMapOrServices) {
+  const requestedSlug = rawRequestedSlug ? String(rawRequestedSlug) : "";
+  const cleanSlug = requestedSlug.trim().replace(/^\/+|\/+$/g, "").toLowerCase();
+  if (!cleanSlug) {
+    return {
+      type: "NOT_FOUND",
+      requestedSlug,
+      cleanSlug: ""
+    };
+  }
+  const slugToService = Array.isArray(slugMapOrServices) ? buildSlugMap(slugMapOrServices).slugToService : slugMapOrServices;
+  const activeServices = Array.isArray(slugMapOrServices) ? slugMapOrServices : Array.from(slugToService.values());
+  if (slugToService.has(cleanSlug)) {
+    return {
+      type: "ACTIVE",
+      requestedSlug,
+      cleanSlug,
+      service: slugToService.get(cleanSlug),
+      matchStrategy: "EXACT_ACTIVE"
+    };
+  }
+  if (Object.prototype.hasOwnProperty.call(LEGACY_SLUGS, cleanSlug)) {
+    let currentSlug = cleanSlug;
+    const visited = /* @__PURE__ */ new Set([currentSlug]);
+    let target = LEGACY_SLUGS[currentSlug]?.trim().toLowerCase();
+    let steps = 0;
+    while (target && Object.prototype.hasOwnProperty.call(LEGACY_SLUGS, target) && steps < 5) {
+      const nextTarget = LEGACY_SLUGS[target]?.trim().toLowerCase();
+      if (!nextTarget || visited.has(nextTarget)) {
+        break;
+      }
+      visited.add(nextTarget);
+      target = nextTarget;
+      steps++;
+    }
+    if (target && slugToService.has(target)) {
+      return {
+        type: "REDIRECT",
+        requestedSlug,
+        cleanSlug,
+        targetSlug: target,
+        targetUrl: `/services/${target}`,
+        service: slugToService.get(target),
+        matchStrategy: "EXPLICIT_LEGACY"
+      };
+    }
+  }
+  const autoMatch = normalizeAndMatchLegacySlug(cleanSlug, activeServices, slugToService);
+  if (autoMatch && autoMatch.targetSlug && slugToService.has(autoMatch.targetSlug)) {
+    return {
+      type: "REDIRECT",
+      requestedSlug,
+      cleanSlug,
+      targetSlug: autoMatch.targetSlug,
+      targetUrl: `/services/${autoMatch.targetSlug}`,
+      service: autoMatch.service,
+      matchStrategy: "AUTOMATED_LEGACY"
+    };
+  }
+  return {
+    type: "NOT_FOUND",
+    requestedSlug,
+    cleanSlug
+  };
+}
 function getServiceSeoTitle(service) {
   const device = `${service.brand} ${service.model}${service.variant ? ` ${service.variant}` : ""}`.trim();
   const title = `${service.serviceName} for ${device} | MTS Lab Kathmandu`;
@@ -16749,7 +17094,15 @@ router22.get("/services/:slug", async (req, res) => {
   try {
     const services = await getAuthoritativeActiveServices();
     const { slugToService } = buildSlugMap(services);
-    const service = slugToService.get(reqSlug);
+    const resolution = resolveServiceSlug(reqSlug, slugToService);
+    if (resolution.type === "REDIRECT" && resolution.targetSlug) {
+      const queryIndex = req.url.indexOf("?");
+      const queryString = queryIndex !== -1 ? req.url.slice(queryIndex) : "";
+      const destination = `/services/${resolution.targetSlug}${queryString}`;
+      res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
+      return res.redirect(301, destination);
+    }
+    const service = resolution.type === "ACTIVE" ? resolution.service : void 0;
     const template = getHtmlTemplate();
     if (!service) {
       const notFoundBody = `
@@ -16762,7 +17115,7 @@ router22.get("/services/:slug", async (req, res) => {
       const notFoundHtml = injectSeoIntoTemplate(template, {
         title: `Service Not Found | ${BUSINESS_NAME}`,
         description: "The requested smartphone repair service could not be found.",
-        canonicalUrl: `${SITE_URL}/services`,
+        canonicalUrl: `${SITE_URL}/services/${reqSlug}`,
         noindex: true,
         bodyHtml: notFoundBody
       });

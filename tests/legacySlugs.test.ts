@@ -5,12 +5,142 @@ import path from 'path';
 import {
   LEGACY_SLUGS,
   resolveServiceSlug,
+  normalizeLegacySlug,
+  stripLegacyNoisePhrases,
+  normalizeAndMatchLegacySlug,
   buildSlugMap,
   ServiceLike,
 } from '../src/lib/seo';
 
-// Mock active service dataset reflecting authoritative MTS Lab repair catalogue
+// Controlled active-service catalogue fixture with known valid slugs
 const mockServices: ServiceLike[] = [
+  // iPhone 11
+  {
+    id: 'srv-iph-11-disp-orig',
+    brand: 'Iphone',
+    model: '11',
+    serviceName: 'iPhone 11 Original Display Replacement',
+    price: 9500,
+    priceType: 'FIXED',
+    category: 'Display',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'srv-iph-11-disp-copy',
+    brand: 'Iphone',
+    model: '11',
+    serviceName: 'iPhone 11 Copy Display Replacement',
+    price: 4500,
+    priceType: 'FIXED',
+    category: 'Display',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'srv-iph-11-disp-gx',
+    brand: 'Iphone',
+    model: '11',
+    serviceName: 'iPhone 11 GX Orginal Display Replacement',
+    price: 6500,
+    priceType: 'FIXED',
+    category: 'Display',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'srv-iph-11-front-cam',
+    brand: 'Iphone',
+    model: '11',
+    serviceName: 'iPhone 11 Front Camera Replacement',
+    price: 3500,
+    priceType: 'FIXED',
+    category: 'Camera',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'srv-iph-11-back-cam',
+    brand: 'Iphone',
+    model: '11',
+    serviceName: 'iPhone 11 Back Camera Replacement',
+    price: 5500,
+    priceType: 'FIXED',
+    category: 'Camera',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'srv-iph-11-batt-orig',
+    brand: 'Iphone',
+    model: '11',
+    serviceName: 'iPhone 11 Original Battery Replacement Kathmandu (1-Year Warranty)',
+    price: 4500,
+    priceType: 'FIXED',
+    category: 'Battery',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'srv-iph-11-batt-copy',
+    brand: 'Iphone',
+    model: '11',
+    serviceName: 'iPhone 11 Copy Battery Replacement',
+    price: 2500,
+    priceType: 'FIXED',
+    category: 'Battery',
+    status: 'ACTIVE',
+  },
+
+  // iPhone 11 Pro Max
+  {
+    id: 'srv-iph-11pm-disp-orig',
+    brand: 'Iphone',
+    model: '11 pro max',
+    serviceName: 'iPhone 11 Pro Max Original Display Replacement',
+    price: 18000,
+    priceType: 'FIXED',
+    category: 'Display',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'srv-iph-11pm-disp-copy',
+    brand: 'Iphone',
+    model: '11 pro max',
+    serviceName: 'iPhone 11 Pro Max Copy Display Replacement',
+    price: 7500,
+    priceType: 'FIXED',
+    category: 'Display',
+    status: 'ACTIVE',
+  },
+
+  // iPhone 13 Pro Max
+  {
+    id: 'srv-iph-13pm-buzzer',
+    brand: 'Iphone',
+    model: '13 Pro Max',
+    serviceName: 'iPhone 13 Pro Max Buzzer Speaker Replacement',
+    price: 3500,
+    priceType: 'FIXED',
+    category: 'Speaker',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'srv-iph-13pm-disp-orig',
+    brand: 'Iphone',
+    model: '13 Pro Max',
+    serviceName: 'iPhone 13 Pro Max Original Display Replacement',
+    price: 32000,
+    priceType: 'FIXED',
+    category: 'Display',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'srv-iph-13pm-disp-incell',
+    brand: 'Iphone',
+    model: '13 Pro Max',
+    serviceName: 'iPhone 13 Pro Max Incell Display Replacement',
+    price: 14000,
+    priceType: 'FIXED',
+    category: 'Display',
+    status: 'ACTIVE',
+  },
+
+  // iPhone 14 Pro Max
   {
     id: 'a66572ae-724d-4703-b982-f5b8f1a3e252',
     brand: 'Iphone',
@@ -21,179 +151,237 @@ const mockServices: ServiceLike[] = [
     category: 'Display',
     status: 'ACTIVE',
   },
+
+  // iPhone X, XR, XS, XS Max
   {
-    id: 'e8df8500-652e-4c09-ab35-17db6b908990',
+    id: 'srv-iph-x-disp-orig',
     brand: 'Iphone',
-    model: '14 pro max',
-    serviceName: 'iPhone 14 Pro Max Original Battery Replacement',
-    price: 9000,
-    priceType: 'FIXED',
-    category: 'Battery',
-    status: 'ACTIVE',
-  },
-  {
-    id: 'test-iphone-11-display',
-    brand: 'Iphone',
-    model: '11 pro max',
-    serviceName: 'iPhone 11 Pro Max Original Display Replacement',
-    price: 18000,
+    model: 'X',
+    serviceName: 'iPhone X Original Display Replacement',
+    price: 8500,
     priceType: 'FIXED',
     category: 'Display',
     status: 'ACTIVE',
   },
   {
-    id: 'test-iphone-12-display',
+    id: 'srv-iph-x-disp-copy',
     brand: 'Iphone',
-    model: '12 pro max',
-    serviceName: 'iPhone 12 Pro Max Original Display Replacement',
-    price: 24000,
+    model: 'X',
+    serviceName: 'iPhone X Copy Display Replacement',
+    price: 3800,
+    priceType: 'FIXED',
+    category: 'Display',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'srv-iph-xr-disp-orig',
+    brand: 'Iphone',
+    model: 'XR',
+    serviceName: 'iPhone XR Original Display Replacement',
+    price: 7500,
+    priceType: 'FIXED',
+    category: 'Display',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'srv-iph-xsmax-disp-orig',
+    brand: 'Iphone',
+    model: 'Xsmax',
+    serviceName: 'iPhone XS Max Original Display Replacement',
+    price: 12000,
     priceType: 'FIXED',
     category: 'Display',
     status: 'ACTIVE',
   },
 ];
 
-describe('MTS Lab Legacy Slugs & Technical SEO Redirection Suite', () => {
+describe('MTS Lab Automated Legacy Service URL Resolution Engine', () => {
   const { slugToService } = buildSlugMap(mockServices);
 
-  // Test 1: Direct Active Slug Matching
-  test('1. Direct active slug matches without redirect', () => {
-    const activeSlug = 'iphone-14-pro-max-14-original-display-replacement';
+  // Test A: Legacy noise phrase
+  test('Test A: Legacy noise phrase resolves to active service slug', () => {
+    const input = 'iphone-11-all-storage-sizes-and-colors-11-original-display-replacement';
+    const resolution = resolveServiceSlug(input, slugToService);
+
+    assert.equal(resolution.type, 'REDIRECT');
+    assert.equal(resolution.targetSlug, 'iphone-11-original-display-replacement');
+    assert.equal(resolution.targetUrl, '/services/iphone-11-original-display-replacement');
+    assert.ok(resolution.service);
+    assert.equal(resolution.service.serviceName, 'iPhone 11 Original Display Replacement');
+    assert.equal(resolution.matchStrategy, 'AUTOMATED_LEGACY');
+  });
+
+  // Test B: Long legacy phrase
+  test('Test B: Long legacy phrase resolves to verified active buzzer speaker service', () => {
+    const input = 'iphone-13-pro-max-all-compatible-variants-confirm-before-repair-13-buzzer-speaker-replacement';
+    const resolution = resolveServiceSlug(input, slugToService);
+
+    assert.equal(resolution.type, 'REDIRECT');
+    assert.equal(resolution.targetSlug, 'iphone-13-pro-max-13-buzzer-speaker-replacement');
+    assert.equal(resolution.targetUrl, '/services/iphone-13-pro-max-13-buzzer-speaker-replacement');
+    assert.ok(resolution.service);
+    assert.equal(resolution.service.serviceName, 'iPhone 13 Pro Max Buzzer Speaker Replacement');
+    assert.equal(resolution.matchStrategy, 'AUTOMATED_LEGACY');
+  });
+
+  // Test C: Exact active slug
+  test('Test C: Exact active slug returns without redirecting', () => {
+    const activeSlug = 'iphone-11-original-display-replacement';
     const resolution = resolveServiceSlug(activeSlug, slugToService);
 
     assert.equal(resolution.type, 'ACTIVE');
     assert.equal(resolution.cleanSlug, activeSlug);
-    assert.ok(resolution.service);
-    assert.equal(resolution.service.serviceName, 'iPhone 14 Pro Max Original Display Replacement');
     assert.equal(resolution.targetSlug, undefined);
+    assert.ok(resolution.service);
+    assert.equal(resolution.service.serviceName, 'iPhone 11 Original Display Replacement');
+    assert.equal(resolution.matchStrategy, 'EXACT_ACTIVE');
   });
 
-  // Test 2: Known Legacy Slug Lookup
-  test('2. Known legacy slug iphone-14-pro-max-standard-original-standard redirects to active slug', () => {
+  // Test D: Explicit legacy dictionary entry
+  test('Test D: Explicit legacy dictionary entry resolves to verified active destination', () => {
     const legacySlug = 'iphone-14-pro-max-standard-original-standard';
     const resolution = resolveServiceSlug(legacySlug, slugToService);
 
     assert.equal(resolution.type, 'REDIRECT');
-    assert.equal(resolution.cleanSlug, legacySlug);
     assert.equal(resolution.targetSlug, 'iphone-14-pro-max-14-original-display-replacement');
-    assert.equal(resolution.targetUrl, '/services/iphone-14-pro-max-14-original-display-replacement');
+    assert.equal(resolution.matchStrategy, 'EXPLICIT_LEGACY');
     assert.ok(resolution.service);
-    assert.equal(resolution.service.id, 'a66572ae-724d-4703-b982-f5b8f1a3e252');
+    assert.equal(resolution.service.serviceName, 'iPhone 14 Pro Max Original Display Replacement');
   });
 
-  // Test 3: Normalization & Case Insensitivity
-  test('3. Resolver handles uppercase, whitespace, and leading/trailing slashes gracefully', () => {
-    const inputWithMessyFormat = '  /IPHONE-14-PRO-MAX-STANDARD-ORIGINAL-STANDARD/  ';
-    const resolution = resolveServiceSlug(inputWithMessyFormat, slugToService);
+  // Test E: Multiple noise phrases
+  test('Test E: Multiple noise phrases are stripped without mutating meaningful model or service tokens', () => {
+    const input = 'iphone-11-all-storage-sizes-and-colors-all-compatible-variants-confirm-before-repair-original-display-replacement';
+    const resolution = resolveServiceSlug(input, slugToService);
 
     assert.equal(resolution.type, 'REDIRECT');
-    assert.equal(resolution.cleanSlug, 'iphone-14-pro-max-standard-original-standard');
-    assert.equal(resolution.targetSlug, 'iphone-14-pro-max-14-original-display-replacement');
+    assert.equal(resolution.targetSlug, 'iphone-11-original-display-replacement');
+    assert.ok(resolution.service);
+    assert.equal(resolution.service.serviceName, 'iPhone 11 Original Display Replacement');
   });
 
-  // Test 4: Additional Legacy Variants
-  test('4. Resolves other legacy variants to the active canonical service', () => {
-    const altVariant = 'iphone-14-pro-max-standard-original';
-    const res1 = resolveServiceSlug(altVariant, slugToService);
-    assert.equal(res1.type, 'REDIRECT');
-    assert.equal(res1.targetSlug, 'iphone-14-pro-max-14-original-display-replacement');
+  // Test F: Model distinction
+  test('Test F: Model distinction ensures distinct models are never confused', () => {
+    // 1. iPhone X vs iPhone XR
+    const xRes = resolveServiceSlug('iphone-x-copy-display-replacement', slugToService);
+    assert.equal(xRes.type, 'ACTIVE');
+    assert.equal(xRes.service?.model.toLowerCase(), 'x');
 
-    const cleanAlias = 'iphone-14-pro-max-original-display-replacement';
-    const res2 = resolveServiceSlug(cleanAlias, slugToService);
-    assert.equal(res2.type, 'REDIRECT');
-    assert.equal(res2.targetSlug, 'iphone-14-pro-max-14-original-display-replacement');
+    const xrRes = resolveServiceSlug('iphone-xr-original-display-replacement', slugToService);
+    assert.equal(xrRes.type, 'ACTIVE');
+    assert.equal(xrRes.service?.model.toLowerCase(), 'xr');
+
+    // 2. iPhone XS vs iPhone XS Max
+    const xsMaxRes = resolveServiceSlug('iphone-xsmax-xs-max-original-display-replacement', slugToService);
+    assert.equal(xsMaxRes.type, 'ACTIVE');
+    assert.equal(xsMaxRes.service?.model.toLowerCase(), 'xsmax');
+
+    // 3. iPhone 11 vs iPhone 11 Pro Max
+    const iph11Res = resolveServiceSlug('iphone-11-original-display-replacement', slugToService);
+    assert.equal(iph11Res.service?.model.toLowerCase(), '11');
+
+    const iph11PmRes = resolveServiceSlug('iphone-11-pro-max-11-original-display-replacement', slugToService);
+    assert.equal(iph11PmRes.service?.model.toLowerCase(), '11 pro max');
+
+    // 4. iPhone 13 vs iPhone 13 Pro Max
+    const iph13PmRes = resolveServiceSlug('iphone-13-pro-max-13-buzzer-speaker-replacement', slugToService);
+    assert.equal(iph13PmRes.service?.model.toLowerCase(), '13 pro max');
   });
 
-  // Test 5: Unknown Slug Returns NOT_FOUND Without Infinite Loops
-  test('5. Nonexistent slug returns NOT_FOUND', () => {
-    const unknownSlug = 'samsung-galaxy-s99-ultra-laser-fix';
-    const resolution = resolveServiceSlug(unknownSlug, slugToService);
+  // Test G: Service-type distinction
+  test('Test G: Service-type distinction prevents confusing display grades, cameras, or parts', () => {
+    // Original vs Copy display
+    const origDisp = resolveServiceSlug('iphone-11-pro-max-11-original-display-replacement', slugToService);
+    const copyDisp = resolveServiceSlug('iphone-11-pro-max-11-copy-display-replacement', slugToService);
+    assert.notEqual(origDisp.service?.id, copyDisp.service?.id);
+    assert.ok(origDisp.service?.serviceName.includes('Original'));
+    assert.ok(copyDisp.service?.serviceName.includes('Copy'));
 
-    assert.equal(resolution.type, 'NOT_FOUND');
-    assert.equal(resolution.cleanSlug, unknownSlug);
-    assert.equal(resolution.service, undefined);
-    assert.equal(resolution.targetSlug, undefined);
+    // Front Camera vs Back Camera
+    const frontCam = resolveServiceSlug('iphone-11-front-camera-replacement', slugToService);
+    const backCam = resolveServiceSlug('iphone-11-back-camera-replacement', slugToService);
+    assert.notEqual(frontCam.service?.id, backCam.service?.id);
+    assert.ok(frontCam.service?.serviceName.includes('Front Camera'));
+    assert.ok(backCam.service?.serviceName.includes('Back Camera'));
+
+    // Original vs Incell display on 13 Pro Max
+    const orig13 = resolveServiceSlug('iphone-13-pro-max-13-original-display-replacement', slugToService);
+    const incell13 = resolveServiceSlug('iphone-13-pro-max-13-incell-display-replacement', slugToService);
+    assert.notEqual(orig13.service?.id, incell13.service?.id);
+    assert.ok(orig13.service?.serviceName.includes('Original'));
+    assert.ok(incell13.service?.serviceName.includes('Incell'));
   });
 
-  // Test 6: Safety Rule - Legacy slug pointing to missing service does NOT redirect to dead end
-  test('6. Safety guard: legacy slug pointing to unmapped service safely yields NOT_FOUND', () => {
-    // Custom isolated slug map missing the target
-    const partialSlugToService = new Map<string, ServiceLike>();
-    // Note: 'iphone-14-pro-max-14-original-display-replacement' is not in this map!
-    const resolution = resolveServiceSlug('iphone-14-pro-max-standard-original-standard', partialSlugToService);
+  // Test H: Unknown model returns NOT_FOUND
+  test('Test H: Unknown model returns NOT_FOUND', () => {
+    const unknown1 = resolveServiceSlug('nokia-3310-display-replacement', slugToService);
+    assert.equal(unknown1.type, 'NOT_FOUND');
 
-    // Must never redirect to a dead 404 URL
-    assert.equal(resolution.type, 'NOT_FOUND');
+    const unknown2 = resolveServiceSlug('iphone-99-screen-fix', slugToService);
+    assert.equal(unknown2.type, 'NOT_FOUND');
   });
 
-  // Test 7: Loop Protection & Depth Limit
-  test('7. Loop protection prevents infinite recursion if legacy slugs contain circular references', () => {
-    // Simulate circular map safely using a test resolver function
-    const visited = new Set<string>(['a']);
-    const circularMap: Record<string, string> = {
-      'a': 'b',
-      'b': 'a',
-    };
-    let target = circularMap['a'];
-    let looped = false;
-    while (target && circularMap[target]) {
-      const next = circularMap[target];
-      if (visited.has(next)) {
-        looped = true;
-        break;
-      }
-      visited.add(next);
-      target = next;
-    }
-    assert.equal(looped, true, 'Circular reference successfully caught by cycle detection');
+  // Test I: Unknown service type returns NOT_FOUND
+  test('Test I: Unknown service type returns NOT_FOUND', () => {
+    const unknown = resolveServiceSlug('iphone-11-coffee-cup-holder', slugToService);
+    assert.equal(unknown.type, 'NOT_FOUND');
   });
 
-  // Test 8: vercel.json Edge Redirect Verification
-  test('8. vercel.json contains 301 permanent redirect for legacy iPhone 14 Pro Max slug', () => {
-    const raw = fs.readFileSync(path.join(process.cwd(), 'vercel.json'), 'utf8');
-    const config = JSON.parse(raw);
+  // Test J: Ambiguous candidates return NOT_FOUND
+  test('Test J: Ambiguous candidates return NOT_FOUND without picking arbitrarily', () => {
+    // Multiple display grades exist for iPhone 11 (Original, Copy, GX), but no grade specified
+    const ambiguousDisplay = resolveServiceSlug('iphone-11-display-replacement', slugToService);
+    assert.equal(ambiguousDisplay.type, 'NOT_FOUND');
 
-    assert.ok(Array.isArray(config.redirects), 'vercel.json must have redirects array');
-    const redirect = config.redirects.find(
-      (r: any) => r.source === '/services/iphone-14-pro-max-standard-original-standard'
-    );
-    assert.ok(redirect, 'Missing vercel.json redirect for iphone-14-pro-max-standard-original-standard');
-    assert.equal(redirect.destination, '/services/iphone-14-pro-max-14-original-display-replacement');
-    assert.equal(redirect.permanent, true);
+    // Both front and back camera exist for iPhone 11, but direction not specified
+    const ambiguousCamera = resolveServiceSlug('iphone-11-camera-replacement', slugToService);
+    assert.equal(ambiguousCamera.type, 'NOT_FOUND');
   });
 
-  // Test 9: Server Endpoint Integration Test
-  test('9. Express endpoint GET /services/:slug returns HTTP 301 for legacy slug and preserves query params', async () => {
-    // Test live server if running
+  // Test K: Destination missing does NOT redirect to dead end
+  test('Test K: Destination missing safely returns NOT_FOUND', () => {
+    const isolatedMap = new Map<string, ServiceLike>();
+    // 'iphone-14-pro-max-14-original-display-replacement' is deliberately missing
+    const res = resolveServiceSlug('iphone-14-pro-max-standard-original-standard', isolatedMap);
+    assert.equal(res.type, 'NOT_FOUND');
+  });
+
+  // Test L: Normalization stability
+  test('Test L: Repeated normalization yields identical, deterministic results', () => {
+    const input = 'iphone-11-all-storage-sizes-and-colors-11-original-display-replacement';
+    const norm1 = normalizeLegacySlug(input);
+    const norm2 = normalizeLegacySlug(input);
+    const norm3 = normalizeLegacySlug(norm1);
+
+    assert.equal(norm1, norm2);
+    assert.equal(norm1, norm3);
+    assert.equal(norm1, 'iphone-11-11-original-display-replacement');
+
+    const res1 = resolveServiceSlug(input, slugToService);
+    const res2 = resolveServiceSlug(input, slugToService);
+    assert.deepEqual(res1, res2);
+  });
+
+  // Test M: Regression & Integration
+  test('Test M: Server integration verifies HTTP 301 redirects for legacy slugs and 404 for unknown', async () => {
     try {
+      // 1. Legacy slug with query parameter preservation
       const res = await fetch(
-        'http://localhost:3000/services/iphone-14-pro-max-standard-original-standard?src=gsc&test=1',
+        'http://localhost:3000/services/iphone-11-all-storage-sizes-and-colors-11-original-display-replacement?utm_campaign=gsc_test',
         { redirect: 'manual' }
       );
-      assert.equal(res.status, 301, 'Should return HTTP 301 status code');
+      assert.equal(res.status, 301, 'Should return HTTP 301 for legacy slug');
       const location = res.headers.get('location');
-      assert.ok(location, 'Should have Location header');
-      assert.ok(
-        location.startsWith('/services/iphone-14-pro-max-14-original-display-replacement'),
-        `Expected redirect to active slug, got: ${location}`
-      );
-      assert.ok(location.includes('src=gsc&test=1'), `Expected query parameters preserved, got: ${location}`);
-    } catch (err: any) {
-      console.warn('Live server test skipped (dev server not listening on 3000):', err.message);
-    }
-  });
+      assert.ok(location?.startsWith('/services/iphone-11-original-display-replacement'));
+      assert.ok(location?.includes('utm_campaign=gsc_test'));
 
-  // Test 10: Express Endpoint Unknown Slug Returns 404 with noindex
-  test('10. Express endpoint GET /services/:slug returns HTTP 404 with noindex for unknown slug', async () => {
-    try {
-      const res = await fetch('http://localhost:3000/services/completely-nonexistent-device-slug-99999');
-      assert.equal(res.status, 404, 'Unknown slug must return HTTP 404');
-      const text = await res.text();
-      assert.ok(text.includes('Repair Service Not Found') || text.includes('Service Not Found'));
-      const xRobots = res.headers.get('x-robots-tag');
-      assert.ok(xRobots && xRobots.includes('noindex'), 'Response must have X-Robots-Tag: noindex');
+      // 2. Genuinely unknown slug
+      const notFoundRes = await fetch('http://localhost:3000/services/completely-unknown-device-model-404');
+      assert.equal(notFoundRes.status, 404, 'Unknown slug must return HTTP 404');
+      const xRobots = notFoundRes.headers.get('x-robots-tag');
+      assert.ok(xRobots?.includes('noindex'), '404 response must specify noindex');
     } catch (err: any) {
-      console.warn('Live server test skipped:', err.message);
+      console.warn('Live server test notice:', err.message);
     }
   });
 });

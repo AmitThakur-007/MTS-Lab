@@ -438,7 +438,7 @@ router.get('/services/:slug', async (req: Request, res: Response) => {
       const notFoundHtml = injectSeoIntoTemplate(template, {
         title: `Service Not Found | ${BUSINESS_NAME}`,
         description: 'The requested smartphone repair service could not be found.',
-        canonicalUrl: `${SITE_URL}/services`,
+        canonicalUrl: `${SITE_URL}/services/${reqSlug}`,
         noindex: true,
         bodyHtml: notFoundBody,
       });

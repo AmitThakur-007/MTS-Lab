@@ -234,7 +234,7 @@ export default function ServiceDetail() {
         <PageSeo
           title="Service Not Found | MTS Lab Kathmandu"
           description="The requested smartphone repair service could not be found in our verified catalog."
-          canonical={`${SITE_URL}/services`}
+          canonical={`${SITE_URL}/services/${cleanSlug}`}
           noindex={true}
         />
         <Navbar />
