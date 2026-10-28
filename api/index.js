@@ -16439,16 +16439,36 @@ async function getAuthoritativeActiveServices() {
   lastCacheFetchTime = now;
   return parsed;
 }
+var FALLBACK_HTML_TEMPLATE = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/jpeg" href="/mts-logo.jpg" />
+    <title>MTS Lab \u2013 Smartphone Hardware &amp; Chip-Level Repair Lab Kathmandu</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>`;
 function getHtmlTemplate() {
-  const prodPath = path9.join(process.cwd(), "dist", "index.html");
-  if (fs9.existsSync(prodPath)) {
-    return fs9.readFileSync(prodPath, "utf8");
+  try {
+    const prodPath = path9.join(process.cwd(), "dist", "index.html");
+    if (fs9.existsSync(prodPath)) {
+      return fs9.readFileSync(prodPath, "utf8");
+    }
+  } catch (_) {
   }
-  const devPath = path9.join(process.cwd(), "index.html");
-  if (fs9.existsSync(devPath)) {
-    return fs9.readFileSync(devPath, "utf8");
+  try {
+    const devPath = path9.join(process.cwd(), "index.html");
+    if (fs9.existsSync(devPath)) {
+      return fs9.readFileSync(devPath, "utf8");
+    }
+  } catch (_) {
   }
-  throw new Error("HTML template not found");
+  return FALLBACK_HTML_TEMPLATE;
 }
 function injectSeoIntoTemplate(template, options) {
   const { title, description, canonicalUrl, noindex = false, jsonLd, bodyHtml } = options;
@@ -16716,6 +16736,7 @@ router22.get("/services", async (req, res) => {
       bodyHtml
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("X-Robots-Tag", "index, follow, max-snippet:-1, max-image-preview:large");
     res.setHeader("Cache-Control", "public, max-age=300, s-maxage=600");
     return res.status(200).send(html);
   } catch (err) {
@@ -16746,6 +16767,7 @@ router22.get("/services/:slug", async (req, res) => {
         bodyHtml: notFoundBody
       });
       res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("X-Robots-Tag", "noindex, nofollow");
       return res.status(404).send(notFoundHtml);
     }
     const title = getServiceSeoTitle(service);
@@ -16822,6 +16844,7 @@ router22.get("/services/:slug", async (req, res) => {
       bodyHtml
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("X-Robots-Tag", "index, follow, max-snippet:-1, max-image-preview:large");
     res.setHeader("Cache-Control", "public, max-age=300, s-maxage=600");
     return res.status(200).send(html);
   } catch (err) {
@@ -16854,6 +16877,7 @@ router22.get("/about", (req, res) => {
       bodyHtml
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("X-Robots-Tag", "index, follow, max-snippet:-1, max-image-preview:large");
     res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600");
     return res.status(200).send(html);
   } catch (err) {
@@ -16890,6 +16914,7 @@ router22.get("/contact", (req, res) => {
       bodyHtml
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("X-Robots-Tag", "index, follow, max-snippet:-1, max-image-preview:large");
     res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600");
     return res.status(200).send(html);
   } catch (err) {
@@ -16936,6 +16961,7 @@ router22.get("/track", (req, res) => {
       bodyHtml
     });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("X-Robots-Tag", hasCustomerQuery ? "noindex, nofollow" : "index, follow, max-snippet:-1, max-image-preview:large");
     res.setHeader("Cache-Control", hasCustomerQuery ? "no-store, max-age=0" : "public, max-age=3600, s-maxage=3600");
     return res.status(200).send(html);
   } catch (err) {

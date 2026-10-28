@@ -403,6 +403,53 @@ export interface StaticPageSeo {
   noindex?: boolean;
 }
 
+export const INDEX_ROBOTS = 'index, follow, max-snippet:-1, max-image-preview:large';
+export const NOINDEX_ROBOTS = 'noindex, nofollow';
+
+/**
+ * Normalizes a URL path for consistent routing and lookup:
+ * - Trims whitespace
+ * - Strips redundant trailing slashes (preserves root '/')
+ * - Lowercases path for routing lookup
+ */
+export function normalizeSeoPath(pathname: string): string {
+  if (!pathname) return '/';
+  const clean = pathname.trim();
+  const withoutTrailing = clean.replace(/\/+$/, '');
+  return withoutTrailing === '' ? '/' : withoutTrailing.toLowerCase();
+}
+
+/**
+ * Gracefully converts a service slug into a human-readable title
+ * used for immediate metadata rendering prior to asynchronous catalog hydration.
+ * E.g., 'iphone-11-back-camera-replacement' -> 'iPhone 11 Back Camera Replacement'
+ */
+export function slugToHumanTitle(slug?: string | null): string {
+  if (!slug) return 'Repair Service';
+  const clean = slug.trim().replace(/^[\/]+|[\/]+$/g, '');
+  const tokens = clean.split('-').filter(Boolean);
+
+  const formatted = tokens.map((word) => {
+    const lower = word.toLowerCase();
+    if (lower === 'iphone') return 'iPhone';
+    if (lower === 'ipad') return 'iPad';
+    if (lower === 'oled') return 'OLED';
+    if (lower === 'amoled') return 'AMOLED';
+    if (lower === 'oca') return 'OCA';
+    if (lower === 'ic') return 'IC';
+    if (lower === 'lcd') return 'LCD';
+    if (lower === 'gx') return 'GX';
+    if (lower === 'sim') return 'SIM';
+    if (lower === '5g') return '5G';
+    if (lower === '4g') return '4G';
+    if (lower === 'npr') return 'NPR';
+    if (lower === 'usb') return 'USB';
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  });
+
+  return formatted.join(' ') || 'Repair Service';
+}
+
 export const STATIC_PAGES_SEO: Record<string, StaticPageSeo> = {
   '/': {
     title: 'MTS Lab – Smartphone Hardware & Chip-Level Repair Lab Kathmandu',
@@ -455,15 +502,17 @@ export const STATIC_PAGES_SEO: Record<string, StaticPageSeo> = {
  * Detect if a route should have noindex directive
  */
 export function isNoindexRoute(pathname: string): boolean {
+  const norm = normalizeSeoPath(pathname);
   if (
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/forgot-password') ||
-    pathname.startsWith('/reset-password') ||
-    pathname.startsWith('/pending-approval') ||
-    pathname.startsWith('/rejected-access')
+    norm.startsWith('/dashboard') ||
+    norm.startsWith('/login') ||
+    norm.startsWith('/forgot-password') ||
+    norm.startsWith('/reset-password') ||
+    norm.startsWith('/pending-approval') ||
+    norm.startsWith('/rejected-access')
   ) {
     return true;
   }
   return false;
 }
+

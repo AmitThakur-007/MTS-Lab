@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
-import { buildSlugMap } from '@/lib/seo';
+import { buildSlugMap, STATIC_PAGES_SEO, getLocalBusinessJsonLd, SITE_URL } from '@/lib/seo';
+import { PageSeo } from '@/components/Seo';
 import { 
   Search, 
   Smartphone, 
@@ -1352,6 +1353,13 @@ export default function Services() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-slate-950 dark:selection:bg-indigo-600 selection:text-white antialiased">
+      <PageSeo
+        title={STATIC_PAGES_SEO['/services'].title}
+        description={STATIC_PAGES_SEO['/services'].description}
+        canonical={STATIC_PAGES_SEO['/services'].canonical}
+        noindex={false}
+        jsonLd={getLocalBusinessJsonLd()}
+      />
       <Navbar />
 
       <main className="flex-1 pt-24 sm:pt-28 lg:pt-32 pb-16 px-2.5 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-4 sm:space-y-6">

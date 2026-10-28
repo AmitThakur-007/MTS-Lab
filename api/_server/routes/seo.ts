@@ -72,16 +72,35 @@ async function getAuthoritativeActiveServices(): Promise<ServiceLike[]> {
   return parsed;
 }
 
+const FALLBACK_HTML_TEMPLATE = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/jpeg" href="/mts-logo.jpg" />
+    <title>MTS Lab – Smartphone Hardware &amp; Chip-Level Repair Lab Kathmandu</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>`;
+
 function getHtmlTemplate(): string {
-  const prodPath = path.join(process.cwd(), 'dist', 'index.html');
-  if (fs.existsSync(prodPath)) {
-    return fs.readFileSync(prodPath, 'utf8');
-  }
-  const devPath = path.join(process.cwd(), 'index.html');
-  if (fs.existsSync(devPath)) {
-    return fs.readFileSync(devPath, 'utf8');
-  }
-  throw new Error('HTML template not found');
+  try {
+    const prodPath = path.join(process.cwd(), 'dist', 'index.html');
+    if (fs.existsSync(prodPath)) {
+      return fs.readFileSync(prodPath, 'utf8');
+    }
+  } catch (_) {}
+  try {
+    const devPath = path.join(process.cwd(), 'index.html');
+    if (fs.existsSync(devPath)) {
+      return fs.readFileSync(devPath, 'utf8');
+    }
+  } catch (_) {}
+  return FALLBACK_HTML_TEMPLATE;
 }
 
 interface PageMetaOptions {
@@ -373,6 +392,7 @@ router.get('/services', async (req: Request, res: Response) => {
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'index, follow, max-snippet:-1, max-image-preview:large');
     res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=600');
     return res.status(200).send(html);
   } catch (err: any) {
@@ -412,6 +432,7 @@ router.get('/services/:slug', async (req: Request, res: Response) => {
       });
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('X-Robots-Tag', 'noindex, nofollow');
       return res.status(404).send(notFoundHtml);
     }
 
@@ -493,6 +514,7 @@ router.get('/services/:slug', async (req: Request, res: Response) => {
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'index, follow, max-snippet:-1, max-image-preview:large');
     res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=600');
     return res.status(200).send(html);
   } catch (err: any) {
@@ -532,6 +554,7 @@ router.get('/about', (req: Request, res: Response) => {
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'index, follow, max-snippet:-1, max-image-preview:large');
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
     return res.status(200).send(html);
   } catch (err: any) {
@@ -575,6 +598,7 @@ router.get('/contact', (req: Request, res: Response) => {
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', 'index, follow, max-snippet:-1, max-image-preview:large');
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
     return res.status(200).send(html);
   } catch (err: any) {
@@ -629,6 +653,7 @@ router.get('/track', (req: Request, res: Response) => {
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-Robots-Tag', hasCustomerQuery ? 'noindex, nofollow' : 'index, follow, max-snippet:-1, max-image-preview:large');
     res.setHeader('Cache-Control', hasCustomerQuery ? 'no-store, max-age=0' : 'public, max-age=3600, s-maxage=3600');
     return res.status(200).send(html);
   } catch (err: any) {

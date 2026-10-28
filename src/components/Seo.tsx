@@ -5,6 +5,10 @@ import {
   BUSINESS_NAME,
   STATIC_PAGES_SEO,
   isNoindexRoute,
+  normalizeSeoPath,
+  slugToHumanTitle,
+  INDEX_ROBOTS,
+  NOINDEX_ROBOTS,
   getLocalBusinessJsonLd,
   safeJsonLdString,
 } from '@/lib/seo';
@@ -46,7 +50,9 @@ function setCanonical(href: string | null) {
     link.setAttribute('rel', 'canonical');
     document.head.appendChild(link);
   }
-  link.setAttribute('href', href);
+  // Ensure absolute canonical URL
+  const absoluteHref = href.startsWith('http') ? href : `${SITE_URL}${href.startsWith('/') ? '' : '/'}${href}`;
+  link.setAttribute('href', absoluteHref);
 }
 
 export function updateDocumentSeo({
@@ -70,8 +76,8 @@ export function updateDocumentSeo({
     setMetaTag('meta[name="description"]', 'name', 'description', description);
   }
 
-  // 3. Robots
-  const robotsDirective = noindex ? 'noindex, nofollow' : 'index, follow, max-snippet:-1, max-image-preview:large';
+  // 3. Robots Directive (Strictly enforced: index for public pages, noindex for private/portal routes)
+  const robotsDirective = noindex ? NOINDEX_ROBOTS : INDEX_ROBOTS;
   setMetaTag('meta[name="robots"]', 'name', 'robots', robotsDirective);
 
   // 4. Canonical URL
@@ -79,7 +85,7 @@ export function updateDocumentSeo({
     setCanonical(canonical);
   }
 
-  // 5. Open Graph
+  // 5. Open Graph Metadata
   if (title) setMetaTag('meta[property="og:title"]', 'property', 'og:title', title);
   if (description) setMetaTag('meta[property="og:description"]', 'property', 'og:description', description);
   if (canonical) setMetaTag('meta[property="og:url"]', 'property', 'og:url', canonical);
@@ -87,7 +93,7 @@ export function updateDocumentSeo({
   setMetaTag('meta[property="og:image"]', 'property', 'og:image', ogImage);
   setMetaTag('meta[property="og:site_name"]', 'property', 'og:site_name', BUSINESS_NAME);
 
-  // 6. Twitter Card
+  // 6. Twitter Card Metadata
   setMetaTag('meta[name="twitter:card"]', 'name', 'twitter:card', 'summary_large_image');
   if (title) setMetaTag('meta[name="twitter:title"]', 'name', 'twitter:title', title);
   if (description) setMetaTag('meta[name="twitter:description"]', 'name', 'twitter:description', description);
@@ -110,58 +116,71 @@ export function updateDocumentSeo({
 
 /**
  * RouteSeo Component: Mounts once inside <Router> to automatically sync
- * title, meta, canonical, and structured data for static routes and private portals.
+ * title, meta, canonical, and structured data across all static, dynamic, and private routes.
  */
 export function RouteSeo() {
   const location = useLocation();
 
   useEffect(() => {
-    const pathname = location.pathname;
+    const rawPath = location.pathname;
+    const normalizedPath = normalizeSeoPath(rawPath);
 
-    // Check static routes
-    const staticConfig = STATIC_PAGES_SEO[pathname];
+    // 1. Check known static public routes (normalized matching removes trailing slashes)
+    const staticConfig = STATIC_PAGES_SEO[normalizedPath];
     if (staticConfig) {
-      const hasTrackingQuery = pathname === '/track' && Boolean(location.search);
+      const hasTrackingQuery = normalizedPath === '/track' && Boolean(location.search);
       updateDocumentSeo({
         title: staticConfig.title,
         description: staticConfig.description,
         canonical: staticConfig.canonical,
         noindex: hasTrackingQuery ? true : (staticConfig.noindex || false),
-        jsonLd: pathname === '/' ? getLocalBusinessJsonLd() : undefined,
+        jsonLd: normalizedPath === '/' ? getLocalBusinessJsonLd() : undefined,
       });
       return;
     }
 
-    // Dynamic service pages handle their own SEO via <PageSeo /> in ServiceDetail
-    if (pathname.startsWith('/services/')) {
-      return;
+    // 2. Dynamic service detail routes (/services/:slug)
+    // Pre-populate indexable baseline metadata immediately so crawlers and WRS never encounter an empty/unindexed state
+    if (normalizedPath.startsWith('/services/')) {
+      const slug = normalizedPath.slice('/services/'.length).replace(/\/+$/, '');
+      if (slug) {
+        const humanName = slugToHumanTitle(slug);
+        updateDocumentSeo({
+          title: `${humanName} | ${BUSINESS_NAME} Kathmandu`,
+          description: `Professional ${humanName} at MTS Lab Kathmandu. Laser repair, chip-level micro-soldering & certified technician service in New Road. Hotline: 9869276668.`,
+          canonical: `${SITE_URL}/services/${slug}`,
+          noindex: false,
+        });
+        return;
+      }
     }
 
-    // Private portals and auth routes: strictly noindex
-    if (isNoindexRoute(pathname)) {
+    // 3. Private portals, authentication, and internal workflows: strictly noindex
+    if (isNoindexRoute(normalizedPath)) {
       updateDocumentSeo({
         title: `${BUSINESS_NAME} – Internal Portal`,
         description: 'Authorized administrative and technician workspace for MTS Lab.',
-        canonical: `${SITE_URL}${pathname}`,
+        canonical: `${SITE_URL}${normalizedPath}`,
         noindex: true,
       });
       return;
     }
 
-    // Default fallback for 404 / unknown routes
+    // 4. Default fallback for true 404 / unknown routes
     updateDocumentSeo({
       title: `Page Not Found | ${BUSINESS_NAME}`,
       description: 'The requested page could not be located on MTS Lab.',
-      canonical: `${SITE_URL}${pathname}`,
+      canonical: `${SITE_URL}${normalizedPath}`,
       noindex: true,
     });
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   return null;
 }
 
 /**
- * PageSeo Component: Used by specific pages (like ServiceDetail) for fine-grained SEO injection
+ * PageSeo Component: Used by specific pages (like ServiceDetail and Services)
+ * for fine-grained, data-rich SEO injection upon data resolution.
  */
 export function PageSeo(props: PageSeoProps) {
   useEffect(() => {
@@ -171,7 +190,15 @@ export function PageSeo(props: PageSeoProps) {
       const script = document.getElementById(JSON_LD_CONTAINER_ID);
       if (script) script.remove();
     };
-  }, [props.title, props.description, props.canonical, props.noindex, JSON.stringify(props.jsonLd)]);
+  }, [
+    props.title,
+    props.description,
+    props.canonical,
+    props.noindex,
+    props.ogType,
+    props.ogImage,
+    JSON.stringify(props.jsonLd),
+  ]);
 
   return null;
 }

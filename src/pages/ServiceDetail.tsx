@@ -40,6 +40,7 @@ import {
   getServicePageJsonLd,
   getServiceFaqSubtitle,
   sanitizeServiceDescription,
+  slugToHumanTitle,
 } from '@/lib/seo';
 import { toast } from 'sonner';
 
@@ -119,10 +120,22 @@ export default function ServiceDetail() {
 
   const whatsappUrl = `https://wa.me/9779869276668?text=${encodeURIComponent(whatsappMessage)}`;
 
-  // Loading state
+  const cleanSlug = (slug || '').trim().toLowerCase();
+  const humanTitle = slugToHumanTitle(cleanSlug);
+  const fallbackTitle = `${humanTitle} | ${BUSINESS_NAME} Kathmandu`;
+  const fallbackDescription = `Professional ${humanTitle} at MTS Lab Kathmandu. Laser repair, chip-level micro-soldering & certified technician service in New Road. Hotline: 9869276668.`;
+  const canonicalUrl = `${SITE_URL}/services/${cleanSlug}`;
+
+  // Loading state (renders indexable fallback metadata immediately so crawlers never see unindexed or empty head)
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 antialiased">
+        <PageSeo
+          title={fallbackTitle}
+          description={fallbackDescription}
+          canonical={canonicalUrl}
+          noindex={false}
+        />
         <Navbar />
         <main className="flex-1 max-w-5xl w-full mx-auto px-4 pt-28 pb-16 flex flex-col items-center justify-center space-y-4">
           <div className="w-10 h-10 border-3 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
@@ -133,8 +146,51 @@ export default function ServiceDetail() {
     );
   }
 
-  // Not Found state
-  if (!service || !slug) {
+  // Fetch/network error state (transient failure must NEVER trigger noindex)
+  if (error && services.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 antialiased">
+        <PageSeo
+          title={fallbackTitle}
+          description={fallbackDescription}
+          canonical={canonicalUrl}
+          noindex={false}
+        />
+        <Navbar />
+        <main className="flex-1 max-w-2xl w-full mx-auto px-4 pt-28 pb-16 text-center space-y-6">
+          <div className="w-16 h-16 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center mx-auto text-amber-600">
+            <HelpCircle className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">{humanTitle}</h1>
+            <p className="text-slate-600 max-w-md mx-auto text-sm sm:text-base leading-relaxed">
+              We are temporarily experiencing difficulty retrieving live laboratory pricing. Please call or message our New Road workshop directly.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <a
+              href={`tel:${BUSINESS_PHONE}`}
+              className="inline-flex items-center justify-center h-12 px-6 rounded-xl font-semibold bg-slate-950 hover:bg-slate-800 text-white text-sm shadow-sm transition-colors cursor-pointer"
+            >
+              <PhoneCall className="w-4 h-4 mr-2" />
+              <span>Call Workshop ({BUSINESS_PHONE})</span>
+            </a>
+            <Link
+              to="/services"
+              className="inline-flex items-center justify-center h-12 px-6 rounded-xl font-semibold border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-sm shadow-sm transition-colors cursor-pointer"
+            >
+              <Search className="w-4 h-4 mr-2" />
+              <span>Browse All Services</span>
+            </Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Not Found state (strictly verified only when active services catalog loaded and slug is genuinely absent)
+  if (!service || !cleanSlug) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 antialiased">
         <PageSeo
