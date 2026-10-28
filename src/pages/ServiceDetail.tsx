@@ -100,8 +100,21 @@ export default function ServiceDetail() {
 
   // Execute client-side replacement redirect for known legacy slugs (preserving query params)
   useEffect(() => {
-    if (resolution && resolution.type === 'REDIRECT' && resolution.targetSlug) {
-      const targetPath = `/services/${resolution.targetSlug}${location.search}`;
+    if (resolution && resolution.type === 'REDIRECT' && (resolution.targetUrl || resolution.targetSlug)) {
+      const destination = resolution.targetUrl || `/services/${resolution.targetSlug}`;
+      const [pathPart, queryPart] = destination.split('?');
+      const destParams = new URLSearchParams(queryPart || '');
+
+      // Preserve current location search parameters without duplicating keys
+      const currentParams = new URLSearchParams(location.search);
+      currentParams.forEach((value, key) => {
+        if (!destParams.has(key)) {
+          destParams.set(key, value);
+        }
+      });
+
+      const finalQuery = destParams.toString();
+      const targetPath = finalQuery ? `${pathPart}?${finalQuery}` : pathPart;
       navigate(targetPath, { replace: true });
     }
   }, [resolution, navigate, location.search]);
@@ -207,14 +220,18 @@ export default function ServiceDetail() {
   }
 
   // Redirect state (renders destination metadata and loading indicator during client navigation transition)
-  if (resolution && resolution.type === 'REDIRECT' && resolution.targetSlug) {
-    const destTitle = `${slugToHumanTitle(resolution.targetSlug)} | ${BUSINESS_NAME} Kathmandu`;
+  if (resolution && resolution.type === 'REDIRECT' && (resolution.targetUrl || resolution.targetSlug)) {
+    const destination = resolution.targetUrl || `/services/${resolution.targetSlug}`;
+    const [pathPart] = destination.split('?');
+    const destTitle = resolution.targetSlug
+      ? `${slugToHumanTitle(resolution.targetSlug)} | ${BUSINESS_NAME} Kathmandu`
+      : `Repair Services | ${BUSINESS_NAME} Kathmandu`;
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 antialiased">
         <PageSeo
           title={destTitle}
           description="Redirecting to verified smartphone repair service..."
-          canonical={`${SITE_URL}/services/${resolution.targetSlug}`}
+          canonical={`${SITE_URL}${pathPart}`}
           noindex={false}
         />
         <Navbar />

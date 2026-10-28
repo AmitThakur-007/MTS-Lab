@@ -8,6 +8,11 @@
   },
   "redirects": [
     {
+      "source": "/services/iphone-14-pro-max-standard-original-2",
+      "destination": "/services/iphone-14-pro-max-14-original-display-replacement",
+      "permanent": true
+    },
+    {
       "source": "/services/iphone-14-pro-max-standard-original-standard",
       "destination": "/services/iphone-14-pro-max-14-original-display-replacement",
       "permanent": true

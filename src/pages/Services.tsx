@@ -691,8 +691,13 @@ export default function Services() {
 
   // Handle URL query parameters
   useEffect(() => {
-    const q = searchParams.get('q');
-    if (q !== null) {
+    const modelParam = searchParams.get('model');
+    const q = searchParams.get('q') || searchParams.get('search');
+    if (modelParam) {
+      const cleanModel = modelParam.replace(/-/g, ' ').replace(/\biphone\b/gi, 'iPhone');
+      setSearchInput(cleanModel);
+      setActiveQuery(cleanModel);
+    } else if (q !== null) {
       setSearchInput(q);
       setActiveQuery(q);
     }

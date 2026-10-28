@@ -16208,12 +16208,16 @@ function buildSlugMap(services) {
 }
 var LEGACY_SLUGS = {
   // iPhone 14 Pro Max legacy/outdated variants
-  "iphone-14-pro-max-standard-original-standard": "iphone-14-pro-max-14-original-display-replacement",
+  "iphone-14-pro-max-standard-original-2": "iphone-14-pro-max-14-original-display-replacement",
   "iphone-14-pro-max-standard-original": "iphone-14-pro-max-14-original-display-replacement",
+  "iphone-14-pro-max-standard-original-standard": "iphone-14-pro-max-14-original-display-replacement",
   "iphone-14-pro-max-original-display-replacement": "iphone-14-pro-max-14-original-display-replacement",
   // iPhone 11 & 12 legacy slug variants without repetitive model tokens
   "iphone-11-pro-max-original-display-replacement": "iphone-11-pro-max-11-original-display-replacement",
-  "iphone-12-pro-max-original-display-replacement": "iphone-12-pro-max-12-original-display-replacement"
+  "iphone-12-pro-max-original-display-replacement": "iphone-12-pro-max-12-original-display-replacement",
+  // iPhone 13 & 15 Pro Max legacy slug variants
+  "iphone-13-pro-max-original-display-replacement": "iphone-13-pro-max-13-original-display-replacement",
+  "iphone-15-pro-max-original-display-replacement": "iphone-15-pro-max-15-original-display-replacement"
 };
 var KNOWN_LEGACY_NOISE_PHRASES = [
   "all-storage-sizes-and-colors",
@@ -16233,7 +16237,8 @@ var KNOWN_LEGACY_NOISE_PHRASES = [
   "check-color-availability",
   "contact-to-confirm-availability",
   "standard-variants",
-  "all-variants"
+  "all-variants",
+  "standard"
 ];
 function stripLegacyNoisePhrases(slug) {
   if (!slug) return "";
@@ -16253,11 +16258,26 @@ function stripLegacyNoisePhrases(slug) {
   }
   return cleaned.replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
+function stripTrailingDuplicateCounter(slug) {
+  if (!slug) return "";
+  const match = slug.match(/[-_](\d+)$/);
+  if (!match) return slug;
+  const num = match[1];
+  if (/^iphone-\d+$/.test(slug)) {
+    return slug;
+  }
+  if (/(?:^|-)iphone-\d+$/.test(slug)) {
+    return slug;
+  }
+  return slug.replace(/[-_]\d+$/, "");
+}
 function normalizeLegacySlug(rawSlug) {
   if (!rawSlug) return "";
   let slug = String(rawSlug).trim().toLowerCase();
+  slug = stripTrailingDuplicateCounter(slug);
   slug = slug.replace(/[+/_&]/g, "-").replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   slug = stripLegacyNoisePhrases(slug);
+  slug = stripTrailingDuplicateCounter(slug);
   return slug;
 }
 var KNOWN_MODEL_PATTERNS = [
@@ -16303,18 +16323,41 @@ function normalizeAndMatchLegacySlug(requestedSlug, activeServices, slugToServic
   if (!norm) return null;
   const slugToService = slugToServiceMap || buildSlugMap(activeServices).slugToService;
   if (slugToService.has(norm)) {
-    return { targetSlug: norm, service: slugToService.get(norm) };
+    const s = slugToService.get(norm);
+    return {
+      targetSlug: norm,
+      targetUrl: `/services/${norm}`,
+      service: s,
+      reason: "NORMALIZED_SLUG",
+      recognizedModel: s.model
+    };
   }
   const collapsed = norm.replace(/iphone-(\d+)-\1-/, "iphone-$1-");
   if (slugToService.has(collapsed)) {
-    return { targetSlug: collapsed, service: slugToService.get(collapsed) };
+    const s = slugToService.get(collapsed);
+    return {
+      targetSlug: collapsed,
+      targetUrl: `/services/${collapsed}`,
+      service: s,
+      reason: "NORMALIZED_SLUG",
+      recognizedModel: s.model
+    };
   }
   const inserted = norm.replace(/iphone-(\d+)-(pro-max)-/, "iphone-$1-$2-$1-");
   if (slugToService.has(inserted)) {
-    return { targetSlug: inserted, service: slugToService.get(inserted) };
+    const s = slugToService.get(inserted);
+    return {
+      targetSlug: inserted,
+      targetUrl: `/services/${inserted}`,
+      service: s,
+      reason: "NORMALIZED_SLUG",
+      recognizedModel: s.model
+    };
   }
   const modelMatch = extractModelIdentifier(norm);
-  if (!modelMatch) return null;
+  if (!modelMatch) {
+    return null;
+  }
   const modelServices = activeServices.filter((s) => {
     const sModel = (s.model || "").trim().toLowerCase();
     if (modelMatch.id === "iphone-xs-max") {
@@ -16322,169 +16365,296 @@ function normalizeAndMatchLegacySlug(requestedSlug, activeServices, slugToServic
     }
     return sModel === modelMatch.name;
   });
-  if (modelServices.length === 0) return null;
+  if (modelServices.length === 0) {
+    return null;
+  }
+  const getPrimaryDisplayService = () => {
+    const displays = modelServices.filter(
+      (s) => (s.category || "").toLowerCase() === "display" || s.serviceName.toLowerCase().includes("display")
+    );
+    if (displays.length === 0) return null;
+    const origDisplay = displays.find(
+      (s) => s.serviceName.toLowerCase().includes("original") && !s.serviceName.toLowerCase().includes("gx") && !s.serviceName.toLowerCase().includes("dd") && !s.serviceName.toLowerCase().includes("copy")
+    ) || displays[0];
+    const slug = Array.from(slugToService.entries()).find(([_, s]) => s.id === origDisplay.id)?.[0];
+    return slug ? { slug, service: origDisplay } : null;
+  };
   const isDisplay = norm.includes("display") || norm.includes("screen") || norm.includes("lcd") || norm.includes("oled") || norm.includes("amoled");
   const isBattery = norm.includes("battery");
   const isCamera = norm.includes("camera");
   const isBackPanel = norm.includes("back-panel") || norm.includes("back-cover") || norm.includes("back-glass") || norm.includes("rear-glass");
   const isSpeaker = norm.includes("speaker") || norm.includes("buzzer") || norm.includes("ringer");
   const isCharging = norm.includes("charging") || norm.includes("dock-flex") || norm.includes("charging-flex");
-  if (isDisplay) {
+  const hasOriginal = norm.includes("original") || norm.includes("genuine");
+  const hasGx = norm.includes("gx");
+  const hasCopy = norm.includes("copy") || norm.includes("aftermarket");
+  const hasDd = norm.includes("dd");
+  const hasIncell = norm.includes("incell") || norm.includes("in-cell");
+  const isConflictingGrade = hasGx && hasOriginal || hasCopy && hasOriginal || hasCopy && hasGx;
+  if (isDisplay || isConflictingGrade || hasOriginal && !isBattery && !isCamera && !isSpeaker && !isCharging && !isBackPanel) {
     const compServices = modelServices.filter(
       (s) => (s.category || "").toLowerCase() === "display" || s.serviceName.toLowerCase().includes("display")
     );
-    if (compServices.length === 0) return null;
-    const isOriginal = (norm.includes("original") || norm.includes("genuine")) && !norm.includes("copy") && !norm.includes("gx") && !norm.includes("dd") && !norm.includes("incell") && !norm.includes("in-cell");
-    const isCopy = norm.includes("copy") || norm.includes("aftermarket");
-    const isGx = norm.includes("gx");
-    const isDd = norm.includes("dd");
-    const isIncell = norm.includes("incell") || norm.includes("in-cell");
-    let filtered = [];
-    if (isOriginal) {
-      filtered = compServices.filter(
-        (s) => s.serviceName.toLowerCase().includes("original") && !s.serviceName.toLowerCase().includes("gx") && !s.serviceName.toLowerCase().includes("dd") && !s.serviceName.toLowerCase().includes("copy")
-      );
-    } else if (isCopy) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("copy"));
-    } else if (isGx) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("gx"));
-    } else if (isDd) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("dd"));
-    } else if (isIncell) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("incell") || s.serviceName.toLowerCase().includes("in-cell"));
-    } else {
-      if (compServices.length > 1) return null;
-      filtered = compServices;
+    if (isConflictingGrade) {
+      const primary = getPrimaryDisplayService();
+      if (primary) {
+        return {
+          targetSlug: primary.slug,
+          targetUrl: `/services/${primary.slug}`,
+          service: primary.service,
+          reason: "MODEL_DEFAULT_FALLBACK",
+          recognizedModel: modelMatch.id
+        };
+      }
+      return {
+        targetUrl: `/services?model=${encodeURIComponent(modelMatch.id)}`,
+        reason: "MODEL_LISTING_FALLBACK",
+        recognizedModel: modelMatch.id
+      };
     }
-    if (filtered.length === 1) {
-      const match = filtered[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
+    if (compServices.length > 0) {
+      let filtered = [];
+      if (hasOriginal && !hasCopy && !hasGx && !hasDd && !hasIncell) {
+        filtered = compServices.filter(
+          (s) => s.serviceName.toLowerCase().includes("original") && !s.serviceName.toLowerCase().includes("gx") && !s.serviceName.toLowerCase().includes("dd") && !s.serviceName.toLowerCase().includes("copy")
+        );
+      } else if (hasCopy) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("copy"));
+      } else if (hasGx) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("gx"));
+      } else if (hasDd) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("dd"));
+      } else if (hasIncell) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("incell") || s.serviceName.toLowerCase().includes("in-cell"));
+      } else {
+        if (compServices.length === 1) {
+          filtered = compServices;
+        } else {
+          const primary = getPrimaryDisplayService();
+          if (primary) {
+            return {
+              targetSlug: primary.slug,
+              targetUrl: `/services/${primary.slug}`,
+              service: primary.service,
+              reason: "MODEL_DEFAULT_FALLBACK",
+              recognizedModel: modelMatch.id
+            };
+          }
+        }
+      }
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: "MODEL_COMPONENT_MATCH",
+            recognizedModel: modelMatch.id
+          };
+        }
+      }
     }
-    return null;
   }
   if (isBattery) {
     const compServices = modelServices.filter(
       (s) => (s.category || "").toLowerCase() === "battery" || s.serviceName.toLowerCase().includes("battery")
     );
-    if (compServices.length === 0) return null;
-    const isMarket = norm.includes("market");
-    const isCopy = norm.includes("copy");
-    const isOrig = (norm.includes("original") || norm.includes("1-year-warranty")) && !isMarket && !isCopy;
-    let filtered = [];
-    if (isMarket) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("market"));
-    } else if (isCopy) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("copy"));
-    } else if (isOrig) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("original") && !s.serviceName.toLowerCase().includes("market"));
-    } else {
-      if (compServices.length > 1) return null;
-      filtered = compServices;
+    if (compServices.length > 0) {
+      const isMarket = norm.includes("market");
+      const isCopy = norm.includes("copy");
+      const isOrig = (hasOriginal || norm.includes("1-year-warranty")) && !isMarket && !isCopy;
+      let filtered = [];
+      if (isMarket) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("market"));
+      } else if (isCopy) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("copy"));
+      } else if (isOrig) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("original") && !s.serviceName.toLowerCase().includes("market"));
+      } else if (compServices.length === 1) {
+        filtered = compServices;
+      }
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: "MODEL_COMPONENT_MATCH",
+            recognizedModel: modelMatch.id
+          };
+        }
+      }
     }
-    if (filtered.length === 1) {
-      const match = filtered[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
-    }
-    return null;
   }
   if (isCamera) {
     const compServices = modelServices.filter(
       (s) => (s.category || "").toLowerCase() === "camera" || s.serviceName.toLowerCase().includes("camera")
     );
-    if (compServices.length === 0) return null;
-    const isFront = norm.includes("front") || norm.includes("selfie");
-    const isBack = norm.includes("back") || norm.includes("rear");
-    if (isFront && !isBack) {
-      const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("front"));
-      if (filtered.length === 1) {
-        const match = filtered[0];
-        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-        return targetSlug ? { targetSlug, service: match } : null;
-      }
-    } else if (isBack && !isFront) {
-      const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("back"));
-      if (filtered.length === 1) {
-        const match = filtered[0];
-        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-        return targetSlug ? { targetSlug, service: match } : null;
+    if (compServices.length > 0) {
+      const isFront = norm.includes("front") || norm.includes("selfie");
+      const isBack = norm.includes("back") || norm.includes("rear");
+      if (isFront && !isBack) {
+        const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("front"));
+        if (filtered.length === 1) {
+          const match = filtered[0];
+          const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+          if (targetSlug) {
+            return {
+              targetSlug,
+              targetUrl: `/services/${targetSlug}`,
+              service: match,
+              reason: "MODEL_COMPONENT_MATCH",
+              recognizedModel: modelMatch.id
+            };
+          }
+        }
+      } else if (isBack && !isFront) {
+        const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("back"));
+        if (filtered.length === 1) {
+          const match = filtered[0];
+          const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+          if (targetSlug) {
+            return {
+              targetSlug,
+              targetUrl: `/services/${targetSlug}`,
+              service: match,
+              reason: "MODEL_COMPONENT_MATCH",
+              recognizedModel: modelMatch.id
+            };
+          }
+        }
       }
     }
-    return null;
   }
   if (isSpeaker) {
     const compServices = modelServices.filter(
       (s) => (s.category || "").toLowerCase() === "speaker" || s.serviceName.toLowerCase().includes("speaker") || s.serviceName.toLowerCase().includes("buzzer")
     );
-    if (compServices.length === 0) return null;
-    if (norm.includes("buzzer")) {
-      const buz = compServices.filter((s) => s.serviceName.toLowerCase().includes("buzzer"));
-      if (buz.length === 1) {
-        const match = buz[0];
+    if (compServices.length > 0) {
+      if (norm.includes("buzzer")) {
+        const buz = compServices.filter((s) => s.serviceName.toLowerCase().includes("buzzer"));
+        if (buz.length === 1) {
+          const match = buz[0];
+          const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+          if (targetSlug) {
+            return {
+              targetSlug,
+              targetUrl: `/services/${targetSlug}`,
+              service: match,
+              reason: "MODEL_COMPONENT_MATCH",
+              recognizedModel: modelMatch.id
+            };
+          }
+        }
+      }
+      if (compServices.length === 1) {
+        const match = compServices[0];
         const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-        return targetSlug ? { targetSlug, service: match } : null;
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: "MODEL_COMPONENT_MATCH",
+            recognizedModel: modelMatch.id
+          };
+        }
       }
     }
-    if (compServices.length === 1) {
-      const match = compServices[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
-    }
-    return null;
   }
   if (isCharging) {
     const compServices = modelServices.filter(
       (s) => (s.category || "").toLowerCase().includes("charging") || s.serviceName.toLowerCase().includes("charging")
     );
-    if (compServices.length === 0) return null;
-    if (compServices.length === 1) {
-      const match = compServices[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
+    if (compServices.length > 0) {
+      if (compServices.length === 1) {
+        const match = compServices[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: "MODEL_COMPONENT_MATCH",
+            recognizedModel: modelMatch.id
+          };
+        }
+      }
+      const isMarket = norm.includes("market");
+      const isGenuine = norm.includes("genuine");
+      let filtered = [];
+      if (isMarket) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("market"));
+      } else if (isGenuine) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("genuine") || s.serviceName.toLowerCase().includes("original"));
+      }
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: "MODEL_COMPONENT_MATCH",
+            recognizedModel: modelMatch.id
+          };
+        }
+      }
     }
-    const isMarket = norm.includes("market");
-    const isGenuine = norm.includes("genuine");
-    let filtered = [];
-    if (isMarket) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("market"));
-    } else if (isGenuine) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("genuine") || s.serviceName.toLowerCase().includes("original"));
-    }
-    if (filtered.length === 1) {
-      const match = filtered[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
-    }
-    return null;
   }
   if (isBackPanel) {
     const compServices = modelServices.filter(
       (s) => (s.category || "").toLowerCase().includes("back panel") || s.serviceName.toLowerCase().includes("back panel")
     );
-    if (compServices.length === 0) return null;
-    const isHq = norm.includes("high-quality") || norm.includes("high quality");
-    const isCopy = norm.includes("copy");
-    const isOrig = norm.includes("original") && !isCopy;
-    let filtered = [];
-    if (isHq) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("high quality") || s.serviceName.toLowerCase().includes("high-quality"));
-    } else if (isCopy) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("copy") && !s.serviceName.toLowerCase().includes("high quality"));
-    } else if (isOrig) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("original"));
-    } else {
-      if (compServices.length > 1) return null;
-      filtered = compServices;
+    if (compServices.length > 0) {
+      const isHq = norm.includes("high-quality") || norm.includes("high quality");
+      const isCopy = norm.includes("copy");
+      const isOrig = hasOriginal && !isCopy;
+      let filtered = [];
+      if (isHq) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("high quality") || s.serviceName.toLowerCase().includes("high-quality"));
+      } else if (isCopy) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("copy") && !s.serviceName.toLowerCase().includes("high quality"));
+      } else if (isOrig) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes("original"));
+      } else if (compServices.length === 1) {
+        filtered = compServices;
+      }
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: "MODEL_COMPONENT_MATCH",
+            recognizedModel: modelMatch.id
+          };
+        }
+      }
     }
-    if (filtered.length === 1) {
-      const match = filtered[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
-    }
-    return null;
   }
-  return null;
+  const primaryDisplay = getPrimaryDisplayService();
+  if (primaryDisplay) {
+    return {
+      targetSlug: primaryDisplay.slug,
+      targetUrl: `/services/${primaryDisplay.slug}`,
+      service: primaryDisplay.service,
+      reason: "MODEL_DEFAULT_FALLBACK",
+      recognizedModel: modelMatch.id
+    };
+  }
+  return {
+    targetUrl: `/services?model=${encodeURIComponent(modelMatch.id)}`,
+    reason: "MODEL_LISTING_FALLBACK",
+    recognizedModel: modelMatch.id
+  };
 }
 function resolveServiceSlug(rawRequestedSlug, slugMapOrServices) {
   const requestedSlug = rawRequestedSlug ? String(rawRequestedSlug) : "";
@@ -16493,18 +16663,22 @@ function resolveServiceSlug(rawRequestedSlug, slugMapOrServices) {
     return {
       type: "NOT_FOUND",
       requestedSlug,
-      cleanSlug: ""
+      cleanSlug: "",
+      reason: "UNKNOWN_MODEL"
     };
   }
   const slugToService = Array.isArray(slugMapOrServices) ? buildSlugMap(slugMapOrServices).slugToService : slugMapOrServices;
   const activeServices = Array.isArray(slugMapOrServices) ? slugMapOrServices : Array.from(slugToService.values());
   if (slugToService.has(cleanSlug)) {
+    const activeService = slugToService.get(cleanSlug);
     return {
       type: "ACTIVE",
       requestedSlug,
       cleanSlug,
-      service: slugToService.get(cleanSlug),
-      matchStrategy: "EXACT_ACTIVE"
+      service: activeService,
+      matchStrategy: "EXACT_ACTIVE",
+      reason: "EXACT_ACTIVE",
+      recognizedModel: activeService?.model
     };
   }
   if (Object.prototype.hasOwnProperty.call(LEGACY_SLUGS, cleanSlug)) {
@@ -16522,33 +16696,41 @@ function resolveServiceSlug(rawRequestedSlug, slugMapOrServices) {
       steps++;
     }
     if (target && slugToService.has(target)) {
+      const matched = slugToService.get(target);
       return {
         type: "REDIRECT",
         requestedSlug,
         cleanSlug,
         targetSlug: target,
         targetUrl: `/services/${target}`,
-        service: slugToService.get(target),
-        matchStrategy: "EXPLICIT_LEGACY"
+        service: matched,
+        matchStrategy: "EXPLICIT_LEGACY",
+        reason: "LEGACY_ALIAS",
+        recognizedModel: matched?.model
       };
     }
   }
   const autoMatch = normalizeAndMatchLegacySlug(cleanSlug, activeServices, slugToService);
-  if (autoMatch && autoMatch.targetSlug && slugToService.has(autoMatch.targetSlug)) {
+  if (autoMatch && (autoMatch.targetSlug || autoMatch.targetUrl)) {
+    const targetSlug = autoMatch.targetSlug;
+    const targetUrl = autoMatch.targetUrl || (targetSlug ? `/services/${targetSlug}` : void 0);
     return {
       type: "REDIRECT",
       requestedSlug,
       cleanSlug,
-      targetSlug: autoMatch.targetSlug,
-      targetUrl: `/services/${autoMatch.targetSlug}`,
+      targetSlug,
+      targetUrl,
       service: autoMatch.service,
-      matchStrategy: "AUTOMATED_LEGACY"
+      matchStrategy: "AUTOMATED_LEGACY",
+      reason: autoMatch.reason,
+      recognizedModel: autoMatch.recognizedModel
     };
   }
   return {
     type: "NOT_FOUND",
     requestedSlug,
-    cleanSlug
+    cleanSlug,
+    reason: "UNKNOWN_MODEL"
   };
 }
 function getServiceSeoTitle(service) {
@@ -17095,12 +17277,24 @@ router22.get("/services/:slug", async (req, res) => {
     const services = await getAuthoritativeActiveServices();
     const { slugToService } = buildSlugMap(services);
     const resolution = resolveServiceSlug(reqSlug, slugToService);
-    if (resolution.type === "REDIRECT" && resolution.targetSlug) {
+    if (resolution.type === "REDIRECT" && (resolution.targetUrl || resolution.targetSlug)) {
+      const destination = resolution.targetUrl || `/services/${resolution.targetSlug}`;
+      const [destPath, destQuery] = destination.split("?");
+      const destParams = new URLSearchParams(destQuery || "");
       const queryIndex = req.url.indexOf("?");
-      const queryString = queryIndex !== -1 ? req.url.slice(queryIndex) : "";
-      const destination = `/services/${resolution.targetSlug}${queryString}`;
+      if (queryIndex !== -1) {
+        const incomingQuery = req.url.slice(queryIndex + 1);
+        const incomingParams = new URLSearchParams(incomingQuery);
+        incomingParams.forEach((val, key) => {
+          if (!destParams.has(key)) {
+            destParams.set(key, val);
+          }
+        });
+      }
+      const finalQuery = destParams.toString();
+      const finalDestination = finalQuery ? `${destPath}?${finalQuery}` : destPath;
       res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
-      return res.redirect(301, destination);
+      return res.redirect(301, finalDestination);
     }
     const service = resolution.type === "ACTIVE" ? resolution.service : void 0;
     const template = getHtmlTemplate();

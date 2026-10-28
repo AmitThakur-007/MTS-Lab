@@ -190,15 +190,30 @@ export function buildSlugMap(services: ServiceLike[]): SlugMappingResult {
  */
 export const LEGACY_SLUGS: Record<string, string> = {
   // iPhone 14 Pro Max legacy/outdated variants
-  'iphone-14-pro-max-standard-original-standard': 'iphone-14-pro-max-14-original-display-replacement',
+  'iphone-14-pro-max-standard-original-2': 'iphone-14-pro-max-14-original-display-replacement',
   'iphone-14-pro-max-standard-original': 'iphone-14-pro-max-14-original-display-replacement',
+  'iphone-14-pro-max-standard-original-standard': 'iphone-14-pro-max-14-original-display-replacement',
   'iphone-14-pro-max-original-display-replacement': 'iphone-14-pro-max-14-original-display-replacement',
   // iPhone 11 & 12 legacy slug variants without repetitive model tokens
   'iphone-11-pro-max-original-display-replacement': 'iphone-11-pro-max-11-original-display-replacement',
   'iphone-12-pro-max-original-display-replacement': 'iphone-12-pro-max-12-original-display-replacement',
+  // iPhone 13 & 15 Pro Max legacy slug variants
+  'iphone-13-pro-max-original-display-replacement': 'iphone-13-pro-max-13-original-display-replacement',
+  'iphone-15-pro-max-original-display-replacement': 'iphone-15-pro-max-15-original-display-replacement',
 };
 
 export type SlugResolutionType = 'ACTIVE' | 'REDIRECT' | 'NOT_FOUND';
+
+export type SlugResolutionReason =
+  | 'EXACT_ACTIVE'
+  | 'LEGACY_ALIAS'
+  | 'NORMALIZED_SLUG'
+  | 'MODEL_COMPONENT_MATCH'
+  | 'MODEL_DEFAULT_FALLBACK'
+  | 'MODEL_LISTING_FALLBACK'
+  | 'UNKNOWN_MODEL'
+  | 'UNKNOWN_SERVICE'
+  | 'AMBIGUOUS_SERVICE';
 
 export interface SlugResolutionResult {
   type: SlugResolutionType;
@@ -208,6 +223,8 @@ export interface SlugResolutionResult {
   targetUrl?: string;
   service?: ServiceLike;
   matchStrategy?: 'EXACT_ACTIVE' | 'EXPLICIT_LEGACY' | 'AUTOMATED_LEGACY';
+  reason?: SlugResolutionReason;
+  recognizedModel?: string;
 }
 
 /**
@@ -232,6 +249,7 @@ export const KNOWN_LEGACY_NOISE_PHRASES: string[] = [
   'contact-to-confirm-availability',
   'standard-variants',
   'all-variants',
+  'standard',
 ];
 
 /**
@@ -257,8 +275,34 @@ export function stripLegacyNoisePhrases(slug: string): string {
 }
 
 /**
+ * Strips trailing duplicate counters such as -2, -3, -4, _1, _2
+ * while preserving legitimate device model numbers (e.g. iPhone 11, iPhone 12, iPhone 7, iPhone 8).
+ */
+export function stripTrailingDuplicateCounter(slug: string): string {
+  if (!slug) return '';
+  const match = slug.match(/[-_](\d+)$/);
+  if (!match) return slug;
+  const num = match[1];
+
+  // If the slug is just a standalone model like iphone-11, iphone-12, iphone-7, iphone-8,
+  // do not strip the number because it defines the device model!
+  if (/^iphone-\d+$/.test(slug)) {
+    return slug;
+  }
+
+  // If slug ends with a model pattern like -iphone-11 or -iphone-7, preserve it
+  if (/(?:^|-)iphone-\d+$/.test(slug)) {
+    return slug;
+  }
+
+  // Otherwise, it is a trailing duplicate counter (e.g. -standard-original-2, -replacement-2, _1)
+  return slug.replace(/[-_]\d+$/, '');
+}
+
+/**
  * Reusable, deterministic slug normalizer:
  * - Converts to lowercase and trims
+ * - Strips trailing duplicate counters (-2, -3, _1, etc.)
  * - Replaces separators (_, +, &) with hyphens
  * - Collapses consecutive hyphens and trims edges
  * - Removes known obsolete descriptive phrases
@@ -266,8 +310,10 @@ export function stripLegacyNoisePhrases(slug: string): string {
 export function normalizeLegacySlug(rawSlug: string | undefined | null): string {
   if (!rawSlug) return '';
   let slug = String(rawSlug).trim().toLowerCase();
+  slug = stripTrailingDuplicateCounter(slug);
   slug = slug.replace(/[+/_&]/g, '-').replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
   slug = stripLegacyNoisePhrases(slug);
+  slug = stripTrailingDuplicateCounter(slug);
   return slug;
 }
 
@@ -316,47 +362,77 @@ export function extractModelIdentifier(slug: string): { id: string; name: string
   return null;
 }
 
+export interface LegacyMatchOutput {
+  targetSlug?: string;
+  targetUrl?: string;
+  service?: ServiceLike;
+  reason: SlugResolutionReason;
+  recognizedModel?: string;
+}
+
 /**
- * Automated legacy slug matching against active catalog services.
- * Strict rules:
- * 1. Checks noise-stripped slug against active catalog
- * 2. Checks redundant model number tokens (e.g. iphone-11-11- -> iphone-11-)
- * 3. Structured match on Device Model + Component Category + Grade/Subtype
- * 4. Rejects ambiguous candidates (if multiple services remain plausible, returns null)
- * 5. Returns active service only if confidence threshold is met
+ * Universal 4-Tier Legacy Service URL Resolution Engine
+ * Tier 1: Exact active slug match
+ * Tier 2: Legacy normalization & catalog matching
+ * Tier 3: Model-level safe fallback (primary display replacement or model listing)
+ * Tier 4: Genuine NOT_FOUND for unknown brands or unsupported models
  */
 export function normalizeAndMatchLegacySlug(
   requestedSlug: string,
   activeServices: ServiceLike[],
   slugToServiceMap?: Map<string, ServiceLike>
-): { targetSlug: string; service: ServiceLike } | null {
+): LegacyMatchOutput | null {
   const norm = normalizeLegacySlug(requestedSlug);
   if (!norm) return null;
 
   const slugToService = slugToServiceMap || buildSlugMap(activeServices).slugToService;
 
-  // 1. Direct match on normalized slug
+  // 1. Direct match on normalized slug (TIER 2)
   if (slugToService.has(norm)) {
-    return { targetSlug: norm, service: slugToService.get(norm)! };
+    const s = slugToService.get(norm)!;
+    return {
+      targetSlug: norm,
+      targetUrl: `/services/${norm}`,
+      service: s,
+      reason: 'NORMALIZED_SLUG',
+      recognizedModel: s.model,
+    };
   }
 
-  // 2. Redundant model number removed (e.g. iphone-11-11- -> iphone-11-)
+  // 2. Redundant model number removed (e.g. iphone-11-11- -> iphone-11-) (TIER 2)
   const collapsed = norm.replace(/iphone-(\d+)-\1-/, 'iphone-$1-');
   if (slugToService.has(collapsed)) {
-    return { targetSlug: collapsed, service: slugToService.get(collapsed)! };
+    const s = slugToService.get(collapsed)!;
+    return {
+      targetSlug: collapsed,
+      targetUrl: `/services/${collapsed}`,
+      service: s,
+      reason: 'NORMALIZED_SLUG',
+      recognizedModel: s.model,
+    };
   }
 
-  // 3. Redundant model number inserted (e.g. iphone-14-pro-max- -> iphone-14-pro-max-14-)
+  // 3. Redundant model number inserted (e.g. iphone-14-pro-max- -> iphone-14-pro-max-14-) (TIER 2)
   const inserted = norm.replace(/iphone-(\d+)-(pro-max)-/, 'iphone-$1-$2-$1-');
   if (slugToService.has(inserted)) {
-    return { targetSlug: inserted, service: slugToService.get(inserted)! };
+    const s = slugToService.get(inserted)!;
+    return {
+      targetSlug: inserted,
+      targetUrl: `/services/${inserted}`,
+      service: s,
+      reason: 'NORMALIZED_SLUG',
+      recognizedModel: s.model,
+    };
   }
 
   // 4. Structured Model Extraction
   const modelMatch = extractModelIdentifier(norm);
-  if (!modelMatch) return null;
+  if (!modelMatch) {
+    // Model not recognized -> proceed to Tier 4 NOT_FOUND
+    return null;
+  }
 
-  // Filter services by matched model
+  // Filter active catalog services for this recognized model
   const modelServices = activeServices.filter((s) => {
     const sModel = (s.model || '').trim().toLowerCase();
     if (modelMatch.id === 'iphone-xs-max') {
@@ -365,9 +441,30 @@ export function normalizeAndMatchLegacySlug(
     return sModel === modelMatch.name;
   });
 
-  if (modelServices.length === 0) return null;
+  if (modelServices.length === 0) {
+    // Recognized brand pattern but unsupported model in catalog -> Tier 4 NOT_FOUND
+    return null;
+  }
 
-  // Detect component category
+  // Helper: Find primary display replacement service for Tier 3 fallback
+  const getPrimaryDisplayService = (): { slug: string; service: ServiceLike } | null => {
+    const displays = modelServices.filter(
+      (s) => (s.category || '').toLowerCase() === 'display' || s.serviceName.toLowerCase().includes('display')
+    );
+    if (displays.length === 0) return null;
+
+    const origDisplay = displays.find(
+      (s) => s.serviceName.toLowerCase().includes('original') &&
+        !s.serviceName.toLowerCase().includes('gx') &&
+        !s.serviceName.toLowerCase().includes('dd') &&
+        !s.serviceName.toLowerCase().includes('copy')
+    ) || displays[0];
+
+    const slug = Array.from(slugToService.entries()).find(([_, s]) => s.id === origDisplay.id)?.[0];
+    return slug ? { slug, service: origDisplay } : null;
+  };
+
+  // Detect component category and grade tokens
   const isDisplay = norm.includes('display') || norm.includes('screen') || norm.includes('lcd') || norm.includes('oled') || norm.includes('amoled');
   const isBattery = norm.includes('battery');
   const isCamera = norm.includes('camera');
@@ -375,207 +472,325 @@ export function normalizeAndMatchLegacySlug(
   const isSpeaker = norm.includes('speaker') || norm.includes('buzzer') || norm.includes('ringer');
   const isCharging = norm.includes('charging') || norm.includes('dock-flex') || norm.includes('charging-flex');
 
-  // A. DISPLAY MATCHING
-  if (isDisplay) {
+  const hasOriginal = norm.includes('original') || norm.includes('genuine');
+  const hasGx = norm.includes('gx');
+  const hasCopy = norm.includes('copy') || norm.includes('aftermarket');
+  const hasDd = norm.includes('dd');
+  const hasIncell = norm.includes('incell') || norm.includes('in-cell');
+
+  // Check for conflicting grade keywords (e.g. gx + original, copy + original, copy + gx)
+  const isConflictingGrade = (hasGx && hasOriginal) || (hasCopy && hasOriginal) || (hasCopy && hasGx);
+
+  // A. DISPLAY MATCHING & CONFLICTING DISPLAY GRADES (TIER 2 & TIER 3)
+  if (isDisplay || isConflictingGrade || (hasOriginal && !isBattery && !isCamera && !isSpeaker && !isCharging && !isBackPanel)) {
     const compServices = modelServices.filter(
       (s) => (s.category || '').toLowerCase() === 'display' || s.serviceName.toLowerCase().includes('display')
     );
-    if (compServices.length === 0) return null;
 
-    const isOriginal = (norm.includes('original') || norm.includes('genuine')) &&
-      !norm.includes('copy') && !norm.includes('gx') && !norm.includes('dd') && !norm.includes('incell') && !norm.includes('in-cell');
-    const isCopy = norm.includes('copy') || norm.includes('aftermarket');
-    const isGx = norm.includes('gx');
-    const isDd = norm.includes('dd');
-    const isIncell = norm.includes('incell') || norm.includes('in-cell');
-
-    let filtered: ServiceLike[] = [];
-    if (isOriginal) {
-      filtered = compServices.filter(
-        (s) => s.serviceName.toLowerCase().includes('original') &&
-          !s.serviceName.toLowerCase().includes('gx') &&
-          !s.serviceName.toLowerCase().includes('dd') &&
-          !s.serviceName.toLowerCase().includes('copy')
-      );
-    } else if (isCopy) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('copy'));
-    } else if (isGx) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('gx'));
-    } else if (isDd) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('dd'));
-    } else if (isIncell) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('incell') || s.serviceName.toLowerCase().includes('in-cell'));
-    } else {
-      // Unspecified grade! If multiple display options exist, reject as ambiguous (Requirement 6 & Test J)
-      if (compServices.length > 1) return null;
-      filtered = compServices;
+    // If conflicting grade keywords (e.g. iphone-15-pro-max-standard-gx-original):
+    // Do NOT return NOT_FOUND! Treat grade as uncertain and use Tier 3 Model-level safe fallback
+    if (isConflictingGrade) {
+      const primary = getPrimaryDisplayService();
+      if (primary) {
+        return {
+          targetSlug: primary.slug,
+          targetUrl: `/services/${primary.slug}`,
+          service: primary.service,
+          reason: 'MODEL_DEFAULT_FALLBACK',
+          recognizedModel: modelMatch.id,
+        };
+      }
+      return {
+        targetUrl: `/services?model=${encodeURIComponent(modelMatch.id)}`,
+        reason: 'MODEL_LISTING_FALLBACK',
+        recognizedModel: modelMatch.id,
+      };
     }
 
-    if (filtered.length === 1) {
-      const match = filtered[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
+    if (compServices.length > 0) {
+      let filtered: ServiceLike[] = [];
+      if (hasOriginal && !hasCopy && !hasGx && !hasDd && !hasIncell) {
+        filtered = compServices.filter(
+          (s) => s.serviceName.toLowerCase().includes('original') &&
+            !s.serviceName.toLowerCase().includes('gx') &&
+            !s.serviceName.toLowerCase().includes('dd') &&
+            !s.serviceName.toLowerCase().includes('copy')
+        );
+      } else if (hasCopy) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('copy'));
+      } else if (hasGx) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('gx'));
+      } else if (hasDd) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('dd'));
+      } else if (hasIncell) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('incell') || s.serviceName.toLowerCase().includes('in-cell'));
+      } else {
+        // Unspecified grade! If single service, match it. If multiple, proceed to Tier 3 Fallback A
+        if (compServices.length === 1) {
+          filtered = compServices;
+        } else {
+          const primary = getPrimaryDisplayService();
+          if (primary) {
+            return {
+              targetSlug: primary.slug,
+              targetUrl: `/services/${primary.slug}`,
+              service: primary.service,
+              reason: 'MODEL_DEFAULT_FALLBACK',
+              recognizedModel: modelMatch.id,
+            };
+          }
+        }
+      }
+
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: 'MODEL_COMPONENT_MATCH',
+            recognizedModel: modelMatch.id,
+          };
+        }
+      }
     }
-    return null;
   }
 
-  // B. BATTERY MATCHING
+  // B. BATTERY MATCHING (TIER 2)
   if (isBattery) {
     const compServices = modelServices.filter(
       (s) => (s.category || '').toLowerCase() === 'battery' || s.serviceName.toLowerCase().includes('battery')
     );
-    if (compServices.length === 0) return null;
+    if (compServices.length > 0) {
+      const isMarket = norm.includes('market');
+      const isCopy = norm.includes('copy');
+      const isOrig = (hasOriginal || norm.includes('1-year-warranty')) && !isMarket && !isCopy;
 
-    const isMarket = norm.includes('market');
-    const isCopy = norm.includes('copy');
-    const isOrig = (norm.includes('original') || norm.includes('1-year-warranty')) && !isMarket && !isCopy;
+      let filtered: ServiceLike[] = [];
+      if (isMarket) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('market'));
+      } else if (isCopy) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('copy'));
+      } else if (isOrig) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('original') && !s.serviceName.toLowerCase().includes('market'));
+      } else if (compServices.length === 1) {
+        filtered = compServices;
+      }
 
-    let filtered: ServiceLike[] = [];
-    if (isMarket) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('market'));
-    } else if (isCopy) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('copy'));
-    } else if (isOrig) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('original') && !s.serviceName.toLowerCase().includes('market'));
-    } else {
-      if (compServices.length > 1) return null;
-      filtered = compServices;
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: 'MODEL_COMPONENT_MATCH',
+            recognizedModel: modelMatch.id,
+          };
+        }
+      }
     }
-
-    if (filtered.length === 1) {
-      const match = filtered[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
-    }
-    return null;
   }
 
-  // C. CAMERA MATCHING
+  // C. CAMERA MATCHING (TIER 2)
   if (isCamera) {
     const compServices = modelServices.filter(
       (s) => (s.category || '').toLowerCase() === 'camera' || s.serviceName.toLowerCase().includes('camera')
     );
-    if (compServices.length === 0) return null;
+    if (compServices.length > 0) {
+      const isFront = norm.includes('front') || norm.includes('selfie');
+      const isBack = norm.includes('back') || norm.includes('rear');
 
-    const isFront = norm.includes('front') || norm.includes('selfie');
-    const isBack = norm.includes('back') || norm.includes('rear');
-
-    if (isFront && !isBack) {
-      const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('front'));
-      if (filtered.length === 1) {
-        const match = filtered[0];
-        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-        return targetSlug ? { targetSlug, service: match } : null;
-      }
-    } else if (isBack && !isFront) {
-      const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('back'));
-      if (filtered.length === 1) {
-        const match = filtered[0];
-        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-        return targetSlug ? { targetSlug, service: match } : null;
+      if (isFront && !isBack) {
+        const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('front'));
+        if (filtered.length === 1) {
+          const match = filtered[0];
+          const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+          if (targetSlug) {
+            return {
+              targetSlug,
+              targetUrl: `/services/${targetSlug}`,
+              service: match,
+              reason: 'MODEL_COMPONENT_MATCH',
+              recognizedModel: modelMatch.id,
+            };
+          }
+        }
+      } else if (isBack && !isFront) {
+        const filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('back'));
+        if (filtered.length === 1) {
+          const match = filtered[0];
+          const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+          if (targetSlug) {
+            return {
+              targetSlug,
+              targetUrl: `/services/${targetSlug}`,
+              service: match,
+              reason: 'MODEL_COMPONENT_MATCH',
+              recognizedModel: modelMatch.id,
+            };
+          }
+        }
       }
     }
-    return null;
   }
 
-  // D. SPEAKER MATCHING
+  // D. SPEAKER / BUZZER MATCHING (TIER 2)
   if (isSpeaker) {
     const compServices = modelServices.filter(
       (s) => (s.category || '').toLowerCase() === 'speaker' ||
         s.serviceName.toLowerCase().includes('speaker') ||
         s.serviceName.toLowerCase().includes('buzzer')
     );
-    if (compServices.length === 0) return null;
-
-    if (norm.includes('buzzer')) {
-      const buz = compServices.filter((s) => s.serviceName.toLowerCase().includes('buzzer'));
-      if (buz.length === 1) {
-        const match = buz[0];
+    if (compServices.length > 0) {
+      if (norm.includes('buzzer')) {
+        const buz = compServices.filter((s) => s.serviceName.toLowerCase().includes('buzzer'));
+        if (buz.length === 1) {
+          const match = buz[0];
+          const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+          if (targetSlug) {
+            return {
+              targetSlug,
+              targetUrl: `/services/${targetSlug}`,
+              service: match,
+              reason: 'MODEL_COMPONENT_MATCH',
+              recognizedModel: modelMatch.id,
+            };
+          }
+        }
+      }
+      if (compServices.length === 1) {
+        const match = compServices[0];
         const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-        return targetSlug ? { targetSlug, service: match } : null;
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: 'MODEL_COMPONENT_MATCH',
+            recognizedModel: modelMatch.id,
+          };
+        }
       }
     }
-    if (compServices.length === 1) {
-      const match = compServices[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
-    }
-    return null;
   }
 
-  // E. CHARGING FLEX MATCHING
+  // E. CHARGING FLEX MATCHING (TIER 2)
   if (isCharging) {
     const compServices = modelServices.filter(
       (s) => (s.category || '').toLowerCase().includes('charging') ||
         s.serviceName.toLowerCase().includes('charging')
     );
-    if (compServices.length === 0) return null;
+    if (compServices.length > 0) {
+      if (compServices.length === 1) {
+        const match = compServices[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: 'MODEL_COMPONENT_MATCH',
+            recognizedModel: modelMatch.id,
+          };
+        }
+      }
 
-    if (compServices.length === 1) {
-      const match = compServices[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
-    }
+      const isMarket = norm.includes('market');
+      const isGenuine = norm.includes('genuine');
+      let filtered: ServiceLike[] = [];
+      if (isMarket) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('market'));
+      } else if (isGenuine) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('genuine') || s.serviceName.toLowerCase().includes('original'));
+      }
 
-    const isMarket = norm.includes('market');
-    const isGenuine = norm.includes('genuine');
-    let filtered: ServiceLike[] = [];
-    if (isMarket) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('market'));
-    } else if (isGenuine) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('genuine') || s.serviceName.toLowerCase().includes('original'));
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: 'MODEL_COMPONENT_MATCH',
+            recognizedModel: modelMatch.id,
+          };
+        }
+      }
     }
-
-    if (filtered.length === 1) {
-      const match = filtered[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
-    }
-    return null;
   }
 
-  // F. BACK PANEL MATCHING
+  // F. BACK PANEL MATCHING (TIER 2)
   if (isBackPanel) {
     const compServices = modelServices.filter(
       (s) => (s.category || '').toLowerCase().includes('back panel') ||
         s.serviceName.toLowerCase().includes('back panel')
     );
-    if (compServices.length === 0) return null;
+    if (compServices.length > 0) {
+      const isHq = norm.includes('high-quality') || norm.includes('high quality');
+      const isCopy = norm.includes('copy');
+      const isOrig = hasOriginal && !isCopy;
 
-    const isHq = norm.includes('high-quality') || norm.includes('high quality');
-    const isCopy = norm.includes('copy');
-    const isOrig = norm.includes('original') && !isCopy;
+      let filtered: ServiceLike[] = [];
+      if (isHq) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('high quality') || s.serviceName.toLowerCase().includes('high-quality'));
+      } else if (isCopy) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('copy') && !s.serviceName.toLowerCase().includes('high quality'));
+      } else if (isOrig) {
+        filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('original'));
+      } else if (compServices.length === 1) {
+        filtered = compServices;
+      }
 
-    let filtered: ServiceLike[] = [];
-    if (isHq) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('high quality') || s.serviceName.toLowerCase().includes('high-quality'));
-    } else if (isCopy) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('copy') && !s.serviceName.toLowerCase().includes('high quality'));
-    } else if (isOrig) {
-      filtered = compServices.filter((s) => s.serviceName.toLowerCase().includes('original'));
-    } else {
-      if (compServices.length > 1) return null;
-      filtered = compServices;
+      if (filtered.length === 1) {
+        const match = filtered[0];
+        const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
+        if (targetSlug) {
+          return {
+            targetSlug,
+            targetUrl: `/services/${targetSlug}`,
+            service: match,
+            reason: 'MODEL_COMPONENT_MATCH',
+            recognizedModel: modelMatch.id,
+          };
+        }
+      }
     }
-
-    if (filtered.length === 1) {
-      const match = filtered[0];
-      const targetSlug = Array.from(slugToService.entries()).find(([_, s]) => s.id === match.id)?.[0];
-      return targetSlug ? { targetSlug, service: match } : null;
-    }
-    return null;
   }
 
-  return null;
+  // TIER 3: MODEL-LEVEL SAFE FALLBACK
+  // When model is recognized in catalog, but service wording is corrupted, ambiguous, or outdated:
+  // Fallback A: Primary display replacement service
+  const primaryDisplay = getPrimaryDisplayService();
+  if (primaryDisplay) {
+    return {
+      targetSlug: primaryDisplay.slug,
+      targetUrl: `/services/${primaryDisplay.slug}`,
+      service: primaryDisplay.service,
+      reason: 'MODEL_DEFAULT_FALLBACK',
+      recognizedModel: modelMatch.id,
+    };
+  }
+
+  // Fallback B: Model-filtered listing
+  return {
+    targetUrl: `/services?model=${encodeURIComponent(modelMatch.id)}`,
+    reason: 'MODEL_LISTING_FALLBACK',
+    recognizedModel: modelMatch.id,
+  };
 }
 
 /**
  * Resolves a requested URL slug against active services and legacy redirects.
  * Follows strict priority order:
- * 1. Exact active slug match
- * 2. Explicit legacy dictionary lookup (LEGACY_SLUGS) with loop protection
- * 3. Automated legacy matching (normalizeAndMatchLegacySlug)
- * 4. NOT_FOUND (never redirects ambiguous or unknown requests)
+ * TIER 1. Exact active slug match
+ * TIER 2. Explicit legacy dictionary lookup (LEGACY_SLUGS) with loop protection
+ * TIER 2 / 3. Automated legacy normalization & model-level recovery (normalizeAndMatchLegacySlug)
+ * TIER 4. NOT_FOUND (never redirects ambiguous or unknown requests to arbitrary devices)
  */
 export function resolveServiceSlug(
   rawRequestedSlug: string | undefined | null,
@@ -589,6 +804,7 @@ export function resolveServiceSlug(
       type: 'NOT_FOUND',
       requestedSlug,
       cleanSlug: '',
+      reason: 'UNKNOWN_MODEL',
     };
   }
 
@@ -600,18 +816,21 @@ export function resolveServiceSlug(
     ? slugMapOrServices
     : Array.from(slugToService.values());
 
-  // PRIORITY 1: Exact active service match
+  // TIER 1: Exact active service match
   if (slugToService.has(cleanSlug)) {
+    const activeService = slugToService.get(cleanSlug);
     return {
       type: 'ACTIVE',
       requestedSlug,
       cleanSlug,
-      service: slugToService.get(cleanSlug),
+      service: activeService,
       matchStrategy: 'EXACT_ACTIVE',
+      reason: 'EXACT_ACTIVE',
+      recognizedModel: activeService?.model,
     };
   }
 
-  // PRIORITY 2: Explicit legacy mapping from dictionary with loop protection
+  // TIER 2: Explicit legacy mapping from dictionary with loop protection
   if (Object.prototype.hasOwnProperty.call(LEGACY_SLUGS, cleanSlug)) {
     let currentSlug = cleanSlug;
     const visited = new Set<string>([currentSlug]);
@@ -629,37 +848,45 @@ export function resolveServiceSlug(
     }
 
     if (target && slugToService.has(target)) {
+      const matched = slugToService.get(target);
       return {
         type: 'REDIRECT',
         requestedSlug,
         cleanSlug,
         targetSlug: target,
         targetUrl: `/services/${target}`,
-        service: slugToService.get(target),
+        service: matched,
         matchStrategy: 'EXPLICIT_LEGACY',
+        reason: 'LEGACY_ALIAS',
+        recognizedModel: matched?.model,
       };
     }
   }
 
-  // PRIORITY 3: Automated legacy matching
+  // TIER 2 & TIER 3: Automated legacy matching and model-level safe fallback
   const autoMatch = normalizeAndMatchLegacySlug(cleanSlug, activeServices, slugToService);
-  if (autoMatch && autoMatch.targetSlug && slugToService.has(autoMatch.targetSlug)) {
+  if (autoMatch && (autoMatch.targetSlug || autoMatch.targetUrl)) {
+    const targetSlug = autoMatch.targetSlug;
+    const targetUrl = autoMatch.targetUrl || (targetSlug ? `/services/${targetSlug}` : undefined);
     return {
       type: 'REDIRECT',
       requestedSlug,
       cleanSlug,
-      targetSlug: autoMatch.targetSlug,
-      targetUrl: `/services/${autoMatch.targetSlug}`,
+      targetSlug,
+      targetUrl,
       service: autoMatch.service,
       matchStrategy: 'AUTOMATED_LEGACY',
+      reason: autoMatch.reason,
+      recognizedModel: autoMatch.recognizedModel,
     };
   }
 
-  // PRIORITY 4: Not found in active catalog or legacy map
+  // TIER 4: Genuinely unknown or unsupported destinations
   return {
     type: 'NOT_FOUND',
     requestedSlug,
     cleanSlug,
+    reason: 'UNKNOWN_MODEL',
   };
 }
 

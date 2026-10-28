@@ -413,13 +413,29 @@ router.get('/services/:slug', async (req: Request, res: Response) => {
 
     const resolution = resolveServiceSlug(reqSlug, slugToService);
 
-    // 1. If this is a known legacy slug, issue HTTP 301 Permanent Redirect (preserving query string)
-    if (resolution.type === 'REDIRECT' && resolution.targetSlug) {
+    // 1. If this is a legacy slug, issue genuine HTTP 301 Permanent Redirect (preserving query params)
+    if (resolution.type === 'REDIRECT' && (resolution.targetUrl || resolution.targetSlug)) {
+      const destination = resolution.targetUrl || `/services/${resolution.targetSlug}`;
+      const [destPath, destQuery] = destination.split('?');
+      const destParams = new URLSearchParams(destQuery || '');
+
+      // Parse incoming query parameters
       const queryIndex = req.url.indexOf('?');
-      const queryString = queryIndex !== -1 ? req.url.slice(queryIndex) : '';
-      const destination = `/services/${resolution.targetSlug}${queryString}`;
+      if (queryIndex !== -1) {
+        const incomingQuery = req.url.slice(queryIndex + 1);
+        const incomingParams = new URLSearchParams(incomingQuery);
+        incomingParams.forEach((val, key) => {
+          if (!destParams.has(key)) {
+            destParams.set(key, val);
+          }
+        });
+      }
+
+      const finalQuery = destParams.toString();
+      const finalDestination = finalQuery ? `${destPath}?${finalQuery}` : destPath;
+
       res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
-      return res.redirect(301, destination);
+      return res.redirect(301, finalDestination);
     }
 
     const service = resolution.type === 'ACTIVE' ? resolution.service : undefined;
