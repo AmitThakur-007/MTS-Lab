@@ -21,11 +21,35 @@ export interface HomeSlideRecord {
   focalPoint?: string | null;
   overlayIntensity?: 'heavy' | 'medium' | 'subtle' | null;
   displayOrder: number;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: 'ACTIVE' | 'INACTIVE' | 'DRAFT' | 'SCHEDULED' | string;
+  publishStartAt?: string | null;
+  publishEndAt?: string | null;
   createdBy?: string | null;
   updatedBy?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export function isSlideCurrentlyPublished(slide: HomeSlideRecord, now: Date = new Date()): boolean {
+  if (!slide) return false;
+  const status = (slide.status as string) || '';
+  if (status === 'INACTIVE' || status === 'DRAFT') {
+    return false;
+  }
+  const currentTime = now.getTime();
+  if (slide.publishStartAt) {
+    const start = new Date(slide.publishStartAt).getTime();
+    if (!isNaN(start) && currentTime < start) {
+      return false;
+    }
+  }
+  if (slide.publishEndAt) {
+    const end = new Date(slide.publishEndAt).getTime();
+    if (!isNaN(end) && currentTime > end) {
+      return false;
+    }
+  }
+  return status === 'ACTIVE' || status === 'SCHEDULED';
 }
 
 export function deriveSlideDefaults(slide: Partial<HomeSlideRecord>): {

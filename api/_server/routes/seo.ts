@@ -13,6 +13,7 @@ import {
   BUSINESS_ADDRESS,
   ServiceLike,
   buildSlugMap,
+  resolveServiceSlug,
   formatNprPrice,
   getServiceSeoTitle,
   getServiceSeoDescription,
@@ -410,7 +411,18 @@ router.get('/services/:slug', async (req: Request, res: Response) => {
     const services = await getAuthoritativeActiveServices();
     const { slugToService } = buildSlugMap(services);
 
-    const service = slugToService.get(reqSlug);
+    const resolution = resolveServiceSlug(reqSlug, slugToService);
+
+    // 1. If this is a known legacy slug, issue HTTP 301 Permanent Redirect (preserving query string)
+    if (resolution.type === 'REDIRECT' && resolution.targetSlug) {
+      const queryIndex = req.url.indexOf('?');
+      const queryString = queryIndex !== -1 ? req.url.slice(queryIndex) : '';
+      const destination = `/services/${resolution.targetSlug}${queryString}`;
+      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+      return res.redirect(301, destination);
+    }
+
+    const service = resolution.type === 'ACTIVE' ? resolution.service : undefined;
     const template = getHtmlTemplate();
 
     if (!service) {

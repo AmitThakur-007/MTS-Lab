@@ -58,6 +58,8 @@ import { useRealtimeSync } from '@/services/realtime';
 import StaffManagement from './Staff';
 import PermanentDeletionHub from '@/components/admin/PermanentDeletionHub';
 import ThemeController from './ThemeController';
+import SlideshowManagement from './SlideshowManagement';
+import { Layers } from 'lucide-react';
 
 export default function SuperAdmin() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -359,6 +361,10 @@ export default function SuperAdmin() {
             <Users className="h-4 w-4 mr-1.5 text-purple-600 dark:text-purple-400 shrink-0" />
             <span>Staff Directory</span>
           </TabsTrigger>
+          <TabsTrigger value="slideshow-cms" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm">
+            <Layers className="h-4 w-4 mr-1.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span>Hero Slideshow CMS</span>
+          </TabsTrigger>
           <TabsTrigger value="data-wipe" className="rounded-xl py-2 px-3 sm:px-4 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm">
             <ShieldAlert className="h-4 w-4 mr-1.5 text-amber-600 dark:text-amber-400 shrink-0" />
             <span>System Data Purge</span>
@@ -368,6 +374,11 @@ export default function SuperAdmin() {
             <span>Federation & Sharing</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* Tab: Slideshow CMS */}
+        <TabsContent value="slideshow-cms" className="space-y-6">
+          <SlideshowManagement />
+        </TabsContent>
 
         {/* Tab: Global Theme Controller */}
         <TabsContent value="theme-controller" className="space-y-6">

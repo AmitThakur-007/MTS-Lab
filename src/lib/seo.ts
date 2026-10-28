@@ -185,6 +185,104 @@ export function buildSlugMap(services: ServiceLike[]): SlugMappingResult {
 }
 
 /**
+ * Centralized, typed registry of historical / legacy service slugs mapped to active canonical slugs.
+ * Used to preserve inbound links, bookmarks, search engine citations, and GSC index equity.
+ */
+export const LEGACY_SLUGS: Record<string, string> = {
+  // iPhone 14 Pro Max legacy/outdated variants
+  'iphone-14-pro-max-standard-original-standard': 'iphone-14-pro-max-14-original-display-replacement',
+  'iphone-14-pro-max-standard-original': 'iphone-14-pro-max-14-original-display-replacement',
+  'iphone-14-pro-max-original-display-replacement': 'iphone-14-pro-max-14-original-display-replacement',
+  // iPhone 11 & 12 legacy slug variants without repetitive model tokens
+  'iphone-11-pro-max-original-display-replacement': 'iphone-11-pro-max-11-original-display-replacement',
+  'iphone-12-pro-max-original-display-replacement': 'iphone-12-pro-max-12-original-display-replacement',
+};
+
+export type SlugResolutionType = 'ACTIVE' | 'REDIRECT' | 'NOT_FOUND';
+
+export interface SlugResolutionResult {
+  type: SlugResolutionType;
+  requestedSlug: string;
+  cleanSlug: string;
+  targetSlug?: string;
+  targetUrl?: string;
+  service?: ServiceLike;
+}
+
+/**
+ * Resolves a requested URL slug against active services and legacy redirects.
+ * - Protects against circular redirect loops (max depth 5, cycle detection)
+ * - Verifies the target slug actually exists in active services before recommending a redirect
+ * - Normalizes case, leading/trailing slashes, and whitespace
+ */
+export function resolveServiceSlug(
+  rawRequestedSlug: string | undefined | null,
+  slugMapOrServices: Map<string, ServiceLike> | ServiceLike[]
+): SlugResolutionResult {
+  const requestedSlug = rawRequestedSlug ? String(rawRequestedSlug) : '';
+  const cleanSlug = requestedSlug.trim().replace(/^\/+|\/+$/g, '').toLowerCase();
+
+  if (!cleanSlug) {
+    return {
+      type: 'NOT_FOUND',
+      requestedSlug,
+      cleanSlug: '',
+    };
+  }
+
+  const slugToService = Array.isArray(slugMapOrServices)
+    ? buildSlugMap(slugMapOrServices).slugToService
+    : slugMapOrServices;
+
+  // 1. Direct active service match
+  if (slugToService.has(cleanSlug)) {
+    return {
+      type: 'ACTIVE',
+      requestedSlug,
+      cleanSlug,
+      service: slugToService.get(cleanSlug),
+    };
+  }
+
+  // 2. Legacy slug lookup with loop protection
+  if (Object.prototype.hasOwnProperty.call(LEGACY_SLUGS, cleanSlug)) {
+    let currentSlug = cleanSlug;
+    const visited = new Set<string>([currentSlug]);
+    let target = LEGACY_SLUGS[currentSlug]?.trim().toLowerCase();
+    let steps = 0;
+
+    while (target && Object.prototype.hasOwnProperty.call(LEGACY_SLUGS, target) && steps < 5) {
+      const nextTarget = LEGACY_SLUGS[target]?.trim().toLowerCase();
+      if (!nextTarget || visited.has(nextTarget)) {
+        break;
+      }
+      visited.add(nextTarget);
+      target = nextTarget;
+      steps++;
+    }
+
+    if (target && slugToService.has(target)) {
+      return {
+        type: 'REDIRECT',
+        requestedSlug,
+        cleanSlug,
+        targetSlug: target,
+        targetUrl: `/services/${target}`,
+        service: slugToService.get(target),
+      };
+    }
+  }
+
+  // 3. Not found in active catalog or legacy map
+  return {
+    type: 'NOT_FOUND',
+    requestedSlug,
+    cleanSlug,
+  };
+}
+
+
+/**
  * Generate SEO Page Title for a service (30-60 characters ideal)
  */
 export function getServiceSeoTitle(service: ServiceLike): string {

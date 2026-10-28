@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Wrench,
   Clock,
@@ -41,11 +41,14 @@ import {
   getServiceFaqSubtitle,
   sanitizeServiceDescription,
   slugToHumanTitle,
+  resolveServiceSlug,
 } from '@/lib/seo';
 import { toast } from 'sonner';
 
 export default function ServiceDetail() {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [services, setServices] = useState<ServiceLike[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +92,21 @@ export default function ServiceDetail() {
     return buildSlugMap(services);
   }, [services]);
 
-  const service = slug ? slugToService.get(slug.toLowerCase()) : undefined;
+  // Resolve requested slug against active catalog and legacy redirects
+  const resolution = useMemo(() => {
+    if (loading) return null;
+    return resolveServiceSlug(slug, slugToService);
+  }, [slug, slugToService, loading]);
+
+  // Execute client-side replacement redirect for known legacy slugs (preserving query params)
+  useEffect(() => {
+    if (resolution && resolution.type === 'REDIRECT' && resolution.targetSlug) {
+      const targetPath = `/services/${resolution.targetSlug}${location.search}`;
+      navigate(targetPath, { replace: true });
+    }
+  }, [resolution, navigate, location.search]);
+
+  const service = resolution?.type === 'ACTIVE' ? resolution.service : undefined;
 
   // Find related services (same brand or model)
   const relatedServices = useMemo(() => {
@@ -189,8 +206,29 @@ export default function ServiceDetail() {
     );
   }
 
+  // Redirect state (renders destination metadata and loading indicator during client navigation transition)
+  if (resolution && resolution.type === 'REDIRECT' && resolution.targetSlug) {
+    const destTitle = `${slugToHumanTitle(resolution.targetSlug)} | ${BUSINESS_NAME} Kathmandu`;
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 antialiased">
+        <PageSeo
+          title={destTitle}
+          description="Redirecting to verified smartphone repair service..."
+          canonical={`${SITE_URL}/services/${resolution.targetSlug}`}
+          noindex={false}
+        />
+        <Navbar />
+        <main className="flex-1 max-w-5xl w-full mx-auto px-4 pt-28 pb-16 flex flex-col items-center justify-center space-y-4">
+          <div className="w-10 h-10 border-3 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
+          <p className="text-slate-600 font-medium text-sm">Redirecting to verified service specification...</p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   // Not Found state (strictly verified only when active services catalog loaded and slug is genuinely absent)
-  if (!service || !cleanSlug) {
+  if (!service || !cleanSlug || resolution?.type === 'NOT_FOUND') {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 antialiased">
         <PageSeo

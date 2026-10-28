@@ -246,7 +246,7 @@ export default function Navbar() {
                     boxShadow: `0 4px 16px -2px ${activeHeroTheme.accentGlow}`
                   } : undefined}
                 >
-                  Sign In
+                  Login
                 </Button>
               ) : (
                 <Button 
@@ -352,7 +352,7 @@ export default function Navbar() {
                     }}
                     className="w-full h-12 rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-base shadow-sm cursor-pointer"
                   >
-                    Sign In
+                    Login
                   </Button>
                 ) : (
                   <Button 

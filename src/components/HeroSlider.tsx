@@ -447,25 +447,33 @@ export default function HeroSlider() {
           className="absolute inset-0"
         >
           {/* Background Image Layer with Zoom effect and Responsive Picture */}
-          <motion.div 
-            initial={{ scale: 1.05 }}
-            animate={{ scale: 1 }}
-            transition={{ duration: 7, ease: "easeOut" }}
-            className="absolute inset-0"
-          >
-            <picture className="w-full h-full block">
-              {currentSlide.mobileImageUrl && (
-                <source media="(max-width: 640px)" srcSet={currentSlide.mobileImageUrl} />
-              )}
-              <img 
-                src={currentSlide.imageUrl} 
-                alt={currentSlide.title}
-                className="w-full h-full object-cover"
-                style={{ objectPosition: currentSlide.focalPoint || 'center' }}
-                loading={activeIndex === 0 ? 'eager' : 'lazy'}
-              />
-            </picture>
-          </motion.div>
+          {(() => {
+            const desktopImage = currentSlide.imageUrl;
+            const mobileImage = currentSlide.mobileImageUrl || desktopImage;
+            const isMobileViewport = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
+
+            return (
+              <motion.div 
+                initial={{ scale: 1.05 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 7, ease: "easeOut" }}
+                className="absolute inset-0"
+              >
+                <picture className="w-full h-full block">
+                  {currentSlide.mobileImageUrl && (
+                    <source media="(max-width: 640px)" srcSet={mobileImage} />
+                  )}
+                  <img 
+                    src={isMobileViewport && currentSlide.mobileImageUrl ? mobileImage : desktopImage} 
+                    alt={currentSlide.title}
+                    className="w-full h-full object-cover"
+                    style={{ objectPosition: currentSlide.focalPoint || 'center' }}
+                    loading={activeIndex === 0 ? 'eager' : 'lazy'}
+                  />
+                </picture>
+              </motion.div>
+            );
+          })()}
 
           {/* Top Vignette Overlay for Header Contrast */}
           <div className="absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-slate-950/90 via-slate-950/50 to-transparent pointer-events-none z-1" />
