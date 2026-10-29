@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import OperatingHours from '@/components/OperatingHours';
 import HeroSlider from '@/components/HeroSlider';
 import { FestivalDecorations } from '@/components/theme/FestivalDecorations';
 import {
@@ -546,15 +547,7 @@ export default function Home() {
                     <span className="text-slate-200">New Road, Kathmandu, Nepal (Near Central Square)</span>
                   </div>
 
-                  <div className="flex flex-col xs:flex-row xs:items-start gap-1 xs:gap-3">
-                    <span className="font-bold text-white xs:w-28 shrink-0 flex items-center gap-1.5">
-                      <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0 hidden xs:inline" />
-                      <span>Opening Hours:</span>
-                    </span>
-                    <span className="text-slate-200">
-                      Sunday – Friday: 10:30 AM – 7:30 PM<br />Saturday: 2PM – 5:30 PM
-                    </span>
-                  </div>
+                  <OperatingHours variant="home" />
 
                   <div className="flex flex-col xs:flex-row xs:items-start gap-1 xs:gap-3 min-w-0">
                     <span className="font-bold text-white xs:w-28 shrink-0 flex items-center gap-1.5">

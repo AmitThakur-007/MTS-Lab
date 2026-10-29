@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { OPERATING_HOURS } from '@/lib/businessHours';
 import { Button } from '@/components/ui/button';
 import { PageSeo } from '@/components/Seo';
 import {
@@ -570,9 +571,21 @@ export default function ServiceDetail() {
               <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                 {BUSINESS_ADDRESS.streetAddress}, {BUSINESS_ADDRESS.addressLocality}, Nepal.
               </p>
-              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <div><strong>Sunday &ndash; Friday:</strong> 10:00 AM &ndash; 7:00 PM</div>
-                <div><strong>Saturday:</strong> 10:00 AM &ndash; 6:00 PM</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <strong>{OPERATING_HOURS.regularDays}:</strong>
+                  <span className="font-medium text-slate-700 dark:text-slate-300">{OPERATING_HOURS.openTime} – {OPERATING_HOURS.closeTime}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <strong>{OPERATING_HOURS.saturdayDayLabel}:</strong>
+                  <a
+                    href={OPERATING_HOURS.phoneTel}
+                    className="text-amber-600 dark:text-amber-400 hover:underline font-semibold"
+                    title={`Call MTS Lab at ${OPERATING_HOURS.phone}`}
+                  >
+                    {OPERATING_HOURS.saturdayActionLabel}
+                  </a>
+                </div>
               </div>
               <div className="pt-1">
                 <Link

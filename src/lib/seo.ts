@@ -22,7 +22,7 @@ export const BUSINESS_GEO = {
   latitude: 27.7029,
   longitude: 85.3123,
 };
-export const BUSINESS_OPENING_HOURS = ['Su-Fr 10:00-19:00', 'Sa 10:00-18:00'];
+export const BUSINESS_OPENING_HOURS = ['Su-Fr 10:20-18:30'];
 
 export interface ServiceLike {
   id: string;
@@ -1003,14 +1003,8 @@ export function getLocalBusinessJsonLd(): Record<string, unknown> {
       {
         '@type': 'OpeningHoursSpecification',
         dayOfWeek: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-        opens: '10:00',
-        closes: '19:00',
-      },
-      {
-        '@type': 'OpeningHoursSpecification',
-        dayOfWeek: ['Saturday'],
-        opens: '10:00',
-        closes: '18:00',
+        opens: '10:20',
+        closes: '18:30',
       },
     ],
     sameAs: ['https://www.facebook.com/mtslabnepal'],

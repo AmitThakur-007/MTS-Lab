@@ -3,6 +3,7 @@ import { XCircle, ArrowLeft, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { motion } from 'motion/react';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function RejectedAccess() {
   return (
@@ -13,12 +14,22 @@ export default function RejectedAccess() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-[440px]"
       >
-        <div className="flex flex-col items-center mb-8 text-center">
-          <div className="w-[72px] h-[72px] bg-red-600 rounded-[22px] flex items-center justify-center text-white mb-6 shadow-2xl shadow-red-600/10">
-            <XCircle className="h-8 w-8" />
+        <div className="flex flex-col items-center mb-6 text-center">
+          <BrandLogo
+            variant="icon"
+            size="xl"
+            linkTo="/"
+            imgClassName="w-16 h-16 drop-shadow-lg mb-3"
+          />
+          <div className="relative mb-3">
+            <div className="w-12 h-12 bg-red-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-red-600/20">
+              <XCircle className="h-6 w-6" />
+            </div>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-1">MTS Lab</h1>
-          <p className="text-slate-500 text-sm font-medium">Repair Management OS v2.0</p>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 mb-0.5">
+            MTS<span className="text-indigo-600 font-bold ml-0.5">Lab</span>
+          </h1>
+          <p className="text-slate-500 text-xs sm:text-sm font-medium">Repair Management OS v2.0</p>
         </div>
 
         <Card className="border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.03)] rounded-[24px] text-center overflow-hidden">

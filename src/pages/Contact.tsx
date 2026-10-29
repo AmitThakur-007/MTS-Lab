@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { OPERATING_HOURS, getMtsLabOpenStatus } from '@/lib/businessHours';
 import { Button } from '@/components/ui/button';
 
 export default function Contact() {
@@ -74,29 +75,9 @@ export default function Contact() {
     return `https://wa.me/9779869276668?text=${encodeURIComponent(text)}`;
   }, []);
 
-  // Live status in Nepal Time (UTC+5:45)
-  const isLabCurrentlyOpen = (() => {
-    try {
-      const now = new Date();
-      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-      const nepalTime = new Date(utc + (5.75 * 3600000));
-      const day = nepalTime.getDay(); // 0 = Sunday, 6 = Saturday
-      const hour = nepalTime.getHours();
-      const minute = nepalTime.getMinutes();
-      const timeInMinutes = hour * 60 + minute;
-
-      if (day >= 0 && day <= 5) {
-        // Sunday - Friday: 10:30 AM (630 mins) to 7:30 PM (1170 mins)
-        return timeInMinutes >= 630 && timeInMinutes <= 1170;
-      } else if (day === 6) {
-        // Saturday: 2:00 PM (840 mins) to 5:30 PM (1050 mins)
-        return timeInMinutes >= 840 && timeInMinutes <= 1050;
-      }
-      return false;
-    } catch {
-      return true;
-    }
-  })();
+  // Live status in Nepal Time (UTC+5:45) based on official operating hours
+  const labStatus = getMtsLabOpenStatus();
+  const isLabCurrentlyOpen = labStatus.isOpen;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -223,7 +204,13 @@ export default function Contact() {
             {/* Breadcrumb / Category Status Tag */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-medium text-slate-300">
               <span className={`h-2 w-2 rounded-full shrink-0 ${isLabCurrentlyOpen ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-              <span>{isLabCurrentlyOpen ? 'Reception Desk Open' : 'Reception Closed (Opens 10:30 AM)'}</span>
+              <span>
+                {isLabCurrentlyOpen
+                  ? 'Reception Desk Open'
+                  : labStatus.isSaturday
+                  ? OPERATING_HOURS.saturdayInstruction
+                  : `Reception Closed (Opens ${OPERATING_HOURS.openTime})`}
+              </span>
               <span className="text-slate-500 font-normal">|</span>
               <span className="text-slate-400">Kathmandu Central Lab</span>
             </div>
@@ -394,21 +381,27 @@ export default function Contact() {
                 </div>
 
                 <div className="min-w-0">
-                  <h3 className="text-base font-bold text-slate-900">Operating Hours</h3>
+                  <h3 className="text-base font-bold text-slate-900">{OPERATING_HOURS.title}</h3>
                   <p className="text-xs text-slate-500 mt-0.5">Laboratory schedule</p>
                 </div>
 
                 <div className="space-y-2 pt-1 text-xs min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold text-slate-700">Sun – Fri:</span>
-                    <span className="text-slate-900 font-bold text-right">10:30 AM – 7:30 PM</span>
+                    <span className="font-semibold text-slate-700">{OPERATING_HOURS.regularDays}:</span>
+                    <span className="text-slate-900 font-bold text-right">{OPERATING_HOURS.openTime} – {OPERATING_HOURS.closeTime}</span>
                   </div>
                   <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold text-slate-700">Saturday:</span>
-                    <span className="text-slate-900 font-bold text-right">2:00 PM – 5:30 PM</span>
+                    <span className="font-semibold text-slate-700">{OPERATING_HOURS.saturdayDayLabel}:</span>
+                    <a
+                      href={OPERATING_HOURS.phoneTel}
+                      className="text-amber-600 hover:text-amber-700 underline underline-offset-2 font-bold text-right transition-colors"
+                      title={`Call MTS Lab at ${OPERATING_HOURS.phone}`}
+                    >
+                      {OPERATING_HOURS.saturdayActionLabel}
+                    </a>
                   </div>
                   <p className="text-[11px] text-slate-400 pt-0.5">
-                    Saturday: Emergency repair intake & scheduled deliveries
+                    {OPERATING_HOURS.saturdayInstruction} (Emergency repair intake &amp; scheduled deliveries)
                   </p>
                 </div>
               </div>

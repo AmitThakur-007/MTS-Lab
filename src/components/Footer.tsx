@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom';
+import BrandLogo from '@/components/BrandLogo';
+import OperatingHours from '@/components/OperatingHours';
 import { 
   Smartphone, 
   MapPin, 
@@ -29,19 +31,13 @@ export default function Footer() {
           
           {/* Brand & Overview */}
           <div className="lg:col-span-5 space-y-4">
-            <Link to="/" className="inline-flex items-center gap-3 group">
-              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-white/10 group-hover:scale-105 transition-transform">
-                M
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xl font-black tracking-tight text-white flex items-center gap-1.5">
-                  MTS<span className="text-indigo-400 font-medium">LAB</span>
-                </span>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                  Mobile Technology Station (MTS)
-                </span>
-              </div>
-            </Link>
+            <BrandLogo
+              variant="full"
+              size="md"
+              theme="dark"
+              subtitle="Mobile Technology Station (MTS)"
+              imgClassName="drop-shadow-lg"
+            />
 
             <p className="text-slate-400 text-xs sm:text-sm font-normal leading-relaxed max-w-md">
               Mobile Technology Station (MTS) is Nepal's premier smartphone hardware restoration and Level-4 micro-soldering laboratory. We specialize in precision OCA front glass lamination, AMOLED display restoration, laser line removal, and circuit-level logic board recovery.
@@ -182,13 +178,7 @@ export default function Footer() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-2.5">
-                <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-[11px] text-slate-500 uppercase tracking-wider block font-bold">Operating Hours</span>
-                  <span className="text-slate-300 font-medium">Sun–Fri &bull; 10:20 AM – 6:30 PM</span>
-                </div>
-              </div>
+              <OperatingHours variant="footer" />
             </div>
           </div>
 

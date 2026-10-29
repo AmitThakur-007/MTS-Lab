@@ -18,7 +18,7 @@ import { api } from '@/services/api';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 
-const mtsLogo = '/apple-touch-icon.png';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -225,15 +225,16 @@ export default function ForgotPassword() {
       >
         {/* MTS Lab Official Logo & Header */}
         <div className="flex flex-col items-center mb-6 text-center space-y-2">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full p-1 bg-white shadow-xl shadow-slate-900/10 border border-slate-200/90 flex items-center justify-center overflow-hidden transition-transform duration-300 hover:scale-105">
-            <img
-              src={mtsLogo}
-              alt="MTS Lab Logo"
-              className="w-full h-full object-contain rounded-full"
-            />
-          </div>
+          <BrandLogo
+            variant="icon"
+            size="2xl"
+            linkTo="/"
+            imgClassName="w-20 h-20 sm:w-24 sm:h-24 drop-shadow-xl"
+          />
           <div className="space-y-0.5">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950">MTS Lab</h1>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950">
+              MTS<span className="text-indigo-600 font-bold ml-0.5">Lab</span>
+            </h1>
             <p className="text-slate-500 text-xs sm:text-sm font-medium">
               Professional Smartphone Repair & Technical Services
             </p>

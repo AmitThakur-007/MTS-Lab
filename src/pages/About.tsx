@@ -22,11 +22,12 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import OperatingHours from '@/components/OperatingHours';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 
-const mtsLogo = '/apple-touch-icon.png';
+const mtsLogo = '/images/mts-lab-logo.png';
 const sabitaPhoto = '/images/team/sabita-thakur.jpg';
 const manishPhoto = '/images/team/manish-sharma.jpg';
 const amitPhoto = '/images/team/amit-sharma.jpg';
@@ -648,10 +649,7 @@ export default function About() {
                   </p>
                 </div>
 
-                <div className="border border-slate-800 rounded-2xl p-2.5 sm:p-3 bg-slate-900 text-slate-300 text-xs font-semibold inline-flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>Open Sun - Fri: 10:30 AM - 7:30 PM</span>
-                </div>
+                <OperatingHours variant="badge" />
               </div>
 
             </div>

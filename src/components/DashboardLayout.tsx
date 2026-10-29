@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import BrandLogo from '@/components/BrandLogo';
 import { 
   LayoutDashboard, 
   Users, 
@@ -342,12 +343,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               className={cn("flex items-center gap-3 min-w-0 group", isCollapsed && "md:justify-center")}
               title="MTS Lab Dashboard"
             >
-              <div className="w-10 h-10 bg-slate-950 dark:bg-white rounded-xl flex items-center justify-center text-white dark:text-slate-950 font-black text-lg shadow-md shadow-slate-950/20 shrink-0 transition-transform group-hover:scale-105">
-                M
-              </div>
+              <BrandLogo
+                variant="icon"
+                size="md"
+                linkTo={null}
+                imgClassName="w-10 h-10 drop-shadow-md group-hover:scale-105"
+              />
               <div className={cn("min-w-0 transition-opacity", isCollapsed && "md:hidden")}>
-                <span className="text-base font-black tracking-tight text-slate-900 dark:text-white block truncate">MTS LAB</span>
-                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider block -mt-0.5 truncate">Repair Systems</span>
+                <span className="text-base font-black tracking-tight text-slate-900 dark:text-white block truncate">
+                  MTS<span className="text-indigo-600 dark:text-indigo-400 font-bold ml-0.5">LAB</span>
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider block -mt-0.5 truncate">
+                  Repair Systems
+                </span>
               </div>
             </NavLink>
 
@@ -585,9 +593,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Button>
             
             {/* Mobile Header Brand */}
-            <NavLink to="/dashboard" className="md:hidden flex items-center gap-1.5 font-black text-slate-900 dark:text-white tracking-tight text-sm select-none shrink-0">
-              <span className="bg-slate-950 dark:bg-white text-white dark:text-slate-950 w-6 h-6 rounded-md flex items-center justify-center text-xs font-black">M</span>
-              <span className="font-extrabold">MTS<span className="text-slate-500 font-semibold ml-0.5">Lab</span></span>
+            <NavLink to="/dashboard" className="md:hidden flex items-center gap-2 font-black text-slate-900 dark:text-white tracking-tight text-sm select-none shrink-0">
+              <BrandLogo
+                variant="icon"
+                size="xs"
+                linkTo={null}
+                imgClassName="w-7 h-7 drop-shadow-sm"
+              />
+              <span className="font-extrabold text-sm tracking-tight text-slate-900 dark:text-white">
+                MTS<span className="text-indigo-600 dark:text-indigo-400 font-bold ml-0.5">Lab</span>
+              </span>
             </NavLink>
 
             {/* Role indicator pill on mobile */}

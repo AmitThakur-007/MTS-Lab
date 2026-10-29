@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Clock, ShieldAlert, ArrowLeft, RefreshCw, Smartphone, Laptop, Tablet, Monitor, CheckCircle } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { motion } from 'motion/react';
@@ -87,12 +88,22 @@ export default function PendingApproval() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-[480px]"
       >
-        <div className="flex flex-col items-center mb-8 text-center">
-          <div className="w-[72px] h-[72px] bg-amber-500 rounded-[22px] flex items-center justify-center text-white mb-6 shadow-2xl shadow-amber-500/10">
-            <Clock className="h-8 w-8 animate-pulse" />
+        <div className="flex flex-col items-center mb-6 text-center">
+          <BrandLogo
+            variant="icon"
+            size="xl"
+            linkTo="/"
+            imgClassName="w-16 h-16 drop-shadow-lg mb-3"
+          />
+          <div className="relative mb-3">
+            <div className="w-12 h-12 bg-amber-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-amber-500/20">
+              <Clock className="h-6 w-6 animate-pulse" />
+            </div>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-1">MTS Lab</h1>
-          <p className="text-slate-500 text-sm font-medium">Repair Management OS v2.0</p>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 mb-0.5">
+            MTS<span className="text-indigo-600 font-bold ml-0.5">Lab</span>
+          </h1>
+          <p className="text-slate-500 text-xs sm:text-sm font-medium">Repair Management OS v2.0</p>
         </div>
 
         <Card className="border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.03)] rounded-[24px] text-center overflow-hidden">
