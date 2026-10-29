@@ -6,6 +6,14 @@ import { logAudit } from '../services/auditService';
 import { broadcastServerChange } from '../services/realtimeSync';
 import { createNotification } from '../services/notificationStorage';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  deleteSingleLogRecord,
+  bulkDeleteLogRecords,
+  clearLogCategoryRecords,
+  AuthorizationError,
+  NotFoundError,
+  ValidationError,
+} from '../services/logDeletionService';
 
 const router = Router();
 
@@ -474,6 +482,103 @@ router.get('/activity-timeline', async (req: AuthRequest, res: Response) => {
   } catch (err: any) {
     console.error('[ACTIVITY TIMELINE ERROR]', err);
     return res.status(500).json({ error: 'Failed to fetch activity logs.' });
+  }
+});
+
+// 7b. DELETE /api/security/activity-timeline/:id — Strictly restricted to SUPER_ADMIN
+router.delete('/activity-timeline/:id', authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason, category } = req.body || {};
+
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || null;
+    const userAgent = (req.headers['user-agent'] as string) || null;
+
+    const result = await deleteSingleLogRecord(id, req.user!, {
+      ipAddress,
+      userAgent,
+      reason,
+      category: category || 'ACTIVITY_TIMELINE',
+    });
+
+    return res.json(result);
+  } catch (err: any) {
+    if (err instanceof AuthorizationError) {
+      return res.status(err.statusCode).json({ error: 'Forbidden', message: err.message });
+    }
+    if (err instanceof NotFoundError) {
+      return res.status(err.statusCode).json({ error: 'Not Found', message: err.message });
+    }
+    if (err instanceof ValidationError) {
+      return res.status(err.statusCode).json({ error: 'Bad Request', message: err.message });
+    }
+    console.error('[TIMELINE DELETE LOG ERROR]', err);
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to delete activity log record.' });
+  }
+});
+
+// 7c. POST /api/security/activity-timeline/bulk-delete — Strictly restricted to SUPER_ADMIN
+router.post('/activity-timeline/bulk-delete', authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids, reason, category } = req.body || {};
+
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || null;
+    const userAgent = (req.headers['user-agent'] as string) || null;
+
+    const result = await bulkDeleteLogRecords(ids, req.user!, {
+      ipAddress,
+      userAgent,
+      reason,
+      category: category || 'ACTIVITY_TIMELINE',
+    });
+
+    return res.json(result);
+  } catch (err: any) {
+    if (err instanceof AuthorizationError) {
+      return res.status(err.statusCode).json({ error: 'Forbidden', message: err.message });
+    }
+    if (err instanceof ValidationError) {
+      return res.status(err.statusCode).json({ error: 'Bad Request', message: err.message });
+    }
+    console.error('[TIMELINE BULK DELETE LOGS ERROR]', err);
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to bulk-delete activity records.' });
+  }
+});
+
+// 7d. POST /api/security/activity-timeline/clear — Strictly restricted to SUPER_ADMIN
+router.post('/activity-timeline/clear', authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { category, userId, startDate, endDate, confirmPhrase, reason } = req.body || {};
+
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || null;
+    const userAgent = (req.headers['user-agent'] as string) || null;
+
+    const result = await clearLogCategoryRecords(
+      {
+        category,
+        userId,
+        startDate,
+        endDate,
+        confirmPhrase,
+      },
+      req.user!,
+      {
+        ipAddress,
+        userAgent,
+        reason,
+      }
+    );
+
+    return res.json(result);
+  } catch (err: any) {
+    if (err instanceof AuthorizationError) {
+      return res.status(err.statusCode).json({ error: 'Forbidden', message: err.message });
+    }
+    if (err instanceof ValidationError) {
+      return res.status(err.statusCode).json({ error: 'Bad Request', message: err.message });
+    }
+    console.error('[TIMELINE CLEAR LOGS ERROR]', err);
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to clear activity timeline records.' });
   }
 });
 

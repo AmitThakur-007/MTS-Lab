@@ -27,7 +27,9 @@ import {
   XCircle,
   Clock,
   RefreshCw,
-  Palette
+  Palette,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -60,6 +62,7 @@ import PermanentDeletionHub from '@/components/admin/PermanentDeletionHub';
 import ThemeController from './ThemeController';
 import SlideshowManagement from './SlideshowManagement';
 import { Layers } from 'lucide-react';
+import { useAuthStore } from '@/store/authStore';
 
 export default function SuperAdmin() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -86,6 +89,108 @@ export default function SuperAdmin() {
   });
   const [sharingHistory, setSharingHistory] = useState<any[]>([]);
   const [shareLoading, setShareLoading] = useState(false);
+
+  const { user } = useAuthStore();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  // Super Admin Log Deletion & Selection States
+  const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
+  const [isSingleDeleteOpen, setIsSingleDeleteOpen] = useState(false);
+  const [targetDeleteLog, setTargetDeleteLog] = useState<any | null>(null);
+  const [singleDeleting, setSingleDeleting] = useState(false);
+
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const [isClearLogsOpen, setIsClearLogsOpen] = useState(false);
+  const [clearCategory, setClearCategory] = useState('ALL');
+  const [clearConfirmPhrase, setClearConfirmPhrase] = useState('');
+  const [clearDeleting, setClearDeleting] = useState(false);
+
+  const handleToggleSelectAll = () => {
+    if (selectedLogIds.length === auditLogs.length && auditLogs.length > 0) {
+      setSelectedLogIds([]);
+    } else {
+      setSelectedLogIds(auditLogs.map((l) => l.id));
+    }
+  };
+
+  const handleToggleSelectLog = (id: string) => {
+    setSelectedLogIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const confirmDeleteSingleLog = async () => {
+    if (!targetDeleteLog) return;
+    setSingleDeleting(true);
+    try {
+      const res: any = await api.delete(`/admin/audit-logs/${targetDeleteLog.id}`);
+      if (res && (res.success || res.deletedCount)) {
+        toast.success('Security log record permanently deleted.');
+        setIsSingleDeleteOpen(false);
+        setTargetDeleteLog(null);
+        setSelectedLogIds((prev) => prev.filter((i) => i !== targetDeleteLog.id));
+        await fetchAuditLogs();
+        fetchHistory();
+      } else {
+        throw new Error(res?.error || res?.message || 'Failed to delete record.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete log record.');
+    } finally {
+      setSingleDeleting(false);
+    }
+  };
+
+  const confirmBulkDeleteLogs = async () => {
+    if (selectedLogIds.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      const res: any = await api.post('/admin/audit-logs/bulk-delete', { ids: selectedLogIds });
+      if (res && (res.success || res.deletedCount !== undefined)) {
+        toast.success(res.message || `Permanently deleted ${res.deletedCount} log records.`);
+        setIsBulkDeleteOpen(false);
+        setSelectedLogIds([]);
+        await fetchAuditLogs();
+        fetchHistory();
+      } else {
+        throw new Error(res?.error || res?.message || 'Failed to bulk-delete records.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to bulk-delete log records.');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const confirmClearLogs = async () => {
+    if (clearConfirmPhrase !== 'PERMANENTLY_DELETE') {
+      toast.error("Type 'PERMANENTLY_DELETE' exactly to confirm dataset purge.");
+      return;
+    }
+    setClearDeleting(true);
+    try {
+      const res: any = await api.post('/admin/audit-logs/clear', {
+        category: clearCategory,
+        confirmPhrase: clearConfirmPhrase,
+      });
+      if (res && (res.success || res.deletedCount !== undefined)) {
+        toast.success(res.message || `Cleared ${res.deletedCount} records.`);
+        setIsClearLogsOpen(false);
+        setClearConfirmPhrase('');
+        setSelectedLogIds([]);
+        await fetchAuditLogs();
+        fetchHistory();
+      } else {
+        throw new Error(res?.error || res?.message || 'Failed to clear logs.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to clear logs.');
+    } finally {
+      setClearDeleting(false);
+    }
+  };
 
   // Security Audit Logs state
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -410,7 +515,31 @@ export default function SuperAdmin() {
                   Real-time recording of logins, 2FA verifications, password updates, role mutations, and system events.
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                {isSuperAdmin && selectedLogIds.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => setIsBulkDeleteOpen(true)}
+                    className="h-10 px-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold gap-2 cursor-pointer shadow-lg shadow-rose-600/20"
+                    title="Bulk delete selected log records"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Delete Selected ({selectedLogIds.length})</span>
+                  </Button>
+                )}
+                {isSuperAdmin && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsClearLogsOpen(true)}
+                    className="h-10 px-3.5 bg-slate-800 text-rose-300 border-rose-900/50 hover:bg-rose-950/40 hover:text-rose-200 rounded-xl text-xs font-bold gap-2 cursor-pointer transition-colors"
+                    title="Safely clear logs by category"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5 text-rose-400" />
+                    <span>Clear Logs</span>
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -565,26 +694,42 @@ export default function SuperAdmin() {
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="bg-slate-100/80 border-b border-slate-200 font-bold text-slate-600 uppercase tracking-wider text-[10px]">
+                        {isSuperAdmin && (
+                          <th className="py-3.5 px-3 w-10 text-center">
+                            <button
+                              type="button"
+                              onClick={handleToggleSelectAll}
+                              className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded cursor-pointer transition-colors"
+                              title={selectedLogIds.length === auditLogs.length && auditLogs.length > 0 ? "Deselect all" : "Select all logs on page"}
+                            >
+                              {auditLogs.length > 0 && selectedLogIds.length === auditLogs.length ? (
+                                <CheckSquare className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                              ) : (
+                                <Square className="h-4 w-4 text-slate-400" />
+                              )}
+                            </button>
+                          </th>
+                        )}
                         <th className="py-3.5 px-4">Timestamp</th>
                         <th className="py-3.5 px-4">Action</th>
                         <th className="py-3.5 px-4">Actor / Role</th>
                         <th className="py-3.5 px-4">Resource</th>
                         <th className="py-3.5 px-4">Details</th>
                         <th className="py-3.5 px-4">IP / Device</th>
-                        <th className="py-3.5 px-4 text-center">Inspect</th>
+                        <th className="py-3.5 px-4 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {auditLoading ? (
                         <tr>
-                          <td colSpan={7} className="py-12 text-center text-slate-400">
+                          <td colSpan={isSuperAdmin ? 8 : 7} className="py-12 text-center text-slate-400">
                             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-indigo-500" />
                             <p className="font-semibold text-xs">Loading Security Audit Logs...</p>
                           </td>
                         </tr>
                       ) : auditError ? (
                         <tr>
-                          <td colSpan={7} className="py-12 text-center text-rose-500">
+                          <td colSpan={isSuperAdmin ? 8 : 7} className="py-12 text-center text-rose-500">
                             <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-rose-500" />
                             <p className="font-bold text-xs text-rose-700">{auditError}</p>
                             <p className="text-[11px] text-slate-500 mt-1">Unable to load audit logs from the database.</p>
@@ -600,7 +745,7 @@ export default function SuperAdmin() {
                         </tr>
                       ) : auditLogs.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="py-12 text-center text-slate-400">
+                          <td colSpan={isSuperAdmin ? 8 : 7} className="py-12 text-center text-slate-400">
                             <Activity className="h-8 w-8 mx-auto mb-2 opacity-30" />
                             <p className="font-semibold text-xs text-slate-700">
                               {hasActiveFilters ? 'No audit logs matching current filter criteria' : 'No audit logs recorded in system yet'}
@@ -622,7 +767,23 @@ export default function SuperAdmin() {
                         </tr>
                       ) : (
                         auditLogs.map((log) => (
-                          <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                          <tr key={log.id} className={`hover:bg-slate-50/80 transition-colors ${selectedLogIds.includes(log.id) ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''}`}>
+                            {isSuperAdmin && (
+                              <td className="py-3.5 px-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleSelectLog(log.id)}
+                                  className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded cursor-pointer transition-colors"
+                                  title="Select log for deletion"
+                                >
+                                  {selectedLogIds.includes(log.id) ? (
+                                    <CheckSquare className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                                  ) : (
+                                    <Square className="h-4 w-4 text-slate-300 dark:text-slate-600" />
+                                  )}
+                                </button>
+                              </td>
+                            )}
                             <td className="py-3.5 px-4 whitespace-nowrap text-slate-500 font-mono text-[11px]">
                               {format(new Date(log.createdAt), 'dd MMM yyyy HH:mm:ss')}
                             </td>
@@ -665,14 +826,31 @@ export default function SuperAdmin() {
                               </div>
                             </td>
                             <td className="py-3.5 px-4 text-center">
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="h-8 w-8 p-0 rounded-lg hover:bg-slate-200"
-                                onClick={() => setSelectedLog(log)}
-                              >
-                                <Eye className="h-4 w-4 text-slate-600" />
-                              </Button>
+                              <div className="flex items-center justify-center gap-1">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-8 w-8 p-0 rounded-lg hover:bg-slate-200 cursor-pointer"
+                                  onClick={() => setSelectedLog(log)}
+                                  title="Inspect log details"
+                                >
+                                  <Eye className="h-4 w-4 text-slate-600" />
+                                </Button>
+                                {isSuperAdmin && (
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    className="h-8 w-8 p-0 rounded-lg hover:bg-rose-100 text-rose-500 hover:text-rose-700 cursor-pointer"
+                                    onClick={() => {
+                                      setTargetDeleteLog(log);
+                                      setIsSingleDeleteOpen(true);
+                                    }}
+                                    title="Permanently Delete Log Record (Super Admin)"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))
@@ -1067,6 +1245,175 @@ export default function SuperAdmin() {
                 disabled={deleting || confirmText !== 'DELETE' || !password}
               >
                 {deleting ? <Loader2 className="animate-spin h-5 w-5" /> : 'Confirm Purge'}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Single Log Deletion Confirmation Dialog */}
+      <Dialog open={isSingleDeleteOpen} onOpenChange={setIsSingleDeleteOpen}>
+        <DialogContent className="rounded-[32px] sm:max-w-md p-0 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl">
+          <div className="bg-rose-600 p-6 text-white">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge className="bg-white/20 text-white font-bold text-[10px]">
+                SUPER ADMIN AUTHORIZATION
+              </Badge>
+            </div>
+            <DialogTitle className="text-xl font-black">PERMANENT LOG DELETION</DialogTitle>
+            <DialogDescription className="text-rose-100 text-xs mt-1">
+              Are you sure you want to permanently delete this security log record?
+            </DialogDescription>
+          </div>
+          <div className="p-6 space-y-4 bg-white dark:bg-slate-900">
+            {targetDeleteLog && (
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-bold">Action:</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{targetDeleteLog.action}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-bold">Resource:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{targetDeleteLog.resource}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-bold">Actor:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{targetDeleteLog.userName || 'System'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-bold">Timestamp:</span>
+                  <span className="font-mono text-slate-600 dark:text-slate-400">{format(new Date(targetDeleteLog.createdAt), 'dd MMM yyyy HH:mm:ss')}</span>
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold leading-relaxed">
+              Warning: This record will be permanently deleted from database storage. This action cannot be undone.
+            </p>
+            <DialogFooter className="grid grid-cols-2 gap-3 pt-2">
+              <Button
+                variant="ghost"
+                className="h-11 rounded-xl font-bold dark:text-slate-300"
+                onClick={() => setIsSingleDeleteOpen(false)}
+                disabled={singleDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                className="h-11 rounded-xl font-black bg-rose-600 hover:bg-rose-700 text-white"
+                onClick={confirmDeleteSingleLog}
+                disabled={singleDeleting}
+              >
+                {singleDeleting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                Delete Record
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Log Deletion Dialog */}
+      <Dialog open={isBulkDeleteOpen} onOpenChange={setIsBulkDeleteOpen}>
+        <DialogContent className="rounded-[32px] sm:max-w-md p-0 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl">
+          <div className="bg-rose-600 p-6 text-white">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge className="bg-white/20 text-white font-bold text-[10px]">
+                SUPER ADMIN AUTHORIZATION
+              </Badge>
+            </div>
+            <DialogTitle className="text-xl font-black">BULK PERMANENT DELETION</DialogTitle>
+            <DialogDescription className="text-rose-100 text-xs mt-1">
+              Permanently delete {selectedLogIds.length} selected security audit logs.
+            </DialogDescription>
+          </div>
+          <div className="p-6 space-y-4 bg-white dark:bg-slate-900">
+            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-800 dark:text-rose-300">
+              <p className="font-bold">You are about to delete {selectedLogIds.length} selected records.</p>
+              <p className="text-[11px] text-rose-700/80 dark:text-rose-400 mt-1">
+                Records will be completely purged from the primary audit table. An administrative proof-of-action entry will be safely preserved in protected compliance storage.
+              </p>
+            </div>
+            <DialogFooter className="grid grid-cols-2 gap-3 pt-2">
+              <Button
+                variant="ghost"
+                className="h-11 rounded-xl font-bold dark:text-slate-300"
+                onClick={() => setIsBulkDeleteOpen(false)}
+                disabled={bulkDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                className="h-11 rounded-xl font-black bg-rose-600 hover:bg-rose-700 text-white"
+                onClick={confirmBulkDeleteLogs}
+                disabled={bulkDeleting || selectedLogIds.length === 0}
+              >
+                {bulkDeleting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                Delete {selectedLogIds.length} Logs
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear Logs / Category Purge Dialog */}
+      <Dialog open={isClearLogsOpen} onOpenChange={setIsClearLogsOpen}>
+        <DialogContent className="rounded-[32px] sm:max-w-md p-0 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl">
+          <div className="bg-rose-600 p-6 text-white">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge className="bg-white/20 text-white font-bold text-[10px]">
+                SUPER ADMIN RESTRICTED
+              </Badge>
+            </div>
+            <DialogTitle className="text-xl font-black">CLEAR LOG CATEGORY</DialogTitle>
+            <DialogDescription className="text-rose-100 text-xs mt-1">
+              Select category and confirm permanent deletion.
+            </DialogDescription>
+          </div>
+          <div className="p-6 space-y-4 bg-white dark:bg-slate-900">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Select Category to Clear:</Label>
+              <select
+                value={clearCategory}
+                onChange={(e) => setClearCategory(e.target.value)}
+                className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none"
+              >
+                <option value="ALL">ALL LOGS (Entire Ordinary Audit Dataset)</option>
+                <option value="AUTH">Authentication Events (Login, Logout, 2FA)</option>
+                <option value="SECURITY">Security Events (Blocked devices, Policy violations)</option>
+                <option value="DATA_MUTATION">Data Mutations (Create, Update, Delete events)</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Type <span className="font-mono text-rose-600 font-black">PERMANENTLY_DELETE</span> to confirm:
+              </Label>
+              <Input
+                placeholder="PERMANENTLY_DELETE"
+                value={clearConfirmPhrase}
+                onChange={(e) => setClearConfirmPhrase(e.target.value.trim().toUpperCase())}
+                className="h-11 rounded-xl text-center font-black tracking-wider bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+              />
+            </div>
+            <DialogFooter className="grid grid-cols-2 gap-3 pt-2">
+              <Button
+                variant="ghost"
+                className="h-11 rounded-xl font-bold dark:text-slate-300"
+                onClick={() => {
+                  setIsClearLogsOpen(false);
+                  setClearConfirmPhrase('');
+                }}
+                disabled={clearDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                className="h-11 rounded-xl font-black bg-rose-600 hover:bg-rose-700 text-white"
+                onClick={confirmClearLogs}
+                disabled={clearDeleting || clearConfirmPhrase !== 'PERMANENTLY_DELETE'}
+              >
+                {clearDeleting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : 'Confirm Clear'}
               </Button>
             </DialogFooter>
           </div>

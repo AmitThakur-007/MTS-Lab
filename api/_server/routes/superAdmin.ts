@@ -9,6 +9,16 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { logAudit } from '../services/auditService';
 import { getSystemThemeConfig, getSystemThemeConfigAsync, updateSystemThemeConfig } from '../services/systemThemeService';
+import { 
+  deleteSingleLogRecord, 
+  bulkDeleteLogRecords, 
+  clearLogCategoryRecords, 
+  assertSuperAdmin,
+  AuthorizationError,
+  NotFoundError,
+  ValidationError 
+} from '../services/logDeletionService';
+import { getProtectedAuditEvidence } from '../services/protectedAuditStorage';
 
 const router = Router();
 
@@ -158,7 +168,7 @@ router.get('/audit-logs', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), asy
   }
 });
 
-// 2. GET /api/admin/deletion-history
+// 2. GET /api/admin/deletion-history (Enhanced with Protected Audit Trail)
 router.get('/deletion-history', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { data: logs, error } = await supabaseAdmin
@@ -168,20 +178,158 @@ router.get('/deletion-history', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']
       .order('createdAt', { ascending: false })
       .limit(100);
 
-    if (error) return res.status(500).json({ error: 'Failed to fetch deletion history.' });
+    const protectedEvidence = await getProtectedAuditEvidence(50);
+    const mappedEvidence = protectedEvidence.map(p => ({
+      id: p.id,
+      action: p.action,
+      resource: `ProtectedAuditEvidence [${p.targetCategory}]`,
+      resourceId: p.targetIds?.slice(0, 3).join(', ') || null,
+      status: 'SUCCESS',
+      userName: p.actorName || 'Super Admin',
+      userEmail: p.actorEmail || null,
+      userRole: p.actorRole,
+      userId: p.actorId,
+      details: `${p.action}: ${p.targetCount} records permanently removed. Reason: ${p.reason}`,
+      ipAddress: p.ipAddress,
+      createdAt: p.timestamp,
+      isProtectedEvidence: true,
+    }));
 
-    return res.json(logs || []);
+    const combined = [...mappedEvidence, ...(logs || [])].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    return res.json(combined.slice(0, 100));
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to retrieve deletion records.' });
   }
 });
 
-// 3. POST /api/admin/delete-data
+// 2b. GET /api/admin/protected-audit-evidence — Strictly restricted to SUPER_ADMIN
+router.get('/protected-audit-evidence', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const evidence = await getProtectedAuditEvidence(100);
+    return res.json({ success: true, evidence, total: evidence.length });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch protected audit evidence.' });
+  }
+});
+
+// 2c. DELETE /api/admin/audit-logs/:id — Strictly restricted to SUPER_ADMIN
+router.delete('/audit-logs/:id', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason, category } = req.body || {};
+
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || null;
+    const userAgent = (req.headers['user-agent'] as string) || null;
+
+    const result = await deleteSingleLogRecord(id, req.user!, {
+      ipAddress,
+      userAgent,
+      reason,
+      category,
+    });
+
+    return res.json(result);
+  } catch (err: any) {
+    if (err instanceof AuthorizationError) {
+      return res.status(err.statusCode).json({ error: 'Forbidden', message: err.message });
+    }
+    if (err instanceof NotFoundError) {
+      return res.status(err.statusCode).json({ error: 'Not Found', message: err.message });
+    }
+    if (err instanceof ValidationError) {
+      return res.status(err.statusCode).json({ error: 'Bad Request', message: err.message });
+    }
+    console.error('[SUPER ADMIN DELETE LOG ERROR]', err);
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to delete audit log record.' });
+  }
+});
+
+// 2d. POST /api/admin/audit-logs/bulk-delete — Strictly restricted to SUPER_ADMIN
+router.post('/audit-logs/bulk-delete', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids, reason, category } = req.body || {};
+
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || null;
+    const userAgent = (req.headers['user-agent'] as string) || null;
+
+    const result = await bulkDeleteLogRecords(ids, req.user!, {
+      ipAddress,
+      userAgent,
+      reason,
+      category,
+    });
+
+    return res.json(result);
+  } catch (err: any) {
+    if (err instanceof AuthorizationError) {
+      return res.status(err.statusCode).json({ error: 'Forbidden', message: err.message });
+    }
+    if (err instanceof ValidationError) {
+      return res.status(err.statusCode).json({ error: 'Bad Request', message: err.message });
+    }
+    console.error('[SUPER ADMIN BULK DELETE LOGS ERROR]', err);
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to bulk-delete audit log records.' });
+  }
+});
+
+// 2e. POST /api/admin/audit-logs/clear — Strictly restricted to SUPER_ADMIN
+router.post('/audit-logs/clear', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { category, userId, startDate, endDate, confirmPhrase, reason } = req.body || {};
+
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || null;
+    const userAgent = (req.headers['user-agent'] as string) || null;
+
+    const result = await clearLogCategoryRecords(
+      {
+        category,
+        userId,
+        startDate,
+        endDate,
+        confirmPhrase,
+      },
+      req.user!,
+      {
+        ipAddress,
+        userAgent,
+        reason,
+      }
+    );
+
+    return res.json(result);
+  } catch (err: any) {
+    if (err instanceof AuthorizationError) {
+      return res.status(err.statusCode).json({ error: 'Forbidden', message: err.message });
+    }
+    if (err instanceof ValidationError) {
+      return res.status(err.statusCode).json({ error: 'Bad Request', message: err.message });
+    }
+    console.error('[SUPER ADMIN CLEAR LOGS ERROR]', err);
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to clear log records.' });
+  }
+});
+
+// 3. POST /api/admin/delete-data — Strictly restricted to SUPER_ADMIN
 router.post('/delete-data', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { table, ids, reason } = req.body;
     if (!table || !ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Table name and target ID list are required.' });
+    }
+
+    if (table === 'AuditLog') {
+      const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || null;
+      const userAgent = (req.headers['user-agent'] as string) || null;
+      const result = await bulkDeleteLogRecords(ids, req.user!, {
+        ipAddress,
+        userAgent,
+        reason,
+        category: 'AuditLog',
+      });
+      return res.json(result);
     }
 
     const validTables = ['Repair', 'Customer', 'BatteryWarranty', 'InventoryItem', 'Attendance', 'RepairRelatedDamage', 'RepairPrice', 'Product', 'HomeSlide'];
