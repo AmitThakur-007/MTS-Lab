@@ -661,6 +661,9 @@ export function maskEmailAddress(email: string): string {
 export const UNIFORM_FORGOT_PASSWORD_MESSAGE =
   'If an account exists for this email address, password-reset instructions will be sent shortly. Please check your inbox and spam folder.';
 
+export const INVALID_STAFF_EMAIL_MESSAGE =
+  'Invalid email address. Please enter the email registered with your staff account.';
+
 // Authorized Staff Roles eligible for staff portal password recovery
 export const AUTHORIZED_STAFF_ROLES = [
   'SUPER_ADMIN',
@@ -698,7 +701,8 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Please enter a valid email address.' });
     }
 
-    // Query staff user strictly from public.User table using case-insensitive email match
+    // 1. Query staff user strictly from public.User table using case-insensitive email match
+    // Critical restriction: Customer, Repair contacts, and unrelated tables are never checked
     const { data: users, error: dbErr } = await supabaseAdmin
       .from('User')
       .select('id, email, name, role, accountStatus, isActive, deletedAt')
@@ -711,47 +715,80 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
     }
 
     const user = users && users.length > 0 ? users[0] : null;
-    const userRole = user?.role ? user.role.toUpperCase().replace(/\s+/g, '_').trim() : '';
-    const normalizedRole = userRole === 'SUPERADMIN' ? 'SUPER_ADMIN' : (userRole === 'HEAD_TECHNICIAN' || userRole === 'LEADTECHNICIAN') ? 'LEAD_TECHNICIAN' : userRole;
 
-    // Strict staff account eligibility check:
-    // 1. Account must exist in staff User table
-    // 2. Account must not be soft-deleted (deletedAt === null)
-    // 3. Account must not be deactivated (isActive !== false)
-    // 4. Account status must not be REJECTED, DISABLED, SUSPENDED, or PENDING
-    // 5. Account role must be an AUTHORIZED_STAFF_ROLE and strictly NOT CUSTOMER
-    const isEligibleStaff =
-      user !== null &&
-      !user.deletedAt &&
-      user.isActive !== false &&
-      user.accountStatus !== 'REJECTED' &&
-      user.accountStatus !== 'DISABLED' &&
-      user.accountStatus !== 'SUSPENDED' &&
-      user.accountStatus !== 'PENDING' &&
-      normalizedRole !== 'CUSTOMER' &&
-      AUTHORIZED_STAFF_ROLES.includes(normalizedRole);
-
-    // If the account is unregistered, inactive, customer, or ineligible:
-    // Return the uniform privacy-preserving response WITHOUT generating any OTP or sending an email
-    if (!isEligibleStaff) {
+    // 2. Unregistered Email Handling:
+    // If the email is not registered in Staff Management, reject immediately.
+    // Do not generate recovery code, do not send email, do not create OTP challenge.
+    if (!user) {
       await logAudit({
         userEmail: normalizedEmail,
-        action: 'PASSWORD_RESET_ATTEMPT_INELIGIBLE',
+        action: 'PASSWORD_RESET_ATTEMPT_UNREGISTERED',
         resource: 'Auth',
         status: 'DENIED',
         ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
         userAgent: req.headers['user-agent'] || null,
         details: {
-          reason: !user ? 'Email not registered in staff management database' : 'Account status inactive or unauthorized role',
+          reason: 'Email not registered in staff management database',
           enteredEmail: normalizedEmail,
         },
       });
 
-      return res.json({
-        success: true,
-        message: UNIFORM_FORGOT_PASSWORD_MESSAGE,
-        resetTicket: uuidv4(), // unresolvable random ticket preserves identical response structure
-        emailMasked: maskEmailAddress(normalizedEmail),
+      return res.status(400).json({
+        error: INVALID_STAFF_EMAIL_MESSAGE,
+      });
+    }
+
+    const userRole = user.role ? user.role.toUpperCase().replace(/\s+/g, '_').trim() : '';
+    const normalizedRole = userRole === 'SUPERADMIN' ? 'SUPER_ADMIN' : (userRole === 'HEAD_TECHNICIAN' || userRole === 'LEADTECHNICIAN') ? 'LEAD_TECHNICIAN' : userRole;
+
+    // 3. Role verification: Customers and non-staff roles are strictly rejected
+    if (normalizedRole === 'CUSTOMER' || !AUTHORIZED_STAFF_ROLES.includes(normalizedRole)) {
+      await logAudit({
+        userId: user.id,
+        userEmail: user.email,
+        action: 'PASSWORD_RESET_ATTEMPT_NON_STAFF',
+        resource: 'Auth',
+        status: 'DENIED',
+        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        details: {
+          reason: 'Non-staff account attempted staff password recovery',
+          role: user.role,
+        },
+      });
+
+      return res.status(400).json({
+        error: INVALID_STAFF_EMAIL_MESSAGE,
+      });
+    }
+
+    // 4. Staff Account Status Eligibility Check
+    // Exclude soft-deleted, deactivated, suspended, disabled, or pending accounts
+    if (
+      user.deletedAt ||
+      user.isActive === false ||
+      user.accountStatus === 'REJECTED' ||
+      user.accountStatus === 'DISABLED' ||
+      user.accountStatus === 'SUSPENDED' ||
+      user.accountStatus === 'PENDING'
+    ) {
+      await logAudit({
+        userId: user.id,
+        userEmail: user.email,
+        action: 'PASSWORD_RESET_ATTEMPT_INACTIVE_STAFF',
+        resource: 'Auth',
+        status: 'DENIED',
+        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        details: {
+          reason: 'Staff account inactive, disabled, or pending',
+          accountStatus: user.accountStatus,
+          isActive: user.isActive,
+        },
+      });
+
+      return res.status(403).json({
+        error: 'Your staff account is currently inactive, suspended, or pending verification. Please contact the administrator.',
       });
     }
 
@@ -768,12 +805,8 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       const lastCreated = new Date(recentOtps[0].createdAt).getTime();
       const elapsedMs = Date.now() - lastCreated;
       if (elapsedMs < 30 * 1000) {
-        // Return uniform response safely without spamming email dispatch
-        return res.json({
-          success: true,
-          message: UNIFORM_FORGOT_PASSWORD_MESSAGE,
-          resetTicket: uuidv4(),
-          emailMasked: maskEmailAddress(user.email),
+        return res.status(429).json({
+          error: 'Please wait a moment before requesting another recovery code.',
         });
       }
     }
@@ -797,7 +830,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       {
         id: otpId,
         userId: user.id,
-        email: user.email, // Authoritative staff email directly from database
+        email: user.email, // Authoritative staff email retrieved strictly from database
         codeHash,
         purpose: 'PASSWORD_RESET',
         expiresAt,
@@ -807,7 +840,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       },
     ]);
 
-    // Dispatch recovery email to the registered staff email address
+    // Dispatch recovery email strictly to the verified staff email address from database
     const emailResult = await sendEmail({
       to: user.email,
       subject: 'MTS Lab — Staff Password Recovery Code',
@@ -833,6 +866,29 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       text: `MTS Lab Staff Password Recovery\n\nYour 6-digit verification code is: ${secureCode}\nThis code expires in 15 minutes.\n\nIf you did not request this, please disregard.`,
     });
 
+    if (!emailResult) {
+      // Invalidate the OTP challenge so failed delivery cannot be exploited
+      await supabaseAdmin.from('OTPVerification').update({ isUsed: true }).eq('id', otpId);
+
+      await logAudit({
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        userRole: user.role,
+        action: 'OTP_DELIVERY_FAILED',
+        resource: 'Auth',
+        resourceId: otpId,
+        status: 'FAILED',
+        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        details: { email: user.email, purpose: 'PASSWORD_RESET', error: 'Email service provider failed to deliver code' },
+      });
+
+      return res.status(502).json({
+        error: 'Unable to deliver recovery email at this time. Please try again shortly or contact system support.',
+      });
+    }
+
     await logAudit({
       userId: user.id,
       userEmail: user.email,
@@ -841,15 +897,15 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       action: 'OTP_REQUESTED',
       resource: 'Auth',
       resourceId: otpId,
-      status: emailResult ? 'SUCCESS' : 'WARNING',
+      status: 'SUCCESS',
       ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
       userAgent: req.headers['user-agent'] || null,
-      details: { email: user.email, purpose: 'PASSWORD_RESET', emailDelivered: emailResult },
+      details: { email: user.email, purpose: 'PASSWORD_RESET', emailDelivered: true },
     });
 
     return res.json({
       success: true,
-      message: UNIFORM_FORGOT_PASSWORD_MESSAGE,
+      message: 'Recovery code has been sent to your registered staff email address.',
       resetTicket: otpId,
       emailMasked: maskEmailAddress(user.email),
     });
@@ -1072,6 +1128,11 @@ router.post('/reset-password', async (req: Request, res: Response) => {
         });
       } catch (_) { }
     }
+
+    // Revoke all existing sessions and refresh tokens for this staff user
+    try {
+      await supabaseAdmin.from('Session').delete().eq('userId', user.id);
+    } catch (_) { }
 
     // Mark token ID as consumed immediately
     markResetTokenConsumed(decoded.tokenId);

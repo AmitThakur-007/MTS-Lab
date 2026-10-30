@@ -15,6 +15,7 @@ import {
   ExternalLink,
   ChevronRight
 } from 'lucide-react';
+import ThemeToggle from '@/components/common/ThemeToggle';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -257,6 +258,10 @@ export default function Footer() {
             >
               Privacy Policy
             </Link>
+            <span className="text-slate-700">|</span>
+            <div className="flex items-center gap-1.5 text-slate-400">
+              <ThemeToggle />
+            </div>
           </div>
         </div>
 

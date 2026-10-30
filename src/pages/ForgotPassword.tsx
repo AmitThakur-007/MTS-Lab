@@ -102,38 +102,33 @@ export default function ForgotPassword() {
     try {
       const res: any = await api.post('/auth/forgot-password', { email: cleanEmail });
 
-      // Always advance to OTP with uniform privacy notice
-      const ticket = res?.resetTicket || 'recovery-session';
-      const masked = res?.emailMasked || cleanEmail;
+      if (res?.success) {
+        const ticket = res?.resetTicket || 'recovery-session';
+        const masked = res?.emailMasked || cleanEmail;
 
-      setResetTicket(ticket);
-      setEmailMasked(masked);
-      setSubmittedNotice(MANDATORY_PRIVACY_NOTICE);
-      setStep('OTP');
-      setOtpDigits(['', '', '', '', '', '']);
-      setOtpExpirySeconds(900); // 15 minutes
-      setResendCooldown(60);
-      setCanResend(false);
-      toast.info(MANDATORY_PRIVACY_NOTICE);
+        setResetTicket(ticket);
+        setEmailMasked(masked);
+        setSubmittedNotice(res?.message || MANDATORY_PRIVACY_NOTICE);
+        setStep('OTP');
+        setOtpDigits(['', '', '', '', '', '']);
+        setOtpExpirySeconds(900); // 15 minutes
+        setResendCooldown(60);
+        setCanResend(false);
+        toast.success(res?.message || 'Recovery code sent to your registered staff email.');
 
-      setTimeout(() => {
-        otpInputRefs.current[0]?.focus();
-      }, 150);
-    } catch (err: any) {
-      if (err?.status === 400 || err?.code === 400) {
-        const errorText = err?.message || 'Please enter a valid email address.';
+        setTimeout(() => {
+          otpInputRefs.current[0]?.focus();
+        }, 150);
+      } else {
+        const errorText = res?.error || res?.message || 'Invalid email address. Please enter the email registered with your staff account.';
         setErrorMessage(errorText);
         toast.error(errorText);
-        return;
       }
-      // For general network interruptions or server errors, maintain zero-knowledge privacy
-      setSubmittedNotice(MANDATORY_PRIVACY_NOTICE);
-      setStep('OTP');
-      setOtpDigits(['', '', '', '', '', '']);
-      setOtpExpirySeconds(900);
-      setResendCooldown(60);
-      setCanResend(false);
-      toast.info(MANDATORY_PRIVACY_NOTICE);
+    } catch (err: any) {
+      const errorText = err?.message || err?.error || 'Invalid email address. Please enter the email registered with your staff account.';
+      setErrorMessage(errorText);
+      toast.error(errorText);
+      // Stay on EMAIL step; do NOT advance to OTP when email is unregistered or invalid
     } finally {
       setLoading(false);
     }
@@ -226,17 +221,19 @@ export default function ForgotPassword() {
     setErrorMessage(null);
     try {
       const cleanEmail = email.trim().toLowerCase();
-      await api.post('/auth/forgot-password', { email: cleanEmail });
-      toast.info(MANDATORY_PRIVACY_NOTICE);
-      setResendCooldown(60);
-      setCanResend(false);
-      setOtpExpirySeconds(900);
-      setOtpDigits(['', '', '', '', '', '']);
-      otpInputRefs.current[0]?.focus();
-    } catch {
-      toast.info(MANDATORY_PRIVACY_NOTICE);
-      setResendCooldown(60);
-      setCanResend(false);
+      const res: any = await api.post('/auth/forgot-password', { email: cleanEmail });
+      if (res?.success) {
+        toast.success(res?.message || 'A new recovery code has been sent to your registered staff email.');
+        setResendCooldown(60);
+        setCanResend(false);
+        setOtpExpirySeconds(900);
+        setOtpDigits(['', '', '', '', '', '']);
+        otpInputRefs.current[0]?.focus();
+      } else {
+        toast.error(res?.error || 'Failed to resend recovery code.');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || err?.error || 'Failed to resend recovery code. Please try again.');
     } finally {
       setResending(false);
     }
@@ -317,34 +314,27 @@ export default function ForgotPassword() {
                       Forgot Password?
                     </CardTitle>
                     <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground max-w-[340px] mx-auto leading-relaxed">
-                      Enter your account email to receive recovery instructions and a secure verification code.
+                      Enter the email registered with your staff account to receive recovery instructions and a secure verification code.
                     </CardDescription>
                   </CardHeader>
 
-                  {/* Informational Privacy Guarantee Notice */}
+                  {/* Informational Staff Policy Guarantee Notice */}
                   <div className="mx-6 sm:mx-8 mt-2 mb-3 p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-900 dark:text-cyan-200 text-xs flex items-start gap-2.5">
                     <Info className="h-4 w-4 text-cyan-600 dark:text-cyan-400 shrink-0 mt-0.5" />
                     <p className="leading-relaxed text-[12px] font-medium">
-                      For your privacy and security, password-recovery instructions are dispatched uniformly to protected mailboxes without exposing registration records.
+                      Password recovery is restricted to verified staff accounts. Recovery codes are delivered directly to registered staff mailboxes.
                     </p>
                   </div>
-
-                  {/* Error Notice */}
-                  {errorMessage && (
-                    <div className="mx-6 sm:mx-8 mb-3 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200 text-xs flex items-start gap-2.5" role="alert">
-                      <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-                      <p className="leading-relaxed text-[12px] font-medium">
-                        {errorMessage}
-                      </p>
-                    </div>
-                  )}
 
                   <form onSubmit={handleSendResetRequest} noValidate>
                     <CardContent className="space-y-4 px-6 sm:px-8 pt-2">
                       <div className="space-y-1.5">
-                        <label htmlFor="recovery-email" className="text-xs font-semibold text-foreground ml-1">
-                          Account Email Address
-                        </label>
+                        <div className="flex items-center justify-between ml-1">
+                          <label htmlFor="recovery-email" className="text-xs font-semibold text-foreground">
+                            Staff Account Email Address
+                          </label>
+                          <span className="text-[11px] text-muted-foreground font-medium">Registered Staff Only</span>
+                        </div>
                         <div className="relative">
                           <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                           <Input
@@ -356,13 +346,29 @@ export default function ForgotPassword() {
                               setEmail(e.target.value);
                               if (errorMessage) setErrorMessage(null);
                             }}
-                            className="pl-10 h-12 rounded-xl border-input bg-background text-foreground placeholder:text-muted-foreground focus:bg-background focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all text-sm font-medium"
+                            className={`pl-10 h-12 rounded-xl border-input bg-background text-foreground placeholder:text-muted-foreground focus:bg-background focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all text-sm font-medium ${
+                              errorMessage ? 'border-rose-500/80 focus:border-rose-500 focus:ring-rose-500/20' : ''
+                            }`}
                             required
                             autoFocus
                             autoComplete="email"
                             disabled={loading}
+                            aria-invalid={!!errorMessage}
+                            aria-describedby={errorMessage ? 'recovery-email-error' : undefined}
                           />
                         </div>
+
+                        {/* Associated Email Input Validation Error */}
+                        {errorMessage && (
+                          <div
+                            id="recovery-email-error"
+                            className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200 text-xs flex items-start gap-2.5 mt-2 transition-all animate-in fade-in-50"
+                            role="alert"
+                          >
+                            <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                            <span className="leading-relaxed font-semibold text-[12px]">{errorMessage}</span>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
 
@@ -370,12 +376,12 @@ export default function ForgotPassword() {
                       <Button
                         type="submit"
                         className="w-full h-12 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 dark:from-cyan-500 dark:to-blue-600 text-white dark:text-slate-950 font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50 shadow-md shadow-cyan-600/20 cursor-pointer"
-                        disabled={loading}
+                        disabled={loading || !email.trim()}
                       >
                         {loading ? (
                           <div className="flex items-center gap-2">
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>Processing Request...</span>
+                            <span>Verifying Staff Account...</span>
                           </div>
                         ) : (
                           'Send Recovery Code'

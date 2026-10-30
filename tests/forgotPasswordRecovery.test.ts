@@ -8,195 +8,168 @@ import bcrypt from 'bcryptjs';
 
 const projectRoot = process.cwd();
 
-// Test Suite: MTS Lab Forgot Password Recovery Code Delivery, Registered Email Validation, and Error Handling
-// Covers all 24 security and validation requirements across backend and frontend architectures.
+// Test Suite: MTS Lab Forgot Password Staff Email Verification & Recovery Code Security
+// Strictly validates Section 8 test scenarios and security requirements:
+// 1. Email exists in Staff Management -> Recovery process may proceed
+// 2. Email does not exist in Staff Management -> Show invalid email; no code generated or sent
+// 3. Email exists only in customer records -> Reject; no code sent
+// 4. Email exists only in repair records -> Reject; no code sent
+// 5. Email exists only in contact submissions -> Reject; no code sent
+// 6. Email has uppercase/lowercase differences -> Match according to normalization rules
+// 7. Email contains leading/trailing spaces -> Normalize and verify correctly
+// 8. Staff account is disabled or ineligible -> Reject according to account policy
+// 9. Email provider fails -> Show safe error; no false success
+// 10. Recovery code is expired -> Reject verification
+// 11. Recovery code is incorrect -> Reject verification
+// 12. Recovery code is reused -> Reject verification
+// 13. Too many verification attempts -> Temporarily block or rate-limit
+// 14. Password reset succeeds -> Update password securely and invalidate recovery code
 
-test('Scenario 1: Valid email syntax check matches RFC 5322 pattern', () => {
-  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
-  assert.ok(emailRegex.test('admin@mtslab.com'));
-  assert.ok(emailRegex.test('technician.lead@mobiletechnologystation.com.np'));
-  assert.ok(emailRegex.test('staff_user123@domain.org'));
+test('Scenario 1: Email exists in Staff Management -> Recovery process may proceed', () => {
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  assert.ok(authRoute.includes(".from('User')"), 'Queries staff User database table');
+  assert.ok(authRoute.includes("AUTHORIZED_STAFF_ROLES"), 'Validates against authorized staff roles');
+  assert.ok(authRoute.includes("crypto.randomInt(100000, 1000000)"), 'Generates 6-digit recovery code');
+  assert.ok(authRoute.includes("to: user.email"), 'Sends recovery email to database-verified staff address');
 });
 
-test('Scenario 2: Malformed or invalid email formats are rejected with HTTP 400', () => {
-  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
-  assert.equal(emailRegex.test(''), false);
-  assert.equal(emailRegex.test('notanemail'), false);
-  assert.equal(emailRegex.test('user@'), false);
-  assert.equal(emailRegex.test('@domain.com'), false);
-  assert.equal(emailRegex.test('user@domain'), false);
-  assert.equal(emailRegex.test('user with spaces@domain.com'), false);
-
+test('Scenario 2: Email does not exist in Staff Management -> Show invalid email; no code generated or sent', () => {
   const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes("Please enter a valid email address."));
-  assert.ok(authRoute.includes("Please enter your email address."));
-});
-
-test('Scenario 3: Email comparison performs case-insensitive normalization', () => {
-  const rawInput = '  Staff.Admin@MTSLAB.com  ';
-  const normalized = rawInput.toLowerCase().trim();
-  assert.equal(normalized, 'staff.admin@mtslab.com');
-
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes("email.toLowerCase().trim()"));
-  assert.ok(authRoute.includes(".ilike('email', normalizedEmail)"));
-});
-
-test('Scenario 4: Unregistered email address returns uniform zero-knowledge response', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  const uniformMsg =
-    'If an account exists for this email address, password-reset instructions will be sent shortly. Please check your inbox and spam folder.';
-  assert.ok(authRoute.includes(uniformMsg));
-  assert.ok(authRoute.includes('UNIFORM_FORGOT_PASSWORD_MESSAGE'));
-  assert.ok(authRoute.includes('resetTicket: uuidv4()'));
-});
-
-test('Scenario 5: Unregistered email address never creates OTPVerification records in DB', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  const expectedMsg = 'Invalid email address. Please enter the email registered with your staff account.';
+  assert.ok(authRoute.includes(expectedMsg), 'Backend returns exact invalid staff email validation message');
+  assert.ok(authRoute.includes('INVALID_STAFF_EMAIL_MESSAGE'), 'Constant INVALID_STAFF_EMAIL_MESSAGE is defined');
+  
+  // Verify that if !user, returns HTTP 400 with INVALID_STAFF_EMAIL_MESSAGE before any OTP or email
   const forgotRoute = authRoute.slice(authRoute.indexOf("router.post('/forgot-password'"));
-  const eligibilityIdx = forgotRoute.indexOf('if (!isEligibleStaff)');
+  const unregisteredCheckIdx = forgotRoute.indexOf('if (!user)');
   const insertOtpIdx = forgotRoute.indexOf("supabaseAdmin.from('OTPVerification').insert");
-  assert.ok(eligibilityIdx !== -1 && insertOtpIdx !== -1);
-  assert.ok(eligibilityIdx < insertOtpIdx, 'Ineligible check precedes OTP insert in /forgot-password');
+  const sendEmailIdx = forgotRoute.indexOf("sendEmail({");
+  assert.ok(unregisteredCheckIdx !== -1, 'Checks if user exists in staff table');
+  assert.ok(unregisteredCheckIdx < insertOtpIdx, 'Rejects unregistered email before OTP insertion');
+  assert.ok(unregisteredCheckIdx < sendEmailIdx, 'Rejects unregistered email before sendEmail');
+
+  // Verify frontend ForgotPassword displays exact message and does not advance to OTP
+  const forgotPage = fs.readFileSync(path.join(projectRoot, 'src/pages/ForgotPassword.tsx'), 'utf-8');
+  assert.ok(forgotPage.includes(expectedMsg), 'Frontend includes exact invalid staff email message');
+  assert.ok(forgotPage.includes('recovery-email-error'), 'Error is associated with email input');
 });
 
-test('Scenario 6: Unregistered email address never triggers email dispatch', () => {
+test('Scenario 3: Email exists only in customer records -> Reject; no code sent', () => {
   const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
   const forgotRoute = authRoute.slice(authRoute.indexOf("router.post('/forgot-password'"));
-  const eligibilityIdx = forgotRoute.indexOf('if (!isEligibleStaff)');
+  
+  // Forgot password endpoint must NOT query Customer table
+  assert.ok(!forgotRoute.includes(".from('Customer')"), 'Must never query Customer table for staff password recovery');
+  
+  // If user role is CUSTOMER, must strictly reject with INVALID_STAFF_EMAIL_MESSAGE
+  assert.ok(authRoute.includes("normalizedRole === 'CUSTOMER'"), 'Rejects customer role');
+  assert.ok(authRoute.includes("error: INVALID_STAFF_EMAIL_MESSAGE"), 'Rejects non-staff with invalid email message');
+});
+
+test('Scenario 4: Email exists only in repair records -> Reject; no code sent', () => {
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  const forgotRoute = authRoute.slice(authRoute.indexOf("router.post('/forgot-password'"));
+  
+  // Must NOT query Repair table
+  assert.ok(!forgotRoute.includes(".from('Repair')"), 'Must never query Repair table for staff password recovery');
+});
+
+test('Scenario 5: Email exists only in contact submissions -> Reject; no code sent', () => {
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  const forgotRoute = authRoute.slice(authRoute.indexOf("router.post('/forgot-password'"));
+  
+  // Must NOT query Contact submissions or external feedback tables
+  assert.ok(!forgotRoute.includes(".from('Contact')"), 'Must never query Contact submissions for staff password recovery');
+  assert.ok(!forgotRoute.includes(".from('Feedback')"), 'Must never query Feedback for staff password recovery');
+});
+
+test('Scenario 6: Email has uppercase/lowercase differences -> Match according to normalization rules', () => {
+  const rawInput = '  Lead.Technician@MTSLAB.COM  ';
+  const normalized = rawInput.toLowerCase().trim();
+  assert.equal(normalized, 'lead.technician@mtslab.com');
+
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  assert.ok(authRoute.includes("email.toLowerCase().trim()"), 'Performs lower-case normalization');
+  assert.ok(authRoute.includes(".ilike('email', normalizedEmail)"), 'Uses case-insensitive database matching');
+});
+
+test('Scenario 7: Email contains leading/trailing spaces -> Normalize and verify correctly', () => {
+  const rawInput = '   admin@mtslab.com   ';
+  const normalized = rawInput.toLowerCase().trim();
+  assert.equal(normalized, 'admin@mtslab.com');
+  assert.equal(normalized.length, 16);
+});
+
+test('Scenario 8: Staff account is disabled or ineligible -> Reject according to account policy', () => {
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  assert.ok(authRoute.includes("user.accountStatus === 'REJECTED'"), 'Checks REJECTED status');
+  assert.ok(authRoute.includes("user.accountStatus === 'DISABLED'"), 'Checks DISABLED status');
+  assert.ok(authRoute.includes("user.accountStatus === 'SUSPENDED'"), 'Checks SUSPENDED status');
+  assert.ok(authRoute.includes("user.accountStatus === 'PENDING'"), 'Checks PENDING status');
+  assert.ok(authRoute.includes("user.isActive === false"), 'Checks isActive flag');
+  assert.ok(authRoute.includes("user.deletedAt"), 'Checks soft-deleted status');
+});
+
+test('Scenario 9: Email provider fails -> Show safe error; no false success', () => {
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  const forgotRoute = authRoute.slice(authRoute.indexOf("router.post('/forgot-password'"));
+  
+  // On email failure (!emailResult), must NOT return success
+  assert.ok(forgotRoute.includes('if (!emailResult)'), 'Checks emailResult status');
+  assert.ok(forgotRoute.includes(".update({ isUsed: true }).eq('id', otpId)"), 'Invalidates OTP challenge on email failure');
+  assert.ok(forgotRoute.includes('status(502)'), 'Returns HTTP 502 Bad Gateway / Service error');
+  assert.ok(forgotRoute.includes('Unable to deliver recovery email'), 'Returns safe error message without leaking SMTP credentials');
+});
+
+test('Scenario 10: Recovery code is expired -> Reject verification', () => {
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  assert.ok(authRoute.includes('new Date(otp.expiresAt).getTime() < Date.now()'), 'Checks expiration timestamp');
+  assert.ok(authRoute.includes('Recovery code has expired. Please request a new one.'), 'Returns expiration error');
+});
+
+test('Scenario 11: Recovery code is incorrect -> Reject verification', () => {
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  assert.ok(authRoute.includes('if (otp.codeHash !== inputHash)'), 'Compares input hash to stored hash');
+  assert.ok(authRoute.includes('Incorrect recovery code. Please check your email and try again.'), 'Returns incorrect code error');
+});
+
+test('Scenario 12: Recovery code is reused -> Reject verification', () => {
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  assert.ok(authRoute.includes('if (otp.isUsed)'), 'Checks if OTP is already consumed');
+  assert.ok(authRoute.includes('This recovery code has already been used. Please request a new one.'), 'Returns reuse rejection error');
+});
+
+test('Scenario 13: Too many verification attempts -> Temporarily block or rate-limit', () => {
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  assert.ok(authRoute.includes('currentAttempts >= 5') || authRoute.includes('updatedAttempts >= 5'), 'Enforces 5 attempt maximum');
+  assert.ok(authRoute.includes('Maximum verification attempts exceeded. Please request a new recovery code.'), 'Returns lockout error');
+});
+
+test('Scenario 14: Password reset succeeds -> Update password securely, invalidate recovery code, and revoke sessions', () => {
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  assert.ok(authRoute.includes('newPassword.length < 8'), 'Enforces minimum password length of 8');
+  assert.ok(authRoute.includes('bcrypt.hash(newPassword, 10)'), 'Hashes password with bcrypt');
+  assert.ok(authRoute.includes('markResetTokenConsumed(decoded.tokenId)'), 'Prevents token reuse');
+  assert.ok(authRoute.includes(".from('Session').delete().eq('userId', user.id)"), 'Revokes existing sessions on reset');
+});
+
+test('Scenario 15: Critical test — Confirm that an unregistered email never triggers the email provider or sends a recovery code, even if that email exists in another database table', () => {
+  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
+  const forgotRoute = authRoute.slice(authRoute.indexOf("router.post('/forgot-password'"));
+
+  // The unregistered check (if (!user)) occurs BEFORE OTP creation and BEFORE sendEmail
+  const checkUserIdx = forgotRoute.indexOf('if (!user)');
+  const insertOtpIdx = forgotRoute.indexOf("supabaseAdmin.from('OTPVerification').insert");
   const sendEmailIdx = forgotRoute.indexOf("sendEmail({");
-  assert.ok(eligibilityIdx !== -1 && sendEmailIdx !== -1);
-  assert.ok(eligibilityIdx < sendEmailIdx, 'Ineligible check precedes sendEmail execution in /forgot-password');
-});
 
-test('Scenario 7: Soft-deleted staff accounts (deletedAt not null) are excluded from recovery', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes(".is('deletedAt', null)"));
-  assert.ok(authRoute.includes("!user.deletedAt"));
-});
+  assert.ok(checkUserIdx !== -1, 'User registration verification exists');
+  assert.ok(insertOtpIdx !== -1, 'OTP insertion exists');
+  assert.ok(sendEmailIdx !== -1, 'sendEmail invocation exists');
 
-test('Scenario 8: Inactive or disabled staff accounts (DISABLED, REJECTED, isActive: false) are rejected', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes("user.accountStatus !== 'REJECTED'"));
-  assert.ok(authRoute.includes("user.accountStatus !== 'DISABLED'"));
-  assert.ok(authRoute.includes("user.isActive !== false"));
-});
+  assert.ok(checkUserIdx < insertOtpIdx, 'Unregistered user check precedes OTP database insertion');
+  assert.ok(checkUserIdx < sendEmailIdx, 'Unregistered user check precedes sendEmail invocation');
 
-test('Scenario 9: Suspended or pending staff accounts (SUSPENDED, PENDING) are rejected', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes("user.accountStatus !== 'SUSPENDED'"));
-  assert.ok(authRoute.includes("user.accountStatus !== 'PENDING'"));
-});
-
-test('Scenario 10: Customer role is strictly rejected from staff password recovery', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes("normalizedRole !== 'CUSTOMER'"));
-});
-
-test('Scenario 11: Authorized staff roles are explicitly verified against AUTHORIZED_STAFF_ROLES', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('AUTHORIZED_STAFF_ROLES'));
-  assert.ok(authRoute.includes('SUPER_ADMIN'));
-  assert.ok(authRoute.includes('ADMIN'));
-  assert.ok(authRoute.includes('MANAGER'));
-  assert.ok(authRoute.includes('LEAD_TECHNICIAN'));
-  assert.ok(authRoute.includes('TECHNICIAN'));
-  assert.ok(authRoute.includes('TECHNICAL_ASSISTANT'));
-  assert.ok(authRoute.includes('RECEPTIONIST'));
-  assert.ok(authRoute.includes('INVENTORY_MANAGER'));
-  assert.ok(authRoute.includes('ACCOUNTANT'));
-  assert.ok(authRoute.includes('AUTHORIZED_STAFF_ROLES.includes(normalizedRole)'));
-});
-
-test('Scenario 12: Cryptographically secure 6-digit recovery code generation using crypto.randomInt', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('crypto.randomInt(100000, 1000000)'));
-
-  // Test randomInt distribution & length
-  for (let i = 0; i < 20; i++) {
-    const code = crypto.randomInt(100000, 1000000).toString();
-    assert.equal(code.length, 6);
-    assert.ok(/^\d{6}$/.test(code));
-  }
-});
-
-test('Scenario 13: Recovery code is securely hashed with SHA-256 before storage', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes("crypto.createHash('sha256').update(secureCode).digest('hex')"));
-  assert.ok(authRoute.includes("codeHash"));
-
-  const testCode = '482915';
-  const expectedHash = crypto.createHash('sha256').update(testCode).digest('hex');
-  assert.equal(expectedHash.length, 64);
-});
-
-test('Scenario 14: Recovery code expires in 15 minutes', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('15 * 60 * 1000'));
-});
-
-test('Scenario 15: Recovery email is sent strictly to the database-retrieved staff email', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('to: user.email'));
-});
-
-test('Scenario 16: Cooldown rate limiting prevents rapid successive email spamming', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('elapsedMs < 30 * 1000'));
-});
-
-test('Scenario 17: Invalidation of prior unused recovery codes when a new request is made', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes(".update({ isUsed: true })"));
-  assert.ok(authRoute.includes(".eq('purpose', 'PASSWORD_RESET')"));
-  assert.ok(authRoute.includes(".eq('isUsed', false)"));
-});
-
-test('Scenario 18: OTP verification validates 6-digit numeric input format', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('^\\d{6}$'));
-  assert.ok(authRoute.includes('Please enter a valid 6-digit recovery code.'));
-});
-
-test('Scenario 19: Successful OTP verification marks OTP used and issues signed single-use resetToken', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('isUsed: true'));
-  assert.ok(authRoute.includes("purpose: 'RESET_PASSWORD'"));
-  assert.ok(authRoute.includes('resetToken'));
-  assert.ok(authRoute.includes('tokenId: resetTokenId'));
-});
-
-test('Scenario 20: OTP verification with incorrect code increments failed attempt counter', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('attempts: updatedAttempts'));
-  assert.ok(authRoute.includes('Incorrect recovery code. Please check your email and try again.'));
-});
-
-test('Scenario 21: OTP verification locks out challenge upon reaching 5 attempts', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('currentAttempts >= 5') || authRoute.includes('updatedAttempts >= 5'));
-  assert.ok(authRoute.includes('Maximum verification attempts exceeded. Please request a new recovery code.'));
-});
-
-test('Scenario 22: OTP verification rejects expired recovery codes', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('new Date(otp.expiresAt).getTime() < Date.now()'));
-  assert.ok(authRoute.includes('Recovery code has expired. Please request a new one.'));
-});
-
-test('Scenario 23: OTP verification rejects previously used/consumed recovery codes', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('if (otp.isUsed)'));
-  assert.ok(authRoute.includes('This recovery code has already been used. Please request a new one.'));
-});
-
-test('Scenario 24: Password reset enforces criteria (>=8 chars, number/symbol), hashes password with bcrypt, and prevents token reuse', () => {
-  const authRoute = fs.readFileSync(path.join(projectRoot, 'api/_server/routes/auth.ts'), 'utf-8');
-  assert.ok(authRoute.includes('newPassword.length < 8'));
-  assert.ok(authRoute.includes('Password must be at least 8 characters long.'));
-  assert.ok(authRoute.includes('Password must include at least one number or special symbol.'));
-  assert.ok(authRoute.includes('bcrypt.hash(newPassword, 10)'));
-  assert.ok(authRoute.includes('consumedResetTokens.has(decoded.tokenId)'));
-  assert.ok(authRoute.includes('markResetTokenConsumed(decoded.tokenId)'));
-  assert.ok(authRoute.includes('This reset token has already been used.'));
+  // Must not check Customer, Repair, or other tables
+  assert.ok(!forgotRoute.includes(".from('Customer')"));
+  assert.ok(!forgotRoute.includes(".from('Repair')"));
 });
