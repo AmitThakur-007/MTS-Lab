@@ -39,7 +39,7 @@ export default function Privacy() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-slate-950 selection:text-white antialiased">
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-slate-950 dark:selection:bg-indigo-600 selection:text-white antialiased">
       <Navbar />
 
       <main className="flex-1 pt-20 sm:pt-24 lg:pt-28 pb-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full space-y-6 sm:space-y-8">
@@ -52,49 +52,49 @@ export default function Privacy() {
             <button
               type="button"
               onClick={handleBack}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:text-slate-950 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer active:scale-95"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-2xs cursor-pointer active:scale-95"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back</span>
             </button>
 
-            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
-              <Link to="/" className="hover:text-slate-900 transition-colors">Home</Link>
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400 dark:text-slate-500">
+              <Link to="/" className="hover:text-slate-900 dark:hover:text-white transition-colors">Home</Link>
               <span>/</span>
-              <span className="text-slate-700 font-bold">Privacy Policy</span>
+              <span className="text-slate-700 dark:text-slate-200 font-bold">Privacy Policy</span>
             </div>
           </div>
 
           {/* Title & Tag */}
           <div className="text-center space-y-3 pt-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-white text-[11px] font-black tracking-wider uppercase shadow-xs">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 dark:bg-slate-900 text-white text-[11px] font-black tracking-wider uppercase shadow-xs border border-transparent dark:border-slate-800">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
               <span>Zero-Trust Data Security</span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-slate-950">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-slate-950 dark:text-white">
               Privacy Policy
             </h1>
 
-            <p className="text-xs sm:text-sm md:text-base text-slate-600 font-medium max-w-xl mx-auto leading-relaxed">
+            <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-400 font-medium max-w-xl mx-auto leading-relaxed">
               How Mobile Technology Station (MTS Lab) collects, encrypts, handles customer records, and guarantees zero-access to private device data.
             </p>
 
-            <p className="text-[11px] sm:text-xs text-slate-400 font-semibold">
+            <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 font-semibold">
               Effective Date: August 2026 &bull; Mobile Technology Station (MTS), Kathmandu, Nepal
             </p>
           </div>
 
           {/* Quick Legal Tab Switcher */}
           <div className="flex items-center justify-center pt-1">
-            <div className="inline-flex p-1 bg-slate-200/80 rounded-2xl border border-slate-300/60 shadow-2xs">
+            <div className="inline-flex p-1 bg-slate-200/80 dark:bg-slate-800 rounded-2xl border border-slate-300/60 dark:border-slate-700 shadow-2xs">
               <Link
                 to="/terms"
-                className="px-4 py-1.5 rounded-xl text-slate-600 hover:text-slate-950 font-bold text-xs transition-colors"
+                className="px-4 py-1.5 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white font-bold text-xs transition-colors"
               >
                 Terms & Conditions
               </Link>
-              <span className="px-4 py-1.5 rounded-xl bg-white text-slate-950 font-extrabold text-xs shadow-xs">
+              <span className="px-4 py-1.5 rounded-xl bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-extrabold text-xs shadow-xs">
                 Privacy Policy
               </span>
             </div>
@@ -113,7 +113,7 @@ export default function Privacy() {
                 key={chip.id}
                 type="button"
                 onClick={() => scrollToSection(chip.id)}
-                className="px-3 py-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 text-slate-700 hover:text-slate-950 text-xs font-bold whitespace-nowrap shadow-2xs transition-all cursor-pointer"
+                className="px-3 py-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white text-xs font-bold whitespace-nowrap shadow-2xs transition-all cursor-pointer"
               >
                 {chip.label}
               </button>
@@ -123,12 +123,12 @@ export default function Privacy() {
         </div>
 
         {/* Legal Document Content Card */}
-        <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-sm p-5 sm:p-8 md:p-10 space-y-8 text-slate-700 leading-relaxed text-xs sm:text-sm md:text-base">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-5 sm:p-8 md:p-10 space-y-8 text-slate-700 dark:text-slate-300 leading-relaxed text-xs sm:text-sm md:text-base">
           
           {/* Section 1: Commitment */}
-          <section id="sec-privacy-commitment" className="space-y-3 border-b border-slate-100 pb-7">
-            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-xs font-black shrink-0 border border-emerald-100">
+          <section id="sec-privacy-commitment" className="space-y-3 border-b border-slate-100 dark:border-slate-800 pb-7">
+            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 dark:text-white flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-xs font-black shrink-0 border border-emerald-100 dark:border-emerald-800">
                 1
               </span>
               <span>Our Commitment to Customer Privacy</span>
@@ -139,9 +139,9 @@ export default function Privacy() {
           </section>
 
           {/* Section 2: Information Collected */}
-          <section id="sec-privacy-data" className="space-y-3 border-b border-slate-100 pb-7">
-            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-xs font-black shrink-0 border border-emerald-100">
+          <section id="sec-privacy-data" className="space-y-3 border-b border-slate-100 dark:border-slate-800 pb-7">
+            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 dark:text-white flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-xs font-black shrink-0 border border-emerald-100 dark:border-emerald-800">
                 2
               </span>
               <span>Information We Collect & Purpose</span>
@@ -149,56 +149,56 @@ export default function Privacy() {
             <p>We strictly collect only the minimal data required for repair tickets, customer tracking, and warranty verification:</p>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-slate-950 text-xs sm:text-sm">
-                  <Database className="w-4 h-4 text-indigo-600 shrink-0" />
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-slate-950 dark:text-white text-xs sm:text-sm">
+                  <Database className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span>Contact Data</span>
                 </div>
-                <p className="text-xs text-slate-600">Customer full name, mobile number for SMS/WhatsApp repair updates, and optional email.</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Customer full name, mobile number for SMS/WhatsApp repair updates, and optional email.</p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-slate-950 text-xs sm:text-sm">
-                  <Key className="w-4 h-4 text-amber-600 shrink-0" />
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-slate-950 dark:text-white text-xs sm:text-sm">
+                  <Key className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                   <span>Device Identity</span>
                 </div>
-                <p className="text-xs text-slate-600">Brand, model, serial number/IMEI, and intake condition to prevent misplacement.</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Brand, model, serial number/IMEI, and intake condition to prevent misplacement.</p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-slate-950 text-xs sm:text-sm">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-slate-950 dark:text-white text-xs sm:text-sm">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>Service Logs</span>
                 </div>
-                <p className="text-xs text-slate-600">Service slip numbers, replacement part serials, and warranty verification dates.</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Service slip numbers, replacement part serials, and warranty verification dates.</p>
               </div>
             </div>
           </section>
 
           {/* Section 3: Device Storage Zero-Access Guarantee */}
-          <section id="sec-privacy-zero-access" className="space-y-3 border-b border-slate-100 pb-7">
-            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-xs font-black shrink-0 border border-emerald-100">
+          <section id="sec-privacy-zero-access" className="space-y-3 border-b border-slate-100 dark:border-slate-800 pb-7">
+            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 dark:text-white flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-xs font-black shrink-0 border border-emerald-100 dark:border-emerald-800">
                 3
               </span>
               <span>Zero-Access Private Data Protocol</span>
             </h2>
             
-            <div className="bg-emerald-50/70 border border-emerald-200/80 p-4 sm:p-5 rounded-2xl space-y-2">
-              <div className="flex items-center gap-2 text-emerald-900 font-black text-xs sm:text-sm">
-                <Lock className="w-4 h-4 text-emerald-600 shrink-0" />
+            <div className="bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 p-4 sm:p-5 rounded-2xl space-y-2">
+              <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-300 font-black text-xs sm:text-sm">
+                <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>Zero-Access Guarantee</span>
               </div>
-              <p className="text-xs sm:text-sm text-emerald-950 leading-relaxed">
+              <p className="text-xs sm:text-sm text-emerald-950 dark:text-emerald-200 leading-relaxed">
                 Technicians at MTS Lab test touch digitizers, display panels, charging ports, cameras, and audio transducers using dedicated standalone hardware diagnostic tools that <strong>do not require opening personal photo galleries, applications, messages, or accounts</strong>. We encourage customers to enable OS Maintenance/Repair Mode before dropping off devices.
               </p>
             </div>
           </section>
 
           {/* Section 4: Security & Third-Party Non-Disclosure */}
-          <section id="sec-privacy-security" className="space-y-3 border-b border-slate-100 pb-7">
-            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-xs font-black shrink-0 border border-emerald-100">
+          <section id="sec-privacy-security" className="space-y-3 border-b border-slate-100 dark:border-slate-800 pb-7">
+            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 dark:text-white flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-xs font-black shrink-0 border border-emerald-100 dark:border-emerald-800">
                 4
               </span>
               <span>Security Protocols & Non-Disclosure</span>
@@ -209,39 +209,39 @@ export default function Privacy() {
           </section>
 
           {/* Section 5: Grievance Officer */}
-          <section id="sec-privacy-contact" className="space-y-4 bg-slate-50 p-5 sm:p-6 rounded-2xl border border-slate-200">
+          <section id="sec-privacy-contact" className="space-y-4 bg-slate-50 dark:bg-slate-800/60 p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
             <div className="space-y-1">
-              <h3 className="font-black text-slate-950 text-sm sm:text-base">
+              <h3 className="font-black text-slate-950 dark:text-white text-sm sm:text-base">
                 Privacy Officer & Data Erasure Contact
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                 To request data deletion, review your stored records, or discuss privacy matters:
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm font-semibold text-slate-800 pt-1">
-              <div className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200/80">
-                <span className="text-slate-400">Officer:</span>
-                <span className="text-slate-950 font-bold">Amit Thakur</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 pt-1">
+              <div className="flex items-center gap-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-700">
+                <span className="text-slate-400 dark:text-slate-500">Officer:</span>
+                <span className="text-slate-950 dark:text-white font-bold">Amit Thakur</span>
               </div>
 
               <a 
                 href="tel:+9779709797526"
-                className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200/80 hover:border-slate-400 transition-colors"
+                className="flex items-center gap-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 transition-colors"
               >
-                <Phone className="w-4 h-4 text-emerald-600 shrink-0" />
+                <Phone className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>+977 9709797526</span>
               </a>
 
               <a 
                 href="mailto:support@mobiletechnologystation.com.np"
-                className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200/80 hover:border-slate-400 transition-colors sm:col-span-2"
+                className="flex items-center gap-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 transition-colors sm:col-span-2"
               >
-                <Mail className="w-4 h-4 text-indigo-600 shrink-0" />
+                <Mail className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                 <span className="truncate">support@mobiletechnologystation.com.np</span>
               </a>
 
-              <div className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200/80 sm:col-span-2">
+              <div className="flex items-center gap-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-700 sm:col-span-2">
                 <MapPin className="w-4 h-4 text-slate-500 shrink-0" />
                 <span>Pako Sadak, New Road, Kathmandu, Nepal</span>
               </div>
@@ -254,7 +254,7 @@ export default function Privacy() {
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
           <Link
             to="/terms"
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors"
           >
             <span>Read Terms & Conditions</span>
             <ChevronRight className="w-3.5 h-3.5" />
@@ -262,7 +262,7 @@ export default function Privacy() {
 
           <Link
             to="/services"
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-950 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white transition-colors"
           >
             <span>Explore Repair Services</span>
             <ChevronRight className="w-3.5 h-3.5" />

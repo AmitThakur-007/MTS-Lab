@@ -18,6 +18,8 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import type { SlideTheme } from './HeroSlider';
 
+import ThemeToggle from '@/components/common/ThemeToggle';
+
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -210,8 +212,11 @@ export default function Navbar() {
             })}
           </div>
 
-          {/* Right Action Utility Group: Search & Sign In & Mobile Menu Toggle */}
+          {/* Right Action Utility Group: Theme Toggle, Search & Sign In & Mobile Menu Toggle */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Theme Toggle Button (Light / Dark / Auto) */}
+            <ThemeToggle isHeroOverlay={isHeroOverlay} />
+
             {/* Search Button */}
             <button 
               id="navbar-search-repair-button"
@@ -342,8 +347,14 @@ export default function Navbar() {
                 })}
               </div>
 
-              {/* Bottom Actions & Social Media */}
-              <div className="mt-6 pt-6 border-t border-slate-200/70 dark:border-slate-800 space-y-5">
+              {/* Theme Preference Switcher & Bottom Actions */}
+              <div className="mt-6 pt-6 border-t border-slate-200/70 dark:border-slate-800 space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Theme Mode
+                  </span>
+                  <ThemeToggle variant="segmented" size="sm" />
+                </div>
                 {!isAuthenticated ? (
                   <Button 
                     onClick={() => {

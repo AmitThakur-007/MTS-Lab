@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import BrandLogo from '@/components/BrandLogo';
 import OperatingHours from '@/components/OperatingHours';
+import ThemeToggle from '@/components/common/ThemeToggle';
 import { 
   Smartphone, 
   MapPin, 
@@ -20,14 +21,14 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-slate-950 text-slate-300 border-t border-slate-800/80 pt-16 pb-10 px-6 sm:px-10 lg:px-12 mt-auto selection:bg-indigo-500 selection:text-white relative overflow-hidden">
+    <footer className="bg-slate-950 dark:bg-slate-950 text-slate-300 dark:text-slate-300 border-t border-slate-800/80 dark:border-slate-800 pt-16 pb-10 px-6 sm:px-10 lg:px-12 mt-auto selection:bg-indigo-500 selection:text-white relative overflow-hidden">
       {/* Subtle Ambient Glow */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-600/5 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-sky-600/5 rounded-full blur-3xl pointer-events-none" />
 
       <div className="max-w-7xl mx-auto relative z-10 space-y-12">
         {/* Top Tier: Brand, Description, Socials & Certifications */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 pb-12 border-b border-slate-800/80">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 pb-12 border-b border-slate-800/80 dark:border-slate-800">
           
           {/* Brand & Overview */}
           <div className="lg:col-span-5 space-y-4">
@@ -39,7 +40,7 @@ export default function Footer() {
               imgClassName="drop-shadow-lg"
             />
 
-            <p className="text-slate-400 text-xs sm:text-sm font-normal leading-relaxed max-w-md">
+            <p className="text-slate-400 dark:text-slate-400 text-xs sm:text-sm font-normal leading-relaxed max-w-md">
               Mobile Technology Station (MTS) is Nepal's premier smartphone hardware restoration and Level-4 micro-soldering laboratory. We specialize in precision OCA front glass lamination, AMOLED display restoration, laser line removal, and circuit-level logic board recovery.
             </p>
 
@@ -53,7 +54,7 @@ export default function Footer() {
                 target="_blank" 
                 rel="noopener noreferrer"
                 aria-label="Visit MTS Lab on Facebook"
-                className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/60 hover:bg-indigo-600 hover:text-white text-slate-300 flex items-center justify-center transition-all shadow-sm group cursor-pointer"
+                className="w-9 h-9 rounded-xl bg-slate-900 dark:bg-slate-900 border border-slate-800 dark:border-slate-800 hover:border-indigo-500/60 hover:bg-indigo-600 hover:text-white text-slate-300 dark:text-slate-300 flex items-center justify-center transition-all shadow-sm group cursor-pointer"
               >
                 <svg className="w-4 h-4 fill-current group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
@@ -241,7 +242,8 @@ export default function Footer() {
             &copy; {currentYear} Mobile Technology Station (MTS). All rights reserved.
           </p>
 
-          <div className="flex items-center gap-6 font-medium">
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 font-medium">
+            <ThemeToggle variant="segmented" size="sm" />
             <Link 
               id="footer-terms-link"
               to="/terms" 

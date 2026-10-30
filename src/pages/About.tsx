@@ -177,7 +177,7 @@ export default function About() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/60 font-sans text-slate-800 leading-relaxed selection:bg-indigo-600 selection:text-white flex flex-col antialiased">
+    <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 font-sans text-slate-800 dark:text-slate-100 leading-relaxed selection:bg-indigo-600 selection:text-white flex flex-col antialiased">
       <Navbar />
 
       {/* 1. Hero Section with Official MTS Logo & Core Positioning */}
@@ -235,11 +235,11 @@ export default function About() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="lg:col-span-8 bg-white p-6 sm:p-8 md:p-10 rounded-[28px] sm:rounded-[36px] border border-slate-200/80 shadow-xl shadow-slate-100/60 space-y-8"
+            className="lg:col-span-8 bg-white dark:bg-slate-900 p-6 sm:p-8 md:p-10 rounded-[28px] sm:rounded-[36px] border border-slate-200/80 dark:border-slate-800 shadow-xl shadow-slate-100/60 dark:shadow-black/30 space-y-8"
           >
             {/* Header Identity Card */}
-            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5 pb-6 border-b border-slate-100">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white p-1.5 shadow-sm border border-slate-200/80 shrink-0 flex items-center justify-center overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5 pb-6 border-b border-slate-100 dark:border-slate-800">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white dark:bg-slate-800 p-1.5 shadow-sm border border-slate-200/80 dark:border-slate-700 shrink-0 flex items-center justify-center overflow-hidden">
                 <img
                   src={mtsLogo}
                   alt="MTS Lab Logo"
@@ -247,14 +247,14 @@ export default function About() {
                 />
               </div>
               <div className="text-center sm:text-left space-y-1.5 min-w-0">
-                <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-black uppercase tracking-wider border border-indigo-100/70">
+                <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-black uppercase tracking-wider border border-indigo-100/70 dark:border-indigo-800">
                   <Building2 className="w-3.5 h-3.5" />
                   <span>Kathmandu, Nepal</span>
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
                   MTS Lab
                 </h2>
-                <p className="text-xs sm:text-sm font-bold text-indigo-600">
+                <p className="text-xs sm:text-sm font-bold text-indigo-600 dark:text-indigo-400">
                   Nepal’s First Wholesale Mobile Screen Refurb Lab
                 </p>
               </div>
@@ -262,13 +262,13 @@ export default function About() {
 
             {/* Section 1: Who We Are */}
             <div className="space-y-3">
-              <div className="flex items-center gap-2.5 text-slate-900">
-                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+              <div className="flex items-center gap-2.5 text-slate-900 dark:text-white">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-800">
                   <Bookmark className="w-4 h-4" />
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight">Who We Are</h3>
               </div>
-              <div className="space-y-3 text-slate-600 text-sm sm:text-base font-normal leading-relaxed pl-0 sm:pl-10">
+              <div className="space-y-3 text-slate-600 dark:text-slate-300 text-sm sm:text-base font-normal leading-relaxed pl-0 sm:pl-10">
                 <p>
                   MTS Lab is a reliable Kathmandu-based mobile phone repair service dedicated to providing professional and dependable solutions for smartphones and other mobile devices.
                 </p>
@@ -279,14 +279,14 @@ export default function About() {
             </div>
 
             {/* Section 2: Screen Refurb */}
-            <div className="space-y-3 pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-2.5 text-slate-900">
-                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 border border-purple-100">
+            <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5 text-slate-900 dark:text-white">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-100 dark:border-purple-800">
                   <Layers className="w-4 h-4" />
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight">Screen Refurb</h3>
               </div>
-              <div className="space-y-3 text-slate-600 text-sm sm:text-base font-normal leading-relaxed pl-0 sm:pl-10">
+              <div className="space-y-3 text-slate-600 dark:text-slate-300 text-sm sm:text-base font-normal leading-relaxed pl-0 sm:pl-10">
                 <p>
                   We operate a specialized screen refurb laboratory offering wholesale mobile display and screen refurb services for repair businesses, retail shops, and individual device owners.
                 </p>
@@ -297,14 +297,14 @@ export default function About() {
             </div>
 
             {/* Section 3: Professional Repair Services */}
-            <div className="space-y-3 pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-2.5 text-slate-900">
-                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+            <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5 text-slate-900 dark:text-white">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-800">
                   <Wrench className="w-4 h-4" />
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight">Professional Repair Services</h3>
               </div>
-              <div className="space-y-3 text-slate-600 text-sm sm:text-base font-normal leading-relaxed pl-0 sm:pl-10">
+              <div className="space-y-3 text-slate-600 dark:text-slate-300 text-sm sm:text-base font-normal leading-relaxed pl-0 sm:pl-10">
                 <p>
                   We provide a wide range of mobile repair, screen refurb, and technical services, supported by experienced technicians, specialized equipment, and modern repair techniques. Our team handles various types of hardware and software problems across different mobile brands and models.
                 </p>
@@ -315,14 +315,14 @@ export default function About() {
             </div>
 
             {/* Section 4: Our Expertise */}
-            <div className="space-y-3 pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-2.5 text-slate-900">
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+            <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5 text-slate-900 dark:text-white">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100 dark:border-emerald-800">
                   <Cpu className="w-4 h-4" />
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight">Our Expertise</h3>
               </div>
-              <div className="space-y-3 text-slate-600 text-sm sm:text-base font-normal leading-relaxed pl-0 sm:pl-10">
+              <div className="space-y-3 text-slate-600 dark:text-slate-300 text-sm sm:text-base font-normal leading-relaxed pl-0 sm:pl-10">
                 <p>
                   Our technical expertise covers advanced board-level and hardware repair, precision micro-soldering, power IC troubleshooting, and component-level circuit diagnostics.
                 </p>
@@ -333,14 +333,14 @@ export default function About() {
             </div>
 
             {/* Section 5: Our Commitment & Customer Motto */}
-            <div className="space-y-4 pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-2.5 text-slate-900">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+            <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5 text-slate-900 dark:text-white">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-100 dark:border-amber-800">
                   <ShieldCheck className="w-4 h-4" />
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight">Our Commitment</h3>
               </div>
-              <div className="space-y-3 text-slate-600 text-sm sm:text-base font-normal leading-relaxed pl-0 sm:pl-10">
+              <div className="space-y-3 text-slate-600 dark:text-slate-300 text-sm sm:text-base font-normal leading-relaxed pl-0 sm:pl-10">
                 <p>
                   MTS Lab is committed to providing customers and industry partners with quality service, transparent communication, and professional technical support. From common mobile issues to advanced hardware, screen refurb, and board-level repairs, our goal is to provide practical, reliable, and professional repair solutions.
                 </p>
@@ -350,11 +350,11 @@ export default function About() {
               </div>
 
               {/* Motto Callout Card */}
-              <div className="mt-4 p-4 sm:p-5 rounded-2xl bg-indigo-50/70 border border-indigo-100/90 flex items-start gap-3.5">
-                <Quote className="h-6 w-6 text-indigo-500 shrink-0 mt-0.5" />
+              <div className="mt-4 p-4 sm:p-5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100/90 dark:border-indigo-800/60 flex items-start gap-3.5">
+                <Quote className="h-6 w-6 text-indigo-500 dark:text-indigo-400 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-900">Our Motto</span>
-                  <p className="text-xs sm:text-sm md:text-base font-bold text-indigo-950 leading-snug">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300">Our Motto</span>
+                  <p className="text-xs sm:text-sm md:text-base font-bold text-indigo-950 dark:text-indigo-100 leading-snug">
                     “To provide you with reliable, professional, and customer-focused service.”
                   </p>
                 </div>
@@ -372,16 +372,16 @@ export default function About() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-md hover:shadow-lg transition-all space-y-3"
+              className="bg-white dark:bg-slate-900 p-6 sm:p-7 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-md hover:shadow-lg transition-all space-y-3"
             >
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100/70">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-100/70 dark:border-indigo-800">
                 <Layers className="h-6 w-6" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
                   Wholesale Screen Refurb
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-normal">
                   Dedicated screen refurb laboratory supporting mobile technicians, retail shops, and partners across Nepal with precision glass and display renewal.
                 </p>
               </div>
@@ -393,16 +393,16 @@ export default function About() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-md hover:shadow-lg transition-all space-y-3"
+              className="bg-white dark:bg-slate-900 p-6 sm:p-7 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-md hover:shadow-lg transition-all space-y-3"
             >
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100/70">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-100/70 dark:border-emerald-800">
                 <Cpu className="h-6 w-6" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
                   Advanced Board-Level Repair
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-normal">
                   Expert micro-soldering, motherboard diagnostics, and component-level circuit troubleshooting for complex smartphone hardware issues.
                 </p>
               </div>
@@ -414,16 +414,16 @@ export default function About() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-md hover:shadow-lg transition-all space-y-3"
+              className="bg-white dark:bg-slate-900 p-6 sm:p-7 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-md hover:shadow-lg transition-all space-y-3"
             >
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100/70">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-100/70 dark:border-amber-800">
                 <ShieldCheck className="h-6 w-6" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
                   Transparent & Reliable Service
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-normal">
                   Honest problem diagnosis, clear customer communication, and disciplined repair standards for smartphone owners and industry partners.
                 </p>
               </div>
@@ -437,13 +437,13 @@ export default function About() {
       {/* 3. Leadership Messages Section */}
       <section className="py-14 sm:py-16 md:py-20 max-w-7xl mx-auto px-4 sm:px-6 w-full" id="leadership-messages">
         <div className="text-center space-y-3 mb-10 sm:mb-14">
-          <Badge className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-100 px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-2xs">
+          <Badge className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-100 dark:border-indigo-800 px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-2xs">
             Executive Vision & Direction
           </Badge>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-950 tracking-tight">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-950 dark:text-white tracking-tight">
             Leadership Messages
           </h2>
-          <p className="text-xs sm:text-sm md:text-base text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed">
+          <p className="text-xs sm:text-sm md:text-base text-slate-500 dark:text-slate-400 font-medium max-w-2xl mx-auto leading-relaxed">
             Our commitment to quality, technical excellence, and customer-focused service.
           </p>
         </div>
@@ -456,11 +456,11 @@ export default function About() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: i * 0.12 }}
-              className="group bg-white rounded-[28px] sm:rounded-[32px] border border-slate-200/90 shadow-md hover:shadow-2xl hover:shadow-slate-200/80 transition-all duration-300 overflow-hidden flex flex-col justify-between"
+              className="group bg-white dark:bg-slate-900 rounded-[28px] sm:rounded-[32px] border border-slate-200/90 dark:border-slate-800 shadow-md hover:shadow-2xl hover:shadow-slate-200/80 dark:hover:shadow-black/50 transition-all duration-300 overflow-hidden flex flex-col justify-between"
             >
               <div className="p-5 sm:p-6 space-y-5">
                 {/* Profile Photo with Position Badge */}
-                <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden bg-slate-100 shadow-inner">
+                <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-inner">
                   {imgErrors[getTargetKey(leader.shortRole)] ? (
                     <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 text-white p-5 text-center">
                       <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-lg font-black text-indigo-300 border border-white/15 mb-2 shadow-inner">
@@ -502,7 +502,7 @@ export default function About() {
 
                   {/* Position Pill Overlay on Photo */}
                   <div className="absolute top-3 left-3 right-3 flex justify-between items-center">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-[11px] font-extrabold shadow-sm bg-white/95 backdrop-blur-md ${leader.badgeClass}`}>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-[11px] font-extrabold shadow-sm bg-white/95 dark:bg-slate-900/95 backdrop-blur-md ${leader.badgeClass}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${leader.dotColor} animate-pulse`} />
                       <span>{leader.shortRole}</span>
                     </span>
@@ -519,14 +519,14 @@ export default function About() {
                         fileInputRef.current?.click();
                       }}
                       disabled={!!isUploading}
-                      className="absolute bottom-3 right-3 px-2.5 py-1.5 rounded-xl bg-white/95 hover:bg-white text-slate-800 hover:text-indigo-600 shadow-md border border-slate-200/90 transition-all z-20 flex items-center gap-1.5 text-[11px] font-bold tracking-tight backdrop-blur-md cursor-pointer"
+                      className="absolute bottom-3 right-3 px-2.5 py-1.5 rounded-xl bg-white/95 dark:bg-slate-800/95 hover:bg-white dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 shadow-md border border-slate-200/90 dark:border-slate-700 transition-all z-20 flex items-center gap-1.5 text-[11px] font-bold tracking-tight backdrop-blur-md cursor-pointer"
                       title={getChangeLabel(leader.shortRole)}
                     >
                       {isUploading === getTargetKey(leader.shortRole) ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
                       ) : (
                         <>
-                          <Camera className="w-3.5 h-3.5 text-indigo-600" />
+                          <Camera className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                           <span>{getChangeLabel(leader.shortRole)}</span>
                         </>
                       )}
@@ -535,21 +535,21 @@ export default function About() {
                 </div>
 
                 {/* Leader Identity Header */}
-                <div className="space-y-1 text-center sm:text-left border-b border-slate-100 pb-3">
-                  <h3 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight group-hover:text-indigo-950 transition-colors">
+                <div className="space-y-1 text-center sm:text-left border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <h3 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white tracking-tight group-hover:text-indigo-950 dark:group-hover:text-indigo-300 transition-colors">
                     {leader.name}
                   </h3>
-                  <p className="text-xs font-extrabold text-indigo-600 tracking-wide uppercase">
+                  <p className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 tracking-wide uppercase">
                     {leader.position}
                   </p>
                 </div>
 
                 {/* Leadership Message Content */}
                 <div className="space-y-3 relative">
-                  <Quote className="w-6 h-6 text-indigo-200/80 absolute -top-1 -left-1 -z-0 opacity-60" />
-                  <div className="space-y-2.5 relative z-10 text-xs sm:text-sm text-slate-600 font-medium leading-relaxed text-justify">
+                  <Quote className="w-6 h-6 text-indigo-200/80 dark:text-indigo-900/40 absolute -top-1 -left-1 -z-0 opacity-60" />
+                  <div className="space-y-2.5 relative z-10 text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed text-justify">
                     {leader.paragraphs.map((p, idx) => (
-                      <p key={idx} className={idx === 0 ? "font-semibold text-slate-800" : ""}>
+                      <p key={idx} className={idx === 0 ? "font-semibold text-slate-800 dark:text-slate-200" : ""}>
                         {p}
                       </p>
                     ))}
@@ -558,9 +558,9 @@ export default function About() {
               </div>
 
               {/* Card Footer Accent Bar */}
-              <div className="px-6 py-3.5 bg-slate-50/90 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-bold">
+              <div className="px-6 py-3.5 bg-slate-50/90 dark:bg-slate-950/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500 font-bold">
                 <span>MTS Lab</span>
-                <span className="text-indigo-600 font-black">Kathmandu</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-black">Kathmandu</span>
               </div>
             </motion.div>
           ))}
@@ -568,17 +568,17 @@ export default function About() {
       </section>
 
       {/* 4. Contact & Support Section */}
-      <section className="py-14 sm:py-16 md:py-20 max-w-7xl mx-auto px-4 sm:px-6 border-t border-slate-200/60 w-full">
+      <section className="py-14 sm:py-16 md:py-20 max-w-7xl mx-auto px-4 sm:px-6 border-t border-slate-200/60 dark:border-slate-800 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-start">
 
           {/* Informational Column */}
           <div className="lg:col-span-5 space-y-6 sm:space-y-8">
             <div className="space-y-2.5">
-              <Badge className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-none px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+              <Badge className="bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
                 Support Desk
               </Badge>
-              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Contact & Support</h2>
-              <p className="text-slate-500 font-medium leading-relaxed text-xs sm:text-sm md:text-base">
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Contact & Support</h2>
+              <p className="text-slate-500 dark:text-slate-400 font-medium leading-relaxed text-xs sm:text-sm md:text-base">
                 Have hardware repair queries, wholesale screen refurb inquiries, or need technical assistance? Connect with our service desk directly.
               </p>
             </div>
@@ -587,15 +587,15 @@ export default function About() {
             <div className="space-y-4 sm:space-y-5">
 
               {/* Business Email */}
-              <div className="p-4 sm:p-5 bg-white border border-slate-200/80 rounded-2xl shadow-xs flex gap-4 items-start">
-                <div className="p-2.5 sm:p-3 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
+              <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs flex gap-4 items-start">
+                <div className="p-2.5 sm:p-3 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0 border border-indigo-100 dark:border-indigo-800">
                   <Mail className="h-5 w-5" />
                 </div>
                 <div className="space-y-1 min-w-0">
-                  <h4 className="text-[10px] sm:text-xs text-slate-400 font-black uppercase tracking-wider">Business Inquiry Email</h4>
+                  <h4 className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 font-black uppercase tracking-wider">Business Inquiry Email</h4>
                   <a
                     href="mailto:support@mobiletechnologystation.com.np"
-                    className="text-xs sm:text-sm md:text-base font-bold text-slate-800 hover:text-indigo-600 transition-colors block break-all underline decoration-slate-200 underline-offset-4"
+                    className="text-xs sm:text-sm md:text-base font-bold text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors block break-all underline decoration-slate-200 dark:decoration-slate-700 underline-offset-4"
                   >
                     support@mobiletechnologystation.com.np
                   </a>
@@ -603,22 +603,22 @@ export default function About() {
               </div>
 
               {/* Phone Contacts */}
-              <div className="p-4 sm:p-5 bg-white border border-slate-200/80 rounded-2xl shadow-xs flex gap-4 items-start">
-                <div className="p-2.5 sm:p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
+              <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs flex gap-4 items-start">
+                <div className="p-2.5 sm:p-3 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-xl shrink-0 border border-emerald-100 dark:border-emerald-800">
                   <PhoneCall className="h-5 w-5" />
                 </div>
                 <div className="space-y-1 min-w-0 w-full">
-                  <h4 className="text-[10px] sm:text-xs text-slate-400 font-black uppercase tracking-wider mb-1.5">Support Numbers</h4>
+                  <h4 className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 font-black uppercase tracking-wider mb-1.5">Support Numbers</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <a
                       href="tel:9869276668"
-                      className="border border-slate-200/80 hover:border-indigo-200 hover:bg-indigo-50/30 p-2.5 rounded-xl block text-center text-xs sm:text-sm font-bold text-slate-800 hover:text-indigo-600 transition-colors"
+                      className="border border-slate-200/80 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-500 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/30 p-2.5 rounded-xl block text-center text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                     >
                       9869276668 (Mob)
                     </a>
                     <a
                       href="tel:015364307"
-                      className="border border-slate-200/80 hover:border-indigo-200 hover:bg-indigo-50/30 p-2.5 rounded-xl block text-center text-xs sm:text-sm font-bold text-slate-800 hover:text-indigo-600 transition-colors"
+                      className="border border-slate-200/80 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-500 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/30 p-2.5 rounded-xl block text-center text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                     >
                       015364307 (Land)
                     </a>

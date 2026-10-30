@@ -646,51 +646,51 @@ export default function Tracking() {
   })();
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
       <Navbar />
 
       <main className="flex-1 pt-24 sm:pt-28 md:pt-32 pb-12 sm:pb-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
           {/* Header Banner */}
           <div className="text-center space-y-2 max-w-xl mx-auto">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/80 border border-slate-300 text-slate-800 text-[11px] font-bold uppercase tracking-wider">
-              <ShieldCheck className="w-3.5 h-3.5 text-slate-700" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/80 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-bold uppercase tracking-wider">
+              <ShieldCheck className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
               <span>MTS Lab Live Tracking Portal</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Track Your Repair</h1>
-            <p className="text-xs sm:text-sm text-slate-600">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Track Your Repair</h1>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
               Enter your repair number and registered phone number to check live diagnostic progress and delivery status.
             </p>
           </div>
 
           {/* Search Card */}
-          <Card className="rounded-2xl border border-slate-200 shadow-md bg-white overflow-hidden max-w-2xl mx-auto">
+          <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md bg-white dark:bg-slate-900 overflow-hidden max-w-2xl mx-auto">
             <CardContent className="p-5 sm:p-7">
               <form onSubmit={handleTrackSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                      <Hash className="w-3.5 h-3.5 text-slate-500" />
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Hash className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                       <span>Repair Number</span>
                     </label>
                     <Input
                       placeholder="Enter repair number"
                       value={repairNumber}
                       onChange={(e) => setRepairNumber(e.target.value)}
-                      className="h-11 rounded-xl bg-slate-50 border-slate-200 font-mono text-base md:text-sm pl-3.5 focus-visible:ring-slate-900"
+                      className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 font-mono text-base md:text-sm pl-3.5 focus-visible:ring-slate-900 dark:focus-visible:ring-blue-500"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                      <Phone className="w-3.5 h-3.5 text-slate-500" />
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                       <span>Phone Number</span>
                     </label>
                     <Input
                       placeholder="Enter phone number"
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
-                      className="h-11 rounded-xl bg-slate-50 border-slate-200 text-base md:text-sm pl-3.5 focus-visible:ring-slate-900"
+                      className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 text-base md:text-sm pl-3.5 focus-visible:ring-slate-900 dark:focus-visible:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -698,7 +698,7 @@ export default function Tracking() {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full h-11 rounded-xl bg-slate-900 hover:bg-slate-950 text-white font-bold text-xs sm:text-sm shadow-sm cursor-pointer transition-colors"
+                  className="w-full h-11 rounded-xl bg-slate-900 hover:bg-slate-950 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-bold text-xs sm:text-sm shadow-sm cursor-pointer transition-colors"
                 >
                   {loading ? <RotateCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4 mr-1.5" />}
                   <span>{loading ? 'Searching Records...' : 'Track Repair'}</span>
@@ -714,7 +714,7 @@ export default function Tracking() {
                 {/* Multi-Device Selector Pills (if customer has multiple devices) */}
                 {trackingData?.devices && trackingData.devices.length > 1 && (
                   <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                    <span className="text-xs font-bold text-slate-600 whitespace-nowrap">Your Devices:</span>
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">Your Devices:</span>
                     {trackingData.devices.map((dev: any, idx: number) => (
                       <button
                         key={dev.id || idx}
@@ -722,8 +722,8 @@ export default function Tracking() {
                         className={cn(
                           'px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer border',
                           selectedDeviceIndex === idx
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            ? 'bg-slate-900 text-white border-slate-900 dark:bg-blue-600 dark:border-blue-600 shadow-xs'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
                         )}
                       >
                         Device #{idx + 1}: {dev.deviceBrand} {dev.deviceModel}
@@ -833,26 +833,26 @@ export default function Tracking() {
                 )}
 
                 {/* Main Status & Timeline Card */}
-                <Card className="rounded-2xl border border-slate-200 shadow-md bg-white overflow-hidden">
-                  <div className="p-5 sm:p-6 border-b border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md bg-white dark:bg-slate-900 overflow-hidden">
+                  <div className="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={cn('px-2.5 py-0.5 rounded-full text-xs font-bold border', currentStatus.bgSoft)}>
                           {currentStatus.label}
                         </span>
                       </div>
-                      <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1.5">
+                      <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white mt-1.5">
                         {activeRepair.deviceBrand?.toUpperCase()} {activeRepair.deviceModel}
                       </h2>
                     </div>
 
-                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 self-start sm:self-auto shadow-2xs">
-                      <span className="text-xs text-slate-500 font-bold uppercase">Ticket:</span>
-                      <span className="font-mono font-black text-slate-900 text-sm">#{activeRepair.repairNumber}</span>
+                    <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 self-start sm:self-auto shadow-2xs">
+                      <span className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase">Ticket:</span>
+                      <span className="font-mono font-black text-slate-900 dark:text-white text-sm">#{activeRepair.repairNumber}</span>
                       <button
                         type="button"
                         onClick={() => copyRepairNumber(activeRepair.repairNumber)}
-                        className="text-slate-400 hover:text-slate-700 cursor-pointer transition-colors p-1"
+                        className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer transition-colors p-1"
                         title="Copy Repair Number"
                       >
                         {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -862,7 +862,7 @@ export default function Tracking() {
 
                   <CardContent className="p-5 sm:p-6 space-y-6">
                     {/* Status Description Message */}
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
+                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
                       {currentStatus.desc}
                     </div>
 
@@ -870,7 +870,7 @@ export default function Tracking() {
                     <div className="hidden sm:block pt-3 pb-2">
                       <div className="relative px-2">
                         {/* Background Track */}
-                        <div className="absolute top-5 left-8 right-8 h-1 bg-slate-200 z-0 rounded-full" />
+                        <div className="absolute top-5 left-8 right-8 h-1 bg-slate-200 dark:bg-slate-700 z-0 rounded-full" />
                         {/* Active Progress Fill */}
                         <div
                           className="absolute top-5 left-8 h-1 bg-emerald-600 z-0 rounded-full transition-all duration-500 ease-out"
@@ -896,8 +896,8 @@ export default function Tracking() {
                                     isCompleted
                                       ? 'bg-emerald-600 text-white shadow-xs'
                                       : isCurrent
-                                      ? 'bg-slate-900 text-white ring-4 ring-slate-200 shadow-md scale-105'
-                                      : 'bg-white text-slate-400 border-2 border-slate-200'
+                                      ? 'bg-slate-900 dark:bg-blue-600 text-white ring-4 ring-slate-200 dark:ring-blue-900/50 shadow-md scale-105'
+                                      : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-2 border-slate-200 dark:border-slate-700'
                                   )}
                                 >
                                   {isCompleted ? (
@@ -911,10 +911,10 @@ export default function Tracking() {
                                     className={cn(
                                       'text-xs font-bold leading-tight',
                                       isCurrent
-                                        ? 'text-slate-900 font-extrabold'
+                                        ? 'text-slate-900 dark:text-white font-extrabold'
                                         : isCompleted
-                                        ? 'text-emerald-700'
-                                        : 'text-slate-400'
+                                        ? 'text-emerald-700 dark:text-emerald-400'
+                                        : 'text-slate-400 dark:text-slate-500'
                                     )}
                                   >
                                     {stage.label}
@@ -923,10 +923,10 @@ export default function Tracking() {
                                     className={cn(
                                       'text-[10px] block leading-tight font-medium',
                                       isCurrent
-                                        ? 'text-slate-600 font-semibold'
+                                        ? 'text-slate-600 dark:text-slate-400 font-semibold'
                                         : isCompleted
-                                        ? 'text-emerald-600/80'
-                                        : 'text-slate-400'
+                                        ? 'text-emerald-600/80 dark:text-emerald-400/80'
+                                        : 'text-slate-400 dark:text-slate-500'
                                     )}
                                   >
                                     {getStageSubtext(idx, status)}
@@ -941,7 +941,7 @@ export default function Tracking() {
 
                     {/* Mobile Timeline (Vertical Stepper for clean responsive view) */}
                     <div className="block sm:hidden pt-2">
-                      <div className="relative pl-7 space-y-4 before:absolute before:left-[15px] before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+                      <div className="relative pl-7 space-y-4 before:absolute before:left-[15px] before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-700">
                         {REPAIR_TIMELINE_STAGES.map((stage, idx) => {
                           const status = getStageStatus(idx);
                           const StageIcon = stage.icon;
@@ -953,12 +953,12 @@ export default function Tracking() {
                               {/* Step Node Icon */}
                               <div
                                 className={cn(
-                                  'absolute -left-7 flex items-center justify-center w-8 h-8 rounded-full border-2 border-white shadow-xs transition-all',
+                                  'absolute -left-7 flex items-center justify-center w-8 h-8 rounded-full border-2 border-white dark:border-slate-900 shadow-xs transition-all',
                                   isCompleted
                                     ? 'bg-emerald-600 text-white'
                                     : isCurrent
-                                    ? 'bg-slate-900 text-white ring-2 ring-slate-200 scale-105'
-                                    : 'bg-slate-100 text-slate-400 border-slate-200'
+                                    ? 'bg-slate-900 dark:bg-blue-600 text-white ring-2 ring-slate-200 dark:ring-blue-900/50 scale-105'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700'
                                 )}
                               >
                                 {isCompleted ? (
@@ -973,10 +973,10 @@ export default function Tracking() {
                                 className={cn(
                                   'ml-3 flex-1 rounded-xl p-3 border transition-all',
                                   isCurrent
-                                    ? 'bg-slate-50/90 border-slate-300 ring-1 ring-slate-200 shadow-2xs'
+                                    ? 'bg-slate-50/90 dark:bg-slate-800/90 border-slate-300 dark:border-slate-700 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xs'
                                     : isCompleted
-                                    ? 'bg-white border-slate-200/80'
-                                    : 'bg-white/60 border-slate-100 opacity-75'
+                                    ? 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800'
+                                    : 'bg-white/60 dark:bg-slate-900/60 border-slate-100 dark:border-slate-800/80 opacity-75'
                                 )}
                               >
                                 <div className="flex items-center justify-between gap-2">
@@ -984,10 +984,10 @@ export default function Tracking() {
                                     className={cn(
                                       'text-xs font-bold',
                                       isCurrent
-                                        ? 'text-slate-900'
+                                        ? 'text-slate-900 dark:text-white'
                                         : isCompleted
-                                        ? 'text-emerald-800'
-                                        : 'text-slate-500'
+                                        ? 'text-emerald-800 dark:text-emerald-400'
+                                        : 'text-slate-500 dark:text-slate-400'
                                     )}
                                   >
                                     {stage.label}
@@ -997,16 +997,16 @@ export default function Tracking() {
                                     className={cn(
                                       'text-[9px] uppercase px-1.5 py-0 font-extrabold',
                                       isCurrent
-                                        ? 'bg-slate-900 text-white border-slate-900'
+                                        ? 'bg-slate-900 dark:bg-blue-600 text-white border-slate-900 dark:border-blue-600'
                                         : isCompleted
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                        : 'bg-slate-50 text-slate-400 border-slate-200'
+                                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                                     )}
                                   >
                                     {getStageSubtext(idx, status)}
                                   </Badge>
                                 </div>
-                                <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium mt-0.5">
                                   {stage.shortDesc}
                                 </p>
                               </div>
@@ -1019,72 +1019,72 @@ export default function Tracking() {
                 </Card>
 
                 {/* Device & Service Information Card */}
-                <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden w-full">
-                  <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+                <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 overflow-hidden w-full">
+                  <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/90 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Smartphone className="w-4 h-4 text-slate-700" />
-                      <h3 className="font-bold text-slate-900 text-sm">Device & Service Information</h3>
+                      <Smartphone className="w-4 h-4 text-slate-700 dark:text-slate-300" />
+                      <h3 className="font-bold text-slate-900 dark:text-white text-sm">Device & Service Information</h3>
                     </div>
-                    <span className="text-[11px] font-mono text-slate-500 font-bold">#{activeRepair.repairNumber}</span>
+                    <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-bold">#{activeRepair.repairNumber}</span>
                   </div>
                   <CardContent className="p-4 sm:p-6 space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 text-xs sm:text-sm">
-                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Device Model</span>
-                        <span className="font-bold text-slate-900 text-sm mt-1 block">
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/80">
+                        <span className="text-slate-500 dark:text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">Device Model</span>
+                        <span className="font-bold text-slate-900 dark:text-white text-sm mt-1 block">
                           {activeRepair.deviceBrand} {activeRepair.deviceModel}
                         </span>
                       </div>
-                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Intake Method</span>
-                        <span className="font-bold text-slate-900 text-sm mt-1 block">
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/80">
+                        <span className="text-slate-500 dark:text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">Intake Method</span>
+                        <span className="font-bold text-slate-900 dark:text-white text-sm mt-1 block">
                           {isCourierDevice ? 'Courier Logistics Delivery' : 'Walk-in Counter Service'}
                         </span>
                       </div>
-                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Intake Date</span>
-                        <span className="font-bold text-slate-900 text-sm mt-1 block">
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/80">
+                        <span className="text-slate-500 dark:text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">Intake Date</span>
+                        <span className="font-bold text-slate-900 dark:text-white text-sm mt-1 block">
                           {formatNepalDateOnly(activeRepair.createdAt) || 'Recorded'}
                         </span>
                       </div>
                     </div>
 
                     {activeRepair.problemDescription && (
-                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
-                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Reported Issue / Fault</span>
-                        <p className="font-medium text-slate-800 text-xs sm:text-sm leading-relaxed">
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/80 space-y-1">
+                        <span className="text-slate-500 dark:text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">Reported Issue / Fault</span>
+                        <p className="font-medium text-slate-800 dark:text-slate-200 text-xs sm:text-sm leading-relaxed">
                           {activeRepair.problemDescription}
                         </p>
                       </div>
                     )}
 
                     {activeRepair.conditionNotes && (
-                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
-                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Physical Condition Notes</span>
-                        <p className="font-medium text-slate-800 text-xs sm:text-sm leading-relaxed">
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/80 space-y-1">
+                        <span className="text-slate-500 dark:text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">Physical Condition Notes</span>
+                        <p className="font-medium text-slate-800 dark:text-slate-200 text-xs sm:text-sm leading-relaxed">
                           {activeRepair.conditionNotes}
                         </p>
                       </div>
                     )}
 
                     {activeRepair.accessoriesReceived && (
-                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
-                        <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">Accessories Received</span>
-                        <p className="font-medium text-slate-800 text-xs sm:text-sm">
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/80 space-y-1">
+                        <span className="text-slate-500 dark:text-slate-400 font-semibold block text-[11px] uppercase tracking-wider">Accessories Received</span>
+                        <p className="font-medium text-slate-800 dark:text-slate-200 text-xs sm:text-sm">
                           {activeRepair.accessoriesReceived}
                         </p>
                       </div>
                     )}
 
                     {activeRepair.returnCourierTrackingNumber && (
-                      <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl space-y-1">
-                        <div className="flex items-center gap-1.5 text-blue-900 font-bold text-xs">
-                          <Truck className="w-3.5 h-3.5 text-blue-700" />
+                      <div className="p-3.5 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-xl space-y-1">
+                        <div className="flex items-center gap-1.5 text-blue-900 dark:text-blue-300 font-bold text-xs">
+                          <Truck className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400" />
                           <span>Return Courier Tracking</span>
                         </div>
-                        <p className="text-xs text-blue-800 font-medium">
+                        <p className="text-xs text-blue-800 dark:text-blue-200 font-medium">
                           {activeRepair.returnCourierCompany || 'Courier'}:{' '}
-                          <strong className="font-mono font-bold text-blue-950">{activeRepair.returnCourierTrackingNumber}</strong>
+                          <strong className="font-mono font-bold text-blue-950 dark:text-white">{activeRepair.returnCourierTrackingNumber}</strong>
                         </p>
                       </div>
                     )}
@@ -1092,18 +1092,18 @@ export default function Tracking() {
                 </Card>
 
                 {/* Diagnostic Activity Trace */}
-                <Card className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden w-full">
-                  <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 overflow-hidden w-full">
+                  <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-900/90">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-xs">
-                        <History className="w-3.5 h-3.5" />
+                      <div className="w-7 h-7 rounded-lg bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center shadow-xs">
+                        <History className="w-3.5 h-3.5 text-white" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-slate-900 text-sm">Diagnostic Activity Trace</h3>
-                        <p className="text-[11px] text-slate-500">Chronological service log for your device</p>
+                        <h3 className="font-bold text-slate-900 dark:text-white text-sm">Diagnostic Activity Trace</h3>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Chronological service log for your device</p>
                       </div>
                     </div>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
                       Live
                     </span>
@@ -1135,7 +1135,7 @@ export default function Tracking() {
                       }
 
                       return (
-                        <div className="relative pl-5 sm:pl-6 space-y-4 before:absolute before:left-[9px] sm:before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                        <div className="relative pl-5 sm:pl-6 space-y-4 before:absolute before:left-[9px] sm:before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-700">
                           {repairLogs.map((log: any, idx: number) => {
                             const friendlyInfo = getCustomerFriendlyLogDetails(
                               log.action,
@@ -1152,12 +1152,12 @@ export default function Tracking() {
                               <div key={log.id || idx} className="relative flex items-start group">
                                 <div
                                   className={cn(
-                                    'absolute -left-[23px] sm:-left-[27px] flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 border-white shadow-2xs transition-all',
+                                    'absolute -left-[23px] sm:-left-[27px] flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 border-white dark:border-slate-900 shadow-2xs transition-all',
                                     itemStatusText === 'Completed'
                                       ? 'bg-emerald-600 text-white'
                                       : isLatest && itemStatusText === 'Active'
-                                      ? 'bg-slate-900 text-white ring-2 ring-slate-200'
-                                      : 'bg-slate-200 text-slate-500'
+                                      ? 'bg-slate-900 dark:bg-blue-600 text-white ring-2 ring-slate-200 dark:ring-blue-900/50'
+                                      : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
                                   )}
                                 >
                                   {itemStatusText === 'Completed' ? (
@@ -1172,26 +1172,26 @@ export default function Tracking() {
                                   )}
                                 </div>
 
-                                <div className="ml-2 sm:ml-3 flex-1 bg-slate-50/80 hover:bg-slate-50 rounded-xl p-3.5 sm:p-4 border border-slate-200/70 transition-colors">
+                                <div className="ml-2 sm:ml-3 flex-1 bg-slate-50/80 dark:bg-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl p-3.5 sm:p-4 border border-slate-200/70 dark:border-slate-700/70 transition-colors">
                                   <div className="flex items-center justify-between gap-2 mb-1">
-                                    <span className="text-xs font-bold text-slate-900">{itemTitle}</span>
+                                    <span className="text-xs font-bold text-slate-900 dark:text-white">{itemTitle}</span>
                                     <Badge
                                       variant="outline"
                                       className={cn(
                                         'text-[10px] uppercase px-2 py-0.5 font-extrabold',
                                         itemStatusText === 'Completed'
-                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                          ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
                                           : itemStatusText === 'Active'
-                                          ? 'bg-slate-900 text-white border-slate-900'
+                                          ? 'bg-slate-900 dark:bg-blue-600 text-white border-slate-900 dark:border-blue-600'
                                           : itemStatusText === 'Closed'
-                                          ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                          : 'bg-slate-50 text-slate-500 border-slate-200'
+                                          ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                                          : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                                       )}
                                     >
                                       {itemStatusText}
                                     </Badge>
                                   </div>
-                                  <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                                  <p className="text-xs text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
                                     {itemDesc}
                                   </p>
                                 </div>

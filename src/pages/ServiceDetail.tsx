@@ -160,7 +160,7 @@ export default function ServiceDetail() {
   // Loading state (renders indexable fallback metadata immediately so crawlers never see unindexed or empty head)
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 antialiased">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans text-slate-900 dark:text-slate-100 antialiased">
         <PageSeo
           title={fallbackTitle}
           description={fallbackDescription}
@@ -169,8 +169,8 @@ export default function ServiceDetail() {
         />
         <Navbar />
         <main className="flex-1 max-w-5xl w-full mx-auto px-4 pt-28 pb-16 flex flex-col items-center justify-center space-y-4">
-          <div className="w-10 h-10 border-3 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
-          <p className="text-slate-600 font-medium text-sm">Loading service specification...</p>
+          <div className="w-10 h-10 border-3 border-slate-300 dark:border-slate-700 border-t-slate-900 dark:border-t-white rounded-full animate-spin" />
+          <p className="text-slate-600 dark:text-slate-400 font-medium text-sm">Loading service specification...</p>
         </main>
         <Footer />
       </div>
@@ -180,7 +180,7 @@ export default function ServiceDetail() {
   // Fetch/network error state (transient failure must NEVER trigger noindex)
   if (error && services.length === 0) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 antialiased">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans text-slate-900 dark:text-slate-100 antialiased">
         <PageSeo
           title={fallbackTitle}
           description={fallbackDescription}
@@ -189,26 +189,26 @@ export default function ServiceDetail() {
         />
         <Navbar />
         <main className="flex-1 max-w-2xl w-full mx-auto px-4 pt-28 pb-16 text-center space-y-6">
-          <div className="w-16 h-16 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center mx-auto text-amber-600">
+          <div className="w-16 h-16 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-2xl flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400">
             <HelpCircle className="w-8 h-8" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">{humanTitle}</h1>
-            <p className="text-slate-600 max-w-md mx-auto text-sm sm:text-base leading-relaxed">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">{humanTitle}</h1>
+            <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto text-sm sm:text-base leading-relaxed">
               We are temporarily experiencing difficulty retrieving live laboratory pricing. Please call or message our New Road workshop directly.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <a
               href={`tel:${BUSINESS_PHONE}`}
-              className="inline-flex items-center justify-center h-12 px-6 rounded-xl font-semibold bg-slate-950 hover:bg-slate-800 text-white text-sm shadow-sm transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center h-12 px-6 rounded-xl font-semibold bg-slate-950 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white text-sm shadow-sm transition-colors cursor-pointer"
             >
               <PhoneCall className="w-4 h-4 mr-2" />
               <span>Call Workshop ({BUSINESS_PHONE})</span>
             </a>
             <Link
               to="/services"
-              className="inline-flex items-center justify-center h-12 px-6 rounded-xl font-semibold border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-sm shadow-sm transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center h-12 px-6 rounded-xl font-semibold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-sm shadow-sm transition-colors cursor-pointer"
             >
               <Search className="w-4 h-4 mr-2" />
               <span>Browse All Services</span>
@@ -228,7 +228,7 @@ export default function ServiceDetail() {
       ? `${slugToHumanTitle(resolution.targetSlug)} | ${BUSINESS_NAME} Kathmandu`
       : `Repair Services | ${BUSINESS_NAME} Kathmandu`;
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 antialiased">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans text-slate-900 dark:text-slate-100 antialiased">
         <PageSeo
           title={destTitle}
           description="Redirecting to verified smartphone repair service..."
@@ -237,8 +237,8 @@ export default function ServiceDetail() {
         />
         <Navbar />
         <main className="flex-1 max-w-5xl w-full mx-auto px-4 pt-28 pb-16 flex flex-col items-center justify-center space-y-4">
-          <div className="w-10 h-10 border-3 border-slate-300 border-t-slate-900 rounded-full animate-spin" />
-          <p className="text-slate-600 font-medium text-sm">Redirecting to verified service specification...</p>
+          <div className="w-10 h-10 border-3 border-slate-300 dark:border-slate-700 border-t-slate-900 dark:border-t-white rounded-full animate-spin" />
+          <p className="text-slate-600 dark:text-slate-400 font-medium text-sm">Redirecting to verified service specification...</p>
         </main>
         <Footer />
       </div>
@@ -248,7 +248,7 @@ export default function ServiceDetail() {
   // Not Found state (strictly verified only when active services catalog loaded and slug is genuinely absent)
   if (!service || !cleanSlug || resolution?.type === 'NOT_FOUND') {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 antialiased">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans text-slate-900 dark:text-slate-100 antialiased">
         <PageSeo
           title="Service Not Found | MTS Lab Kathmandu"
           description="The requested smartphone repair service could not be found in our verified catalog."
@@ -257,19 +257,19 @@ export default function ServiceDetail() {
         />
         <Navbar />
         <main className="flex-1 max-w-2xl w-full mx-auto px-4 pt-28 pb-16 text-center space-y-6">
-          <div className="w-16 h-16 bg-slate-100 border border-slate-200 rounded-2xl flex items-center justify-center mx-auto text-slate-600">
+          <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-center mx-auto text-slate-600 dark:text-slate-400">
             <HelpCircle className="w-8 h-8" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Repair Service Not Found</h1>
-            <p className="text-slate-600 max-w-md mx-auto text-sm sm:text-base leading-relaxed">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Repair Service Not Found</h1>
+            <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto text-sm sm:text-base leading-relaxed">
               The service identifier you requested does not exist or may have been updated. You can browse our complete repair catalog or contact our workshop directly.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <Link
               to="/services"
-              className="inline-flex items-center justify-center h-12 px-6 rounded-xl font-semibold bg-slate-950 hover:bg-slate-800 text-white text-sm shadow-sm transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center h-12 px-6 rounded-xl font-semibold bg-slate-950 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white text-sm shadow-sm transition-colors cursor-pointer"
             >
               <Search className="w-4 h-4 mr-2" />
               <span>Browse All Services</span>
@@ -357,13 +357,13 @@ export default function ServiceDetail() {
                 )}
               </div>
 
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-950 tracking-tight leading-tight">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-950 dark:text-white tracking-tight leading-tight">
                 {service.serviceName}
               </h1>
 
-              <p className="text-sm sm:text-base font-medium text-slate-600 flex items-center gap-2">
+              <p className="text-sm sm:text-base font-medium text-slate-600 dark:text-slate-400 flex items-center gap-2">
                 <Smartphone className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
-                <span>Compatible Hardware: <strong className="text-slate-900 font-semibold">{fullDeviceName}</strong></span>
+                <span>Compatible Hardware: <strong className="text-slate-900 dark:text-white font-semibold">{fullDeviceName}</strong></span>
               </p>
             </div>
 
@@ -402,28 +402,28 @@ export default function ServiceDetail() {
           </div>
 
           {/* Laboratory Quality Indicators */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
-            <div className="flex items-start gap-3 p-4 bg-slate-50/80 rounded-2xl border border-slate-100">
-              <ShieldCheck className="w-5 h-5 text-slate-700 shrink-0 mt-0.5" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-start gap-3 p-4 bg-slate-50/80 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <ShieldCheck className="w-5 h-5 text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
               <div className="space-y-0.5">
-                <div className="text-xs font-bold text-slate-900">Functional Testing</div>
-                <div className="text-xs text-slate-600 leading-normal">Touch calibration, sensory checks, and current draw testing</div>
+                <div className="text-xs font-bold text-slate-900 dark:text-white">Functional Testing</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400 leading-normal">Touch calibration, sensory checks, and current draw testing</div>
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-4 bg-slate-50/80 rounded-2xl border border-slate-100">
-              <Wrench className="w-5 h-5 text-slate-700 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 p-4 bg-slate-50/80 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <Wrench className="w-5 h-5 text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
               <div className="space-y-0.5">
-                <div className="text-xs font-bold text-slate-900">Precision Equipment</div>
-                <div className="text-xs text-slate-600 leading-normal">Cleanroom OCA lamination, micro-soldering, and laser tooling</div>
+                <div className="text-xs font-bold text-slate-900 dark:text-white">Precision Equipment</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400 leading-normal">Cleanroom OCA lamination, micro-soldering, and laser tooling</div>
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-4 bg-slate-50/80 rounded-2xl border border-slate-100">
-              <MapPin className="w-5 h-5 text-slate-700 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 p-4 bg-slate-50/80 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <MapPin className="w-5 h-5 text-slate-700 dark:text-slate-300 shrink-0 mt-0.5" />
               <div className="space-y-0.5">
-                <div className="text-xs font-bold text-slate-900">Kathmandu Workshop</div>
-                <div className="text-xs text-slate-600 leading-normal">Pakosadak, New Road (Opposite People's Plaza back gate)</div>
+                <div className="text-xs font-bold text-slate-900 dark:text-white">Kathmandu Workshop</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400 leading-normal">Pakosadak, New Road (Opposite People's Plaza back gate)</div>
               </div>
             </div>
           </div>
@@ -453,16 +453,16 @@ export default function ServiceDetail() {
               variant="outline"
               size="lg"
               onClick={handleShare}
-              className="rounded-xl h-12 font-bold text-slate-700 hover:text-slate-900 border-slate-300"
+              className="rounded-xl h-12 font-bold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700"
             >
               {copiedLink ? (
                 <>
-                  <Check className="w-4 h-4 text-emerald-600 mr-2" />
+                  <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mr-2" />
                   <span>Copied</span>
                 </>
               ) : (
                 <>
-                  <Share2 className="w-4 h-4 mr-2 text-slate-500" />
+                  <Share2 className="w-4 h-4 mr-2 text-slate-500 dark:text-slate-400" />
                   <span>Share Quotation</span>
                 </>
               )}

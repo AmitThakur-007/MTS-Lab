@@ -194,7 +194,7 @@ export default function Contact() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased overflow-x-hidden selection:bg-slate-900 selection:text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans text-slate-800 dark:text-slate-100 antialiased overflow-x-hidden selection:bg-slate-900 selection:text-white">
       <Navbar />
 
       {/* Header & Introduction */}
@@ -235,113 +235,113 @@ export default function Contact() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
             
             {/* Card 1: Phone Hotlines */}
-            <div className="w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
+            <div className="w-full min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
               <div className="space-y-3 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+                  <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100 dark:border-emerald-800">
                     <PhoneCall className="h-5 w-5 shrink-0" />
                   </div>
                   <button
                     type="button"
                     onClick={handleCopyPhone}
                     aria-label="Copy mobile number"
-                    className="text-xs text-slate-400 hover:text-slate-700 font-medium inline-flex items-center gap-1 py-1 px-2 rounded-md hover:bg-slate-100 transition-colors"
+                    className="text-xs text-slate-400 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 font-medium inline-flex items-center gap-1 py-1 px-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   >
-                    {copiedPhone ? <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
+                    {copiedPhone ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
                     <span>{copiedPhone ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
 
                 <div className="min-w-0">
-                  <h3 className="text-base font-bold text-slate-900">Phone Hotlines</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Direct reception & technician desk</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Phone Hotlines</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Direct reception & technician desk</p>
                 </div>
 
                 <div className="space-y-2 pt-1 min-w-0">
                   <a 
                     href="tel:+9779869276668" 
-                    className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-100 bg-slate-50/70 hover:bg-emerald-50/50 hover:border-emerald-200 text-slate-900 transition-colors group min-w-0"
+                    className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 hover:border-emerald-200 dark:hover:border-emerald-800 text-slate-900 dark:text-white transition-colors group min-w-0"
                   >
                     <div className="min-w-0">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Mobile Hotline</span>
-                      <span className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block truncate">
+                      <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Mobile Hotline</span>
+                      <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors block truncate">
                         +977 9869276668
                       </span>
                     </div>
-                    <Phone className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 shrink-0" />
+                    <Phone className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 shrink-0" />
                   </a>
 
                   <a 
                     href="tel:015364307" 
-                    className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-100 bg-slate-50/70 hover:bg-emerald-50/50 hover:border-emerald-200 text-slate-900 transition-colors group min-w-0"
+                    className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 hover:border-emerald-200 dark:hover:border-emerald-800 text-slate-900 dark:text-white transition-colors group min-w-0"
                   >
                     <div className="min-w-0">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Kathmandu Landline</span>
-                      <span className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block truncate">
+                      <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Kathmandu Landline</span>
+                      <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors block truncate">
                         01-5364307
                       </span>
                     </div>
-                    <Phone className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 shrink-0" />
+                    <Phone className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 shrink-0" />
                   </a>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 dark:text-slate-500">
                 Tap to call instantly during hours
               </div>
             </div>
 
             {/* Card 2: Support Email */}
-            <div className="w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
+            <div className="w-full min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
               <div className="space-y-3 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+                  <div className="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-800">
                     <Mail className="h-5 w-5 shrink-0" />
                   </div>
                   <button
                     type="button"
                     onClick={handleCopyEmail}
                     aria-label="Copy support email address"
-                    className="text-xs text-slate-400 hover:text-slate-700 font-medium inline-flex items-center gap-1 py-1 px-2 rounded-md hover:bg-slate-100 transition-colors"
+                    className="text-xs text-slate-400 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 font-medium inline-flex items-center gap-1 py-1 px-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   >
-                    {copiedEmail ? <Check className="h-3.5 w-3.5 text-indigo-600 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
+                    {copiedEmail ? <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
                     <span>{copiedEmail ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
 
                 <div className="min-w-0">
-                  <h3 className="text-base font-bold text-slate-900">Email Inquiries</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Written estimates & quotations</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Email Inquiries</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Written estimates & quotations</p>
                 </div>
 
                 <div className="pt-1 min-w-0">
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Support Desk</span>
+                  <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">Support Desk</span>
                   <a 
                     href="mailto:support@mobiletechnologystation.com.np"
-                    className="text-xs sm:text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline break-all block leading-snug"
+                    className="text-xs sm:text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline break-all block leading-snug"
                   >
                     support@mobiletechnologystation.com.np
                   </a>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 dark:text-slate-500">
                 Response within 24 business hours
               </div>
             </div>
 
             {/* Card 3: Location Address */}
-            <div className="w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
+            <div className="w-full min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
               <div className="space-y-3 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="h-10 w-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
+                  <div className="h-10 w-10 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-100 dark:border-rose-800">
                     <MapPin className="h-5 w-5 shrink-0" />
                   </div>
                   <a
                     href="https://maps.app.goo.gl/baP5yg6qgcgBT7neA"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-rose-600 hover:text-rose-800 font-semibold inline-flex items-center gap-1 hover:underline"
+                    className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 font-semibold inline-flex items-center gap-1 hover:underline"
                   >
                     <span>Maps</span>
                     <ExternalLink className="h-3 w-3 shrink-0" />
@@ -349,64 +349,64 @@ export default function Contact() {
                 </div>
 
                 <div className="min-w-0">
-                  <h3 className="text-base font-bold text-slate-900">Physical Lab</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Central service & diagnostic facility</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Physical Lab</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Central service & diagnostic facility</p>
                 </div>
 
-                <div className="pt-1 text-xs sm:text-sm text-slate-700 font-medium leading-relaxed min-w-0">
-                  <p className="font-semibold text-slate-900">Pakosadak, Newroad</p>
-                  <p className="text-slate-600">Kathmandu, Nepal</p>
-                  <p className="text-slate-500 text-xs mt-1.5 flex items-center gap-1">
+                <div className="pt-1 text-xs sm:text-sm text-slate-700 dark:text-slate-300 font-medium leading-relaxed min-w-0">
+                  <p className="font-semibold text-slate-900 dark:text-white">Pakosadak, Newroad</p>
+                  <p className="text-slate-600 dark:text-slate-400">Kathmandu, Nepal</p>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs mt-1.5 flex items-center gap-1">
                     <Compass className="h-3.5 w-3.5 text-rose-500 shrink-0" />
                     <span>Opposite People's Plaza back gate</span>
                   </p>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 dark:text-slate-500">
                 Walk-ins welcomed without prior booking
               </div>
             </div>
 
             {/* Card 4: Operating Hours */}
-            <div className="w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
+            <div className="w-full min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
               <div className="space-y-3 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="h-10 w-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+                  <div className="h-10 w-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-100 dark:border-amber-800">
                     <Clock className="h-5 w-5 shrink-0" />
                   </div>
-                  <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
                     Nepal Time
                   </span>
                 </div>
 
                 <div className="min-w-0">
-                  <h3 className="text-base font-bold text-slate-900">{OPERATING_HOURS.title}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Laboratory schedule</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">{OPERATING_HOURS.title}</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Laboratory schedule</p>
                 </div>
 
                 <div className="space-y-2 pt-1 text-xs min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold text-slate-700">{OPERATING_HOURS.regularDays}:</span>
-                    <span className="text-slate-900 font-bold text-right">{OPERATING_HOURS.openTime} – {OPERATING_HOURS.closeTime}</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{OPERATING_HOURS.regularDays}:</span>
+                    <span className="text-slate-900 dark:text-white font-bold text-right">{OPERATING_HOURS.openTime} – {OPERATING_HOURS.closeTime}</span>
                   </div>
                   <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold text-slate-700">{OPERATING_HOURS.saturdayDayLabel}:</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{OPERATING_HOURS.saturdayDayLabel}:</span>
                     <a
                       href={OPERATING_HOURS.phoneTel}
-                      className="text-amber-600 hover:text-amber-700 underline underline-offset-2 font-bold text-right transition-colors"
+                      className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline underline-offset-2 font-bold text-right transition-colors"
                       title={`Call MTS Lab at ${OPERATING_HOURS.phone}`}
                     >
                       {OPERATING_HOURS.saturdayActionLabel}
                     </a>
                   </div>
-                  <p className="text-[11px] text-slate-400 pt-0.5">
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 pt-0.5">
                     {OPERATING_HOURS.saturdayInstruction} (Emergency repair intake &amp; scheduled deliveries)
                   </p>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 dark:text-slate-500">
                 Public holiday adjustments announced on Facebook
               </div>
             </div>
@@ -418,68 +418,68 @@ export default function Contact() {
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
           {/* Left Column: Contact Form (7 cols) */}
-          <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 p-6 sm:p-8 shadow-xs min-w-0">
+          <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 sm:p-8 shadow-xs min-w-0">
             <div className="space-y-2 mb-6">
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
                 Send an Inquiry
               </h2>
-              <p className="text-slate-500 text-xs sm:text-sm leading-relaxed">
+              <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm leading-relaxed">
                 Have a hardware issue, screen damage, or inquiry about repairs? Leave your message and our reception team will get in touch with you.
               </p>
             </div>
 
             {submitSuccess && submittedInquiry ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 sm:p-7 space-y-5 animate-in fade-in-50 min-w-0">
+              <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 p-5 sm:p-7 space-y-5 animate-in fade-in-50 min-w-0">
                 <div className="flex flex-col sm:flex-row sm:items-start gap-3.5 text-left">
-                  <div className="h-11 w-11 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                  <div className="h-11 w-11 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                     <CheckCircle2 className="h-6 w-6 shrink-0" />
                   </div>
                   <div className="space-y-1 min-w-0">
-                    <h3 className="text-base sm:text-lg font-bold text-emerald-950">
+                    <h3 className="text-base sm:text-lg font-bold text-emerald-950 dark:text-emerald-200">
                       Inquiry Submitted Successfully
                     </h3>
-                    <p className="text-xs sm:text-sm text-emerald-800 leading-relaxed">
+                    <p className="text-xs sm:text-sm text-emerald-800 dark:text-emerald-300 leading-relaxed">
                       Your inquiry has been submitted successfully. Our support team will get back to you at <span className="font-semibold">{submittedInquiry.phone}</span> or via email.
                     </p>
                   </div>
                 </div>
 
                 {/* Submitted Inquiry Summary Box */}
-                <div className="bg-white/95 border border-emerald-200/80 rounded-xl p-4 text-xs sm:text-sm space-y-2.5 min-w-0 shadow-2xs">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <div className="bg-white/95 dark:bg-slate-900/95 border border-emerald-200/80 dark:border-emerald-800/80 rounded-xl p-4 text-xs sm:text-sm space-y-2.5 min-w-0 shadow-2xs">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                     Inquiry Summary
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
                     <div>
-                      <span className="text-slate-500 font-medium">Customer: </span>
-                      <span className="font-semibold text-slate-900">{submittedInquiry.name}</span>
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Customer: </span>
+                      <span className="font-semibold text-slate-900 dark:text-white">{submittedInquiry.name}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 font-medium">Phone: </span>
-                      <span className="font-semibold text-slate-900">{submittedInquiry.phone}</span>
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Phone: </span>
+                      <span className="font-semibold text-slate-900 dark:text-white">{submittedInquiry.phone}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 font-medium">Subject: </span>
-                      <span className="font-semibold text-slate-900">{submittedInquiry.subject || 'General Inquiry'}</span>
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Subject: </span>
+                      <span className="font-semibold text-slate-900 dark:text-white">{submittedInquiry.subject || 'General Inquiry'}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 font-medium">Email: </span>
-                      <span className="font-semibold text-slate-900">{submittedInquiry.email || 'Not provided'}</span>
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Email: </span>
+                      <span className="font-semibold text-slate-900 dark:text-white">{submittedInquiry.email || 'Not provided'}</span>
                     </div>
                   </div>
-                  <div className="pt-1 text-[11px] text-slate-400 border-t border-slate-100">
-                    Dispatched to: <span className="font-medium text-slate-600">support@mobiletechnologystation.com.np</span>
+                  <div className="pt-1 text-[11px] text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-800">
+                    Dispatched to: <span className="font-medium text-slate-600 dark:text-slate-300">support@mobiletechnologystation.com.np</span>
                   </div>
                 </div>
 
                 {/* Send via WhatsApp Action Box */}
-                <div className="p-4 rounded-xl bg-white border border-emerald-200 space-y-3 shadow-2xs">
+                <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 space-y-3 shadow-2xs">
                   <div className="space-y-0.5">
-                    <div className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                      <MessageCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <MessageCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       <span>Send this inquiry via WhatsApp</span>
                     </div>
-                    <p className="text-[11px] sm:text-xs text-slate-500 leading-relaxed">
+                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                       Want an immediate response? Connect directly with our technician desk on WhatsApp (+977 9869276668) with your message pre-filled.
                     </p>
                   </div>
@@ -505,15 +505,15 @@ export default function Contact() {
                       setSubmitSuccess(false);
                       setSubmittedInquiry(null);
                     }}
-                    className="border-emerald-300 text-emerald-900 hover:bg-emerald-100 text-xs sm:text-sm h-10 px-4"
+                    className="border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-950/60 text-xs sm:text-sm h-10 px-4"
                   >
                     Send Another Message
                   </Button>
                   <a
                     href="tel:+9779869276668"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-medium transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs sm:text-sm font-medium transition-colors"
                   >
-                    <Phone className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <Phone className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
                     <span>Call Hotline Directly</span>
                   </a>
                 </div>
@@ -535,13 +535,13 @@ export default function Contact() {
                 </div>
 
                 {serverError && (
-                  <div className="p-3.5 sm:p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm space-y-2.5">
+                  <div className="p-3.5 sm:p-4 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200 text-xs sm:text-sm space-y-2.5">
                     <div className="flex items-start gap-2.5">
-                      <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                      <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                       <span className="min-w-0 font-medium leading-relaxed">{serverError}</span>
                     </div>
-                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-rose-200/70">
-                      <span className="text-[11px] text-rose-700">Need immediate help? Reach us directly on WhatsApp:</span>
+                    <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-rose-200/70 dark:border-rose-800/70">
+                      <span className="text-[11px] text-rose-700 dark:text-rose-300">Need immediate help? Reach us directly on WhatsApp:</span>
                       <a
                         href={getWhatsAppUrl(formData)}
                         target="_blank"
@@ -560,7 +560,7 @@ export default function Contact() {
                   
                   {/* Name */}
                   <div className="space-y-1.5 min-w-0">
-                    <label htmlFor="contact-name" className="block text-xs font-semibold text-slate-700">
+                    <label htmlFor="contact-name" className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Full Name <span className="text-rose-500">*</span>
                     </label>
                     <input
@@ -571,20 +571,20 @@ export default function Contact() {
                       value={formData.name}
                       onChange={handleInputChange}
                       placeholder="e.g. Aashish Sharma"
-                      className={`w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                      className={`w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 transition-all ${
                         formErrors.name 
-                          ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
-                          : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'
+                          ? 'border-rose-300 dark:border-rose-600 focus:ring-rose-200 dark:focus:ring-rose-900/40 focus:border-rose-500' 
+                          : 'border-slate-300 dark:border-slate-700 focus:ring-slate-900/15 dark:focus:ring-blue-500/20 focus:border-slate-900 dark:focus:border-blue-500'
                       }`}
                     />
                     {formErrors.name && (
-                      <p className="text-xs text-rose-600 font-medium">{formErrors.name}</p>
+                      <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">{formErrors.name}</p>
                     )}
                   </div>
 
                   {/* Phone */}
                   <div className="space-y-1.5 min-w-0">
-                    <label htmlFor="contact-phone" className="block text-xs font-semibold text-slate-700">
+                    <label htmlFor="contact-phone" className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Phone Number <span className="text-rose-500">*</span>
                     </label>
                     <input
@@ -595,14 +595,14 @@ export default function Contact() {
                       value={formData.phone}
                       onChange={handleInputChange}
                       placeholder="e.g. 98XXXXXXXX"
-                      className={`w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                      className={`w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 transition-all ${
                         formErrors.phone 
-                          ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
-                          : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'
+                          ? 'border-rose-300 dark:border-rose-600 focus:ring-rose-200 dark:focus:ring-rose-900/40 focus:border-rose-500' 
+                          : 'border-slate-300 dark:border-slate-700 focus:ring-slate-900/15 dark:focus:ring-blue-500/20 focus:border-slate-900 dark:focus:border-blue-500'
                       }`}
                     />
                     {formErrors.phone && (
-                      <p className="text-xs text-rose-600 font-medium">{formErrors.phone}</p>
+                      <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">{formErrors.phone}</p>
                     )}
                   </div>
 
@@ -613,7 +613,7 @@ export default function Contact() {
                   
                   {/* Email */}
                   <div className="space-y-1.5 min-w-0">
-                    <label htmlFor="contact-email" className="block text-xs font-semibold text-slate-700">
+                    <label htmlFor="contact-email" className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Email Address <span className="text-slate-400 font-normal">(Optional)</span>
                     </label>
                     <input
@@ -623,20 +623,20 @@ export default function Contact() {
                       value={formData.email}
                       onChange={handleInputChange}
                       placeholder="name@example.com"
-                      className={`w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                      className={`w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 transition-all ${
                         formErrors.email 
-                          ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
-                          : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'
+                          ? 'border-rose-300 dark:border-rose-600 focus:ring-rose-200 dark:focus:ring-rose-900/40 focus:border-rose-500' 
+                          : 'border-slate-300 dark:border-slate-700 focus:ring-slate-900/15 dark:focus:ring-blue-500/20 focus:border-slate-900 dark:focus:border-blue-500'
                       }`}
                     />
                     {formErrors.email && (
-                      <p className="text-xs text-rose-600 font-medium">{formErrors.email}</p>
+                      <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">{formErrors.email}</p>
                     )}
                   </div>
 
                   {/* Subject Dropdown */}
                   <div className="space-y-1.5 min-w-0">
-                    <label htmlFor="contact-subject" className="block text-xs font-semibold text-slate-700">
+                    <label htmlFor="contact-subject" className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Inquiry Category
                     </label>
                     <select
@@ -644,7 +644,7 @@ export default function Contact() {
                       name="subject"
                       value={formData.subject}
                       onChange={handleInputChange}
-                      className="w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900 transition-all cursor-pointer"
+                      className="w-full text-base md:text-sm px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-900/15 dark:focus:ring-blue-500/20 focus:border-slate-900 dark:focus:border-blue-500 transition-all cursor-pointer"
                     >
                       <option value="Screen & Glass Refurbishing">Screen & Glass Refurbishing</option>
                       <option value="Motherboard & Micro-Soldering">Motherboard & Micro-Soldering</option>
@@ -660,10 +660,10 @@ export default function Contact() {
                 {/* Message */}
                 <div className="space-y-1.5 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <label htmlFor="contact-message" className="block text-xs font-semibold text-slate-700">
+                    <label htmlFor="contact-message" className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Inquiry Details <span className="text-rose-500">*</span>
                     </label>
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
                       {formData.message.length}/2000
                     </span>
                   </div>
@@ -676,14 +676,14 @@ export default function Contact() {
                     value={formData.message}
                     onChange={handleInputChange}
                     placeholder="Describe your device brand, model, and the issue you are experiencing (e.g. Samsung S23 display flickering after fall)..."
-                    className={`w-full text-base md:text-sm p-3.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all resize-y min-h-[100px] ${
+                    className={`w-full text-base md:text-sm p-3.5 rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 transition-all resize-y min-h-[100px] ${
                       formErrors.message 
-                        ? 'border-rose-300 focus:ring-rose-200 focus:border-rose-500' 
-                        : 'border-slate-300 focus:ring-slate-900/15 focus:border-slate-900'
+                        ? 'border-rose-300 dark:border-rose-600 focus:ring-rose-200 dark:focus:ring-rose-900/40 focus:border-rose-500' 
+                        : 'border-slate-300 dark:border-slate-700 focus:ring-slate-900/15 dark:focus:ring-blue-500/20 focus:border-slate-900 dark:focus:border-blue-500'
                     }`}
                   />
                   {formErrors.message && (
-                    <p className="text-xs text-rose-600 font-medium">{formErrors.message}</p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">{formErrors.message}</p>
                   )}
                 </div>
 
@@ -693,7 +693,7 @@ export default function Contact() {
                     <Button
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full sm:flex-1 h-11 px-6 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm transition-all shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                      className="w-full sm:flex-1 h-11 px-6 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-semibold text-sm transition-all shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                     >
                       {isSubmitting ? (
                         <>
@@ -713,16 +713,16 @@ export default function Contact() {
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="Send inquiry directly via WhatsApp"
-                      className="w-full sm:w-auto h-11 px-4 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold text-xs sm:text-sm transition-colors inline-flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                      className="w-full sm:w-auto h-11 px-4 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-semibold text-xs sm:text-sm transition-colors inline-flex items-center justify-center gap-2 cursor-pointer shrink-0"
                     >
-                      <MessageCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <MessageCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       <span>Send via WhatsApp</span>
                       <ExternalLink className="h-3 w-3 opacity-70 shrink-0" />
                     </a>
                   </div>
 
-                  <p className="text-[11px] text-slate-400 text-center sm:text-left">
-                    Your inquiry will be sent to <span className="font-medium text-slate-600">support@mobiletechnologystation.com.np</span> and logged with our reception team.
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center sm:text-left">
+                    Your inquiry will be sent to <span className="font-medium text-slate-600 dark:text-slate-300">support@mobiletechnologystation.com.np</span> and logged with our reception team.
                   </p>
                 </div>
 
@@ -734,17 +734,17 @@ export default function Contact() {
           <div className="lg:col-span-5 space-y-5 min-w-0">
             
             {/* Quick Self-Service Card */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4 min-w-0">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <History className="h-4 w-4 text-indigo-600 shrink-0" />
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4 min-w-0">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                 <span>Looking for Your Repair Ticket?</span>
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 If your device is currently admitted at MTS Lab, you can track its live stage, diagnostic logs, and technical notes instantly using your repair number or phone.
               </p>
               <Link
                 to="/track"
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs sm:text-sm transition-colors border border-indigo-200"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold text-xs sm:text-sm transition-colors border border-indigo-200 dark:border-indigo-800"
               >
                 <span>Open Public Repair Tracker</span>
                 <ArrowRight className="h-4 w-4 shrink-0" />
@@ -752,19 +752,19 @@ export default function Contact() {
             </div>
 
             {/* Direct Messenger Support Card */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4 min-w-0">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <MessageCircle className="h-4 w-4 text-blue-600 shrink-0" />
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4 min-w-0">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <MessageCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
                 <span>Instant Messaging</span>
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 Prefer chatting on social channels? Send photos or short videos of your damaged screen directly to our official Facebook page for quick preliminary quotes.
               </p>
               <a
                 href="https://www.facebook.com/MTSmobilescreenrefurblab"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs sm:text-sm transition-colors border border-blue-200"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold text-xs sm:text-sm transition-colors border border-blue-200 dark:border-blue-800"
               >
                 <span>Message on Facebook</span>
                 <ExternalLink className="h-3.5 w-3.5 shrink-0" />
@@ -772,15 +772,15 @@ export default function Contact() {
             </div>
 
             {/* Logistics for Customers Outside Valley */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-3 min-w-0">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-3 min-w-0">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-                <h4 className="text-sm font-bold text-slate-900">Courier Intake from All 7 Provinces</h4>
+                <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">Courier Intake from All 7 Provinces</h4>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                 Clients outside the Kathmandu Valley can safely dispatch phones through reputable couriers (Sundar, Pathao, Nepal Post). Include your full name, phone number, and lock passcode inside the parcel.
               </p>
-              <p className="text-[11px] text-slate-500 font-medium">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                 Parcel destination: MTS Lab Reception, Pakosadak, Newroad, Kathmandu.
               </p>
             </div>
@@ -790,14 +790,14 @@ export default function Contact() {
         </section>
 
         {/* 3. Location, Directions & Responsive Map Section */}
-        <section aria-labelledby="location-heading" className="w-full min-w-0 bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-7 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5 min-w-0">
+        <section aria-labelledby="location-heading" className="w-full min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 sm:p-7 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5 min-w-0">
             <div className="space-y-1 min-w-0">
-              <h2 id="location-heading" className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <h2 id="location-heading" className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-rose-500 shrink-0" />
                 <span>Visit Our Central Laboratory</span>
               </h2>
-              <p className="text-xs sm:text-sm text-slate-500">
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                 Pakosadak, Newroad, Kathmandu, Nepal &bull; Opposite People's Plaza back gate
               </p>
             </div>
@@ -807,7 +807,7 @@ export default function Contact() {
                 href="https://maps.app.goo.gl/baP5yg6qgcgBT7neA"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold transition-colors shadow-xs"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold transition-colors shadow-xs"
               >
                 <Navigation className="h-3.5 w-3.5 shrink-0" />
                 <span>Open Google Maps</span>
@@ -815,7 +815,7 @@ export default function Contact() {
               </a>
               <a
                 href="tel:+9779869276668"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs sm:text-sm font-semibold transition-colors"
               >
                 <Phone className="h-3.5 w-3.5 shrink-0" />
                 <span>Call Hotline</span>
@@ -824,7 +824,7 @@ export default function Contact() {
           </div>
 
           {/* Embedded Responsive Map */}
-          <div className="w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-100 relative min-w-0">
+          <div className="w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 relative min-w-0">
             <div className="w-full h-72 sm:h-80 md:h-96 relative">
               <iframe
                 title="MTS Lab Location Map - Pakosadak, Newroad, Kathmandu"
@@ -836,18 +836,18 @@ export default function Contact() {
           </div>
 
           {/* Practical Transit & Navigation Notes */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1 text-xs text-slate-600">
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1 min-w-0">
-              <span className="font-bold text-slate-900 block">Walking Proximity</span>
-              <p className="text-slate-600">50 meters inside Pakosadak directly from the New Road gate entrance.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1 text-xs text-slate-600 dark:text-slate-300">
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/80 space-y-1 min-w-0">
+              <span className="font-bold text-slate-900 dark:text-white block">Walking Proximity</span>
+              <p className="text-slate-600 dark:text-slate-400">50 meters inside Pakosadak directly from the New Road gate entrance.</p>
             </div>
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1 min-w-0">
-              <span className="font-bold text-slate-900 block">Vehicle Parking</span>
-              <p className="text-slate-600">Public two-wheeler & car parking available at Khulla Manch and New Road square.</p>
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/80 space-y-1 min-w-0">
+              <span className="font-bold text-slate-900 dark:text-white block">Vehicle Parking</span>
+              <p className="text-slate-600 dark:text-slate-400">Public two-wheeler & car parking available at Khulla Manch and New Road square.</p>
             </div>
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1 min-w-0">
-              <span className="font-bold text-slate-900 block">Identifiable Landmark</span>
-              <p className="text-slate-600">Directly on the opposite side of People's Plaza rear exit in Pakosadak.</p>
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/80 space-y-1 min-w-0">
+              <span className="font-bold text-slate-900 dark:text-white block">Identifiable Landmark</span>
+              <p className="text-slate-600 dark:text-slate-400">Directly on the opposite side of People's Plaza rear exit in Pakosadak.</p>
             </div>
           </div>
         </section>
@@ -855,51 +855,51 @@ export default function Contact() {
         {/* 4. Frequently Asked Questions */}
         <section aria-labelledby="faq-heading" className="space-y-4">
           <div className="space-y-1">
-            <h2 id="faq-heading" className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
+            <h2 id="faq-heading" className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white tracking-tight">
               Frequently Asked Questions
             </h2>
-            <p className="text-xs sm:text-sm text-slate-500">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
               Common questions regarding our repair reception, parts quality, and turnaround timelines.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-            <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs space-y-2 min-w-0">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-xs space-y-2 min-w-0">
               <div className="flex items-center gap-2">
-                <HelpCircle className="h-4 w-4 text-indigo-600 shrink-0" />
-                <h3 className="text-sm font-bold text-slate-900">Are walk-in diagnostics free at Pakosadak?</h3>
+                <HelpCircle className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Are walk-in diagnostics free at Pakosadak?</h3>
               </div>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 Yes. Our technician team conducts an initial 15-minute diagnostic assessment free of charge. You will receive an exact quote and turnaround estimation prior to repair commencement.
               </p>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs space-y-2 min-w-0">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-xs space-y-2 min-w-0">
               <div className="flex items-center gap-2">
-                <HelpCircle className="h-4 w-4 text-emerald-600 shrink-0" />
-                <h3 className="text-sm font-bold text-slate-900">How long does screen refurbishment or glass repair take?</h3>
+                <HelpCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">How long does screen refurbishment or glass repair take?</h3>
               </div>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 Most OLED/AMOLED outer glass replacements and polariser laminations are completed within 2 to 4 hours on the same business day using clean-room OCA machines.
               </p>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs space-y-2 min-w-0">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-xs space-y-2 min-w-0">
               <div className="flex items-center gap-2">
-                <HelpCircle className="h-4 w-4 text-rose-600 shrink-0" />
-                <h3 className="text-sm font-bold text-slate-900">Can I send my device via courier from outside Kathmandu?</h3>
+                <HelpCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Can I send my device via courier from outside Kathmandu?</h3>
               </div>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 Absolutely. We accept phones sent by courier from outside Kathmandu through Nepal Can Move (NCM), Pathao Parcel, and local cargo services. We regularly receive devices from Pokhara, Butwal, Biratnagar, Chitwan, and other parts of Nepal.
               </p>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs space-y-2 min-w-0">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-xs space-y-2 min-w-0">
               <div className="flex items-center gap-2">
-                <HelpCircle className="h-4 w-4 text-amber-600 shrink-0" />
-                <h3 className="text-sm font-bold text-slate-900">What warranty or quality verification is provided on repairs?</h3>
+                <HelpCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">What warranty or quality verification is provided on repairs?</h3>
               </div>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 Original replacement batteries carry our verifiable 6-month or 1-year battery warranty card with serial registration. All other hardware repairs (including displays, screens, motherboards, and charging flex) undergo thorough multi-point laboratory diagnostic testing and quality verification before handover.
               </p>
             </div>

@@ -173,6 +173,22 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return 'global';
   });
 
+  // Real-time Operating System Color-Scheme Tracking for System Preference
+  const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleSystemChange = (e: MediaQueryListEvent) => {
+      setSystemIsDark(e.matches);
+    };
+    mediaQuery.addEventListener('change', handleSystemChange);
+    return () => mediaQuery.removeEventListener('change', handleSystemChange);
+  }, []);
+
   // 2. Authoritative Global Theme Configuration from server, pre-hydrated synchronously from localStorage cache to prevent flash of light mode
   const [globalTheme, setGlobalTheme] = useState<GlobalThemeConfig>(() => getCachedGlobalTheme());
 
@@ -232,8 +248,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Determine effective theme with strict priority:
   // 1. Preview mode (Super Admin only, local testing in current tab)
-  // 2. Super Admin Authoritative Global Theme (if festival theme is active or default)
-  // 3. User's personal preference if explicitly opted-in (and not festival enforced)
+  // 2. User's personal preference if explicitly opted-in (and not festival enforced)
+  // 3. Super Admin Authoritative Global Theme (if festival theme is active or default)
   const isFestivalEnforced = globalTheme.festivalModeEnabled || FESTIVAL_THEME_IDS.includes(globalTheme.effectiveTheme);
   const isScheduledActive = globalTheme.isScheduledActive;
 
@@ -245,9 +261,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // 2. If user selected a personal override AND festival is not actively enforced
     if (userPreference !== 'global' && !isFestivalEnforced) {
-      if (userPreference === 'system' && typeof window !== 'undefined') {
-        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        return systemDark ? 'dark' : 'light';
+      if (userPreference === 'system') {
+        return systemIsDark ? 'dark' : 'light';
       }
       if (['light', 'dark', 'night', 'neutral-default'].includes(userPreference)) {
         return userPreference as ThemeId;
@@ -256,7 +271,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // 3. Default: authoritatively follow global theme configured by Super Admin
     return globalTheme.effectiveTheme || globalTheme.activeTheme || 'neutral-default';
-  }, [previewTheme, globalTheme, userPreference, isFestivalEnforced]);
+  }, [previewTheme, globalTheme, userPreference, isFestivalEnforced, systemIsDark]);
 
   // Apply theme classes to <html> root element
   useEffect(() => {

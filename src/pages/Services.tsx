@@ -2003,28 +2003,28 @@ export default function Services() {
           {/* 5. ERROR STATE                                            */}
           {/* ========================================================= */}
           {!loading && error && (
-            <div className="p-8 sm:p-12 text-center bg-white border border-rose-200 rounded-3xl space-y-4 shadow-sm">
-              <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto text-rose-600">
+            <div className="p-8 sm:p-12 text-center bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/60 rounded-3xl space-y-4 shadow-sm">
+              <div className="w-12 h-12 bg-rose-50 dark:bg-rose-950/60 border border-rose-200/60 dark:border-rose-800/80 rounded-2xl flex items-center justify-center mx-auto text-rose-600 dark:text-rose-400">
                 <AlertCircle className="w-6 h-6" />
               </div>
               <div className="space-y-1 max-w-md mx-auto">
-                <h3 className="text-xl font-black text-slate-900">Unable to load repair services</h3>
-                <p className="text-sm text-slate-600 font-medium">
+                <h3 className="text-xl font-black text-slate-900 dark:text-white">Unable to load repair services</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
                   {error}
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <Button 
                   onClick={fetchPrices} 
-                  className="rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold px-6 cursor-pointer"
+                  className="rounded-xl bg-slate-950 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold px-6 cursor-pointer"
                 >
                   Try again
                 </Button>
                 <a
                   href={`tel:${MTS_PHONE}`}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold text-sm transition-all"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-bold text-sm transition-all"
                 >
-                  <PhoneCall className="w-4 h-4 text-emerald-600" />
+                  <PhoneCall className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   <span>Call MTS ({MTS_PHONE_DISPLAY})</span>
                 </a>
               </div>
@@ -2255,8 +2255,8 @@ export default function Services() {
               {/* 8. PAGINATION CONTROLS                                    */}
               {/* ========================================================= */}
               {totalPages > 1 && (
-                <div className="pt-4 pb-2 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200/80">
-                  <span className="text-xs font-bold text-slate-500">
+                <div className="pt-4 pb-2 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200/80 dark:border-slate-800">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
                     Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} – {Math.min(currentPage * ITEMS_PER_PAGE, totalItems)} of {totalItems} repair services
                   </span>
 
@@ -2267,7 +2267,7 @@ export default function Services() {
                       id="pagination-prev-btn"
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all shadow-2xs"
+                      className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all shadow-2xs"
                       aria-label="Previous page"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -2290,8 +2290,8 @@ export default function Services() {
                             onClick={() => handlePageChange(pageNum)}
                             className={`w-9 h-9 rounded-xl text-xs font-extrabold flex items-center justify-center transition-all cursor-pointer ${
                               isActive
-                                ? 'bg-slate-950 text-white shadow-xs'
-                                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                                ? 'bg-slate-950 dark:bg-indigo-600 text-white shadow-xs'
+                                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
                             }`}
                             aria-label={`Page ${pageNum}`}
                             aria-current={isActive ? 'page' : undefined}
@@ -2304,7 +2304,7 @@ export default function Services() {
                         (pageNum === totalPages - 1 && currentPage < totalPages - 2)
                       ) {
                         return (
-                          <span key={pageNum} className="px-1 text-slate-400 font-black text-xs">
+                          <span key={pageNum} className="px-1 text-slate-400 dark:text-slate-500 font-black text-xs">
                             ...
                           </span>
                         );
@@ -2318,7 +2318,7 @@ export default function Services() {
                       id="pagination-next-btn"
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all shadow-2xs"
+                      className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all shadow-2xs"
                       aria-label="Next page"
                     >
                       <span className="hidden sm:inline">Next</span>
@@ -2650,43 +2650,43 @@ export default function Services() {
         {/* 11. LAB TRUST & QUALITY METRICS                           */}
         {/* ========================================================= */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
-          <div className="p-5 bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl space-y-2.5 shadow-2xs hover:shadow-md transition-shadow">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100/80">
+          <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl sm:rounded-3xl space-y-2.5 shadow-2xs hover:shadow-md transition-shadow">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-100/80 dark:border-emerald-800/80">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-black text-sm text-slate-950">Certified Lab Quality</h4>
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">Comprehensive diagnostic testing on original-grade replacement components.</p>
+              <h4 className="font-black text-sm text-slate-950 dark:text-white">Certified Lab Quality</h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed">Comprehensive diagnostic testing on original-grade replacement components.</p>
             </div>
           </div>
 
-          <div className="p-5 bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl space-y-2.5 shadow-2xs hover:shadow-md transition-shadow">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100/80">
+          <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl sm:rounded-3xl space-y-2.5 shadow-2xs hover:shadow-md transition-shadow">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-100/80 dark:border-blue-800/80">
               <Clock className="w-5 h-5" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-black text-sm text-slate-950">Fast Turnaround</h4>
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">Glass change and battery swaps completed in 30-90 minutes at our hub.</p>
+              <h4 className="font-black text-sm text-slate-950 dark:text-white">Fast Turnaround</h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed">Glass change and battery swaps completed in 30-90 minutes at our hub.</p>
             </div>
           </div>
 
-          <div className="p-5 bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl space-y-2.5 shadow-2xs hover:shadow-md transition-shadow">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100/80">
+          <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl sm:rounded-3xl space-y-2.5 shadow-2xs hover:shadow-md transition-shadow">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-100/80 dark:border-indigo-800/80">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-black text-sm text-slate-950">Genuine Parts</h4>
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">Premium-grade AMOLED screens & high-density battery cells.</p>
+              <h4 className="font-black text-sm text-slate-950 dark:text-white">Genuine Parts</h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed">Premium-grade AMOLED screens & high-density battery cells.</p>
             </div>
           </div>
 
-          <div className="p-5 bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl space-y-2.5 shadow-2xs hover:shadow-md transition-shadow">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-900 flex items-center justify-center border border-slate-200/80">
+          <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl sm:rounded-3xl space-y-2.5 shadow-2xs hover:shadow-md transition-shadow">
+            <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 flex items-center justify-center border border-slate-200/80 dark:border-slate-700">
               <Cpu className="w-5 h-5" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-black text-sm text-slate-950">Level 4 Micro-Soldering</h4>
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">Motherboard IC reballing, power short repair, and precision laser line removal.</p>
+              <h4 className="font-black text-sm text-slate-950 dark:text-white">Level 4 Micro-Soldering</h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed">Motherboard IC reballing, power short repair, and precision laser line removal.</p>
             </div>
           </div>
         </section>
@@ -2694,14 +2694,14 @@ export default function Services() {
         {/* ========================================================= */}
         {/* 12. PRICE DISCLAIMER & TERMS                              */}
         {/* ========================================================= */}
-        <section className="p-4 sm:p-6 bg-slate-100/80 rounded-2xl sm:rounded-3xl border border-slate-200 space-y-2 text-slate-700">
+        <section className="p-4 sm:p-6 bg-slate-100/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl space-y-2 text-slate-700 dark:text-slate-300">
           <div className="flex items-center gap-2">
-            <Info className="w-4 h-4 text-slate-950 shrink-0" />
-            <h4 className="font-extrabold text-xs text-slate-950 uppercase tracking-wider">
+            <Info className="w-4 h-4 text-slate-950 dark:text-amber-400 shrink-0" />
+            <h4 className="font-extrabold text-xs text-slate-950 dark:text-white uppercase tracking-wider">
               Price Disclaimer & Physical Inspection Terms
             </h4>
           </div>
-          <p className="text-xs sm:text-sm leading-relaxed text-slate-600 font-medium">
+          <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-400 font-medium">
             Listed prices represent standard laboratory estimates for genuine component replacement and technician labor. Actual pricing may vary slightly based on specific regional hardware variants, hidden liquid corrosion, frame warpage, or secondary IC board failures. A definitive quotation is verified after a complimentary 10-minute physical inspection at MTS Lab Kathmandu Hub.
           </p>
         </section>

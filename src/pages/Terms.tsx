@@ -37,7 +37,7 @@ export default function Terms() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-slate-950 selection:text-white antialiased">
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-slate-950 dark:selection:bg-indigo-600 selection:text-white antialiased">
       <Navbar />
 
       <main className="flex-1 pt-20 sm:pt-24 lg:pt-28 pb-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full space-y-6 sm:space-y-8">
@@ -50,48 +50,48 @@ export default function Terms() {
             <button
               type="button"
               onClick={handleBack}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:text-slate-950 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer active:scale-95"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-2xs cursor-pointer active:scale-95"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back</span>
             </button>
 
-            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
-              <Link to="/" className="hover:text-slate-900 transition-colors">Home</Link>
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400 dark:text-slate-500">
+              <Link to="/" className="hover:text-slate-900 dark:hover:text-white transition-colors">Home</Link>
               <span>/</span>
-              <span className="text-slate-700 font-bold">Terms & Conditions</span>
+              <span className="text-slate-700 dark:text-slate-200 font-bold">Terms & Conditions</span>
             </div>
           </div>
 
           {/* Title & Tag */}
           <div className="text-center space-y-3 pt-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-white text-[11px] font-black tracking-wider uppercase shadow-xs">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 dark:bg-slate-900 text-white text-[11px] font-black tracking-wider uppercase shadow-xs border border-transparent dark:border-slate-800">
               <FileText className="w-3.5 h-3.5 text-indigo-400" />
               <span>Official Service Agreement</span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-slate-950">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-slate-950 dark:text-white">
               Terms & Conditions
             </h1>
 
-            <p className="text-xs sm:text-sm md:text-base text-slate-600 font-medium max-w-xl mx-auto leading-relaxed">
+            <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-400 font-medium max-w-xl mx-auto leading-relaxed">
               Official laboratory repair policies and service terms for Mobile Technology Station (MTS).
             </p>
 
-            <p className="text-[11px] sm:text-xs text-slate-400 font-semibold">
+            <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 font-semibold">
               Kathmandu, Nepal &bull; Effective August 2026
             </p>
           </div>
 
           {/* Quick Legal Tab Switcher */}
           <div className="flex items-center justify-center pt-1">
-            <div className="inline-flex p-1 bg-slate-200/80 rounded-2xl border border-slate-300/60 shadow-2xs">
-              <span className="px-4 py-1.5 rounded-xl bg-white text-slate-950 font-extrabold text-xs shadow-xs">
+            <div className="inline-flex p-1 bg-slate-200/80 dark:bg-slate-800 rounded-2xl border border-slate-300/60 dark:border-slate-700 shadow-2xs">
+              <span className="px-4 py-1.5 rounded-xl bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-extrabold text-xs shadow-xs">
                 Terms & Conditions
               </span>
               <Link
                 to="/privacy"
-                className="px-4 py-1.5 rounded-xl text-slate-600 hover:text-slate-950 font-bold text-xs transition-colors"
+                className="px-4 py-1.5 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white font-bold text-xs transition-colors"
               >
                 Privacy Policy
               </Link>
@@ -111,7 +111,7 @@ export default function Terms() {
                 key={chip.id}
                 type="button"
                 onClick={() => scrollToSection(chip.id)}
-                className="px-3 py-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 text-slate-700 hover:text-slate-950 text-xs font-bold whitespace-nowrap shadow-2xs transition-all cursor-pointer"
+                className="px-3 py-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white text-xs font-bold whitespace-nowrap shadow-2xs transition-all cursor-pointer"
               >
                 {chip.label}
               </button>
@@ -121,12 +121,12 @@ export default function Terms() {
         </div>
 
         {/* Legal Document Content Card */}
-        <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-sm p-5 sm:p-8 md:p-10 space-y-8 text-slate-700 leading-relaxed text-xs sm:text-sm md:text-base">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-5 sm:p-8 md:p-10 space-y-8 text-slate-700 dark:text-slate-300 leading-relaxed text-xs sm:text-sm md:text-base">
           
           {/* Section 1: Business Overview */}
-          <section id="sec-overview" className="space-y-3 border-b border-slate-100 pb-7">
-            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0 border border-indigo-100">
+          <section id="sec-overview" className="space-y-3 border-b border-slate-100 dark:border-slate-800 pb-7">
+            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 dark:text-white flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 flex items-center justify-center text-xs font-black shrink-0 border border-indigo-100 dark:border-indigo-800">
                 1
               </span>
               <span>About Mobile Technology Station (MTS)</span>
@@ -137,9 +137,9 @@ export default function Terms() {
           </section>
 
           {/* Section 2: Diagnostics & Estimates */}
-          <section id="sec-estimates" className="space-y-3 border-b border-slate-100 pb-7">
-            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0 border border-indigo-100">
+          <section id="sec-estimates" className="space-y-3 border-b border-slate-100 dark:border-slate-800 pb-7">
+            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 dark:text-white flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 flex items-center justify-center text-xs font-black shrink-0 border border-indigo-100 dark:border-indigo-800">
                 2
               </span>
               <span>Inspection, Quotations & Authorization</span>
@@ -150,28 +150,28 @@ export default function Terms() {
           </section>
 
           {/* Section 3: Customer Data & Privacy */}
-          <section id="sec-privacy" className="space-y-3 border-b border-slate-100 pb-7">
-            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0 border border-indigo-100">
+          <section id="sec-privacy" className="space-y-3 border-b border-slate-100 dark:border-slate-800 pb-7">
+            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 dark:text-white flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 flex items-center justify-center text-xs font-black shrink-0 border border-indigo-100 dark:border-indigo-800">
                 3
               </span>
               <span>Customer Data & Zero-Access Security</span>
             </h2>
-            <div className="p-4 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-2">
-              <div className="flex items-center gap-2 text-slate-950 font-bold text-xs sm:text-sm">
-                <Lock className="w-4 h-4 text-emerald-600" />
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700 rounded-2xl space-y-2">
+              <div className="flex items-center gap-2 text-slate-950 dark:text-white font-bold text-xs sm:text-sm">
+                <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Zero-Access Privacy Commitment</span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                 MTS Lab strictly enforces a zero-access customer data protocol. Technicians only execute hardware diagnostic tests and never access personal galleries, apps, or private accounts. Customers are strongly encouraged to back up sensitive files before repair. MTS Lab is not liable for data loss caused by pre-existing NAND storage corruption or motherboard short circuits.
               </p>
             </div>
           </section>
 
           {/* Section 4: Unclaimed Devices */}
-          <section id="sec-storage" className="space-y-3 border-b border-slate-100 pb-7">
-            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0 border border-indigo-100">
+          <section id="sec-storage" className="space-y-3 border-b border-slate-100 dark:border-slate-800 pb-7">
+            <h2 className="text-base sm:text-lg md:text-xl font-black text-slate-950 dark:text-white flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 flex items-center justify-center text-xs font-black shrink-0 border border-indigo-100 dark:border-indigo-800">
                 4
               </span>
               <span>Device Collection & Storage Policy</span>
@@ -182,39 +182,39 @@ export default function Terms() {
           </section>
 
           {/* Section 5: Grievance Redressal */}
-          <section id="sec-grievance" className="space-y-4 bg-slate-50 p-5 sm:p-6 rounded-2xl border border-slate-200">
+          <section id="sec-grievance" className="space-y-4 bg-slate-50 dark:bg-slate-800/60 p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
             <div className="space-y-1">
-              <h3 className="font-black text-slate-950 text-sm sm:text-base">
+              <h3 className="font-black text-slate-950 dark:text-white text-sm sm:text-base">
                 Grievance Redressal & Customer Support
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                 For any disputes, service inquiries, or customer support:
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm font-semibold text-slate-800 pt-1">
-              <div className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200/80">
-                <span className="text-slate-400">Officer:</span>
-                <span className="text-slate-950 font-bold">Amit Thakur</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 pt-1">
+              <div className="flex items-center gap-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-700">
+                <span className="text-slate-400 dark:text-slate-500">Officer:</span>
+                <span className="text-slate-950 dark:text-white font-bold">Amit Thakur</span>
               </div>
 
               <a 
                 href="tel:+9779709797526"
-                className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200/80 hover:border-slate-400 transition-colors"
+                className="flex items-center gap-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 transition-colors"
               >
-                <Phone className="w-4 h-4 text-emerald-600 shrink-0" />
+                <Phone className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>+977 9709797526</span>
               </a>
 
               <a 
                 href="mailto:support@mobiletechnologystation.com.np"
-                className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200/80 hover:border-slate-400 transition-colors sm:col-span-2"
+                className="flex items-center gap-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 transition-colors sm:col-span-2"
               >
-                <Mail className="w-4 h-4 text-indigo-600 shrink-0" />
+                <Mail className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                 <span className="truncate">support@mobiletechnologystation.com.np</span>
               </a>
 
-              <div className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200/80 sm:col-span-2">
+              <div className="flex items-center gap-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-700 sm:col-span-2">
                 <MapPin className="w-4 h-4 text-slate-500 shrink-0" />
                 <span>Pako Sadak, New Road, Kathmandu, Nepal</span>
               </div>
@@ -227,7 +227,7 @@ export default function Terms() {
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
           <Link
             to="/privacy"
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors"
           >
             <span>Read Privacy Policy</span>
             <ChevronRight className="w-3.5 h-3.5" />
@@ -235,7 +235,7 @@ export default function Terms() {
 
           <Link
             to="/services"
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-950 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white transition-colors"
           >
             <span>Explore Repair Services</span>
             <ChevronRight className="w-3.5 h-3.5" />
