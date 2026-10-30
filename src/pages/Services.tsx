@@ -86,25 +86,25 @@ export interface RepairPriceItem {
   updatedAt?: string;
 }
 
-// Popular Search Suggestions for Instant Discovery
-const SEARCH_SUGGESTIONS = [
-  'iPhone 13 display',
-  'Samsung S23',
-  'Front Glass',
-  'Lining',
-  'Flex Change',
-  'Green / White Screen',
-  'Battery',
-  'Charging Port',
-  'Back Glass',
-  'IC Repair'
+// Popular Search Suggestions with dedicated service icons for instant visual discovery
+const POPULAR_SEARCH_KEYWORDS = [
+  { text: 'iPhone Display', icon: Smartphone },
+  { text: 'Battery Replacement', icon: Battery },
+  { text: 'Front Glass OCA', icon: Layers },
+  { text: 'Green / White Line', icon: ScanLine },
+  { text: 'Charging Port', icon: Zap },
+  { text: 'Camera Lens', icon: Camera },
+  { text: 'Water Damage', icon: Droplets },
+  { text: 'Flex Cable', icon: Cable },
+  { text: 'IC Repair', icon: Cpu },
+  { text: 'Samsung S23', icon: Smartphone }
 ];
 
 // Popular Repair Categories with specialized icons & theme accents
 const POPULAR_CATEGORIES = [
   { id: 'all', label: 'All Repairs', icon: Layers },
   { id: 'Display', label: 'Display Replacement', icon: Smartphone },
-  { id: 'Front Glass', label: 'Front Glass (OCA)', icon: Smartphone },
+  { id: 'Front Glass', label: 'Front Glass (OCA)', icon: Layers },
   { id: 'Lining', label: 'Laser Line Removal', icon: ScanLine },
   { id: 'Flex Change', label: 'Flex Cable Bonding', icon: Cable },
   { id: 'Green / White Screen', label: 'WSOD Screen Recovery', icon: Tv },
@@ -156,8 +156,8 @@ export const DEVICE_BRAND_MAPPINGS: Record<DeviceTypeId, string[]> = {
 // Default fallback brands list
 export const BRANDS_LIST = DEVICE_BRAND_MAPPINGS.all;
 
-// Items displayed per catalog page
-const ITEMS_PER_PAGE = 32;
+// Items displayed per catalog page (divides cleanly across 2, 3, 4, 6, and 8 column layouts)
+const ITEMS_PER_PAGE = 48;
 
 // Helper to normalize strings for robust fuzzy comparison
 function normalizeText(str: string): string {
@@ -802,26 +802,44 @@ export default function Services() {
     }
   };
 
-  // Autocomplete Suggestions computation
+  // Autocomplete Suggestions computation with Dynamic Service & Category Icons
   const autoSuggestions = useMemo(() => {
     const query = searchInput.trim().toLowerCase();
     if (!query || query.length < 2) return [];
 
-    const results: { type: 'model' | 'service' | 'category'; title: string; subtitle: string; query: string }[] = [];
+    const results: {
+      type: 'model' | 'service' | 'category';
+      title: string;
+      subtitle: string;
+      query: string;
+      icon: React.ElementType;
+      iconClass?: string;
+      bgClass?: string;
+      price?: number;
+      priceType?: 'FIXED' | 'STARTING_FROM' | 'ON_INSPECTION' | 'CONTACT_FOR_PRICE';
+    }[] = [];
     const seen = new Set<string>();
 
     for (const item of prices) {
       const fullDevice = `${item.brand} ${item.model}`;
       const serviceName = item.serviceName || item.problem;
       const category = item.category;
+      const catInfo = getCategoryInfo(category, serviceName);
 
       if (fullDevice.toLowerCase().includes(query) && !seen.has(`model-${fullDevice.toLowerCase()}`)) {
         seen.add(`model-${fullDevice.toLowerCase()}`);
+        const DevIcon = item.deviceType === 'Laptop' ? Laptop 
+          : item.deviceType === 'Tablet' ? Tablet 
+          : item.deviceType === 'TV' || item.deviceType === 'Smart TV' ? Tv 
+          : Smartphone;
         results.push({
           type: 'model',
           title: fullDevice,
           subtitle: `${item.brand} Hardware Series`,
-          query: fullDevice
+          query: fullDevice,
+          icon: DevIcon,
+          iconClass: 'text-indigo-600 dark:text-indigo-400',
+          bgClass: 'bg-indigo-50 dark:bg-indigo-950/60'
         });
       }
 
@@ -830,22 +848,31 @@ export default function Services() {
         results.push({
           type: 'service',
           title: serviceName,
-          subtitle: `${category} Service`,
-          query: serviceName
+          subtitle: `${item.brand} ${item.model} • ${category}`,
+          query: serviceName,
+          icon: catInfo.icon,
+          iconClass: catInfo.iconClass,
+          bgClass: catInfo.bgClass,
+          price: item.price,
+          priceType: item.priceType
         });
       }
 
       if (category.toLowerCase().includes(query) && !seen.has(`cat-${category.toLowerCase()}`)) {
         seen.add(`cat-${category.toLowerCase()}`);
+        const catOnlyInfo = getCategoryInfo(category);
         results.push({
           type: 'category',
           title: category,
-          subtitle: 'Browse Category',
-          query: category
+          subtitle: 'Browse Service Category',
+          query: category,
+          icon: catOnlyInfo.icon,
+          iconClass: catOnlyInfo.iconClass,
+          bgClass: catOnlyInfo.bgClass
         });
       }
 
-      if (results.length >= 6) break;
+      if (results.length >= 8) break;
     }
     return results;
   }, [searchInput, prices]);
@@ -1348,7 +1375,7 @@ export default function Services() {
       />
       <Navbar />
 
-      <main className="flex-1 pt-24 sm:pt-28 lg:pt-32 pb-16 px-2.5 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full space-y-4 sm:space-y-6">
+      <main className="flex-1 pt-24 sm:pt-28 lg:pt-32 pb-16 px-2.5 sm:px-4 md:px-6 lg:px-8 max-w-7xl 2xl:max-w-[1600px] min-[1800px]:max-w-[1850px] mx-auto w-full space-y-4 sm:space-y-6">
         
         {/* Dedicated Breadcrumb Container */}
         <div className="w-full bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl px-3.5 sm:px-4 py-2.5 shadow-2xs">
@@ -1473,7 +1500,7 @@ export default function Services() {
                 </button>
               </form>
 
-              {/* Autocomplete Suggestions Dropdown */}
+              {/* Autocomplete Suggestions Dropdown with Dynamic Service Icons */}
               {isSuggestionsOpen && autoSuggestions.length > 0 && (
                 <div 
                   id="search-autocomplete-dropdown"
@@ -1484,53 +1511,64 @@ export default function Services() {
                     <span className="text-[10px] font-medium text-slate-400">Click or press Enter to choose</span>
                   </div>
                   <div className="max-h-64 overflow-y-auto">
-                    {autoSuggestions.map((item, idx) => (
-                      <div
-                        key={`${item.type}-${item.query}-${idx}`}
-                        onClick={() => {
-                          executeSearch(item.query);
-                          setIsSuggestionsOpen(false);
-                        }}
-                        className={`px-3.5 py-2.5 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors ${
-                          selectedSuggestionIndex === idx ? 'bg-slate-100 dark:bg-slate-800' : ''
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {item.type === 'model' && <Smartphone className="w-4 h-4 text-indigo-600 shrink-0" />}
-                          {item.type === 'service' && <Wrench className="w-4 h-4 text-amber-500 shrink-0" />}
-                          {item.type === 'category' && <Layers className="w-4 h-4 text-emerald-600 shrink-0" />}
-                          <div className="min-w-0">
-                            <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">{item.title}</p>
-                            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">{item.subtitle}</p>
+                    {autoSuggestions.map((item, idx) => {
+                      const SuggestionIcon = item.icon || Wrench;
+                      return (
+                        <div
+                          key={`${item.type}-${item.query}-${idx}`}
+                          onClick={() => {
+                            executeSearch(item.query);
+                            setIsSuggestionsOpen(false);
+                          }}
+                          className={`px-3.5 py-2.5 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors ${
+                            selectedSuggestionIndex === idx ? 'bg-slate-100 dark:bg-slate-800' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${item.bgClass || 'bg-slate-100 dark:bg-slate-800'}`}>
+                              <SuggestionIcon className={`w-4 h-4 ${item.iconClass || 'text-slate-600 dark:text-slate-400'}`} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">{item.title}</p>
+                              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">{item.subtitle}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {item.price !== undefined && item.price > 0 && (
+                              <span className="text-[11px] sm:text-xs font-black text-slate-900 dark:text-white whitespace-nowrap">
+                                {item.priceType === 'STARTING_FROM' ? 'From ' : ''}NPR {item.price.toLocaleString()}
+                              </span>
+                            )}
+                            <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded shrink-0">
+                              {item.type}
+                            </span>
                           </div>
                         </div>
-                        <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded shrink-0">
-                          {item.type}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Popular Search Suggestions Chips */}
+            {/* Popular Search Suggestions Chips with Dynamic Icons */}
             <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-2.5 text-xs">
               <span className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-[10px] mr-0.5">
                 Trending:
               </span>
-              {SEARCH_SUGGESTIONS.map((suggestion) => (
+              {POPULAR_SEARCH_KEYWORDS.map(({ text, icon: ChipIcon }) => (
                 <button
-                  key={suggestion}
+                  key={text}
                   type="button"
-                  onClick={() => executeSearch(suggestion)}
-                  className={`px-2.5 py-0.5 sm:py-1 rounded-full text-xs font-bold transition-all cursor-pointer border ${
-                    activeQuery.toLowerCase() === suggestion.toLowerCase()
+                  onClick={() => executeSearch(text)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border ${
+                    activeQuery.toLowerCase() === text.toLowerCase()
                       ? 'bg-slate-950 dark:bg-indigo-600 text-white border-slate-950 dark:border-indigo-600 shadow-2xs'
                       : 'bg-white dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-950 dark:hover:text-white'
                   }`}
                 >
-                  {suggestion}
+                  <ChipIcon className="w-3 h-3 text-amber-500 shrink-0" />
+                  <span>{text}</span>
                 </button>
               ))}
             </div>
@@ -1956,24 +1994,23 @@ export default function Services() {
           {/* 4. LOADING STATE (SKELETON CARDS)                         */}
           {/* ========================================================= */}
           {loading && (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 md:gap-5 lg:gap-6">
-              {Array.from({ length: 8 }).map((_, idx) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 min-[1800px]:grid-cols-8 gap-2.5 sm:gap-3 md:gap-3.5 lg:gap-4">
+              {Array.from({ length: 16 }).map((_, idx) => (
                 <div 
                   key={idx} 
-                  className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-slate-200/90 dark:border-slate-800 p-2.5 sm:p-4 md:p-5 space-y-2.5 sm:space-y-3 shadow-xs animate-pulse flex flex-col justify-between h-full min-h-[200px] sm:min-h-[240px]"
+                  className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200/90 dark:border-slate-800 p-2.5 sm:p-3.5 space-y-2 shadow-xs animate-pulse flex flex-col justify-between min-h-[170px] sm:min-h-[190px]"
                 >
                   <div className="flex justify-between items-start">
-                    <div className="h-8 w-8 sm:h-11 sm:w-11 bg-slate-100 dark:bg-slate-800 rounded-lg sm:rounded-2xl" />
-                    <div className="h-5 sm:h-6 bg-slate-100 dark:bg-slate-800 rounded-md sm:rounded-lg w-12 sm:w-16" />
+                    <div className="h-8 w-8 sm:h-10 sm:w-10 bg-slate-100 dark:bg-slate-800 rounded-xl sm:rounded-2xl" />
+                    <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-md w-12" />
                   </div>
-                  <div className="space-y-1 sm:space-y-1.5">
-                    <div className="h-3 sm:h-3.5 bg-slate-100 dark:bg-slate-800 rounded-md w-1/2" />
-                    <div className="h-4 sm:h-5 bg-slate-200 dark:bg-slate-700 rounded-md w-4/5" />
-                    <div className="h-3 sm:h-4 bg-slate-100 dark:bg-slate-800 rounded-md w-full hidden sm:block" />
+                  <div className="space-y-1">
+                    <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded w-1/2" />
+                    <div className="h-3.5 bg-slate-200 dark:bg-slate-700 rounded w-4/5" />
                   </div>
-                  <div className="pt-2 sm:pt-2.5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                    <div className="h-5 sm:h-6 bg-slate-200 dark:bg-slate-700 rounded-md w-14 sm:w-20" />
-                    <div className="h-7 sm:h-8 bg-slate-200 dark:bg-slate-700 rounded-lg sm:rounded-xl w-14 sm:w-18" />
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                    <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-16" />
+                    <div className="h-6 w-6 bg-slate-100 dark:bg-slate-800 rounded-lg sm:rounded-xl" />
                   </div>
                 </div>
               ))}
@@ -2115,18 +2152,23 @@ export default function Services() {
           )}
 
           {/* ========================================================= */}
-          {/* 7. PREMIUM E-COMMERCE STYLE SERVICE CARD GRID             */}
+          {/* 7. PREMIUM E-COMMERCE STYLE COMPACT SERVICE CARD GRID     */}
           {/* ========================================================= */}
           {!loading && !error && paginatedItems.length > 0 && (
             <div className="space-y-6 sm:space-y-8">
               
-              {/* Responsive Service Grid: 1 col on mobile smartphone, 2 cols on tablet/iPad (md), 3 cols on laptop (lg), 4 cols on large desktop (xl) */}
-              <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 md:gap-6">
+              {/* Responsive Compact Rounded-Square Grid:
+                  - Mobile Smartphones: at least 2 cards per row (grid-cols-2)
+                  - Larger phones / phablets: 3 cards per row (sm:grid-cols-3)
+                  - Tablets / iPads: 4 cards per row (md:grid-cols-4)
+                  - Laptops / Desktops: 5-6 cards per row (lg:grid-cols-5 xl:grid-cols-6)
+                  - Wide Monitors / Large TVs: 7-8 cards per row (2xl:grid-cols-7 min-[1800px]:grid-cols-8)
+              */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 min-[1800px]:grid-cols-8 gap-2.5 sm:gap-3 md:gap-3.5 lg:gap-4">
                 {paginatedItems.map((item) => {
                   const catInfo = getCategoryInfo(item.category, item.serviceName);
                   const CategoryIcon = catInfo.icon;
                   const fullDeviceName = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`;
-                  const shortDescription = item.description || item.notes || (item.problem && item.problem !== item.serviceName ? `Addresses: ${item.problem}` : `Original-grade laboratory repair for ${fullDeviceName}.`);
                   const isTablet = item.deviceType === 'Tablet' || item.deviceType === 'iPad';
                   const isLaptop = item.deviceType === 'Laptop';
                   const isTv = item.deviceType === 'Smart TV' || item.deviceType === 'TV';
@@ -2136,97 +2178,70 @@ export default function Services() {
                   return (
                     <article
                       key={item.id}
+                      tabIndex={0}
+                      role="link"
+                      aria-label={`View repair service details for ${item.serviceName} - ${fullDeviceName}`}
                       onClick={() => navigate(serviceUrl)}
-                      className={`group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 hover:border-slate-400/80 dark:hover:border-slate-700 p-4 sm:p-5 h-full flex flex-col justify-between hover:shadow-xl dark:hover:shadow-none hover:-translate-y-1 ${catInfo.cardHover} transition-all duration-200 cursor-pointer relative`}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          navigate(serviceUrl);
+                        }
+                      }}
+                      className={`group bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200/90 dark:border-slate-800 hover:border-indigo-400/80 dark:hover:border-indigo-500/80 p-2.5 sm:p-3.5 h-full flex flex-col justify-between hover:shadow-lg dark:hover:shadow-none hover:-translate-y-1 ${catInfo.cardHover} transition-all duration-200 cursor-pointer relative overflow-hidden select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 min-h-[170px] sm:min-h-[190px]`}
                     >
-                      {/* Top Header: Icon + Category Badge + Brand Pill */}
-                      <div className="space-y-2.5">
-                        <div className="flex items-start justify-between gap-2">
-                          {/* Category Icon in Curved Square Badge */}
-                          <Link
-                            to={serviceUrl}
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={`View full details for ${item.serviceName}`}
-                            className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl ${catInfo.bgClass} flex items-center justify-center border border-slate-100/90 dark:border-slate-800 group-hover:scale-105 transition-transform shrink-0 shadow-2xs cursor-pointer`}
+                      {/* Top: Category Icon Badge & Brand Pill */}
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <div className="flex items-start justify-between gap-1.5">
+                          {/* Category Icon */}
+                          <div 
+                            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl ${catInfo.bgClass} flex items-center justify-center border border-slate-100/90 dark:border-slate-800/80 group-hover:scale-105 transition-transform shrink-0 shadow-2xs`}
                           >
-                            <CategoryIcon className={`w-5 h-5 ${catInfo.iconClass}`} />
-                          </Link>
-
-                          {/* Brand Pill & Rating Stars */}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {renderRatingStars(item.rating, item.ratingCount)}
-                            <span className="text-[10px] sm:text-xs font-black uppercase text-slate-700 dark:text-slate-300 bg-slate-100/90 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-2 py-0.5 sm:py-1 rounded-lg tracking-wider whitespace-nowrap">
-                              {item.brand}
-                            </span>
+                            <CategoryIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${catInfo.iconClass}`} />
                           </div>
+
+                          {/* Brand Pill */}
+                          <span className="text-[9px] sm:text-[10px] font-black uppercase text-slate-700 dark:text-slate-300 bg-slate-100/90 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-1.5 py-0.5 rounded-md tracking-wider truncate max-w-[70px] sm:max-w-[90px] shrink-0">
+                            {item.brand}
+                          </span>
                         </div>
 
-                        {/* Service Title & Device Model */}
-                        <div className="space-y-0.5 sm:space-y-1">
-                          <div className="flex items-center gap-1 text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400">
+                        {/* Device Model & Service Name */}
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate">
                             {isTablet ? (
-                              <Tablet className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-500 shrink-0" />
+                              <Tablet className="w-3 h-3 text-indigo-500 shrink-0" />
                             ) : isLaptop ? (
-                              <Laptop className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500 shrink-0" />
+                              <Laptop className="w-3 h-3 text-blue-500 shrink-0" />
                             ) : isTv ? (
-                              <Tv className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 shrink-0" />
+                              <Tv className="w-3 h-3 text-amber-500 shrink-0" />
                             ) : (
-                              <Smartphone className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
+                              <Smartphone className="w-3 h-3 text-slate-400 shrink-0" />
                             )}
                             <span className="truncate">{fullDeviceName}</span>
                           </div>
-                          
-                          <Link
-                            to={serviceUrl}
-                            onClick={(e) => e.stopPropagation()}
-                            className="block focus-visible:outline-none focus-visible:underline"
-                          >
-                            <h3 className="text-sm sm:text-base md:text-lg font-black text-slate-950 dark:text-white tracking-tight leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 min-h-[2.5rem] sm:min-h-[2.75rem] flex items-center cursor-pointer">
-                              {item.serviceName}
-                            </h3>
-                          </Link>
-                        </div>
 
-                        {/* Short Description */}
-                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-normal leading-relaxed line-clamp-2 min-h-[2.25rem]">
-                          {shortDescription}
-                        </p>
-
-                        {/* Service Highlights / Tags */}
-                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400">
-                          <span className={`px-2 py-0.5 rounded-lg border truncate max-w-full ${catInfo.badgeClass}`}>
-                            {catInfo.name}
-                          </span>
-                          {item.estimatedTime && (
-                            <span className="flex px-2 py-0.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 items-center gap-1">
-                              <Clock className="w-3 h-3 text-slate-400" />
-                              <span>{item.estimatedTime}</span>
-                            </span>
-                          )}
+                          <h3 className="text-xs sm:text-sm font-black text-slate-950 dark:text-white tracking-tight leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 min-h-[2rem] sm:min-h-[2.25rem] flex items-center">
+                            {item.serviceName}
+                          </h3>
                         </div>
                       </div>
 
-                      {/* Card Footer: Clean Price & View Details Action */}
-                      <div className="pt-3 sm:pt-3.5 mt-3 sm:mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
-                        {/* Price Display (Bottom-Left) */}
+                      {/* Bottom: Complete Service Price & Subtle Click Indicator */}
+                      <div className="pt-2 sm:pt-2.5 mt-2 sm:mt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5">
+                        {/* Always completely visible service price (never truncated or clipped) */}
                         <div className="min-w-0 flex-1">
                           {renderPriceBadge(item)}
                         </div>
 
-                        {/* Actions: Single Details Button (Bottom-Right) */}
-                        <div className="shrink-0">
-                          <Link
-                            to={serviceUrl}
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={`View full service details for ${item.serviceName}`}
-                            className="h-8 sm:h-9 px-3.5 sm:px-4 rounded-xl bg-slate-950 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 shadow-2xs hover:shadow cursor-pointer whitespace-nowrap"
-                          >
-                            <span>Details</span>
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </Link>
+                        {/* Click Action Indicator Icon */}
+                        <div 
+                          className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg sm:rounded-xl bg-slate-100 dark:bg-slate-800 group-hover:bg-slate-950 dark:group-hover:bg-indigo-600 text-slate-400 group-hover:text-white dark:text-slate-400 dark:group-hover:text-white flex items-center justify-center shrink-0 transition-all duration-200 shadow-2xs"
+                          aria-hidden="true"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                         </div>
                       </div>
-
                     </article>
                   );
                 })}
