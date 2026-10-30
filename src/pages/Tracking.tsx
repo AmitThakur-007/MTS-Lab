@@ -58,8 +58,8 @@ const statusConfig: Record<
   PENDING: {
     label: 'Pending Queue',
     color: 'bg-slate-500',
-    bgSoft: 'bg-slate-50 text-slate-900 border-slate-200',
-    textColor: 'text-slate-600',
+    bgSoft: 'bg-slate-50 dark:bg-slate-850 text-slate-900 dark:text-slate-100 border-slate-200 dark:border-slate-700',
+    textColor: 'text-slate-600 dark:text-slate-300',
     icon: Clock,
     progress: 10,
     desc: 'Your device is cataloged in the service queue awaiting laboratory intake and diagnosis.',
@@ -67,8 +67,8 @@ const statusConfig: Record<
   RECEIVED: {
     label: 'Device Received',
     color: 'bg-amber-500',
-    bgSoft: 'bg-amber-50 text-amber-900 border-amber-200',
-    textColor: 'text-amber-600',
+    bgSoft: 'bg-amber-50 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border-amber-200 dark:border-amber-800/70',
+    textColor: 'text-amber-600 dark:text-amber-400',
     icon: Inbox,
     progress: 16,
     desc: 'Your device has been safely cataloged and checked into MTS Lab inventory.',
@@ -76,8 +76,8 @@ const statusConfig: Record<
   DIAGNOSING: {
     label: 'Diagnosis In Progress',
     color: 'bg-blue-600',
-    bgSoft: 'bg-blue-50 text-blue-900 border-blue-200',
-    textColor: 'text-blue-600',
+    bgSoft: 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800/70',
+    textColor: 'text-blue-600 dark:text-blue-400',
     icon: Search,
     progress: 33,
     desc: 'Certified micro-engineers are inspecting device hardware, IC circuits, and display assemblies.',
@@ -85,8 +85,8 @@ const statusConfig: Record<
   IN_PROCESS: {
     label: 'Restoration In Progress',
     color: 'bg-indigo-600',
-    bgSoft: 'bg-indigo-50 text-indigo-900 border-indigo-200',
-    textColor: 'text-indigo-600',
+    bgSoft: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-900 dark:text-indigo-200 border-indigo-200 dark:border-indigo-800/70',
+    textColor: 'text-indigo-600 dark:text-indigo-400',
     icon: Wrench,
     progress: 50,
     desc: 'Active hardware repair, precision micro-soldering, and OEM component replacement in progress.',
@@ -94,8 +94,8 @@ const statusConfig: Record<
   IN_PROGRESS: {
     label: 'Restoration In Progress',
     color: 'bg-indigo-600',
-    bgSoft: 'bg-indigo-50 text-indigo-900 border-indigo-200',
-    textColor: 'text-indigo-600',
+    bgSoft: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-900 dark:text-indigo-200 border-indigo-200 dark:border-indigo-800/70',
+    textColor: 'text-indigo-600 dark:text-indigo-400',
     icon: Wrench,
     progress: 50,
     desc: 'Active hardware repair, precision micro-soldering, and OEM component replacement in progress.',
@@ -103,8 +103,8 @@ const statusConfig: Record<
   WAITING_FOR_PARTS: {
     label: 'Waiting For Parts',
     color: 'bg-purple-600',
-    bgSoft: 'bg-purple-50 text-purple-900 border-purple-200',
-    textColor: 'text-purple-600',
+    bgSoft: 'bg-purple-50 dark:bg-purple-950/60 text-purple-900 dark:text-purple-200 border-purple-200 dark:border-purple-800/70',
+    textColor: 'text-purple-600 dark:text-purple-400',
     icon: Package,
     progress: 55,
     desc: 'Sourcing genuine Grade-A replacement components from logistics inventory.',
@@ -112,8 +112,8 @@ const statusConfig: Record<
   TESTING: {
     label: 'QA Testing',
     color: 'bg-orange-500',
-    bgSoft: 'bg-orange-50 text-orange-900 border-orange-200',
-    textColor: 'text-orange-600',
+    bgSoft: 'bg-orange-50 dark:bg-orange-950/60 text-orange-900 dark:text-orange-200 border-orange-200 dark:border-orange-800/70',
+    textColor: 'text-orange-600 dark:text-orange-400',
     icon: ClipboardCheck,
     progress: 70,
     desc: 'Performing comprehensive 36-point diagnostic inspection and display touch calibration.',
@@ -121,8 +121,8 @@ const statusConfig: Record<
   REPAIRED: {
     label: 'Device Repaired',
     color: 'bg-teal-600',
-    bgSoft: 'bg-teal-50 text-teal-900 border-teal-200',
-    textColor: 'text-teal-600',
+    bgSoft: 'bg-teal-50 dark:bg-teal-950/60 text-teal-900 dark:text-teal-200 border-teal-200 dark:border-teal-800/70',
+    textColor: 'text-teal-600 dark:text-teal-400',
     icon: CheckCircle2,
     progress: 88,
     desc: 'Technical repair completed successfully and passed quality verification standards.',
@@ -130,8 +130,8 @@ const statusConfig: Record<
   READY_FOR_PICKUP: {
     label: 'Ready For Collection',
     color: 'bg-emerald-600',
-    bgSoft: 'bg-emerald-50 text-emerald-900 border-emerald-200',
-    textColor: 'text-emerald-600',
+    bgSoft: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800/70',
+    textColor: 'text-emerald-600 dark:text-emerald-400',
     icon: MapPin,
     progress: 90,
     desc: 'Restoration verified. Your device is sanitized and packaged ready for counter pickup or return courier dispatch.',
@@ -139,8 +139,8 @@ const statusConfig: Record<
   READY_FOR_DELIVERY: {
     label: 'Ready For Collection',
     color: 'bg-emerald-600',
-    bgSoft: 'bg-emerald-50 text-emerald-900 border-emerald-200',
-    textColor: 'text-emerald-600',
+    bgSoft: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800/70',
+    textColor: 'text-emerald-600 dark:text-emerald-400',
     icon: MapPin,
     progress: 90,
     desc: 'Restoration verified. Your device is packaged ready for counter pickup or courier handover.',
@@ -148,8 +148,8 @@ const statusConfig: Record<
   COURIER_DISPATCHED: {
     label: 'Return Courier Dispatched',
     color: 'bg-blue-700',
-    bgSoft: 'bg-blue-50 text-blue-900 border-blue-300 ring-2 ring-blue-500/20',
-    textColor: 'text-blue-700',
+    bgSoft: 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 border-blue-300 dark:border-blue-800/80 ring-2 ring-blue-500/20',
+    textColor: 'text-blue-700 dark:text-blue-400',
     icon: Truck,
     progress: 95,
     desc: 'Repaired device has been safely packed and dispatched via courier logistics back to your destination.',
@@ -157,8 +157,8 @@ const statusConfig: Record<
   DISPATCHED_VIA_COURIER: {
     label: 'Return Courier Dispatched',
     color: 'bg-blue-700',
-    bgSoft: 'bg-blue-50 text-blue-900 border-blue-300 ring-2 ring-blue-500/20',
-    textColor: 'text-blue-700',
+    bgSoft: 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 border-blue-300 dark:border-blue-800/80 ring-2 ring-blue-500/20',
+    textColor: 'text-blue-700 dark:text-blue-400',
     icon: Truck,
     progress: 95,
     desc: 'Repaired device has been safely packed and dispatched via courier logistics back to your destination.',
@@ -166,8 +166,8 @@ const statusConfig: Record<
   DELIVERED: {
     label: 'Delivered & Handed Over',
     color: 'bg-emerald-700',
-    bgSoft: 'bg-emerald-50 text-emerald-950 border-emerald-300',
-    textColor: 'text-emerald-700',
+    bgSoft: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800/80',
+    textColor: 'text-emerald-700 dark:text-emerald-400',
     icon: PackageCheck,
     progress: 100,
     desc: 'Device handed over to customer successfully.',
@@ -175,8 +175,8 @@ const statusConfig: Record<
   COMPLETED: {
     label: 'Delivered & Handed Over',
     color: 'bg-emerald-700',
-    bgSoft: 'bg-emerald-50 text-emerald-950 border-emerald-300',
-    textColor: 'text-emerald-700',
+    bgSoft: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800/80',
+    textColor: 'text-emerald-700 dark:text-emerald-400',
     icon: PackageCheck,
     progress: 100,
     desc: 'Device handed over to customer successfully.',
@@ -184,8 +184,8 @@ const statusConfig: Record<
   RE_PROBLEM: {
     label: 'Re-Check Inspection',
     color: 'bg-rose-600',
-    bgSoft: 'bg-rose-50 text-rose-900 border-rose-300 ring-2 ring-rose-500/20',
-    textColor: 'text-rose-600',
+    bgSoft: 'bg-rose-50 dark:bg-rose-950/60 text-rose-900 dark:text-rose-200 border-rose-300 dark:border-rose-800/80 ring-2 ring-rose-500/20',
+    textColor: 'text-rose-600 dark:text-rose-400',
     icon: AlertCircle,
     progress: 40,
     desc: 'Device received for priority post-delivery diagnostic inspection.',
@@ -193,8 +193,8 @@ const statusConfig: Record<
   REPROBLEM: {
     label: 'Re-Check Inspection',
     color: 'bg-rose-600',
-    bgSoft: 'bg-rose-50 text-rose-900 border-rose-300 ring-2 ring-rose-500/20',
-    textColor: 'text-rose-600',
+    bgSoft: 'bg-rose-50 dark:bg-rose-950/60 text-rose-900 dark:text-rose-200 border-rose-300 dark:border-rose-800/80 ring-2 ring-rose-500/20',
+    textColor: 'text-rose-600 dark:text-rose-400',
     icon: AlertCircle,
     progress: 40,
     desc: 'Device received for priority post-delivery diagnostic inspection.',
@@ -202,8 +202,8 @@ const statusConfig: Record<
   CANNOT_REPAIR: {
     label: 'Cannot Repair',
     color: 'bg-rose-600',
-    bgSoft: 'bg-rose-50 text-rose-900 border-rose-200',
-    textColor: 'text-rose-600',
+    bgSoft: 'bg-rose-50 dark:bg-rose-950/60 text-rose-900 dark:text-rose-200 border-rose-200 dark:border-rose-800/70',
+    textColor: 'text-rose-600 dark:text-rose-400',
     icon: AlertCircle,
     progress: 100,
     desc: 'Catastrophic circuit damage exceeds viable safe restoration standards.',
@@ -211,8 +211,8 @@ const statusConfig: Record<
   CANCELLED: {
     label: 'Service Cancelled',
     color: 'bg-slate-600',
-    bgSoft: 'bg-slate-50 text-slate-900 border-slate-200',
-    textColor: 'text-slate-600',
+    bgSoft: 'bg-slate-50 dark:bg-slate-850 text-slate-900 dark:text-slate-100 border-slate-200 dark:border-slate-700',
+    textColor: 'text-slate-600 dark:text-slate-300',
     icon: AlertTriangle,
     progress: 100,
     desc: 'Repair service ticket was closed or cancelled by customer request.',
@@ -734,27 +734,27 @@ export default function Tracking() {
 
                 {/* Pending Status Banner */}
                 {isPending && (
-                  <div className="bg-amber-50/90 border-2 border-amber-300 rounded-2xl p-5 sm:p-6 text-amber-950 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                  <div className="bg-amber-50/90 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-800/80 rounded-2xl p-5 sm:p-6 text-amber-950 dark:text-amber-100 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
                     <div className="flex items-start gap-3.5 sm:gap-4">
                       <div className="w-11 h-11 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-md shadow-amber-500/20">
                         <Clock className="w-6 h-6" />
                       </div>
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-base sm:text-lg font-black text-amber-950 tracking-tight">
+                          <h3 className="text-base sm:text-lg font-black text-amber-950 dark:text-amber-100 tracking-tight">
                             Your device is currently in Pending status.
                           </h3>
                           <Badge className="bg-amber-500 hover:bg-amber-500 text-white text-[10px] font-extrabold uppercase px-2 py-0.5">
                             Pending
                           </Badge>
                         </div>
-                        <p className="text-xs sm:text-sm text-amber-900 font-semibold leading-relaxed">
+                        <p className="text-xs sm:text-sm text-amber-900 dark:text-amber-200 font-semibold leading-relaxed">
                           For more information or assistance, please contact MTS Lab directly.
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto pt-3 lg:pt-0 border-t lg:border-t-0 border-amber-200/80">
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto pt-3 lg:pt-0 border-t lg:border-t-0 border-amber-200/80 dark:border-amber-800/60">
                       <a
                         href="tel:9869276668"
                         className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-bold transition-colors shadow-xs shrink-0 flex-1 sm:flex-initial"
@@ -764,7 +764,7 @@ export default function Tracking() {
                       </a>
                       <a
                         href="tel:015364307"
-                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-amber-100 text-amber-950 border border-amber-300 text-xs sm:text-sm font-bold transition-colors shadow-xs shrink-0 flex-1 sm:flex-initial"
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-950 dark:text-amber-100 border border-amber-300 dark:border-amber-700 text-xs sm:text-sm font-bold transition-colors shadow-xs shrink-0 flex-1 sm:flex-initial"
                       >
                         <Phone className="w-4 h-4" />
                         <span>Tel: 015364307</span>
@@ -775,26 +775,26 @@ export default function Tracking() {
 
                 {/* Delivered Completion Banner */}
                 {isDelivered && (
-                  <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 sm:p-6 text-emerald-950 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-200 dark:border-emerald-800/80 rounded-2xl p-5 sm:p-6 text-emerald-950 dark:text-emerald-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="flex items-start gap-3.5">
                       <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                         <CheckCircle2 className="w-6 h-6" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="text-base sm:text-lg font-black text-emerald-950">
+                          <h3 className="text-base sm:text-lg font-black text-emerald-950 dark:text-emerald-100">
                             Delivered & Handed Over
                           </h3>
                           <Badge className="bg-emerald-600 text-white text-[10px] font-extrabold uppercase px-2 py-0.5">
                             Completed
                           </Badge>
                         </div>
-                        <p className="text-xs sm:text-sm text-emerald-800 font-medium mt-1">
+                        <p className="text-xs sm:text-sm text-emerald-800 dark:text-emerald-200 font-medium mt-1">
                           This device was successfully delivered and handed over to the customer.
                         </p>
                         {(activeRepair.deliveredAt || activeRepair.updatedAt) && (
-                          <div className="flex items-center gap-1.5 text-xs text-emerald-900 font-bold mt-2">
-                            <Calendar className="w-3.5 h-3.5 text-emerald-700" />
+                          <div className="flex items-center gap-1.5 text-xs text-emerald-900 dark:text-emerald-300 font-bold mt-2">
+                            <Calendar className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
                             <span>Delivered on: {formatNepalDateOnly(activeRepair.deliveredAt || activeRepair.updatedAt)}</span>
                           </div>
                         )}
@@ -805,25 +805,25 @@ export default function Tracking() {
 
                 {/* Device Repaired — Ready for Pickup Banner */}
                 {isRepaired && !isDelivered && (
-                  <div className="bg-emerald-50/90 border-2 border-emerald-300 rounded-2xl p-5 sm:p-6 text-emerald-950 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="bg-emerald-50/90 dark:bg-emerald-950/40 border-2 border-emerald-300 dark:border-emerald-800/80 rounded-2xl p-5 sm:p-6 text-emerald-950 dark:text-emerald-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="flex items-start gap-3.5 sm:gap-4">
                       <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-md shadow-emerald-600/20">
                         <CheckCircle2 className="w-6 h-6" />
                       </div>
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-base sm:text-lg font-black text-emerald-950 tracking-tight">
+                          <h3 className="text-base sm:text-lg font-black text-emerald-950 dark:text-emerald-100 tracking-tight">
                             Your Device Is Repaired
                           </h3>
                           <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] font-extrabold uppercase px-2 py-0.5">
                             Ready for Pickup
                           </Badge>
                         </div>
-                        <p className="text-xs sm:text-sm text-emerald-900 font-semibold leading-relaxed">
+                        <p className="text-xs sm:text-sm text-emerald-900 dark:text-emerald-200 font-semibold leading-relaxed">
                           Your device has been successfully repaired and is ready for pickup. You can pick it up now.
                         </p>
                         {activeRepair.updatedAt && (
-                          <p className="text-[11px] text-emerald-800 font-medium pt-0.5">
+                          <p className="text-[11px] text-emerald-800 dark:text-emerald-300 font-medium pt-0.5">
                             Verified completed: {formatNepalDateOnly(activeRepair.updatedAt)}
                           </p>
                         )}

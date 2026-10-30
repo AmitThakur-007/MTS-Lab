@@ -39,7 +39,7 @@ const leadershipMessages = [
     shortRole: 'CEO',
     image: sabitaPhoto,
     alt: 'Sabita Thakur - Chief Executive Officer (CEO) of MTS Lab',
-    badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200/80',
+    badgeClass: 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200/80 dark:border-indigo-800',
     dotColor: 'bg-indigo-500',
     objectPosition: 'object-[center_18%]',
     paragraphs: [
@@ -55,7 +55,7 @@ const leadershipMessages = [
     shortRole: 'Founder',
     image: manishPhoto,
     alt: 'Manish Thakur - Founder of MTS Lab',
-    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200/80',
+    badgeClass: 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800',
     dotColor: 'bg-amber-500',
     objectPosition: 'object-[center_15%]',
     paragraphs: [
@@ -71,7 +71,7 @@ const leadershipMessages = [
     shortRole: 'Technical Head',
     image: amitPhoto,
     alt: 'Amit Thakur - Technical Head | Computer Engineer at MTS Lab',
-    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+    badgeClass: 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800',
     dotColor: 'bg-emerald-500',
     objectPosition: 'object-[center_15%]',
     paragraphs: [

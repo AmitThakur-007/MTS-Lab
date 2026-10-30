@@ -50,10 +50,6 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Dialog, 
-  DialogContent, 
-} from '@/components/ui/dialog';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { useAuthStore } from '@/store/authStore';
@@ -534,10 +530,6 @@ export default function Services() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Service Detail Dialog state
-  const [selectedService, setSelectedService] = useState<RepairPriceItem | null>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
 
   // Element refs for keyboard focus and smooth positioning
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -927,25 +919,6 @@ export default function Services() {
     setSearchParams(newParams, { replace: true });
   };
 
-  // Open Service Detail Dialog
-  const handleOpenDetail = (item: RepairPriceItem) => {
-    setSelectedService(item);
-    setIsDetailOpen(true);
-    setCopiedLink(false);
-  };
-
-  // Share or copy quote info
-  const handleShareService = (item: RepairPriceItem) => {
-    const fullDevice = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`;
-    const text = `MTS Lab Repair: ${item.serviceName} for ${fullDevice} (${item.price > 0 ? `NPR ${item.price.toLocaleString()}` : 'Price on Inspection'}) - Call: ${MTS_PHONE_DISPLAY} / Kathmandu Hub`;
-    
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-      setCopiedLink(true);
-      toast.success('Service quote copied to clipboard!');
-      setTimeout(() => setCopiedLink(false), 2500);
-    }
-  };
 
   // Smart Search & Scoring Algorithm + Category & Brand Filtering
   const filteredAndRankedPrices = useMemo(() => {
@@ -1271,11 +1244,11 @@ export default function Services() {
   const renderRatingStars = (rating?: number | null, ratingCount?: number | null) => {
     if (!rating || rating <= 0) return null;
     return (
-      <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-amber-500 bg-amber-50/90 border border-amber-200/70 px-1.5 py-0.5 rounded-md">
+      <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-amber-500 bg-amber-50/90 dark:bg-amber-950/60 border border-amber-200/70 dark:border-amber-800/80 px-1.5 py-0.5 rounded-md">
         <span>★</span>
-        <span className="text-slate-800 font-extrabold">{rating.toFixed(1)}</span>
+        <span className="text-slate-800 dark:text-amber-200 font-extrabold">{rating.toFixed(1)}</span>
         {ratingCount !== undefined && ratingCount !== null && ratingCount > 0 && (
-          <span className="text-slate-400 font-medium">({ratingCount})</span>
+          <span className="text-slate-500 dark:text-amber-300/70 font-medium">({ratingCount})</span>
         )}
       </div>
     );
@@ -1291,8 +1264,10 @@ export default function Services() {
     if (item.priceType === 'ON_INSPECTION') {
       return (
         <div className="flex flex-col min-w-0">
-          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 leading-none mb-0.5">Estimate</span>
-          <span className="text-[11px] sm:text-xs md:text-sm font-extrabold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/80 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg inline-block w-fit whitespace-nowrap">
+          <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-none mb-1">
+            Estimate
+          </span>
+          <span className="text-xs sm:text-sm md:text-base font-extrabold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/80 px-2 sm:px-2.5 py-0.5 rounded-lg inline-block w-fit whitespace-nowrap">
             On Inspection
           </span>
         </div>
@@ -1302,8 +1277,10 @@ export default function Services() {
     if (item.priceType === 'CONTACT_FOR_PRICE' || (!item.price && item.priceType !== 'FIXED')) {
       return (
         <div className="flex flex-col min-w-0">
-          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 leading-none mb-0.5">Quotation</span>
-          <span className="text-[11px] sm:text-xs md:text-sm font-extrabold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg inline-block w-fit whitespace-nowrap">
+          <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-none mb-1">
+            Quotation
+          </span>
+          <span className="text-xs sm:text-sm md:text-base font-extrabold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 sm:px-2.5 py-0.5 rounded-lg inline-block w-fit whitespace-nowrap">
             Contact
           </span>
         </div>
@@ -1313,17 +1290,19 @@ export default function Services() {
     if (item.priceType === 'STARTING_FROM') {
       return (
         <div className="flex flex-col min-w-0">
-          <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 leading-none mb-0.5">From</span>
-          <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
-            <span className="text-xs sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight whitespace-nowrap">
+          <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-none mb-1">
+            Starting From
+          </span>
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <span className="text-sm sm:text-base md:text-lg font-black text-slate-950 dark:text-white tracking-tight whitespace-nowrap">
               NPR {item.price.toLocaleString()}
             </span>
             {hasDiscount && (
               <>
-                <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 dark:text-slate-500 line-through whitespace-nowrap">
+                <span className="text-xs sm:text-sm font-semibold text-slate-400 dark:text-slate-500 line-through whitespace-nowrap">
                   NPR {item.originalPrice!.toLocaleString()}
                 </span>
-                <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 px-1 py-0.2 rounded whitespace-nowrap">
+                <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 px-1.5 py-0.5 rounded whitespace-nowrap">
                   -{discountPercent}%
                 </span>
               </>
@@ -1336,17 +1315,19 @@ export default function Services() {
     // Default FIXED
     return (
       <div className="flex flex-col min-w-0">
-        <span className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 leading-none mb-0.5">Price</span>
-        <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
-          <span className="text-xs sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight whitespace-nowrap">
+        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-none mb-1">
+          Price
+        </span>
+        <div className="flex items-baseline gap-1.5 flex-wrap">
+          <span className="text-sm sm:text-base md:text-lg font-black text-slate-950 dark:text-white tracking-tight whitespace-nowrap">
             NPR {item.price.toLocaleString()}
           </span>
           {hasDiscount && (
             <>
-              <span className="text-[9px] sm:text-[11px] font-semibold text-slate-400 dark:text-slate-500 line-through whitespace-nowrap">
+              <span className="text-xs sm:text-sm font-semibold text-slate-400 dark:text-slate-500 line-through whitespace-nowrap">
                 NPR {item.originalPrice!.toLocaleString()}
               </span>
-              <span className="text-[8px] sm:text-[9px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 px-1 py-0.2 rounded whitespace-nowrap">
+              <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 px-1.5 py-0.5 rounded whitespace-nowrap">
                 -{discountPercent}%
               </span>
             </>
@@ -2139,8 +2120,8 @@ export default function Services() {
           {!loading && !error && paginatedItems.length > 0 && (
             <div className="space-y-6 sm:space-y-8">
               
-              {/* Responsive Service Grid: 2 cols on mobile smartphone, 2 cols on sm, 3 cols on md, 4 cols on lg/laptop/desktop */}
-              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 md:gap-5 lg:gap-6">
+              {/* Responsive Service Grid: 1 col on mobile smartphone, 2 cols on tablet/iPad (md), 3 cols on laptop (lg), 4 cols on large desktop (xl) */}
+              <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 md:gap-6">
                 {paginatedItems.map((item) => {
                   const catInfo = getCategoryInfo(item.category, item.serviceName);
                   const CategoryIcon = catInfo.icon;
@@ -2156,25 +2137,25 @@ export default function Services() {
                     <article
                       key={item.id}
                       onClick={() => navigate(serviceUrl)}
-                      className={`group bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-slate-200/90 dark:border-slate-800 hover:border-slate-400/80 dark:hover:border-slate-700 p-2.5 sm:p-4 md:p-5 h-full flex flex-col justify-between hover:shadow-xl dark:hover:shadow-none hover:-translate-y-1 ${catInfo.cardHover} transition-all duration-200 cursor-pointer relative overflow-hidden`}
+                      className={`group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 hover:border-slate-400/80 dark:hover:border-slate-700 p-4 sm:p-5 h-full flex flex-col justify-between hover:shadow-xl dark:hover:shadow-none hover:-translate-y-1 ${catInfo.cardHover} transition-all duration-200 cursor-pointer relative`}
                     >
                       {/* Top Header: Icon + Category Badge + Brand Pill */}
-                      <div className="space-y-1.5 sm:space-y-2.5">
-                        <div className="flex items-start justify-between gap-1 sm:gap-2">
+                      <div className="space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
                           {/* Category Icon in Curved Square Badge */}
                           <Link
                             to={serviceUrl}
                             onClick={(e) => e.stopPropagation()}
                             aria-label={`View full details for ${item.serviceName}`}
-                            className={`w-8 h-8 sm:w-11 sm:h-11 rounded-lg sm:rounded-2xl ${catInfo.bgClass} flex items-center justify-center border border-slate-100/90 dark:border-slate-800 group-hover:scale-105 transition-transform shrink-0 shadow-2xs cursor-pointer`}
+                            className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl ${catInfo.bgClass} flex items-center justify-center border border-slate-100/90 dark:border-slate-800 group-hover:scale-105 transition-transform shrink-0 shadow-2xs cursor-pointer`}
                           >
-                            <CategoryIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${catInfo.iconClass}`} />
+                            <CategoryIcon className={`w-5 h-5 ${catInfo.iconClass}`} />
                           </Link>
 
                           {/* Brand Pill & Rating Stars */}
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             {renderRatingStars(item.rating, item.ratingCount)}
-                            <span className="text-[9px] sm:text-xs font-black uppercase text-slate-600 dark:text-slate-300 bg-slate-100/90 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg tracking-wider whitespace-nowrap">
+                            <span className="text-[10px] sm:text-xs font-black uppercase text-slate-700 dark:text-slate-300 bg-slate-100/90 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-2 py-0.5 sm:py-1 rounded-lg tracking-wider whitespace-nowrap">
                               {item.brand}
                             </span>
                           </div>
@@ -2200,25 +2181,25 @@ export default function Services() {
                             onClick={(e) => e.stopPropagation()}
                             className="block focus-visible:outline-none focus-visible:underline"
                           >
-                            <h3 className="text-xs sm:text-sm md:text-base font-black text-slate-950 dark:text-white tracking-tight leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 min-h-[1.75rem] sm:min-h-[2.5rem] flex items-center cursor-pointer">
+                            <h3 className="text-sm sm:text-base md:text-lg font-black text-slate-950 dark:text-white tracking-tight leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 min-h-[2.5rem] sm:min-h-[2.75rem] flex items-center cursor-pointer">
                               {item.serviceName}
                             </h3>
                           </Link>
                         </div>
 
                         {/* Short Description */}
-                        <p className="text-[10px] sm:text-xs text-slate-600 dark:text-slate-400 font-normal sm:font-medium leading-relaxed line-clamp-1 sm:line-clamp-2 min-h-[0.875rem] sm:min-h-[2rem]">
+                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-normal leading-relaxed line-clamp-2 min-h-[2.25rem]">
                           {shortDescription}
                         </p>
 
                         {/* Service Highlights / Tags */}
-                        <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pt-0.5 text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                          <span className={`px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg border truncate max-w-full ${catInfo.badgeClass}`}>
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400">
+                          <span className={`px-2 py-0.5 rounded-lg border truncate max-w-full ${catInfo.badgeClass}`}>
                             {catInfo.name}
                           </span>
                           {item.estimatedTime && (
-                            <span className="hidden sm:flex px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 items-center gap-0.5 sm:gap-1">
-                              <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-400" />
+                            <span className="flex px-2 py-0.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 items-center gap-1">
+                              <Clock className="w-3 h-3 text-slate-400" />
                               <span>{item.estimatedTime}</span>
                             </span>
                           )}
@@ -2226,7 +2207,7 @@ export default function Services() {
                       </div>
 
                       {/* Card Footer: Clean Price & View Details Action */}
-                      <div className="pt-2 sm:pt-2.5 mt-2 sm:mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5 sm:gap-2">
+                      <div className="pt-3 sm:pt-3.5 mt-3 sm:mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
                         {/* Price Display (Bottom-Left) */}
                         <div className="min-w-0 flex-1">
                           {renderPriceBadge(item)}
@@ -2238,10 +2219,10 @@ export default function Services() {
                             to={serviceUrl}
                             onClick={(e) => e.stopPropagation()}
                             aria-label={`View full service details for ${item.serviceName}`}
-                            className="h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg sm:rounded-xl bg-slate-950 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 shadow-2xs cursor-pointer whitespace-nowrap"
+                            className="h-8 sm:h-9 px-3.5 sm:px-4 rounded-xl bg-slate-950 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 shadow-2xs hover:shadow cursor-pointer whitespace-nowrap"
                           >
                             <span>Details</span>
-                            <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                            <ChevronRight className="w-3.5 h-3.5" />
                           </Link>
                         </div>
                       </div>
@@ -2333,274 +2314,7 @@ export default function Services() {
 
         </section>
 
-        {/* ========================================================= */}
-        {/* 9. WIDESCREEN LAPTOP & MOBILE OPTIMIZED DETAIL DIALOG     */}
-        {/* ========================================================= */}
-        <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-          <DialogContent 
-            showCloseButton={false}
-            className="sm:max-w-3xl md:max-w-4xl lg:max-w-5xl w-[95vw] p-0 overflow-hidden border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-2xl bg-white dark:bg-slate-900 focus:outline-none"
-          >
-            {selectedService && (() => {
-              const catInfo = getCategoryInfo(selectedService.category, selectedService.serviceName);
-              const CategoryIcon = catInfo.icon;
-              const fullDeviceName = `${selectedService.brand} ${selectedService.model}${selectedService.variant ? ` ${selectedService.variant}` : ''}`;
-              const serviceSlug = serviceIdToSlug.get(selectedService.id);
-              const whatsappMessage = `Hello MTS Lab, I would like to inquire about ${selectedService.serviceName} for my ${fullDeviceName}. Price: ${selectedService.price > 0 ? `NPR ${selectedService.price.toLocaleString()}` : 'Price on Inspection'}.`;
-              const whatsappUrl = `https://wa.me/${MTS_WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappMessage)}`;
 
-              return (
-                <div className="flex flex-col md:flex-row max-h-[88vh] overflow-hidden">
-                  
-                  {/* Left Column (Widescreen Brand & Identity Hero) */}
-                  <div className="md:w-[42%] lg:w-[38%] bg-slate-950 text-white p-6 sm:p-7 flex flex-col justify-between relative overflow-hidden shrink-0">
-                    
-                    {/* Ambient Glow */}
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
-                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
-
-                    <div className="relative z-10 space-y-5">
-                      
-                      {/* Top Badges */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black uppercase tracking-wider bg-white/15 text-white border border-white/20 px-2.5 py-1 rounded-lg">
-                            {selectedService.brand}
-                          </span>
-                          <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/30 px-2.5 py-1 rounded-lg">
-                            {catInfo.name}
-                          </span>
-                        </div>
-                        {selectedService.rating && selectedService.rating > 0 && (
-                          <div className="flex items-center gap-1 text-xs font-bold text-amber-300 bg-white/15 border border-white/20 px-2 py-0.5 rounded-lg">
-                            <span>★</span>
-                            <span>{selectedService.rating.toFixed(1)}</span>
-                            {selectedService.ratingCount ? (
-                              <span className="text-white/60 text-[10px]">({selectedService.ratingCount})</span>
-                            ) : null}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Large Category Icon Box & Service Title */}
-                      <div className="space-y-3">
-                        <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center shadow-inner">
-                          <CategoryIcon className="w-8 h-8 text-amber-400" />
-                        </div>
-
-                        <div>
-                          <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
-                            MTS Certified Repair
-                          </p>
-                          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-snug mt-0.5">
-                            {selectedService.serviceName}
-                          </h2>
-                        </div>
-                      </div>
-
-                      {/* Compatible Hardware Device */}
-                      <div className="p-3.5 rounded-2xl bg-white/10 border border-white/15 space-y-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                          {selectedService.deviceType === 'Tablet' || selectedService.deviceType === 'iPad' ? (
-                            <Tablet className="w-3.5 h-3.5 text-indigo-400" />
-                          ) : (
-                            <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
-                          )}
-                          Target Hardware Model ({selectedService.deviceType || 'Smartphone'})
-                        </span>
-                        <p className="text-sm font-black text-white">
-                          {fullDeviceName}
-                        </p>
-                      </div>
-
-                      {/* Price & Turnaround Box */}
-                      <div className="p-4 rounded-2xl bg-gradient-to-br from-white/15 to-white/5 border border-white/20 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                            {selectedService.priceType === 'STARTING_FROM' ? 'Starting From' : 'Laboratory Cost'}
-                          </span>
-                          {selectedService.estimatedTime && (
-                            <span className="text-[11px] font-bold text-amber-300 bg-amber-400/20 border border-amber-400/30 px-2 py-0.5 rounded-md flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {selectedService.estimatedTime}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-baseline gap-2 flex-wrap">
-                          <div className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                            {selectedService.price > 0 
-                              ? `NPR ${selectedService.price.toLocaleString()}`
-                              : selectedService.priceType === 'ON_INSPECTION'
-                                ? 'Price on Inspection'
-                                : 'Contact for Price'
-                            }
-                          </div>
-                          {selectedService.originalPrice && selectedService.originalPrice > selectedService.price && selectedService.price > 0 && (
-                            <div className="text-sm text-slate-400 line-through font-semibold">
-                              NPR {selectedService.originalPrice.toLocaleString()}
-                            </div>
-                          )}
-                        </div>
-
-                        {selectedService.originalPrice && selectedService.originalPrice > selectedService.price && selectedService.price > 0 && (
-                          <div className="text-[11px] font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-400/30 px-2 py-0.5 rounded-md w-fit">
-                            Save NPR {(selectedService.originalPrice - selectedService.price).toLocaleString()} ({Math.round(((selectedService.originalPrice - selectedService.price) / selectedService.originalPrice) * 100)}% off)
-                          </div>
-                        )}
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                  {/* Right Column (Specifications, Procedures & High-Conversion Action Buttons) */}
-                  <div className="md:w-[58%] lg:w-[62%] p-6 sm:p-7 flex flex-col justify-between bg-white dark:bg-slate-900 overflow-y-auto max-h-[88vh] space-y-5">
-                    
-                    {/* Header Row with Single Sleek Close Button */}
-                    <div className="flex items-start justify-between gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
-                      <div className="space-y-0.5">
-                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                          Hardware Diagnosis & Specifications
-                        </span>
-                        <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                          {selectedService.serviceName}
-                        </h3>
-                      </div>
-
-                      {/* Single, Sleek Close Button */}
-                      <button
-                        type="button"
-                        onClick={() => setIsDetailOpen(false)}
-                        className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white flex items-center justify-center transition-all cursor-pointer shrink-0"
-                        title="Close details"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Main Content Details */}
-                    <div className="space-y-4 flex-1">
-                      
-                      {/* Problem Scope */}
-                      <div className="space-y-1.5">
-                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                          <Wrench className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Identified Hardware Symptom & Fault</span>
-                        </span>
-                        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 leading-relaxed">
-                          {selectedService.problem || 'Diagnostic inspection and hardware component restoration.'}
-                        </div>
-                      </div>
-
-                      {/* Detailed Laboratory Notes / Procedure */}
-                      {selectedService.notes && (
-                        <div className="space-y-1.5">
-                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                            <Wrench className="w-3.5 h-3.5 text-amber-500" />
-                            <span>Laboratory Procedure & Technical Details</span>
-                          </span>
-                          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">
-                            {selectedService.notes}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Lab Standard Guarantees */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                        <div className="p-3 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 rounded-2xl space-y-0.5">
-                          <div className="flex items-center gap-1.5 text-xs font-black text-emerald-900 dark:text-emerald-300">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                            <span>Laboratory Verified</span>
-                          </div>
-                          <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium leading-normal">
-                            Multi-point diagnostic inspection and calibrated touch response.
-                          </p>
-                        </div>
-
-                        <div className="p-3 bg-sky-50/80 dark:bg-sky-950/40 border border-sky-200/80 dark:border-sky-800/60 rounded-2xl space-y-0.5">
-                          <div className="flex items-center gap-1.5 text-xs font-black text-sky-900 dark:text-sky-300">
-                            <MapPin className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
-                            <span>Kathmandu Service Hub</span>
-                          </div>
-                          <p className="text-[11px] text-sky-700 dark:text-sky-400 font-medium leading-normal">
-                            Pakosadak, New Road (Opposite People's Plaza back gate).
-                          </p>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    {/* Bottom Action Bar */}
-                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                      
-                      {/* Copy Info Action & Full Page Link */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleShareService(selectedService)}
-                          className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-xl h-10 px-3 shrink-0"
-                        >
-                          {copiedLink ? (
-                            <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                              <Check className="w-4 h-4" />
-                              <span>Copied to Clipboard!</span>
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1.5">
-                              <Share2 className="w-4 h-4" />
-                              <span>Copy Quotation</span>
-                            </span>
-                          )}
-                        </Button>
-
-                        {serviceSlug && (
-                          <Link
-                            to={`/services/${serviceSlug}`}
-                            className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors py-2 px-3 rounded-xl hover:bg-blue-50/80 dark:hover:bg-blue-950/40 shrink-0"
-                          >
-                            <span>View full page for this service</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </Link>
-                        )}
-                      </div>
-
-                      {/* Contact Actions: Direct Call & WhatsApp */}
-                      <div className="flex items-center gap-2.5">
-                        
-                        {/* Direct Call Button */}
-                        <a
-                          href={`tel:${MTS_PHONE}`}
-                          className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-2xl bg-slate-950 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer flex-1 sm:flex-none"
-                        >
-                          <PhoneCall className="w-4 h-4 text-emerald-400" />
-                          <span>Call Hotline ({MTS_PHONE_DISPLAY})</span>
-                        </a>
-
-                        {/* WhatsApp Inquiry Button */}
-                        <a
-                          href={whatsappUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer flex-1 sm:flex-none"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                          <span>WhatsApp</span>
-                        </a>
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                </div>
-              );
-            })()}
-          </DialogContent>
-        </Dialog>
 
         {/* ========================================================= */}
         {/* 10. DIRECT CONTACT & BOOKING ASSURANCE BANNER             */}

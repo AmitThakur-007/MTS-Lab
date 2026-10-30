@@ -54,6 +54,17 @@ export default function Navbar() {
     setIsMobileMenuOpen(false);
   }, [location]);
 
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isMobileMenuOpen]);
+
   // Support closing mobile menu via Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -269,19 +280,23 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Mobile Menu Hamburger Button */}
+            {/* Mobile Menu Hamburger Button (Min 44x44px touch target) */}
             <button 
+              id="mobile-nav-toggle-button"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className={cn(
-                "lg:hidden w-10 h-10 rounded-full cursor-pointer relative z-[70] shrink-0 transition-all duration-500 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
+                "lg:hidden min-w-[44px] min-h-[44px] w-11 h-11 rounded-full cursor-pointer relative z-[70] shrink-0 transition-all duration-300 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-xs",
                 isHeroOverlay
-                  ? "bg-[#0b101b]/80 text-white border border-blue-500/25 backdrop-blur-xl"
-                  : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white"
+                  ? "bg-[#0b101b]/90 text-white border border-blue-500/30 backdrop-blur-xl hover:bg-slate-800"
+                  : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700"
               )}
               style={isHeroOverlay && activeHeroTheme ? {
-                borderColor: activeHeroTheme.pillBorder
+                borderColor: activeHeroTheme.pillBorder,
+                boxShadow: `0 2px 10px -2px ${activeHeroTheme.accentGlow}`
               } : undefined}
-              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="mobile-nav-drawer"
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -301,18 +316,52 @@ export default function Navbar() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[55] lg:hidden cursor-pointer"
+              className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[55] lg:hidden cursor-pointer"
               aria-hidden="true"
             />
 
             <motion.div 
+              id="mobile-nav-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Site Navigation"
               initial={{ opacity: 0, x: '100%' }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 right-0 w-full max-w-sm bg-white/95 dark:bg-[#0a0f1d]/95 backdrop-blur-2xl z-[60] shadow-2xl lg:hidden flex flex-col p-6 sm:p-8 pt-20 sm:pt-24 overflow-y-auto overscroll-contain border-l border-slate-200/50 dark:border-slate-800"
+              transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+              className="fixed inset-y-0 right-0 w-full max-w-sm sm:max-w-md bg-white dark:bg-[#0a0f1d] backdrop-blur-2xl z-[60] shadow-2xl lg:hidden flex flex-col justify-between overflow-y-auto overscroll-contain border-l border-slate-200/80 dark:border-slate-800 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
             >
-              <div className="flex flex-col gap-1">
+              {/* Drawer Top Header with Brand and Close Button */}
+              <div className="flex items-center justify-between p-5 sm:p-6 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/50 shrink-0">
+                <Link
+                  to="/"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg py-0.5"
+                  aria-label="MTS LAB Home"
+                >
+                  <img
+                    src="/images/mts-lab-logo.png"
+                    alt="MTS LAB"
+                    className="w-8 h-8 object-contain shrink-0 drop-shadow-xs"
+                  />
+                  <div className="flex items-baseline tracking-tight select-none">
+                    <span className="font-black text-xl text-slate-950 dark:text-white">MTS</span>
+                    <span className="font-normal text-xl text-slate-500 dark:text-slate-400 ml-1.5">LAB</span>
+                  </div>
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  aria-label="Close navigation menu"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Navigation Links */}
+              <div className="flex flex-col gap-1.5 p-5 sm:p-6 flex-1">
                 {navLinks.map((link) => {
                   const isActive = location.pathname === link.path;
                   return (
@@ -321,26 +370,26 @@ export default function Navbar() {
                       to={link.path}
                       onClick={() => setIsMobileMenuOpen(false)}
                       className={cn(
-                        "flex items-center justify-between p-3.5 rounded-2xl transition-all group min-h-[48px]",
+                        "flex items-center justify-between p-3.5 rounded-2xl transition-all group min-h-[48px] border",
                         isActive 
-                          ? "bg-slate-900 dark:bg-blue-600 text-white font-bold shadow-sm" 
-                          : "hover:bg-slate-100/80 dark:hover:bg-slate-800/80 text-slate-900 dark:text-slate-100"
+                          ? "bg-slate-950 dark:bg-blue-600 text-white font-bold border-slate-950 dark:border-blue-600 shadow-md" 
+                          : "border-transparent hover:bg-slate-100 dark:hover:bg-slate-800/90 text-slate-800 dark:text-slate-100 hover:text-slate-950 dark:hover:text-white"
                       )}
                     >
                       <div className="flex items-center gap-3.5">
                         <div className={cn(
                           "p-2.5 rounded-xl transition-colors",
                           isActive 
-                            ? "bg-white/15 text-white" 
-                            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 group-hover:bg-slate-900 dark:group-hover:bg-slate-700 group-hover:text-white"
+                            ? "bg-white/20 text-white" 
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 group-hover:bg-slate-950 dark:group-hover:bg-slate-700 group-hover:text-white"
                         )}>
                           <link.icon className="h-4.5 w-4.5" />
                         </div>
-                        <span className="font-bold text-base">{link.name}</span>
+                        <span className="font-bold text-base tracking-tight">{link.name}</span>
                       </div>
                       <ChevronRight className={cn(
                         "h-4 w-4 transition-transform group-hover:translate-x-0.5",
-                        isActive ? "text-white/70" : "text-slate-400"
+                        isActive ? "text-white/80" : "text-slate-400 dark:text-slate-500"
                       )} />
                     </Link>
                   );
@@ -348,9 +397,9 @@ export default function Navbar() {
               </div>
 
               {/* Theme Preference Switcher & Bottom Actions */}
-              <div className="mt-6 pt-6 border-t border-slate-200/70 dark:border-slate-800 space-y-4">
+              <div className="p-5 sm:p-6 border-t border-slate-200/80 dark:border-slate-800 space-y-4 shrink-0 bg-slate-50/50 dark:bg-slate-900/30">
                 <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                     Theme Mode
                   </span>
                   <ThemeToggle variant="segmented" size="sm" />
@@ -361,7 +410,7 @@ export default function Navbar() {
                       setIsMobileMenuOpen(false);
                       navigate('/login');
                     }}
-                    className="w-full h-12 rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-base shadow-sm cursor-pointer"
+                    className="w-full min-h-[48px] h-12 rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-850 dark:hover:bg-white text-white dark:text-slate-950 font-black text-base shadow-md cursor-pointer transition-all active:scale-[0.99]"
                   >
                     Login
                   </Button>
@@ -371,14 +420,14 @@ export default function Navbar() {
                       setIsMobileMenuOpen(false);
                       navigate('/dashboard');
                     }}
-                    className="w-full h-12 rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950 font-bold text-base shadow-sm cursor-pointer"
+                    className="w-full min-h-[48px] h-12 rounded-xl bg-slate-950 dark:bg-slate-100 hover:bg-slate-850 dark:hover:bg-white text-white dark:text-slate-950 font-black text-base shadow-md cursor-pointer transition-all active:scale-[0.99]"
                   >
                     Go to Dashboard
                   </Button>
                 )}
 
                 {/* Connect With MTS Lab */}
-                <div className="space-y-3 pt-1">
+                <div className="space-y-2.5 pt-1">
                   <div className="flex items-center justify-center gap-2">
                     <span className="h-px w-8 bg-slate-200 dark:bg-slate-800" />
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">
@@ -396,7 +445,7 @@ export default function Navbar() {
                         rel="noopener noreferrer"
                         aria-label={social.label}
                         className={cn(
-                          "w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all duration-200 shadow-2xs group active:scale-95 cursor-pointer",
+                          "min-w-[44px] min-h-[44px] w-11 h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all duration-200 shadow-2xs group active:scale-95 cursor-pointer",
                           social.hoverColor
                         )}
                       >
@@ -408,7 +457,7 @@ export default function Navbar() {
                   </div>
                 </div>
 
-                <p className="text-center text-slate-400 dark:text-slate-500 text-xs font-medium pt-1">
+                <p className="text-center text-slate-500 dark:text-slate-400 text-xs font-medium pt-1">
                   MTS Lab Repair Management System
                 </p>
               </div>

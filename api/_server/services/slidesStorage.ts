@@ -13,13 +13,18 @@ export interface HomeSlideRecord {
   mobileImageUrl?: string | null;
   category?: string | null;
   badgeIcon?: string | null;
+  badgeText?: string | null;
   features?: string[] | string | null;
   buttonText: string;
   buttonLink: string;
   buttonSecondaryText?: string | null;
   buttonSecondaryLink?: string | null;
+  secondaryButtonText?: string | null;
+  secondaryButtonLink?: string | null;
   focalPoint?: string | null;
+  textAlign?: 'left' | 'center' | 'right' | null;
   overlayIntensity?: 'heavy' | 'medium' | 'subtle' | null;
+  overlayStrength?: 'light' | 'medium' | 'dark' | 'strong' | null;
   displayOrder: number;
   status: 'ACTIVE' | 'INACTIVE' | 'DRAFT' | 'SCHEDULED' | string;
   publishStartAt?: string | null;
@@ -639,3 +644,36 @@ export async function deleteSlide(id: string): Promise<void> {
   // 4. Multi-device realtime broadcast
   await broadcastServerChange('HomeSlide', 'DELETE', id);
 }
+
+/**
+ * Duplicate an existing slide
+ */
+export async function duplicateSlide(id: string, userId?: string): Promise<HomeSlideRecord> {
+  await initializeSlidesStorage();
+  const source = await getSlideById(id);
+  if (!source) {
+    throw new Error(`Slide with ID '${id}' not found`);
+  }
+
+  const allSlides = Array.from(slidesCache.values());
+  const maxOrder = allSlides.length > 0 ? Math.max(...allSlides.map(s => s.displayOrder)) : 0;
+
+  return createSlide({
+    title: `${source.title} (Copy)`,
+    description: source.description,
+    imageUrl: source.imageUrl,
+    mobileImageUrl: source.mobileImageUrl,
+    category: source.category,
+    badgeText: source.badgeText,
+    buttonText: source.buttonText,
+    buttonLink: source.buttonLink,
+    secondaryButtonText: source.secondaryButtonText,
+    secondaryButtonLink: source.secondaryButtonLink,
+    features: source.features ? [...source.features] : null,
+    textAlign: source.textAlign,
+    overlayStrength: source.overlayStrength,
+    displayOrder: maxOrder + 1,
+    status: 'ACTIVE',
+  }, userId);
+}
+

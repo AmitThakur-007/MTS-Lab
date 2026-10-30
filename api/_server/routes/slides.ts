@@ -17,6 +17,7 @@ import {
   toggleSlideStatus,
   reorderSlides,
   deleteSlide,
+  duplicateSlide,
 } from '../services/slidesStorage';
 
 const router = Router();
@@ -157,6 +158,7 @@ router.post(
           const mime = matches[1];
           if (mime.includes('png')) ext = 'png';
           else if (mime.includes('webp')) ext = 'webp';
+          else if (mime.includes('avif')) ext = 'avif';
           else if (mime.includes('gif')) ext = 'gif';
           buffer = Buffer.from(matches[2], 'base64');
         } else {
@@ -194,7 +196,23 @@ router.post(
 // 4. POST /api/admin/slides (Create slide)
 router.post('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, imageUrl, buttonText, buttonLink, displayOrder = 1, status = 'ACTIVE' } = req.body;
+    const {
+      title,
+      description,
+      imageUrl,
+      mobileImageUrl,
+      category,
+      badgeText,
+      buttonText,
+      buttonLink,
+      secondaryButtonText,
+      secondaryButtonLink,
+      features,
+      textAlign,
+      overlayStrength,
+      displayOrder = 1,
+      status = 'ACTIVE'
+    } = req.body;
 
     if (!title || !String(title).trim()) {
       return res.status(400).json({ error: 'Slide title is required.' });
@@ -209,8 +227,16 @@ router.post('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: 
         title,
         description,
         imageUrl,
+        mobileImageUrl,
+        category,
+        badgeText,
         buttonText,
         buttonLink,
+        secondaryButtonText,
+        secondaryButtonLink,
+        features,
+        textAlign,
+        overlayStrength,
         displayOrder,
         status,
       },
@@ -296,6 +322,21 @@ router.patch('/:id/status', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
     console.error(`[SET STATUS EXCEPTION: ${req.params.id}]`, err);
     const statusCode = err?.message?.includes('not found') ? 404 : 500;
     return res.status(statusCode).json({ error: err?.message || 'Failed to set slide status.' });
+  }
+});
+
+// 8.5 POST /api/admin/slides/:id/duplicate (Duplicate slide)
+router.post('/:id/duplicate', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'Valid slide ID is required.' });
+    }
+    const duplicated = await duplicateSlide(id, req.user?.id);
+    return res.status(201).json(duplicated);
+  } catch (err: any) {
+    console.error(`[DUPLICATE SLIDE EXCEPTION: ${req.params.id}]`, err);
+    return res.status(500).json({ error: err?.message || 'Failed to duplicate slide.' });
   }
 });
 
