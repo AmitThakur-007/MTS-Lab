@@ -18,6 +18,8 @@ interface AuthState {
   user: User | null;
   token: string | null;
   refreshToken: string | null;
+  hasHydrated: boolean;
+  setHasHydrated: (hasHydrated: boolean) => void;
   setAuth: (user: User, token: string, refreshToken?: string | null) => void;
   updateUser: (user: Partial<User>) => void;
   setToken: (token: string | null) => void;
@@ -31,20 +33,35 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       refreshToken: null,
-      setAuth: (user, token, refreshToken) => set((state) => ({ 
-        user, 
-        token, 
-        refreshToken: refreshToken !== undefined ? refreshToken : state.refreshToken 
-      })),
+      hasHydrated: false,
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
+      setAuth: (user, token, refreshToken) => {
+        try {
+          localStorage.setItem('mts_last_activity', String(Date.now()));
+        } catch {}
+        set((state) => ({ 
+          user, 
+          token, 
+          refreshToken: refreshToken !== undefined ? refreshToken : state.refreshToken 
+        }));
+      },
       updateUser: (partialUser) => set((state) => ({ 
         user: state.user ? { ...state.user, ...partialUser } : null 
       })),
       setToken: (token) => set({ token }),
       setRefreshToken: (refreshToken) => set({ refreshToken }),
-      logout: () => set({ user: null, token: null, refreshToken: null }),
+      logout: () => {
+        try {
+          localStorage.removeItem('mts_last_activity');
+        } catch {}
+        set({ user: null, token: null, refreshToken: null });
+      },
     }),
     {
       name: 'mts-auth-storage',
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

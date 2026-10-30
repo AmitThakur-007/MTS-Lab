@@ -25,10 +25,25 @@ import NotFound from './pages/NotFound';
 import { RouteSeo } from '@/components/Seo';
 import { ThemeProvider } from '@/context/ThemeContext';
 
-function ProtectedRoute({ children, roles }: { children: React.ReactNode, roles?: string[] }) {
+import BrandLogo from '@/components/BrandLogo';
 
-  const { user, token } = useAuthStore();
+function ProtectedRoute({ children, roles }: { children: React.ReactNode, roles?: string[] }) {
+  const { user, token, hasHydrated } = useAuthStore();
   
+  if (!hasHydrated) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-100">
+        <div className="flex flex-col items-center gap-4">
+          <BrandLogo variant="icon" size="xl" imgClassName="w-16 h-16 animate-pulse" />
+          <div className="flex items-center gap-2.5 text-slate-400 text-sm font-medium">
+            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+            <span>Restoring secure session...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!token || !user) {
     return <Navigate to="/login" replace />;
   }

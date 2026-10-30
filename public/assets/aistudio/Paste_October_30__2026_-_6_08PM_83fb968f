@@ -1,0 +1,795 @@
+# MASTER IMPLEMENTATION PROMPT
+## MTS LAB — PROFESSIONAL LOGIN & FORGOT PASSWORD REDESIGN + PERMANENT AUTHENTICATION SESSION FIX
+
+### ROLE
+
+Act as a Principal Full-Stack Engineer, Senior UI/UX Designer, Authentication and Session Management Specialist, Application Security Engineer, and Responsive Web Design Expert.
+
+You are responsible for upgrading the authentication experience of MTS Lab's smartphone repair management system.
+
+**Do not merely redesign the interface or hide the symptoms. Identify the actual root cause of the automatic logout problem, fix it at the architectural level, and verify the complete authentication flow.**
+
+Implement the changes directly in the existing repository.
+
+---
+
+# 1. PRIMARY OBJECTIVES
+
+Complete the following tasks:
+
+1. Completely redesign the login portal with a premium, professional, modern interface.
+2. Completely redesign the forgot-password portal.
+3. Redesign the password-reset and recovery flow if these pages exist.
+4. Ensure the forgot-password page never reveals whether an email address is registered.
+5. Investigate why users are automatically logged out after successfully logging into their dashboards.
+6. Fix the underlying authentication/session issue.
+7. Verify that users remain authenticated when navigating between dashboard pages.
+8. Verify that refreshing a page does not unexpectedly log the user out.
+9. Ensure that authentication works consistently across all implemented user roles.
+10. Make the entire authentication experience responsive on laptops, desktops, iPhones, Android smartphones, iPads, tablets, and supported TV browsers.
+
+Do not change the application's intended authentication policy or weaken its security to make login appear successful.
+
+---
+
+# 2. PHASE ONE — INVESTIGATE THE EXISTING AUTHENTICATION ARCHITECTURE
+
+Before changing code, audit the actual repository.
+
+Inspect the existing implementation of:
+
+- Login page and login form.
+- Forgot-password page.
+- Password-reset page.
+- Signup and account-approval pages.
+- Authentication context or state management.
+- Authenticated route guards.
+- Dashboard route initialization.
+- Login and logout API endpoints.
+- Refresh-token endpoints, if implemented.
+- Session restoration logic.
+- Backend authentication middleware.
+- Role-based authorization middleware.
+- API request utilities and interceptors.
+- Frontend environment configuration.
+- Cookie and token handling.
+- Database user and session models.
+- Supabase Auth integration, if present.
+- Any custom JWT or refresh-token implementation.
+- Vercel deployment configuration, if relevant.
+- Existing CORS, cookie, and security settings.
+- Current test infrastructure.
+
+Search the entire repository for relevant code, including:
+
+`login`, `logout`, `refresh`, `refreshToken`, `accessToken`, `session`, `auth`, `401`, `403`, `credentials`, `withCredentials`, `Set-Cookie`, `HttpOnly`, `SameSite`, `Secure`, `AuthProvider`, `ProtectedRoute`, and `forgot-password`.
+
+Determine the actual framework, authentication provider, session storage strategy, and API architecture before implementing a fix.
+
+**Do not assume that the application uses Supabase Auth, custom JWTs, or a particular cookie strategy until the repository confirms it.**
+
+---
+
+# 3. PHASE TWO — FIND THE ROOT CAUSE OF AUTOMATIC LOGOUT
+
+## The reported problem
+
+A user successfully enters their credentials and reaches the dashboard, but the application automatically logs them out or redirects them to the login page. The user must log in again.
+
+This may happen immediately, after a short delay, after refreshing the page, or when moving between dashboard pages.
+
+Investigate the real cause instead of applying a superficial workaround.
+
+## A. Investigate session initialization
+
+Check whether:
+
+- The login API returns a valid response.
+- The frontend stores or receives the expected authentication state.
+- The dashboard loads before authentication initialization finishes.
+- The initial authentication state is incorrectly treated as unauthenticated.
+- An asynchronous session check overwrites the successful login state.
+- A React effect triggers an unintended logout.
+- The authentication provider is initialized more than once.
+- Development Strict Mode exposes a lifecycle bug.
+- Protected routes redirect before session restoration completes.
+- The application incorrectly clears the authenticated user after a transient error.
+
+Implement a clear authentication initialization state, such as:
+
+- `INITIALIZING`
+- `AUTHENTICATED`
+- `UNAUTHENTICATED`
+
+Adapt these states to the existing architecture.
+
+While session restoration is in progress, do not redirect the user prematurely.
+
+## B. Investigate access-token expiration
+
+If the application uses access tokens:
+
+- Check the token expiration time.
+- Compare the issued token's expiration with the backend validation rules.
+- Verify that frontend and backend clocks and time calculations are handled correctly.
+- Check whether tokens are issued with an unexpectedly short lifetime.
+- Verify that expired tokens are refreshed only through the intended secure mechanism.
+- Ensure that token refresh failures are handled correctly.
+
+Do not simply increase token expiration indefinitely.
+
+## C. Investigate refresh-token behavior
+
+If refresh tokens are implemented, inspect:
+
+- Whether refresh tokens are issued correctly.
+- Whether refresh requests reach the correct endpoint.
+- Whether cookies or authorization headers are included as required.
+- Whether token rotation is implemented consistently.
+- Whether concurrent API requests trigger competing refresh operations.
+- Whether multiple requests attempt to rotate the same token simultaneously.
+- Whether a successful refresh updates the session correctly.
+- Whether stale refresh responses overwrite newer authentication state.
+- Whether failed refresh requests trigger an unintended logout.
+- Whether refresh-token reuse detection or revocation is misconfigured.
+
+Implement single-flight refresh behavior where appropriate so simultaneous requests do not unnecessarily invalidate one another.
+
+Do not introduce refresh-token rotation if the current authentication provider already manages refresh securely.
+
+## D. Investigate cookies and cross-origin requests
+
+If the application uses cookies, verify:
+
+- The correct cookie is issued.
+- The browser accepts the cookie.
+- The cookie is sent on subsequent requests.
+- `HttpOnly` is used for sensitive session cookies where appropriate.
+- `Secure` is correctly configured for HTTPS.
+- `SameSite` matches the actual frontend/backend deployment topology.
+- Cookie domain and path are correct.
+- Cross-origin requests include credentials when required.
+- Backend CORS configuration explicitly allows the intended origin and credentials.
+- Production and local-development settings do not conflict.
+- Cookie settings are compatible with the actual hosting environment.
+
+Do not blindly set `SameSite=None` or broaden cookie domains without justification.
+
+## E. Investigate API and HTTP errors
+
+Inspect actual API responses and network behavior.
+
+Check whether:
+
+- The login endpoint sometimes returns HTML instead of JSON.
+- The frontend calls an incorrect API URL.
+- API routes return unexpected `401` or `403` responses.
+- A frontend interceptor logs the user out on every HTTP error.
+- A temporary server error is incorrectly treated as session expiration.
+- An API base URL points to the wrong environment.
+- A backend deployment or rewrite causes authentication requests to hit the wrong route.
+- A failed background request triggers a global logout.
+- A successful login is followed by an unsuccessful session-restoration request.
+
+Distinguish authentication failures from authorization failures, network errors, validation errors, rate limits, and server errors.
+
+**Do not log users out simply because any API request fails.**
+
+## F. Investigate role-based authorization
+
+MTS Lab has multiple user roles, potentially including:
+
+- SUPER_ADMIN.
+- ADMIN.
+- MANAGER.
+- RECEPTIONIST.
+- LEAD_TECHNICIAN.
+- TECHNICIAN.
+- TECHNICAL_ASSISTANT.
+- CUSTOMER.
+
+Inspect the actual roles implemented in the application.
+
+Check whether:
+
+- The backend returns role names that differ from frontend expectations.
+- Role values are compared incorrectly.
+- The dashboard route guard rejects valid roles.
+- Role data is missing during initial session restoration.
+- User-profile requests fail and cause an unnecessary logout.
+- Role-based navigation redirects users incorrectly.
+- An unauthorized page is incorrectly treated as an expired session.
+
+Keep authentication separate from authorization.
+
+A valid authenticated user who lacks permission to access a particular page should receive the application's appropriate forbidden-access experience rather than automatically losing their session.
+
+## G. Identify and document the actual root cause
+
+Before declaring the issue fixed, determine:
+
+1. The exact code path causing the logout.
+2. The relevant API request or browser event.
+3. The failure mechanism.
+4. The affected authentication component or middleware.
+5. The minimal secure fix.
+6. How the fix prevents recurrence.
+
+Use actual code inspection, test results, and available logs.
+
+Do not invent a root cause or claim that a suspected issue has been verified without evidence.
+
+---
+
+# 4. PHASE THREE — IMPLEMENT THE AUTHENTICATION FIX
+
+After identifying the root cause, implement the appropriate correction.
+
+The following are required behavioral outcomes, not permission to introduce an incompatible authentication architecture.
+
+## A. Reliable login flow
+
+After successful authentication:
+
+1. Validate the login response.
+2. Establish the application's authenticated session.
+3. Store or receive session credentials using the existing secure architecture.
+4. Load the authenticated user's profile and role.
+5. Complete authentication initialization.
+6. Navigate to the correct authorized dashboard.
+7. Preserve authentication during normal dashboard navigation.
+
+Do not navigate to the dashboard before required session state is established.
+
+## B. Reliable session restoration
+
+When the user refreshes a protected page:
+
+1. Initialize the authentication provider.
+2. Restore the existing valid session.
+3. Verify the current user.
+4. Load required role information.
+5. Render the authorized page when initialization succeeds.
+6. Redirect to login only when the session is genuinely invalid or absent.
+
+Avoid flickering between the dashboard and login page.
+
+## C. Reliable refresh behavior
+
+Where token refresh is necessary:
+
+- Refresh credentials using the established secure mechanism.
+- Avoid concurrent refresh races.
+- Update authentication state consistently.
+- Retry an eligible failed request only when appropriate.
+- Avoid infinite retry loops.
+- Avoid clearing valid session state after temporary network errors.
+- Log out only when the authentication provider confirms that the session is invalid, revoked, or unrecoverable.
+
+Do not retry non-idempotent requests blindly.
+
+## D. Correct logout behavior
+
+Logout should happen when:
+
+- The user explicitly chooses to log out.
+- The session is genuinely expired and cannot be renewed.
+- The account is revoked or disabled and the backend confirms the relevant policy.
+- Another legitimate security rule requires the session to end.
+
+Do not silently log out a user because of a temporary API failure or a profile request that can safely be retried.
+
+## E. Multi-tab and multi-device consistency
+
+Inspect existing session synchronization behavior.
+
+If appropriate to the existing authentication architecture:
+
+- Synchronize explicit logout across browser tabs.
+- Ensure stale tabs do not overwrite newer session state.
+- Handle session revocation correctly.
+- Avoid unnecessary logout caused by concurrent refresh operations.
+- Preserve the application's intended device and session policies.
+
+Do not weaken any existing security policy concerning approved devices or concurrent sessions.
+
+---
+
+# 5. PHASE FOUR — COMPLETELY REDESIGN THE LOGIN PORTAL
+
+Create a premium, professional, modern login experience for MTS Lab.
+
+The visual identity should reflect a trusted smartphone repair business and professional repair-management platform.
+
+## A. Design direction
+
+Use a polished technology-oriented aesthetic consistent with the existing MTS Lab branding.
+
+Preferred visual direction:
+
+- Premium dark charcoal or carefully balanced light surfaces.
+- Black, grey, white, and restrained electric-cyan accents where appropriate.
+- Clean typography.
+- Professional spacing.
+- Subtle borders and shadows.
+- Well-designed input fields.
+- Clear visual hierarchy.
+- Minimal, purposeful animation.
+- Accessible contrast.
+
+Inspect the existing brand assets and use the actual MTS Lab logo if available.
+
+Do not generate a replacement logo or introduce unrelated branding.
+
+Avoid:
+- Excessive gradients.
+- Overloaded layouts.
+- Unnecessary animations.
+- Oversized empty spaces.
+- Generic templates that do not fit MTS Lab.
+- Tiny input fields.
+- Excessively rounded controls.
+- Distracting background effects.
+
+## B. Login layout
+
+Design a balanced responsive login interface.
+
+Depending on screen size, use a single-column layout or a split-screen layout with a subtle brand panel.
+
+The page should include:
+
+- MTS Lab logo.
+- Clear heading: `Welcome Back`.
+- Supporting text such as `Sign in to your MTS Lab account`.
+- Email or the existing supported username field.
+- Password field.
+- Password visibility toggle.
+- Remember-me option only if supported by the existing authentication policy.
+- Forgot-password link.
+- Primary Sign In button.
+- Loading state.
+- Accessible validation messages.
+- Clear authentication error messages.
+- Appropriate account approval or account-disabled messaging when applicable.
+- Existing signup link if registration is supported.
+
+Preserve the current authentication requirements and role-based access rules.
+
+Do not add unnecessary social login options or change the login identifier without a technical reason.
+
+## C. Login interaction requirements
+
+- Support keyboard navigation.
+- Associate labels with their input fields.
+- Support password managers and appropriate browser autofill.
+- Provide a visible focus state.
+- Disable repeated submissions while the request is processing.
+- Preserve the user's email input after recoverable failures.
+- Never display passwords in error messages.
+- Avoid duplicate login requests.
+- Provide accessible loading and success/error feedback.
+- Use appropriate autocomplete attributes.
+- Respect reduced-motion preferences.
+
+Do not reveal whether an account exists through unnecessarily specific authentication errors.
+
+---
+
+# 6. PHASE FIVE — REDESIGN THE FORGOT-PASSWORD PORTAL
+
+Create a visually consistent recovery page that matches the redesigned login experience.
+
+## A. Page design
+
+Include:
+
+- MTS Lab logo.
+- Clear heading: `Forgot Password?`
+- Concise instructions explaining that the user can request a password-reset email.
+- Email input.
+- Primary button: `Send Reset Link`.
+- Loading state.
+- Accessible validation feedback.
+- A `Back to Login` link.
+- A confirmation state after submission.
+
+Use the same design system, typography, spacing, responsive behavior, and interaction quality as the login portal.
+
+Avoid exposing unnecessary account information.
+
+## B. CRITICAL: NEVER REVEAL WHETHER AN EMAIL EXISTS
+
+The forgot-password page must not disclose whether an email address is registered in MTS Lab.
+
+For every syntactically valid email submitted, show the same generic confirmation message, regardless of whether the account:
+
+- Exists.
+- Does not exist.
+- Is pending approval.
+- Is inactive.
+- Is disabled.
+- Cannot receive a reset email under the application's account policy.
+
+Use generic wording such as:
+
+**"If an account exists for this email address, password-reset instructions will be sent shortly. Please check your inbox and spam folder."**
+
+This message must not change based on the account's actual existence or status.
+
+Do not display messages such as:
+
+- "Email not found."
+- "This account does not exist."
+- "No user registered with this email."
+- "Your account has been disabled" on the public forgot-password response.
+- "Reset email sent successfully" only when the email exists.
+- "User found" or "User not found."
+
+The generic response must be returned consistently for syntactically valid requests, including cases where the backend decides not to send an email.
+
+Invalid email syntax may receive a generic format-validation message before the recovery request is submitted.
+
+## C. Backend enumeration protection
+
+Inspect the existing forgot-password API and make the same generic response behavior apply on the server.
+
+Do not implement this only in the frontend.
+
+Requirements:
+
+- Use the existing authentication provider's secure password-recovery mechanism where available.
+- Avoid returning different HTTP response bodies based on account existence.
+- Avoid returning account-specific information in error messages.
+- Avoid exposing internal user IDs, roles, or account status.
+- Apply appropriate rate limiting.
+- Avoid email flooding and automated abuse.
+- Avoid logging passwords, reset tokens, or sensitive recovery data.
+- Do not leak account existence through obvious response differences.
+
+Where feasible, reduce timing differences that could reveal account existence.
+
+Do not promise perfect timing equality if the underlying provider cannot guarantee it, but implement reasonable protections.
+
+If the email provider or recovery service fails, log the operational error securely while keeping the public response generic where appropriate.
+
+Do not silently ignore all failures or falsely report that an email was sent.
+
+## D. Reset-token security
+
+Inspect the existing reset flow.
+
+Where custom reset-token handling exists, ensure that tokens are:
+
+- Cryptographically secure.
+- Short-lived.
+- Single-use.
+- Bound to the intended recovery operation.
+- Invalidated after successful use.
+- Stored securely, preferably as hashes when the architecture supports it.
+
+Use the authentication provider's established recovery mechanism if it already provides these protections.
+
+Never expose reset tokens in application logs, analytics, or error messages.
+
+---
+
+# 7. PHASE SIX — REDESIGN THE PASSWORD RESET AND RECOVERY FLOW
+
+If the application includes a reset-password page, update it to match the redesigned authentication portal.
+
+The reset page should include:
+
+- MTS Lab logo.
+- Clear heading such as `Create a New Password`.
+- New-password input.
+- Confirm-password input.
+- Password visibility controls.
+- Clear password requirements.
+- Validation feedback.
+- Loading and submission states.
+- A successful-reset confirmation.
+- A safe path back to login.
+
+Requirements:
+
+- Validate password confirmation.
+- Follow the existing password policy.
+- Validate the reset token or recovery session.
+- Reject expired, invalid, or already-used recovery tokens.
+- Prevent password changes without valid recovery authorization.
+- Avoid exposing sensitive token information.
+- Handle expired links gracefully.
+- Preserve account security and existing authorization behavior.
+
+If the application does not currently support a reset page, inspect the provider and routing architecture before implementing the necessary flow.
+
+---
+
+# 8. PHASE SEVEN — RESPONSIVE DESIGN FOR ALL REQUESTED DEVICES
+
+Implement responsive layouts rather than creating separate applications for each device.
+
+Test the login, forgot-password, and reset-password pages across the following screen sizes.
+
+## A. Laptops and desktops
+
+Examples:
+- 1280 × 720.
+- 1366 × 768.
+- 1440 × 900.
+- 1920 × 1080.
+
+Requirements:
+- Balanced layout.
+- Proper form width.
+- No excessive whitespace.
+- Appropriate logo sizing.
+- Consistent alignment.
+
+## B. iPhones
+
+Test narrow viewport widths, including approximately:
+- 320 CSS pixels.
+- 375 CSS pixels.
+- 390 CSS pixels.
+- 430 CSS pixels.
+
+Requirements:
+- No horizontal scrolling.
+- Inputs fit the viewport.
+- Buttons are easy to tap.
+- Keyboard appearance does not hide critical controls.
+- The layout works in portrait and landscape orientations.
+- Respect safe-area insets where appropriate.
+
+## C. Android smartphones
+
+Requirements:
+- Responsive form layout.
+- Appropriate input sizing.
+- Usable password controls.
+- Compatible browser autofill.
+- No overlapping elements.
+
+## D. iPads and tablets
+
+Test approximately:
+- 768 CSS pixels.
+- 820 CSS pixels.
+- 1024 CSS pixels.
+
+Requirements:
+- Appropriate tablet layout.
+- Balanced content width.
+- No oversized form or branding panel.
+- Comfortable touch targets.
+
+## E. TV browsers and large displays
+
+Support browser-equipped smart TVs and large-screen browsers through responsive layout rules.
+
+Requirements:
+- Readable text and controls.
+- A form width suitable for viewing from a distance.
+- Visible keyboard focus.
+- Navigation that does not depend exclusively on hover.
+- No excessive scaling or stretching.
+- Keyboard accessibility where supported by the browser.
+
+Do not claim compatibility with every TV operating system without testing it.
+
+---
+
+# 9. ACCESSIBILITY AND PERFORMANCE
+
+Follow applicable accessibility best practices.
+
+Requirements:
+
+- Semantic HTML.
+- Proper labels and accessible descriptions.
+- Visible keyboard focus.
+- Appropriate input types.
+- Accessible error announcements.
+- Sufficient color contrast.
+- Touch-friendly controls.
+- Reduced-motion support.
+- Appropriate autocomplete attributes.
+- No password or reset-token exposure.
+- No layout shifts caused by image loading.
+- Efficient frontend rendering.
+
+Do not add large animation libraries or dependencies unless necessary.
+
+---
+
+# 10. TEST THE COMPLETE AUTHENTICATION FLOW
+
+Use the project's actual test framework and authentication architecture.
+
+## A. Login tests
+
+Verify:
+- Valid credentials establish a session.
+- Invalid credentials produce a safe error.
+- Repeated submissions are controlled.
+- The correct dashboard is selected for the authenticated user's role.
+- Unauthorized routes remain protected.
+- Login errors do not expose sensitive information.
+
+## B. Session persistence tests
+
+Verify:
+- Successful login does not immediately log the user out.
+- Refreshing the dashboard preserves a valid session.
+- Navigating between dashboard routes preserves authentication.
+- Initial session restoration does not trigger premature redirects.
+- Transient network errors do not automatically destroy valid sessions.
+- Expired sessions are handled correctly.
+- Refresh-token behavior is correct if applicable.
+- Concurrent API requests do not cause refresh races.
+- Explicit logout works correctly.
+- Role authorization remains intact.
+
+Test across all implemented user roles, including Super Admin, Admin, Manager, Receptionist, Lead Technician, Technician, Technical Assistant, Customer, and any other actual roles.
+
+## C. Forgot-password tests
+
+Verify:
+- Validly formatted email requests return the same generic public response.
+- Registered and unregistered email addresses cannot be distinguished through the response body.
+- Pending, inactive, or disabled account states do not leak through the public response.
+- Invalid email syntax is handled appropriately.
+- Rate limiting works.
+- Sensitive recovery information is not exposed.
+
+## D. Password-reset tests
+
+Verify:
+- Valid reset links work.
+- Expired links are rejected.
+- Invalid links are rejected.
+- Reused tokens are rejected.
+- Password confirmation is validated.
+- Successful password changes allow the intended login flow.
+- Reset tokens are not exposed in logs.
+
+## E. Responsive and visual tests
+
+Where supported by the existing environment, verify:
+- Login page.
+- Forgot-password page.
+- Reset-password page.
+- Mobile layouts.
+- Tablet layouts.
+- Desktop layouts.
+- Large-screen layouts.
+
+Use automated browser tests, screenshots, or visual regression checks if available.
+
+Do not claim that physical iPhones, iPads, or TVs were tested when only simulated viewport sizes were checked.
+
+---
+
+# 11. LOGGING AND DIAGNOSTICS
+
+Add or improve safe diagnostic logging where necessary to identify future authentication failures.
+
+Record useful information such as:
+- Authentication stage.
+- Endpoint and operation category.
+- Error category.
+- Request correlation ID.
+- Token-refresh outcome without logging credentials.
+- Session-restoration failure reason.
+
+Never log:
+- Passwords.
+- Raw access tokens.
+- Raw refresh tokens.
+- Password-reset tokens.
+- Session cookies.
+- Full sensitive authorization headers.
+
+Avoid excessive logging of personal information.
+
+Do not leave verbose production debugging enabled unnecessarily.
+
+---
+
+# 12. STRICT CHANGE RULES
+
+- Do not commit changes.
+- Do not push to GitHub.
+- Do not deploy to production.
+- Do not change production passwords or user records.
+- Do not disable authentication to make the dashboard accessible.
+- Do not remove role-based authorization.
+- Do not store sensitive tokens in insecure storage merely to avoid logout problems.
+- Do not weaken cookie or session security.
+- Do not reveal account existence on the forgot-password page.
+- Do not fabricate test results.
+- Do not replace the actual authentication architecture without a justified technical reason.
+- Do not modify unrelated application features.
+
+Preserve unrelated user changes and avoid destructive Git operations.
+
+---
+
+# 13. REQUIRED VERIFICATION COMMANDS
+
+Inspect `package.json` and run the actual available project commands, including:
+
+- `npm test`
+- `npm run build`
+- TypeScript checks.
+- Linting.
+- Authentication integration tests.
+- Relevant browser or end-to-end tests.
+
+If a command does not exist, state that clearly.
+
+Fix implementation errors discovered during verification.
+
+Do not delete tests or weaken assertions to obtain a passing result.
+
+---
+
+# 14. FINAL ACCEPTANCE CRITERIA
+
+The task is complete only when:
+
+1. The login page has a professional, responsive redesign.
+2. The forgot-password page has a matching professional redesign.
+3. The reset-password flow is updated where applicable.
+4. Forgot-password responses do not reveal whether an email exists.
+5. The actual cause of automatic dashboard logout is identified and documented.
+6. The underlying cause is fixed rather than hidden.
+7. Successful login establishes the expected authenticated state.
+8. Refreshing a protected dashboard does not unexpectedly log out a valid user.
+9. Dashboard navigation does not cause accidental logout.
+10. Authentication and authorization remain distinct.
+11. Token refresh and cookie behavior are correct for the actual architecture.
+12. All implemented roles continue to work according to their permissions.
+13. The interface adapts to iPhones, Android smartphones, laptops, desktops, iPads, tablets, and supported TV browsers.
+14. Relevant tests and build checks pass, or remaining failures are explicitly documented.
+15. No commit, push, or deployment occurs.
+
+---
+
+# 15. REQUIRED FINAL REPORT
+
+After implementation, provide:
+
+### A. Authentication root cause
+Explain the exact reason for the automatic logout, with the relevant code path or test evidence.
+
+### B. Fix implemented
+List the changes that prevent the issue from recurring.
+
+### C. Files changed
+List modified and added files with their purposes.
+
+### D. UI/UX redesign
+Describe the login, forgot-password, and password-reset improvements.
+
+### E. Password recovery privacy
+Explain how account-enumeration protection works in both frontend and backend responses.
+
+### F. Session verification
+Report the results of login, page refresh, dashboard navigation, session restoration, token refresh where applicable, and logout tests.
+
+### G. Responsive verification
+Report which viewport sizes and browser environments were actually tested.
+
+### H. Test and build results
+Provide the actual test, lint, TypeScript, build, and integration-test outcomes.
+
+### I. Remaining issues
+Document any unresolved defects, hosting constraints, or environment limitations.
+
+### J. Git and deployment status
+Confirm that no commit, push, or deployment was performed.
+
+**Begin by auditing the real repository. Identify the authentication root cause, implement the UI redesign and secure session fix, test the complete recovery flow, and report verified results. Do not stop after producing a plan.**

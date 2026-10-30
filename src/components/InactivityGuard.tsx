@@ -129,7 +129,10 @@ export default function InactivityGuard({ children }: InactivityGuardProps) {
     warningShownRef.current = false;
     loggedOutRef.current = false;
     const now = Date.now();
-    if (!localStorage.getItem(STORAGE_KEY)) {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const storedTs = stored ? parseInt(stored, 10) : 0;
+    // If no timestamp, invalid, or stale (> INACTIVITY_TIMEOUT_MS), reset to now since session is active
+    if (!stored || isNaN(storedTs) || (now - storedTs >= INACTIVITY_TIMEOUT_MS)) {
       setLastActivity(now);
     }
     lastThrottleRef.current = now;

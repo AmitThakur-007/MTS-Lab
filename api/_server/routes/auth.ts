@@ -646,15 +646,34 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   return res.json({ user: req.user });
 });
 
+// Helper to mask email address uniformly without disclosing user details
+function maskEmailAddress(email: string): string {
+  const parts = email.split('@');
+  if (parts.length !== 2) return email;
+  const [local, domain] = parts;
+  if (local.length <= 2) {
+    return `${local[0] || '*'}***@${domain}`;
+  }
+  return `${local[0]}***${local[local.length - 1]}@${domain}`;
+}
+
+const UNIFORM_FORGOT_PASSWORD_MESSAGE =
+  'If an account exists for this email address, password-reset instructions will be sent shortly. Please check your inbox and spam folder.';
+
 // 7. POST /api/auth/forgot-password
 router.post('/forgot-password', async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required.' });
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Please enter your email address.' });
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+
     const { data: users } = await supabaseAdmin
       .from('User')
       .select('*')
@@ -662,8 +681,14 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       .is('deletedAt', null)
       .limit(1);
 
-    if (!users || users.length === 0) {
-      return res.json({ success: true, message: 'If an account exists, a reset code has been sent.' });
+    // If user does not exist or account is disabled/rejected, return uniform response without disclosing status
+    if (!users || users.length === 0 || users[0].accountStatus === 'REJECTED' || users[0].accountStatus === 'DISABLED' || users[0].isActive === false) {
+      return res.json({
+        success: true,
+        message: UNIFORM_FORGOT_PASSWORD_MESSAGE,
+        resetTicket: uuidv4(),
+        emailMasked: maskEmailAddress(normalizedEmail),
+      });
     }
 
     const user = users[0];
@@ -717,8 +742,9 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      message: 'Password reset code sent to your email.',
-      resetId: otpId,
+      message: UNIFORM_FORGOT_PASSWORD_MESSAGE,
+      resetTicket: otpId,
+      emailMasked: maskEmailAddress(user.email),
     });
   } catch (err: any) {
     console.error('[FORGOT PASSWORD ERROR]', err);
