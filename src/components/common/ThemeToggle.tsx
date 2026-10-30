@@ -152,11 +152,11 @@ export default function ThemeToggle({
         aria-haspopup="true"
         aria-expanded={isOpen}
         className={cn(
-          "rounded-full inline-flex items-center justify-center transition-all duration-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2",
+          "rounded-full inline-flex items-center justify-center transition-all duration-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2",
           buttonSizeClasses,
           isHeroOverlay
-            ? "bg-[#0b101b]/80 hover:bg-slate-800 text-white border border-blue-500/25 backdrop-blur-xl shadow-xs"
-            : "text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
+            ? "bg-[#0b101b]/80 hover:bg-slate-800 text-white border border-blue-500/30 backdrop-blur-xl shadow-xs"
+            : "text-slate-700 dark:text-slate-100 hover:text-slate-950 dark:hover:text-white bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 dark:hover:border-slate-500 shadow-2xs"
         )}
       >
         {userPreference === 'system' ? (

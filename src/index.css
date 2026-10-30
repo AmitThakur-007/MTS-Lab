@@ -563,3 +563,135 @@
   display: block;
   object-fit: contain;
 }
+
+/* ==========================================================================
+   Desktop Navigation & Action Button Theme Styles (WCAG 2.2 AA Compliant)
+   ========================================================================== */
+
+/* Desktop Login Button */
+.desktop-login-button {
+  color: #FFFFFF;
+  background-color: #0f172a;
+  border: 1px solid #0f172a;
+  transition: all 0.25s ease-in-out;
+}
+.desktop-login-button:hover {
+  color: #FFFFFF;
+  background-color: #1e293b;
+  border-color: #1e293b;
+}
+
+/* Light mode on hero overlay */
+.desktop-login-button-hero-light {
+  color: #0f172a;
+  background-color: #FFFFFF;
+  border: 1px solid #FFFFFF;
+  transition: all 0.25s ease-in-out;
+}
+.desktop-login-button-hero-light:hover {
+  color: #0f172a;
+  background-color: #f1f5f9;
+  border-color: #f1f5f9;
+}
+
+/* Dark mode desktop login button */
+.dark .desktop-login-button,
+[data-theme="dark"] .desktop-login-button {
+  color: #FFFFFF !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.70) !important;
+  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.45);
+}
+.dark .desktop-login-button:hover,
+[data-theme="dark"] .desktop-login-button:hover {
+  color: #FFFFFF !important;
+  background-color: rgba(255, 255, 255, 0.18) !important;
+  border-color: #FFFFFF !important;
+}
+.dark .desktop-login-button:active,
+[data-theme="dark"] .desktop-login-button:active {
+  background-color: rgba(255, 255, 255, 0.25) !important;
+  transform: scale(0.96);
+}
+.dark .desktop-login-button:focus-visible,
+[data-theme="dark"] .desktop-login-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #020617, 0 0 0 4px #22D3EE !important;
+}
+
+/* Home Page Primary CTA: Check Repair Price Button */
+.check-repair-price-button {
+  color: #09090b;
+  background-color: #FFFFFF;
+  border: 1.5px solid #FFFFFF;
+  font-weight: 800;
+  transition: all 0.25s ease-in-out;
+}
+.check-repair-price-button:hover {
+  color: #09090b;
+  background-color: #f1f5f9;
+  border-color: #f1f5f9;
+}
+.dark .check-repair-price-button,
+[data-theme="dark"] .check-repair-price-button {
+  color: #071318 !important;
+  background-color: #22D3EE !important;
+  border: 1.5px solid #22D3EE !important;
+}
+.dark .check-repair-price-button:hover,
+[data-theme="dark"] .check-repair-price-button:hover {
+  color: #071318 !important;
+  background-color: #67E8F9 !important;
+  border-color: #67E8F9 !important;
+  box-shadow: 0 10px 30px -4px rgba(34, 211, 238, 0.45) !important;
+}
+.dark .check-repair-price-button:active,
+[data-theme="dark"] .check-repair-price-button:active {
+  background-color: #06B6D4 !important;
+  border-color: #06B6D4 !important;
+  transform: scale(0.97);
+}
+.dark .check-repair-price-button:focus-visible,
+[data-theme="dark"] .check-repair-price-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #020617, 0 0 0 4px #FFFFFF !important;
+}
+
+/* Home Page Secondary CTA: Track Repair Status Button */
+.track-repair-status-button {
+  color: #FFFFFF;
+  background-color: rgba(15, 23, 42, 0.75);
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  font-weight: 700;
+  backdrop-filter: blur(12px);
+  transition: all 0.25s ease-in-out;
+}
+.track-repair-status-button:hover {
+  color: #FFFFFF;
+  background-color: rgba(15, 23, 42, 0.95);
+  border-color: rgba(255, 255, 255, 0.65);
+}
+.dark .track-repair-status-button,
+[data-theme="dark"] .track-repair-status-button {
+  color: #FFFFFF !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border: 1.5px solid #FFFFFF !important;
+  backdrop-filter: blur(12px);
+}
+.dark .track-repair-status-button:hover,
+[data-theme="dark"] .track-repair-status-button:hover {
+  color: #FFFFFF !important;
+  background-color: rgba(255, 255, 255, 0.18) !important;
+  border-color: #FFFFFF !important;
+  box-shadow: 0 8px 25px -4px rgba(0, 0, 0, 0.6) !important;
+}
+.dark .track-repair-status-button:active,
+[data-theme="dark"] .track-repair-status-button:active {
+  background-color: rgba(255, 255, 255, 0.26) !important;
+  transform: scale(0.97);
+}
+.dark .track-repair-status-button:focus-visible,
+[data-theme="dark"] .track-repair-status-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #020617, 0 0 0 4px #22D3EE !important;
+}

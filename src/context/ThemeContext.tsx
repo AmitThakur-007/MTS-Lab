@@ -291,6 +291,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       'theme-festival-nepali-new-year'
     );
 
+    const isDark = effectiveTheme === 'dark' || effectiveTheme === 'night' || effectiveTheme === 'tihar';
+    root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+
     switch (effectiveTheme) {
       case 'light':
         root.classList.add('theme-light');

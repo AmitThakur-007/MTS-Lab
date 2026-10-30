@@ -550,7 +550,7 @@ export default function HeroSlider() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-3">
                 <Button 
                   onClick={() => navigate(currentSlide.buttonLink || '/services?focus=search')}
-                  className="h-12 sm:h-13 px-7 sm:px-8 rounded-full bg-white text-slate-950 hover:bg-slate-100 font-extrabold text-sm sm:text-base shadow-xl shadow-black/40 flex items-center justify-center gap-2 group transition-all active:scale-95 cursor-pointer"
+                  className="check-repair-price-button h-12 sm:h-13 px-7 sm:px-8 rounded-full shadow-xl flex items-center justify-center gap-2 group transition-all active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 text-sm sm:text-base font-extrabold whitespace-nowrap"
                   style={{
                     boxShadow: `0 10px 30px -5px ${currentTheme.accentGlow}`
                   }}
@@ -561,7 +561,7 @@ export default function HeroSlider() {
 
                 <Button 
                   onClick={() => navigate(currentSlide.buttonSecondaryLink || '/track')}
-                  className="h-12 sm:h-13 px-7 sm:px-8 rounded-full bg-slate-900/80 hover:bg-slate-800/95 backdrop-blur-md border border-slate-700/70 text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-md"
+                  className="track-repair-status-button h-12 sm:h-13 px-7 sm:px-8 rounded-full flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 text-sm sm:text-base font-bold whitespace-nowrap"
                 >
                   <span>{currentSlide.buttonSecondaryText || 'Track Repair Status'}</span>
                 </Button>

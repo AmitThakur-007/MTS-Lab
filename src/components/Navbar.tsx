@@ -19,12 +19,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { SlideTheme } from './HeroSlider';
 
 import ThemeToggle from '@/components/common/ThemeToggle';
+import { useAppTheme } from '@/context/ThemeContext';
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeHeroTheme, setActiveHeroTheme] = useState<SlideTheme | null>(null);
   const { user, token } = useAuthStore();
+  const { effectiveTheme } = useAppTheme();
+  const isDark = effectiveTheme === 'dark' || effectiveTheme === 'night' || effectiveTheme === 'tihar';
   const isAuthenticated = !!token;
   const location = useLocation();
   const navigate = useNavigate();
@@ -183,7 +186,7 @@ export default function Navbar() {
               </span>
               <span className={cn(
                 "font-normal text-xl sm:text-2xl tracking-tight ml-1.5 transition-colors duration-500",
-                isHeroOverlay ? "text-slate-400" : "text-slate-500 dark:text-slate-400"
+                isHeroOverlay ? "text-slate-300 drop-shadow-sm" : "text-slate-500 dark:text-slate-300"
               )}>
                 LAB
               </span>
@@ -209,13 +212,16 @@ export default function Navbar() {
                 <Link 
                   key={link.name} 
                   to={link.path}
-                  className={`text-xs sm:text-sm font-semibold px-4 sm:px-4.5 py-1.5 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                  className={cn(
+                    "text-xs sm:text-sm font-semibold px-4 sm:px-4.5 py-1.5 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2",
                     isActive 
-                      ? 'bg-white text-slate-950 font-bold shadow-md' 
+                      ? isHeroOverlay
+                        ? "bg-white text-slate-950 font-bold shadow-md" 
+                        : "bg-slate-950 dark:bg-white text-white dark:text-slate-950 font-bold shadow-md"
                       : isHeroOverlay
-                        ? 'text-slate-200 hover:text-white hover:bg-white/10'
-                        : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10'
-                  }`}
+                        ? "text-slate-200 hover:text-white hover:bg-white/10"
+                        : "text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/15"
+                  )}
                 >
                   {link.name}
                 </Link>
@@ -234,10 +240,10 @@ export default function Navbar() {
               onClick={() => navigate('/services?focus=search')}
               aria-label="Search Repair Prices"
               className={cn(
-                "w-10 h-10 rounded-full transition-all duration-500 cursor-pointer shrink-0 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
+                "w-10 h-10 rounded-full transition-all duration-300 cursor-pointer shrink-0 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2",
                 isHeroOverlay
-                  ? "bg-[#0b101b]/80 hover:bg-slate-800 text-white border border-blue-500/25 backdrop-blur-xl shadow-[0_2px_12px_-2px_rgba(59,130,246,0.2)]"
-                  : "text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
+                  ? "bg-[#0b101b]/80 hover:bg-slate-800 text-white border border-blue-500/30 backdrop-blur-xl shadow-xs"
+                  : "text-slate-700 dark:text-slate-100 hover:text-slate-950 dark:hover:text-white bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 shadow-2xs"
               )}
               style={isHeroOverlay && activeHeroTheme ? {
                 borderColor: activeHeroTheme.pillBorder,
@@ -253,12 +259,10 @@ export default function Navbar() {
                 <Button 
                   onClick={() => navigate('/login')}
                   className={cn(
-                    "rounded-full font-bold text-xs sm:text-sm h-10 px-5 sm:px-6 shadow-lg shadow-black/20 cursor-pointer transition-all duration-500 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
-                    isHeroOverlay
-                      ? "bg-white hover:bg-slate-100 text-slate-950 shadow-md"
-                      : "bg-slate-950 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-950"
+                    "desktop-login-button rounded-full font-bold text-xs sm:text-sm h-10 px-5 sm:px-6 shadow-md cursor-pointer transition-all duration-300 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2",
+                    isHeroOverlay && !isDark && "desktop-login-button-hero-light"
                   )}
-                  style={isHeroOverlay && activeHeroTheme ? {
+                  style={isHeroOverlay && activeHeroTheme && isDark ? {
                     boxShadow: `0 4px 16px -2px ${activeHeroTheme.accentGlow}`
                   } : undefined}
                 >
@@ -269,10 +273,10 @@ export default function Navbar() {
                   onClick={() => navigate('/dashboard')}
                   variant="outline"
                   className={cn(
-                    "rounded-full font-bold text-xs sm:text-sm h-10 px-5 sm:px-6 shadow-sm cursor-pointer transition-all duration-500",
+                    "rounded-full font-bold text-xs sm:text-sm h-10 px-5 sm:px-6 shadow-sm cursor-pointer transition-all duration-300 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400",
                     isHeroOverlay
                       ? "border-blue-500/30 text-white bg-[#0b101b]/80 hover:bg-slate-800 backdrop-blur-xl"
-                      : "border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      : "border-slate-300 dark:border-slate-600 text-slate-800 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
                   )}
                 >
                   Dashboard
