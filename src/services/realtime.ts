@@ -52,7 +52,7 @@ class RealtimeService {
       });
 
       // Listen to native postgres table changes if enabled on supabase backend
-      const tablesToTrack = ['Repair', 'repair', 'Customer', 'customer', 'TechnicianNote', 'techniciannote', 'RepairLog', 'repairlog', 'Notification', 'notification'];
+      const tablesToTrack = ['Repair', 'repair', 'RepairPrice', 'repairprice', 'Customer', 'customer', 'TechnicianNote', 'techniciannote', 'RepairLog', 'repairlog', 'Notification', 'notification'];
 
       tablesToTrack.forEach((tableName) => {
         this.supabaseChannel.on(
@@ -124,6 +124,8 @@ class RealtimeService {
     const aliases = [normalized];
     if (normalized.startsWith('repairdamage') || normalized.startsWith('repairrelateddamage')) {
       aliases.push('repairdamage', 'repairrelateddamage', 'repair_damage', 'repair-damage', 'damage');
+    } else if (normalized.startsWith('repairprice') || normalized.startsWith('repair_price')) {
+      aliases.push('repairprice', 'repairprices', 'repair_price', 'price', 'prices');
     } else if (normalized.startsWith('repair')) {
       aliases.push('repair', 'repairs', 'repairlog', 'techniciannote');
     } else if (normalized === 'user' || normalized === 'users' || normalized === 'staff') {

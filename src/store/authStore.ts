@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useRepairCache } from './repairCache';
 
 interface User {
   id: string;
@@ -53,6 +54,9 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         try {
           localStorage.removeItem('mts_last_activity');
+        } catch {}
+        try {
+          useRepairCache.getState().clear();
         } catch {}
         set({ user: null, token: null, refreshToken: null });
       },

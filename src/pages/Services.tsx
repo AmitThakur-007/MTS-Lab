@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { buildSlugMap, STATIC_PAGES_SEO, getLocalBusinessJsonLd, SITE_URL } from '@/lib/seo';
 import { PageSeo } from '@/components/Seo';
@@ -53,6 +53,7 @@ import { Button } from '@/components/ui/button';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { useAuthStore } from '@/store/authStore';
+import { useServiceCache } from '@/store/serviceCache';
 import { useRealtimeSync } from '@/services/realtime';
 import { toast } from 'sonner';
 
@@ -499,23 +500,33 @@ export default function Services() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuthStore();
 
-  const [prices, setPrices] = useState<RepairPriceItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedServices = useServiceCache((state) => state.services);
+  const cachedFilters = useServiceCache((state) => state.filters);
+  const setCachedServices = useServiceCache((state) => state.setServices);
+  const setCachedFilters = useServiceCache((state) => state.setFilters);
+  const isCacheStale = useServiceCache((state) => state.isStale);
+
+  const [prices, setPrices] = useState<RepairPriceItem[]>(() => {
+    return cachedServices && cachedServices.length > 0 ? cachedServices : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    return !cachedServices || cachedServices.length === 0;
+  });
   const [error, setError] = useState<string | null>(null);
 
   // Memoized deterministic service slug map
   const { serviceIdToSlug } = useMemo(() => buildSlugMap(prices), [prices]);
 
-  // Search input and applied active filters
-  const [searchInput, setSearchInput] = useState('');
-  const [activeQuery, setActiveQuery] = useState('');
-  const [selectedBrand, setSelectedBrand] = useState('All Brands');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedDeviceType, setSelectedDeviceType] = useState<DeviceTypeId>('all');
-  const [sortBy, setSortBy] = useState<'recommended' | 'priceLow' | 'priceHigh' | 'deviceAsc'>('recommended');
+  // Search input and applied active filters - initialized from cachedFilters
+  const [searchInput, setSearchInput] = useState(() => cachedFilters.searchInput || '');
+  const [activeQuery, setActiveQuery] = useState(() => cachedFilters.activeQuery || '');
+  const [selectedBrand, setSelectedBrand] = useState(() => cachedFilters.selectedBrand || 'All Brands');
+  const [selectedCategory, setSelectedCategory] = useState(() => cachedFilters.selectedCategory || 'all');
+  const [selectedDeviceType, setSelectedDeviceType] = useState<DeviceTypeId>(() => cachedFilters.selectedDeviceType || 'all');
+  const [sortBy, setSortBy] = useState<'recommended' | 'priceLow' | 'priceHigh' | 'deviceAsc'>(() => cachedFilters.sortBy || 'recommended');
 
-  // Filter expansion state (for desktop/tablet collapsible) & mobile bottom sheet state
-  const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
+  // Filter expansion state & mobile bottom sheet state
+  const [isFiltersExpanded, setIsFiltersExpanded] = useState(() => cachedFilters.isFiltersExpanded || false);
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
 
   // Category horizontal scroll controls & state
@@ -528,8 +539,21 @@ export default function Services() {
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
 
   // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(() => cachedFilters.currentPage || 1);
 
+  // Synchronize state back to cache store on changes
+  useEffect(() => {
+    setCachedFilters({
+      searchInput,
+      activeQuery,
+      selectedBrand,
+      selectedCategory,
+      selectedDeviceType,
+      sortBy,
+      isFiltersExpanded,
+      currentPage,
+    });
+  }, [searchInput, activeQuery, selectedBrand, selectedCategory, selectedDeviceType, sortBy, isFiltersExpanded, currentPage, setCachedFilters]);
 
   // Element refs for keyboard focus and smooth positioning
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -538,32 +562,44 @@ export default function Services() {
 
   const isAdmin = user && ['ADMIN', 'SUPER_ADMIN'].includes(user.role);
 
-  // Fetch active repair prices from public API
-  const fetchPrices = async () => {
+  // Fetch active repair prices from public API with background SWR support
+  const fetchPrices = useCallback(async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground && (!cachedServices || cachedServices.length === 0)) {
+        setLoading(true);
+      }
       setError(null);
       const res = await fetch('/api/public/repair-prices');
       if (!res.ok) {
         throw new Error('Failed to load repair price catalog');
       }
       const data: RepairPriceItem[] = await res.json();
-      setPrices(data.filter(item => item.status === 'ACTIVE'));
+      const active = Array.isArray(data) ? data.filter(item => item.status === 'ACTIVE') : [];
+      setPrices(active);
+      setCachedServices(active);
     } catch (err: any) {
       console.error('Error fetching repair prices:', err);
-      setError('Unable to load repair services. Please try again or contact MTS Lab directly.');
+      if (!isBackground && (!cachedServices || cachedServices.length === 0)) {
+        setError('Unable to load repair services. Please try again or contact MTS Lab directly.');
+      }
     } finally {
-      setLoading(false);
+      if (!isBackground) {
+        setLoading(false);
+      }
     }
-  };
+  }, [cachedServices, setCachedServices]);
 
   useEffect(() => {
-    fetchPrices();
-  }, []);
+    if (!cachedServices || cachedServices.length === 0) {
+      fetchPrices(false);
+    } else if (isCacheStale(5 * 60 * 1000)) {
+      fetchPrices(true);
+    }
+  }, [fetchPrices, cachedServices, isCacheStale]);
 
   // Real-time synchronization
-  useRealtimeSync(['repairPrice', 'sync'], () => {
-    fetchPrices();
+  useRealtimeSync(['repairPrice', 'repairprice', 'price', 'sync'], () => {
+    fetchPrices(true);
   });
 
   // Dynamic brand list reflecting selected device form + actual catalog data
@@ -2033,7 +2069,7 @@ export default function Services() {
               </div>
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <Button 
-                  onClick={fetchPrices} 
+                  onClick={() => fetchPrices(false)} 
                   className="rounded-xl bg-slate-950 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold px-6 cursor-pointer"
                 >
                   Try again
@@ -2181,10 +2217,14 @@ export default function Services() {
                       tabIndex={0}
                       role="link"
                       aria-label={`View repair service details for ${item.serviceName} - ${fullDeviceName}`}
-                      onClick={() => navigate(serviceUrl)}
+                      onClick={() => {
+                        useServiceCache.getState().setScrollY(window.scrollY);
+                        navigate(serviceUrl);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
+                          useServiceCache.getState().setScrollY(window.scrollY);
                           navigate(serviceUrl);
                         }
                       }}

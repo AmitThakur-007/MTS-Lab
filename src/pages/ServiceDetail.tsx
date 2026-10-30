@@ -44,6 +44,7 @@ import {
   slugToHumanTitle,
   resolveServiceSlug,
 } from '@/lib/seo';
+import { useServiceCache } from '@/store/serviceCache';
 import { toast } from 'sonner';
 
 export default function ServiceDetail() {
@@ -51,17 +52,32 @@ export default function ServiceDetail() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [services, setServices] = useState<ServiceLike[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedServices = useServiceCache((state) => state.services);
+  const setCachedServices = useServiceCache((state) => state.setServices);
+  const isCacheStale = useServiceCache((state) => state.isStale);
+
+  const [services, setServices] = useState<ServiceLike[]>(() => {
+    return cachedServices && cachedServices.length > 0 ? (cachedServices as ServiceLike[]) : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    return !cachedServices || cachedServices.length === 0;
+  });
   const [error, setError] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Fetch verified active services from authoritative public API
+  // Fetch verified active services from authoritative public API with background SWR
   useEffect(() => {
     let isMounted = true;
     async function fetchServices() {
+      if (cachedServices && cachedServices.length > 0 && !isCacheStale(10 * 60 * 1000)) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        setLoading(true);
+        if (!cachedServices || cachedServices.length === 0) {
+          setLoading(true);
+        }
         const res = await fetch('/api/public/repair-prices');
         if (!res.ok) {
           throw new Error(`Failed to load repair services (HTTP ${res.status})`);
@@ -70,10 +86,11 @@ export default function ServiceDetail() {
         if (isMounted) {
           const activeOnly = Array.isArray(data) ? data.filter((s) => s.status === 'ACTIVE') : [];
           setServices(activeOnly);
+          setCachedServices(activeOnly);
           setError(null);
         }
       } catch (err: any) {
-        if (isMounted) {
+        if (isMounted && (!cachedServices || cachedServices.length === 0)) {
           setError(err?.message || 'Unable to load service details at this time.');
         }
       } finally {
@@ -326,13 +343,21 @@ export default function ServiceDetail() {
 
         {/* Back Link */}
         <div>
-          <Link
-            to="/services"
-            className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.length > 1) {
+                navigate(-1);
+              } else {
+                navigate('/services');
+              }
+            }}
+            className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer bg-transparent border-0 p-0"
+            aria-label="Back to repair price directory"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to Price Directory</span>
-          </Link>
+          </button>
         </div>
 
         {/* Hero Section: Technical Overview & Verified Laboratory Fee */}

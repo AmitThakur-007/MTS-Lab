@@ -451,6 +451,11 @@ const handleGetPrices = async (req: Request, res: Response) => {
       });
     }
 
+    if (isPublic) {
+      res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    } else {
+      res.setHeader('Cache-Control', 'private, no-cache');
+    }
     return res.json(parsedPrices);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to retrieve repair pricing directory.' });

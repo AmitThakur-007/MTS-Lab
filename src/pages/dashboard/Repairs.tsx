@@ -84,6 +84,7 @@ import {
 } from '@/components/ui/select';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
+import { useRepairCache } from '@/store/repairCache';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -141,28 +142,95 @@ const statusConfig: Record<string, { label: string; badgeClass: string; bgSoft: 
 type StatusTabKey = 'ALL' | 'PENDING' | 'RECEIVED' | 'IN_PROGRESS' | 'REPAIRED' | 'DELIVERED' | 'RE_PROBLEM' | 'CANCELLED';
 
 export default function Repairs() {
-  const [repairs, setRepairs] = useState<any[]>([]);
-  const [staffList, setStaffList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const { user } = useAuthStore();
   const navigate = useNavigate();
 
-  // Filters state
-  const [search, setSearch] = useState('');
-  const [activeStatusTab, setActiveStatusTab] = useState<StatusTabKey>('ALL');
-  const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>('ALL');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
-  const [selectedTechnicianFilter, setSelectedTechnicianFilter] = useState('ALL');
-  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'updated' | 'repairNumber' | 'customerName' | 'status'>('newest');
+  const cachedUserId = useRepairCache((state) => state.userId);
+  const cachedRepairs = useRepairCache((state) => state.repairs);
+  const cachedStaffList = useRepairCache((state) => state.staffList);
+  const cachedFilters = useRepairCache((state) => state.filters);
+  const setCachedRepairs = useRepairCache((state) => state.setRepairs);
+  const setCachedStaffList = useRepairCache((state) => state.setStaffList);
+  const setCachedFilters = useRepairCache((state) => state.setFilters);
+  const isCacheStale = useRepairCache((state) => state.isStale);
+
+  const isCacheValidForUser = Boolean(
+    user?.id && cachedUserId === user.id && cachedRepairs && cachedRepairs.length > 0
+  );
+
+  const [repairs, setRepairs] = useState<any[]>(() => {
+    return isCacheValidForUser ? cachedRepairs : [];
+  });
+  const [staffList, setStaffList] = useState<any[]>(() => {
+    return isCacheValidForUser && cachedStaffList ? cachedStaffList : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    return !isCacheValidForUser;
+  });
+
+  // Filters state - preserve previous page state across navigation
+  const [search, setSearch] = useState(() => (isCacheValidForUser ? cachedFilters.search : ''));
+  const [activeStatusTab, setActiveStatusTab] = useState<StatusTabKey>(() =>
+    isCacheValidForUser ? (cachedFilters.activeStatusTab as StatusTabKey) : 'ALL'
+  );
+  const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>(() =>
+    isCacheValidForUser ? (cachedFilters.dateFilterPreset as DateFilterPreset) : 'ALL'
+  );
+  const [customStartDate, setCustomStartDate] = useState(() =>
+    isCacheValidForUser ? cachedFilters.customStartDate : ''
+  );
+  const [customEndDate, setCustomEndDate] = useState(() =>
+    isCacheValidForUser ? cachedFilters.customEndDate : ''
+  );
+  const [selectedTechnicianFilter, setSelectedTechnicianFilter] = useState(() =>
+    isCacheValidForUser ? cachedFilters.selectedTechnicianFilter : 'ALL'
+  );
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'updated' | 'repairNumber' | 'customerName' | 'status'>(() =>
+    isCacheValidForUser ? (cachedFilters.sortBy as any) : 'newest'
+  );
 
   // Authoritative 40-record page state
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(() => (isCacheValidForUser ? cachedFilters.currentPage || 1 : 1));
 
-  // Reset pagination to page 1 whenever any filter or search changes
+  // Sync active filters to cache
   useEffect(() => {
+    setCachedFilters({
+      search,
+      activeStatusTab,
+      dateFilterPreset,
+      customStartDate,
+      customEndDate,
+      selectedTechnicianFilter,
+      sortBy,
+      currentPage,
+    });
+  }, [
+    search,
+    activeStatusTab,
+    dateFilterPreset,
+    customStartDate,
+    customEndDate,
+    selectedTechnicianFilter,
+    sortBy,
+    currentPage,
+    setCachedFilters,
+  ]);
+
+  // Reset pagination to page 1 ONLY when user actively changes filter or search (skip on initial mount)
+  const isInitialFilterMount = React.useRef(true);
+  useEffect(() => {
+    if (isInitialFilterMount.current) {
+      isInitialFilterMount.current = false;
+      return;
+    }
     setCurrentPage(1);
   }, [activeStatusTab, selectedTechnicianFilter, dateFilterPreset, customStartDate, customEndDate, search, sortBy]);
+
+  // Navigate to repair details while preserving scroll position
+  const navigateToRepair = (repairId: string) => {
+    useRepairCache.getState().setScrollY(window.scrollY);
+    navigate(`/dashboard/repairs/${repairId}`);
+  };
 
   // Selection & Bulk Actions State
   const [selectedRepairIds, setSelectedRepairIds] = useState<Set<string>>(new Set());
@@ -404,31 +472,42 @@ export default function Repairs() {
     }
   };
 
-  // Fetch all repair records and staff from the real database
+  // Fetch all repair records and staff from the real database with SWR background revalidation
   const fetchData = useCallback(async (isBackground = false) => {
-    if (!isBackground) setLoading(true);
+    const hasCached = isCacheValidForUser || (cachedRepairs && cachedRepairs.length > 0);
+    if (!isBackground && !hasCached) {
+      setLoading(true);
+    }
     try {
       const [repairRes, staffRes] = await Promise.all([
         api.get('/repairs'),
         api.get('/staff').catch(() => [])
       ]);
-      setRepairs(Array.isArray(repairRes) ? repairRes : []);
-      setStaffList(Array.isArray(staffRes) ? staffRes : []);
+      const repairList = Array.isArray(repairRes) ? repairRes : [];
+      const staffListData = Array.isArray(staffRes) ? staffRes : [];
+      setRepairs(repairList);
+      setStaffList(staffListData);
+      setCachedRepairs(repairList, user?.id || null);
+      setCachedStaffList(staffListData);
     } catch (err: any) {
       toast.error(err.message || 'Failed to fetch repair records');
       console.error(err);
     } finally {
       if (!isBackground) setLoading(false);
     }
-  }, []);
+  }, [isCacheValidForUser, cachedRepairs, setCachedRepairs, setCachedStaffList, user?.id]);
 
   useEffect(() => {
-    fetchData(false);
-  }, [fetchData]);
+    if (!isCacheValidForUser) {
+      fetchData(false);
+    } else if (isCacheStale(user?.id, 3 * 60 * 1000)) {
+      fetchData(true);
+    }
+  }, [fetchData, isCacheValidForUser, isCacheStale, user?.id]);
 
   // Real-Time Event Sync across all user roles via singleton realtime hook
   useRealtimeSync(
-    ['repair', 'repairlog', 'techniciannote', 'payment', 'repairtransferrequest'],
+    ['repair', 'repairs', 'repairlog', 'techniciannote', 'payment', 'repairtransferrequest'],
     () => {
       fetchData(true);
     }
@@ -1527,7 +1606,7 @@ export default function Repairs() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
+                              onClick={() => navigateToRepair(repair.id)}
                               className="h-8 px-2.5 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold cursor-pointer"
                             >
                               <Eye className="h-3.5 w-3.5 mr-1" /> View
@@ -1914,7 +1993,7 @@ export default function Repairs() {
 
                     <Button
                       size="sm"
-                      onClick={() => navigate(`/dashboard/repairs/${repair.id}`)}
+                      onClick={() => navigateToRepair(repair.id)}
                       className="h-8 rounded-xl bg-slate-900 hover:bg-black dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 text-white text-xs font-semibold px-3"
                     >
                       Manage Job <ChevronRight className="h-3.5 w-3.5 ml-1" />

@@ -56,6 +56,7 @@ import SendSmsModal from '@/components/repair/SendSmsModal';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { useRepairCache } from '@/store/repairCache';
 
 export default function RepairDetails() {
   const { id } = useParams();
@@ -107,6 +108,9 @@ export default function RepairDetails() {
         api.get(`/repairs/${id}/notes`).catch(() => [])
       ]);
       setRepair(repairData);
+      if (repairData && (repairData.id || repairData.repairNumber)) {
+        useRepairCache.getState().updateRepair(repairData.id || repairData.repairNumber, repairData);
+      }
       setTechnicians(
         Array.isArray(staffData)
           ? staffData.filter((s: any) => ['TECHNICIAN', 'LEAD_TECHNICIAN'].includes(s.role) && s.isActive !== false)
@@ -252,6 +256,7 @@ export default function RepairDetails() {
       const updated = await api.patch(`/repairs/${id}`, { status });
       await syncRepairToRtdb(updated);
       setRepair(updated);
+      if (id) useRepairCache.getState().updateRepair(id, updated);
       toast.success(`Status updated to ${status.replace(/_/g, ' ')}`);
       fetchData();
     } catch (err: any) {
@@ -269,6 +274,7 @@ export default function RepairDetails() {
       const synced = updated?.repair || updated;
       await syncRepairToRtdb(synced);
       setRepair(synced);
+      if (id) useRepairCache.getState().updateRepair(id, synced);
       toast.success(`Priority set to ${newPriority}`);
       fetchData();
     } catch (err: any) {
@@ -356,7 +362,13 @@ export default function RepairDetails() {
         <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1 w-full xl:w-auto">
           <Button
             variant="outline"
-            onClick={() => navigate('/dashboard/repairs')}
+            onClick={() => {
+              if (window.history.length > 1) {
+                navigate(-1);
+              } else {
+                navigate('/dashboard/repairs');
+              }
+            }}
             className="rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 h-10 w-10 p-0 flex items-center justify-center shrink-0 cursor-pointer hover:bg-slate-100 mt-1 sm:mt-0"
             title="Back to repairs"
           >
