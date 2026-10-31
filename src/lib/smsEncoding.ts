@@ -154,3 +154,21 @@ export function generateRepairCompletedMessage(params: {
 
   return msg;
 }
+
+/**
+ * Standard MTS Lab SMS for Repaired Devices.
+ * Strictly complies with max 160 GSM-7 characters and contains tracking link.
+ */
+export function generateRepairedDeviceSmsMessage(repairNumber: string): string {
+  const cleanNumber = (repairNumber || 'N/A').trim();
+  return `Dear Customer, your device (Repair No: ${cleanNumber}) is repaired and ready for collection. Track: https://www.mobiletechnologystation.com.np/track - MTS Lab`;
+}
+
+/**
+ * Standard MTS Lab SMS for Received Devices.
+ * Strictly complies with max 160 GSM-7 characters and contains tracking link.
+ */
+export function generateReceivedDeviceSmsMessage(repairNumber: string): string {
+  const cleanNumber = (repairNumber || 'N/A').trim();
+  return `Dear Customer, your device has been received by MTS Lab. Repair No: ${cleanNumber}. Track: https://www.mobiletechnologystation.com.np/track - MTS Lab`;
+}

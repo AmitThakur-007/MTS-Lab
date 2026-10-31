@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Smartphone,
   MessageSquare,
@@ -21,11 +21,16 @@ import {
   AlertTriangle,
   Layers,
   ChevronRight,
+  ChevronLeft,
+  Calendar,
+  Eye,
+  CheckSquare,
+  Tag,
   Loader2,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import {
@@ -45,14 +50,23 @@ import { toast } from 'sonner';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { validateAndFormatNepalPhone } from '@/lib/nepalPhone';
-import { analyzeSmsEncoding, generateRepairCompletedMessage } from '@/lib/smsEncoding';
+import {
+  analyzeSmsEncoding,
+  generateRepairedDeviceSmsMessage,
+  generateReceivedDeviceSmsMessage,
+} from '@/lib/smsEncoding';
+import { toNepalDateString } from '@/lib/nepalDate';
 import { cn } from '@/lib/utils';
 import SendSmsModal from '@/components/repair/SendSmsModal';
 
 export default function SmsCenter() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const userRole = (user?.role || '').toUpperCase().trim();
   const isAuthorized = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(userRole);
+
+  // Active Category Tab: 'REPAIRED' | 'RECEIVED' | 'HISTORY'
+  const [activeTab, setActiveTab] = useState<'REPAIRED' | 'RECEIVED' | 'HISTORY'>('REPAIRED');
 
   // Stats
   const [stats, setStats] = useState<{
@@ -72,28 +86,29 @@ export default function SmsCenter() {
   });
   const [statsLoading, setStatsLoading] = useState(false);
 
-  // Pending Repaired Queue
-  const [pendingRepairs, setPendingRepairs] = useState<any[]>([]);
-  const [loadingPending, setLoadingPending] = useState(false);
+  // Repaired Devices State
+  const [repairedPreset, setRepairedPreset] = useState<string>('TODAY');
+  const [repairedCustomStart, setRepairedCustomStart] = useState<string>('');
+  const [repairedCustomEnd, setRepairedCustomEnd] = useState<string>('');
+  const [repairedSearch, setRepairedSearch] = useState<string>('');
+  const [repairedPage, setRepairedPage] = useState<number>(1);
+  const [repairedTotal, setRepairedTotal] = useState<number>(0);
+  const [repairedTotalPages, setRepairedTotalPages] = useState<number>(1);
+  const [repairedList, setRepairedList] = useState<any[]>([]);
+  const [repairedLoading, setRepairedLoading] = useState<boolean>(false);
+  const [repairedError, setRepairedError] = useState<string | null>(null);
 
-  // Search
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRepair, setSelectedRepair] = useState<any | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-
-  // Composer State (for selected repair)
-  const [composerMessage, setComposerMessage] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [copiedComposerMsg, setCopiedComposerMsg] = useState(false);
-  const [copiedComposerPhone, setCopiedComposerPhone] = useState(false);
-
-  // Confirmation Flow state
-  const [pendingConfirmation, setPendingConfirmation] = useState<{
-    channel: 'WINDOWS_PHONE_LINK' | 'WHATSAPP' | 'SMS_PROTOCOL';
-    recordId: string;
-    repairId: string;
-  } | null>(null);
+  // Received Devices State
+  const [receivedPreset, setReceivedPreset] = useState<string>('TODAY');
+  const [receivedCustomStart, setReceivedCustomStart] = useState<string>('');
+  const [receivedCustomEnd, setReceivedCustomEnd] = useState<string>('');
+  const [receivedSearch, setReceivedSearch] = useState<string>('');
+  const [receivedPage, setReceivedPage] = useState<number>(1);
+  const [receivedTotal, setReceivedTotal] = useState<number>(0);
+  const [receivedTotalPages, setReceivedTotalPages] = useState<number>(1);
+  const [receivedList, setReceivedList] = useState<any[]>([]);
+  const [receivedLoading, setReceivedLoading] = useState<boolean>(false);
+  const [receivedError, setReceivedError] = useState<string | null>(null);
 
   // Notification History Table State
   const [historyList, setHistoryList] = useState<any[]>([]);
@@ -103,11 +118,12 @@ export default function SmsCenter() {
   const [historyStatusFilter, setHistoryStatusFilter] = useState('ALL');
   const [historyChannelFilter, setHistoryChannelFilter] = useState('ALL');
 
-  // Modal helper
+  // Modal State for Preview & Send
   const [modalRepair, setModalRepair] = useState<any | null>(null);
+  const [modalNotificationType, setModalNotificationType] = useState<'REPAIR_COMPLETED' | 'DEVICE_RECEIVED'>('REPAIR_COMPLETED');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Load stats
+  // Load summary stats
   const fetchStats = async () => {
     try {
       setStatsLoading(true);
@@ -129,23 +145,78 @@ export default function SmsCenter() {
     }
   };
 
-  // Load pending repairs
-  const fetchPendingRepairs = async () => {
+  // Load Repaired Devices
+  const fetchRepairedDevices = useCallback(async () => {
     try {
-      setLoadingPending(true);
-      const res = await api.get('/sms/pending-repairs');
-      if (res && Array.isArray(res.repairs)) {
-        setPendingRepairs(res.repairs);
+      setRepairedLoading(true);
+      setRepairedError(null);
+      const params: any = {
+        preset: repairedPreset,
+        page: repairedPage,
+        limit: 20,
+      };
+      if (repairedPreset === 'CUSTOM') {
+        if (repairedCustomStart) params.startDate = repairedCustomStart;
+        if (repairedCustomEnd) params.endDate = repairedCustomEnd;
       }
-    } catch (err) {
-      console.warn('[FETCH PENDING REPAIRS WARN]', err);
-    } finally {
-      setLoadingPending(false);
-    }
-  };
+      if (repairedSearch.trim()) {
+        params.search = repairedSearch.trim();
+      }
 
-  // Load notification history
-  const fetchHistory = async () => {
+      const queryStr = new URLSearchParams(params).toString();
+      const res = await api.get(`/sms/devices/repaired?${queryStr}`);
+      if (res && res.success) {
+        setRepairedList(res.items || []);
+        setRepairedTotal(res.total || 0);
+        setRepairedTotalPages(res.totalPages || 1);
+      }
+    } catch (err: any) {
+      console.warn('[FETCH REPAIRED DEVICES WARN]', err);
+      const msg = err?.response?.data?.error || err?.message || 'Failed to load repaired devices.';
+      setRepairedError(msg);
+      toast.error(msg, { id: 'sms-repaired-device-error' });
+    } finally {
+      setRepairedLoading(false);
+    }
+  }, [repairedPreset, repairedCustomStart, repairedCustomEnd, repairedSearch, repairedPage]);
+
+  // Load Received Devices
+  const fetchReceivedDevices = useCallback(async () => {
+    try {
+      setReceivedLoading(true);
+      setReceivedError(null);
+      const params: any = {
+        preset: receivedPreset,
+        page: receivedPage,
+        limit: 20,
+      };
+      if (receivedPreset === 'CUSTOM') {
+        if (receivedCustomStart) params.startDate = receivedCustomStart;
+        if (receivedCustomEnd) params.endDate = receivedCustomEnd;
+      }
+      if (receivedSearch.trim()) {
+        params.search = receivedSearch.trim();
+      }
+
+      const queryStr = new URLSearchParams(params).toString();
+      const res = await api.get(`/sms/devices/received?${queryStr}`);
+      if (res && res.success) {
+        setReceivedList(res.items || []);
+        setReceivedTotal(res.total || 0);
+        setReceivedTotalPages(res.totalPages || 1);
+      }
+    } catch (err: any) {
+      console.warn('[FETCH RECEIVED DEVICES WARN]', err);
+      const msg = err?.response?.data?.error || err?.message || 'Failed to load received devices.';
+      setReceivedError(msg);
+      toast.error(msg, { id: 'sms-received-device-error' });
+    } finally {
+      setReceivedLoading(false);
+    }
+  }, [receivedPreset, receivedCustomStart, receivedCustomEnd, receivedSearch, receivedPage]);
+
+  // Load Notification History
+  const fetchHistory = useCallback(async () => {
     try {
       setHistoryLoading(true);
       const params: any = {
@@ -166,177 +237,35 @@ export default function SmsCenter() {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, [historySearch, historyStatusFilter, historyChannelFilter]);
 
+  // Trigger data fetches based on active tab and filters
   useEffect(() => {
     if (!isAuthorized) return;
     fetchStats();
-    fetchPendingRepairs();
-    fetchHistory();
   }, [isAuthorized]);
 
-  // Execute Search for repairs
   useEffect(() => {
-    const q = searchQuery.trim();
-    if (!q) {
-      setSearchResults([]);
-      return;
+    if (!isAuthorized) return;
+    if (activeTab === 'REPAIRED') {
+      fetchRepairedDevices();
+    } else if (activeTab === 'RECEIVED') {
+      fetchReceivedDevices();
+    } else if (activeTab === 'HISTORY') {
+      fetchHistory();
     }
+  }, [activeTab, fetchRepairedDevices, fetchReceivedDevices, fetchHistory, isAuthorized]);
 
-    const timer = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await api.get(`/repairs?search=${encodeURIComponent(q)}&limit=10`);
-        const repairs = Array.isArray(res) ? res : res?.repairs || [];
-        setSearchResults(repairs);
-      } catch (err) {
-        console.warn('[SEARCH REPAIRS WARN]', err);
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // When a repair is selected, initialize composer
-  const handleSelectRepair = (repair: any) => {
-    setSelectedRepair(repair);
-    const customer = repair.customerName || repair.customer?.name || 'Customer';
-    const dev = `${repair.deviceBrand ? `${repair.deviceBrand} ` : ''}${repair.deviceModel || 'Device'}`.trim();
-    const repNum = repair.repairNumber || 'N/A';
-
-    const tpl = generateRepairCompletedMessage({
-      customerName: customer,
-      deviceModel: dev,
-      repairNumber: repNum,
-    });
-    setComposerMessage(tpl);
-    setPendingConfirmation(null);
+  // Open modal with specific repair and notification type
+  const handleOpenNotificationModal = (repair: any, type: 'REPAIR_COMPLETED' | 'DEVICE_RECEIVED') => {
+    setModalRepair(repair);
+    setModalNotificationType(type);
+    setIsModalOpen(true);
   };
 
-  // Composer Phone and Encoding Calculations
-  const selectedPhoneInfo = useMemo(() => {
-    if (!selectedRepair) return null;
-    const raw = selectedRepair.customerPhone || selectedRepair.customer?.phone || selectedRepair.customerPhoneRaw;
-    return validateAndFormatNepalPhone(raw);
-  }, [selectedRepair]);
-
-  const composerEncoding = useMemo(() => {
-    return analyzeSmsEncoding(composerMessage);
-  }, [composerMessage]);
-
-  // Dispatch Windows Phone Link from Composer
-  const handleComposerSendPhoneLink = async () => {
-    if (!selectedRepair || !selectedPhoneInfo?.isValid || submitting) return;
-    if (!composerEncoding.isSingleSegment) {
-      toast.error(`Message exceeds single-segment limit (${composerEncoding.unitsUsed}/${composerEncoding.maxUnitsSingleSegment}). Please shorten.`);
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      // 1. Copy to clipboard
-      try {
-        await navigator.clipboard.writeText(composerMessage);
-        setCopiedComposerMsg(true);
-      } catch (_) {}
-
-      // 2. Open on backend
-      const res = await api.post('/sms/open', {
-        repairId: selectedRepair.id || selectedRepair.repairId,
-        customMessage: composerMessage,
-        channel: 'WINDOWS_PHONE_LINK',
-      });
-
-      // 3. Launch sms: protocol deep link for Windows Phone Link
-      const smsUri = `sms:${selectedPhoneInfo.international}?body=${encodeURIComponent(composerMessage)}`;
-      window.location.href = smsUri;
-
-      setPendingConfirmation({
-        channel: 'WINDOWS_PHONE_LINK',
-        recordId: res?.record?.id || '',
-        repairId: selectedRepair.id || selectedRepair.repairId,
-      });
-
-      toast.info('Windows Phone Link launched. Please confirm once SMS is sent.', { duration: 5000 });
-      fetchHistory();
-      fetchPendingRepairs();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to initiate Windows Phone Link.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Dispatch WhatsApp from Composer
-  const handleComposerSendWhatsApp = async () => {
-    if (!selectedRepair || !selectedPhoneInfo?.isValid || submitting) return;
-
-    setSubmitting(true);
-    try {
-      try {
-        await navigator.clipboard.writeText(composerMessage);
-        setCopiedComposerMsg(true);
-      } catch (_) {}
-
-      const res = await api.post('/sms/open', {
-        repairId: selectedRepair.id || selectedRepair.repairId,
-        customMessage: composerMessage,
-        channel: 'WHATSAPP',
-      });
-
-      const waUrl = `https://wa.me/${selectedPhoneInfo.whatsappPhone}?text=${encodeURIComponent(composerMessage)}`;
-      window.open(waUrl, '_blank', 'noopener,noreferrer');
-
-      setPendingConfirmation({
-        channel: 'WHATSAPP',
-        recordId: res?.record?.id || '',
-        repairId: selectedRepair.id || selectedRepair.repairId,
-      });
-
-      toast.info('WhatsApp opened. Please confirm once sent.', { duration: 5000 });
-      fetchHistory();
-      fetchPendingRepairs();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to open WhatsApp.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Confirm Sent / Failed action
-  const handleConfirmSentStatus = async (status: 'STAFF_CONFIRMED_SENT' | 'FAILED', failureReason?: string) => {
-    if (!pendingConfirmation?.recordId && !pendingConfirmation?.repairId) return;
-
-    setSubmitting(true);
-    try {
-      await api.post('/sms/confirm', {
-        smsRecordId: pendingConfirmation.recordId,
-        repairId: pendingConfirmation.repairId,
-        status,
-        failureReason,
-      });
-
-      if (status === 'STAFF_CONFIRMED_SENT') {
-        toast.success(
-          pendingConfirmation.channel === 'WHATSAPP'
-            ? 'WhatsApp notification confirmed sent.'
-            : 'SMS notification confirmed sent.'
-        );
-      } else {
-        toast.error('Notification logged as failed.');
-      }
-
-      setPendingConfirmation(null);
-      fetchStats();
-      fetchHistory();
-      fetchPendingRepairs();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to confirm status.');
-    } finally {
-      setSubmitting(false);
-    }
+  // Quick Direct WhatsApp Launch (with confirmation modal)
+  const handleDirectWhatsApp = (repair: any, type: 'REPAIR_COMPLETED' | 'DEVICE_RECEIVED') => {
+    handleOpenNotificationModal(repair, type);
   };
 
   if (!isAuthorized) {
@@ -354,20 +283,25 @@ export default function SmsCenter() {
   }
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-16">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800 pb-5">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
               <Smartphone className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
-                SMS Notification Center
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Staff-assisted customer notifications via Windows Phone Link & WhatsApp with single-segment GSM-7 validation.
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
+                  SMS & Customer Notification Center
+                </h1>
+                <Badge variant="outline" className="text-[10px] font-mono text-cyan-600 border-cyan-500/30 bg-cyan-50/50 dark:bg-cyan-950/30">
+                  NPT (UTC+05:45)
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Retrieve repaired and received devices by date and notify customers via single-segment SMS and WhatsApp.
               </p>
             </div>
           </div>
@@ -379,9 +313,10 @@ export default function SmsCenter() {
             size="sm"
             onClick={() => {
               fetchStats();
-              fetchPendingRepairs();
-              fetchHistory();
-              toast.success('SMS Center data refreshed.');
+              if (activeTab === 'REPAIRED') fetchRepairedDevices();
+              if (activeTab === 'RECEIVED') fetchReceivedDevices();
+              if (activeTab === 'HISTORY') fetchHistory();
+              toast.success('Data refreshed.');
             }}
             className="text-xs border-slate-200 dark:border-slate-800"
           >
@@ -391,7 +326,7 @@ export default function SmsCenter() {
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {/* Total SMS Sent */}
         <Card className="bg-slate-900 border-slate-800 text-white shadow-md">
@@ -402,7 +337,7 @@ export default function SmsCenter() {
             </div>
             <span className="text-[10px] text-cyan-400 font-medium flex items-center gap-1 mt-1">
               <Check className="w-3 h-3" />
-              <span>All confirmed SMS</span>
+              <span>SMS channel total</span>
             </span>
           </CardContent>
         </Card>
@@ -416,7 +351,7 @@ export default function SmsCenter() {
             </div>
             <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
               <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-              <span>Explicitly verified</span>
+              <span>Verified sent</span>
             </span>
           </CardContent>
         </Card>
@@ -444,12 +379,12 @@ export default function SmsCenter() {
             </div>
             <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
               <XCircle className="w-3 h-3 text-rose-500" />
-              <span>Requires attention</span>
+              <span>Attention needed</span>
             </span>
           </CardContent>
         </Card>
 
-        {/* Pending SMS */}
+        {/* Pending / Draft SMS */}
         <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
           <CardContent className="p-3.5 sm:p-4">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Pending / Draft</span>
@@ -458,7 +393,7 @@ export default function SmsCenter() {
             </div>
             <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
               <Clock className="w-3 h-3 text-amber-500" />
-              <span>Awaiting dispatch</span>
+              <span>Awaiting send</span>
             </span>
           </CardContent>
         </Card>
@@ -472,562 +407,820 @@ export default function SmsCenter() {
             </div>
             <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-1">
               <MessageSquare className="w-3 h-3" />
-              <span>Tracked separately</span>
+              <span>Alternative channel</span>
             </span>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Workspace Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Left Column: Customer Repair Search & Pending Queue (7 cols) */}
-        <div className="lg:col-span-7 space-y-6">
-          
-          {/* Customer Repair Search Box */}
+      {/* Primary Category Tabs */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(val: any) => setActiveTab(val)}
+        className="w-full space-y-4"
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2 flex-wrap gap-2">
+          <TabsList className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl h-auto flex flex-wrap gap-1">
+            <TabsTrigger
+              value="REPAIRED"
+              className="text-xs font-bold py-2 px-3.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-xs rounded-lg flex items-center gap-2"
+            >
+              <CheckSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Repaired Devices</span>
+              {repairedTotal > 0 && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300">
+                  {repairedTotal}
+                </Badge>
+              )}
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="RECEIVED"
+              className="text-xs font-bold py-2 px-3.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-xs rounded-lg flex items-center gap-2"
+            >
+              <Tag className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+              <span>Received Devices</span>
+              {receivedTotal > 0 && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-cyan-100 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-300">
+                  {receivedTotal}
+                </Badge>
+              )}
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="HISTORY"
+              className="text-xs font-bold py-2 px-3.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-xs rounded-lg flex items-center gap-2"
+            >
+              <Clock className="w-4 h-4 text-slate-500" />
+              <span>Notification Audit History</span>
+              {historyTotal > 0 && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                  {historyTotal}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        {/* ---------------------------------------------------- */}
+        {/* TAB 1: REPAIRED DEVICES                              */}
+        {/* ---------------------------------------------------- */}
+        <TabsContent value="REPAIRED" className="space-y-4 pt-1">
+          {/* Controls: Date Preset Filters & Search */}
           <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <Search className="w-4 h-4 text-cyan-500" />
-                <span>Customer Repair Search</span>
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Search by Repair Number (e.g. 10042), Customer Name, Phone, or Device Model.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Enter repair #, phone, customer name..."
-                  className="pl-10 h-10 text-xs sm:text-sm bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
-                />
-                {searching && (
-                  <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-600 animate-spin" />
-                )}
+            <CardContent className="p-3.5 sm:p-4 space-y-3">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                {/* Date Presets */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mr-1 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Completion Date (NPT):</span>
+                  </span>
+
+                  {[
+                    { label: 'Today', value: 'TODAY' },
+                    { label: 'Yesterday', value: 'YESTERDAY' },
+                    { label: 'This Week', value: 'THIS_WEEK' },
+                    { label: 'This Month', value: 'THIS_MONTH' },
+                    { label: 'Custom Range', value: 'CUSTOM' },
+                    { label: 'All Repaired', value: 'ALL' },
+                  ].map((p) => (
+                    <Button
+                      key={p.value}
+                      type="button"
+                      size="sm"
+                      variant={repairedPreset === p.value ? "default" : "outline"}
+                      className={cn(
+                        "h-8 text-xs font-semibold px-2.5",
+                        repairedPreset === p.value
+                          ? "bg-cyan-600 text-white hover:bg-cyan-700 shadow-xs"
+                          : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
+                      )}
+                      onClick={() => {
+                        setRepairedPreset(p.value);
+                        setRepairedPage(1);
+                      }}
+                    >
+                      {p.label}
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Search Box */}
+                <div className="relative w-full lg:w-72">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    placeholder="Search repair #, phone, model..."
+                    value={repairedSearch}
+                    onChange={(e) => {
+                      setRepairedSearch(e.target.value);
+                      setRepairedPage(1);
+                    }}
+                    className="h-8 text-xs pl-8.5 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                  />
+                </div>
               </div>
 
-              {/* Search Results Dropdown / List */}
-              {searchResults.length > 0 && (
-                <div className="border border-slate-200 dark:border-slate-800 rounded-xl divide-y divide-slate-100 dark:divide-slate-800 max-h-56 overflow-y-auto bg-white dark:bg-slate-950">
-                  {searchResults.map((rep) => (
-                    <button
-                      key={rep.id}
-                      type="button"
-                      onClick={() => handleSelectRepair(rep)}
-                      className="w-full text-left p-3 hover:bg-slate-50 dark:hover:bg-slate-900 flex items-center justify-between transition-colors text-xs"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                            #{rep.repairNumber}
-                          </span>
-                          <span className="font-semibold text-slate-700 dark:text-slate-300">
-                            {rep.customerName}
-                          </span>
-                          <Badge variant="outline" className="text-[10px]">
-                            {rep.status}
-                          </Badge>
-                        </div>
-                        <span className="text-[11px] text-slate-500 block mt-0.5">
-                          {rep.deviceBrand} {rep.deviceModel} • {rep.customerPhone}
-                        </span>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-slate-400" />
-                    </button>
-                  ))}
+              {/* Custom Date Inputs if CUSTOM selected */}
+              {repairedPreset === 'CUSTOM' && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-3 flex-wrap text-xs">
+                  <span className="font-bold text-slate-700 dark:text-slate-300">Select Date Bounds:</span>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="repaired-start" className="text-[11px] text-slate-500">From:</Label>
+                    <Input
+                      id="repaired-start"
+                      type="date"
+                      value={repairedCustomStart}
+                      onChange={(e) => setRepairedCustomStart(e.target.value)}
+                      className="h-8 text-xs w-36 bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="repaired-end" className="text-[11px] text-slate-500">To:</Label>
+                    <Input
+                      id="repaired-end"
+                      type="date"
+                      value={repairedCustomEnd}
+                      onChange={(e) => setRepairedCustomEnd(e.target.value)}
+                      className="h-8 text-xs w-36 bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs bg-cyan-600 hover:bg-cyan-700 text-white font-bold"
+                    onClick={() => {
+                      setRepairedPage(1);
+                      fetchRepairedDevices();
+                    }}
+                  >
+                    Apply Filter
+                  </Button>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Pending Repaired Devices Queue */}
+          {/* Repaired Devices Results Table */}
           <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/80 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>Repaired & Ready Queue ({pendingRepairs.length})</span>
+                  <CheckSquare className="w-4 h-4 text-emerald-500" />
+                  <span>Repaired Devices Ready for Customer Collection ({repairedTotal})</span>
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Devices in REPAIRED status awaiting customer pickup notification.
+                  Filter based on actual repair completion date. Standard notification includes collection alert and tracking URL.
                 </CardDescription>
               </div>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={fetchPendingRepairs}
-                className="h-8 text-xs text-slate-500"
-              >
-                <RefreshCw className={cn("w-3 h-3 mr-1", loadingPending && "animate-spin")} />
-                Refresh
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {loadingPending ? (
-                <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-cyan-600" />
-                  <span>Loading repaired queue...</span>
-                </div>
-              ) : pendingRepairs.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-                  No repaired devices currently waiting for notification.
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100 dark:divide-slate-800/80 max-h-96 overflow-y-auto pr-1">
-                  {pendingRepairs.map((item) => {
-                    const isSelected = selectedRepair?.id === item.repairId || selectedRepair?.repairNumber === item.repairNumber;
-                    const hasSent = item.smsSummary?.status === 'SENT';
-
-                    return (
-                      <div
-                        key={item.repairId}
-                        className={cn(
-                          "py-3 px-2 flex items-center justify-between gap-3 rounded-lg transition-colors",
-                          isSelected && "bg-cyan-50/50 dark:bg-cyan-950/30"
-                        )}
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100">
-                              #{item.repairNumber}
-                            </span>
-                            <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate">
-                              {item.customerName}
-                            </span>
-                            {hasSent ? (
-                              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400">
-                                Notified ({item.smsSummary?.count}x)
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400">
-                                Unnotified
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                            {item.deviceModel} • {item.phoneValidation?.displayFormatted || item.customerPhoneRaw}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <Button
-                            size="sm"
-                            variant={isSelected ? "default" : "outline"}
-                            className={cn(
-                              "h-8 text-xs font-semibold px-2.5",
-                              isSelected ? "bg-cyan-600 hover:bg-cyan-700 text-white" : "border-slate-200 dark:border-slate-800"
-                            )}
-                            onClick={() => handleSelectRepair(item)}
-                          >
-                            <span>Compose</span>
-                            <ArrowRight className="w-3 h-3 ml-1" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column: Notification Composer for Selected Repair (5 cols) */}
-        <div className="lg:col-span-5 space-y-6">
-          <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm sticky top-6">
-            <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/80">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <Send className="w-4 h-4 text-cyan-500" />
-                    <span>Notification Composer</span>
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Review and dispatch customer pickup alert.
-                  </CardDescription>
-                </div>
-
-                {selectedRepair && (
-                  <Badge variant="outline" className="font-mono text-[10px]">
-                    #{selectedRepair.repairNumber}
-                  </Badge>
-                )}
+              <div className="text-xs text-slate-400">
+                Page {repairedPage} of {repairedTotalPages}
               </div>
             </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              {!selectedRepair ? (
-                <div className="py-16 text-center text-xs text-slate-400 space-y-2">
-                  <Smartphone className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto" />
-                  <p>Select a repair ticket from the search or queue on the left to compose notification.</p>
+            <CardContent className="p-0">
+              {repairedError ? (
+                <div className="py-12 text-center text-xs text-rose-500 bg-rose-50/50 dark:bg-rose-950/20 m-4 rounded-xl border border-rose-200 dark:border-rose-900/50 space-y-3 p-4">
+                  <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 flex items-center justify-center mx-auto">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-rose-700 dark:text-rose-300">{repairedError}</p>
+                    <p className="text-[11px] text-rose-500/80 mt-0.5">An error occurred while communicating with the database.</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/30"
+                    onClick={() => fetchRepairedDevices()}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                    Retry Loading
+                  </Button>
+                </div>
+              ) : repairedLoading ? (
+                <div className="py-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-cyan-600" />
+                  <span>Retrieving completed repairs from database...</span>
+                </div>
+              ) : repairedList.length === 0 ? (
+                <div className="py-16 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-slate-950/20 m-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 space-y-1">
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">No completed repairs found for this period.</p>
+                  <p className="text-[11px] text-slate-400">Try selecting another date filter or clearing your search query.</p>
                 </div>
               ) : (
-                <>
-                  {/* Selected Device Meta */}
-                  <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 dark:text-slate-100">{selectedRepair.customerName}</span>
-                      <Badge variant="outline" className="text-[10px]">
-                        {selectedRepair.status}
-                      </Badge>
-                    </div>
-                    <div className="text-slate-500 text-[11px]">
-                      Device: <span className="font-semibold text-slate-700 dark:text-slate-300">{selectedRepair.deviceBrand} {selectedRepair.deviceModel}</span>
-                    </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 bg-slate-50/60 dark:bg-slate-950/60">
+                        <th className="py-3 px-3.5">Repair #</th>
+                        <th className="py-3 px-3">Customer</th>
+                        <th className="py-3 px-3">Phone</th>
+                        <th className="py-3 px-3">Device Model</th>
+                        <th className="py-3 px-3">Repair Problem</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-3">Completed (NPT)</th>
+                        <th className="py-3 px-3">SMS Status</th>
+                        <th className="py-3 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                      {repairedList.map((item) => {
+                        const hasSent = item.smsSummary?.status === 'SENT';
+                        const isPhoneValid = item.phoneValidation?.isValid;
 
-                    <div className="pt-1.5 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold">
-                        <Phone className="w-3 h-3 text-slate-400" />
-                        <span>{selectedPhoneInfo?.displayFormatted || selectedRepair.customerPhone}</span>
-                      </div>
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/60 transition-colors">
+                            {/* Repair Number */}
+                            <td className="py-3 px-3.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+                              <span className="text-cyan-600 hover:underline cursor-pointer" onClick={() => navigate(`/dashboard/repairs/${item.id}`)}>
+                                #{item.repairNumber}
+                              </span>
+                            </td>
 
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-[10px] text-slate-500"
-                        onClick={async () => {
-                          const num = selectedPhoneInfo?.international || selectedRepair.customerPhone;
-                          await navigator.clipboard.writeText(num);
-                          setCopiedComposerPhone(true);
-                          toast.success('Phone copied.');
-                          setTimeout(() => setCopiedComposerPhone(false), 2000);
-                        }}
-                      >
-                        {copiedComposerPhone ? <Check className="w-3 h-3 text-emerald-600 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
-                        {copiedComposerPhone ? 'Copied' : 'Copy'}
-                      </Button>
-                    </div>
+                            {/* Customer Name */}
+                            <td className="py-3 px-3 font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[130px]">
+                              {item.customerName}
+                            </td>
 
-                    {selectedPhoneInfo && !selectedPhoneInfo.isValid && (
-                      <div className="p-2 rounded-lg bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 text-[11px] flex items-center gap-1.5">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                        <span>{selectedPhoneInfo.error}</span>
-                      </div>
-                    )}
-                  </div>
+                            {/* Customer Phone */}
+                            <td className="py-3 px-3 font-mono">
+                              <div className="flex items-center gap-1.5">
+                                <span className={cn("text-xs font-semibold", isPhoneValid ? "text-slate-700 dark:text-slate-300" : "text-rose-600")}>
+                                  {item.phoneValidation?.displayFormatted || item.customerPhoneRaw}
+                                </span>
+                              </div>
+                            </td>
 
-                  {/* Post-Trigger Confirmation Banner */}
-                  {pendingConfirmation && (
-                    <div className="p-3.5 rounded-xl bg-cyan-50 dark:bg-cyan-950/70 border-2 border-cyan-400 dark:border-cyan-600 space-y-2.5 animate-in fade-in">
-                      <div className="flex items-start gap-2">
-                        <Send className="w-4 h-4 text-cyan-600 shrink-0 mt-0.5" />
-                        <div className="text-xs">
-                          <h4 className="font-bold text-slate-900 dark:text-slate-100">
-                            Did you successfully dispatch this {pendingConfirmation.channel === 'WHATSAPP' ? 'WhatsApp' : 'SMS'}?
-                          </h4>
-                          <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                            Please confirm whether the customer was notified.
-                          </p>
-                        </div>
-                      </div>
+                            {/* Device Model */}
+                            <td className="py-3 px-3 text-slate-700 dark:text-slate-300 truncate max-w-[140px]">
+                              <span className="font-semibold">{item.deviceBrand}</span> {item.deviceModel}
+                            </td>
 
-                      <div className="flex items-center gap-2 pt-1">
-                        <Button
-                          size="sm"
-                          className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-                          onClick={() => handleConfirmSentStatus('STAFF_CONFIRMED_SENT')}
-                          disabled={submitting}
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                          Confirm Sent
-                        </Button>
+                            {/* Problem */}
+                            <td className="py-3 px-3 text-slate-500 truncate max-w-[160px] italic">
+                              {item.problemDescription || 'Inspection'}
+                            </td>
 
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400"
-                          onClick={() => handleConfirmSentStatus('FAILED', 'Delivery failed or cancelled')}
-                          disabled={submitting}
-                        >
-                          Report Failed
-                        </Button>
+                            {/* Status */}
+                            <td className="py-3 px-3">
+                              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400">
+                                {item.status}
+                              </Badge>
+                            </td>
 
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 text-xs text-slate-500"
-                          onClick={() => setPendingConfirmation(null)}
-                          disabled={submitting}
-                        >
-                          Dismiss
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                            {/* Completion Date */}
+                            <td className="py-3 px-3 font-mono text-[11px] text-slate-500">
+                              {item.completedDate ? toNepalDateString(item.completedDate) : '—'}
+                            </td>
 
-                  {/* Message Composer Field */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <Label htmlFor="composer-text" className="font-bold text-slate-700 dark:text-slate-300">
-                        Message Content
-                      </Label>
-                      <Badge variant="outline" className={cn(
-                        "text-[10px] font-mono",
-                        composerEncoding.encoding === 'GSM_7'
-                          ? "text-cyan-700 bg-cyan-50 border-cyan-200 dark:text-cyan-300 dark:bg-cyan-950/60"
-                          : "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-950/60"
-                      )}>
-                        {composerEncoding.encoding} Encoding
-                      </Badge>
-                    </div>
+                            {/* SMS Status */}
+                            <td className="py-3 px-3">
+                              {hasSent ? (
+                                <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400">
+                                  Notified ({item.smsSummary?.count}x)
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400">
+                                  Unnotified
+                                </Badge>
+                              )}
+                            </td>
 
-                    <Textarea
-                      id="composer-text"
-                      value={composerMessage}
-                      onChange={(e) => setComposerMessage(e.target.value)}
-                      rows={4}
-                      className={cn(
-                        "text-xs resize-none focus:ring-cyan-500",
-                        !composerEncoding.isSingleSegment && "border-rose-400 focus:border-rose-500"
-                      )}
-                      placeholder="Type completed repair SMS..."
-                    />
+                            {/* Action Buttons */}
+                            <td className="py-3 px-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-[11px] font-bold px-2.5 bg-cyan-600 hover:bg-cyan-700 text-white shadow-xs"
+                                  onClick={() => handleOpenNotificationModal(item, 'REPAIR_COMPLETED')}
+                                  title="Send Repaired SMS Notification"
+                                >
+                                  <Smartphone className="w-3 h-3 mr-1" />
+                                  <span>Send SMS</span>
+                                </Button>
 
-                    {/* Segment & Char Counter */}
-                    <div className="flex items-center justify-between text-xs px-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className={cn(
-                          "font-mono font-bold text-[11px]",
-                          !composerEncoding.isSingleSegment ? "text-rose-600 dark:text-rose-400" : "text-slate-600 dark:text-slate-400"
-                        )}>
-                          {composerEncoding.unitsUsed}/{composerEncoding.maxUnitsSingleSegment} units
-                        </span>
-                        <Badge variant="outline" className={cn(
-                          "text-[9px] font-bold px-1.5 py-0",
-                          composerEncoding.isSingleSegment
-                            ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950/50"
-                            : "text-rose-700 bg-rose-50 border-rose-300 dark:text-rose-400 dark:bg-rose-950/50"
-                        )}>
-                          {composerEncoding.segmentCount}/1 Segment
-                        </Badge>
-                      </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[11px] font-bold px-2 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                  onClick={() => handleDirectWhatsApp(item, 'REPAIR_COMPLETED')}
+                                  title="Send WhatsApp Notification"
+                                >
+                                  <MessageSquare className="w-3 h-3 text-emerald-600" />
+                                  <span className="hidden sm:inline ml-1">WhatsApp</span>
+                                </Button>
 
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 text-[10px] text-cyan-600 hover:text-cyan-700 px-1"
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(composerMessage);
-                          setCopiedComposerMsg(true);
-                          toast.success('Message copied.');
-                          setTimeout(() => setCopiedComposerMsg(false), 2000);
-                        }}
-                      >
-                        {copiedComposerMsg ? <Check className="w-3 h-3 mr-0.5 text-emerald-600" /> : <Copy className="w-3 h-3 mr-0.5" />}
-                        {copiedComposerMsg ? 'Copied' : 'Copy'}
-                      </Button>
-                    </div>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs text-slate-500 px-1.5"
+                                  onClick={() => navigate(`/dashboard/repairs/${item.id}`)}
+                                  title="View Repair Ticket Details"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
-                    {!composerEncoding.isSingleSegment && (
-                      <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-[11px] flex items-start gap-1.5">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                        <span>Single-segment policy: Trim text to fit 1 SMS (max {composerEncoding.maxUnitsSingleSegment} {composerEncoding.encoding === 'GSM_7' ? 'septets' : 'chars'}).</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="space-y-2 pt-2">
+              {/* Pagination Controls */}
+              {repairedTotalPages > 1 && (
+                <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-500">
+                    Showing {repairedList.length} of {repairedTotal} records
+                  </span>
+                  <div className="flex items-center gap-1.5">
                     <Button
-                      type="button"
-                      className="w-full h-10 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
-                      onClick={handleComposerSendPhoneLink}
-                      disabled={!selectedPhoneInfo?.isValid || !composerEncoding.isSingleSegment || submitting || !composerMessage.trim()}
-                    >
-                      {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
-                      <span>Send via Windows Phone Link</span>
-                    </Button>
-
-                    <Button
-                      type="button"
+                      size="sm"
                       variant="outline"
-                      className="w-full h-10 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-bold text-xs flex items-center justify-center gap-2"
-                      onClick={handleComposerSendWhatsApp}
-                      disabled={!selectedPhoneInfo?.isValid || submitting || !composerMessage.trim()}
+                      className="h-7 text-xs"
+                      disabled={repairedPage <= 1 || repairedLoading}
+                      onClick={() => setRepairedPage((p) => Math.max(1, p - 1))}
                     >
-                      <MessageSquare className="w-4 h-4 text-emerald-600" />
-                      <span>Send via WhatsApp</span>
-                      <ExternalLink className="w-3 h-3 text-slate-400" />
+                      <ChevronLeft className="w-3 h-3 mr-1" />
+                      Previous
+                    </Button>
+                    <span className="px-2 font-mono font-bold text-slate-700 dark:text-slate-300">
+                      {repairedPage} / {repairedTotalPages}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      disabled={repairedPage >= repairedTotalPages || repairedLoading}
+                      onClick={() => setRepairedPage((p) => p + 1)}
+                    >
+                      Next
+                      <ChevronRight className="w-3 h-3 ml-1" />
                     </Button>
                   </div>
-                </>
+                </div>
               )}
             </CardContent>
           </Card>
-        </div>
-      </div>
+        </TabsContent>
 
-      {/* Bottom Section: Comprehensive Notification Audit History */}
-      <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
-        <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-cyan-500" />
-              <span>SMS & WhatsApp Dispatch History ({historyTotal})</span>
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Audit log of all prepared, opened, staff-confirmed, and failed customer notifications.
-            </CardDescription>
-          </div>
+        {/* ---------------------------------------------------- */}
+        {/* TAB 2: RECEIVED DEVICES                              */}
+        {/* ---------------------------------------------------- */}
+        <TabsContent value="RECEIVED" className="space-y-4 pt-1">
+          {/* Controls: Date Preset Filters & Search */}
+          <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+            <CardContent className="p-3.5 sm:p-4 space-y-3">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                {/* Date Presets */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mr-1 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Received Date (NPT):</span>
+                  </span>
 
-          {/* History Filters */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <Input
-                placeholder="Search history..."
-                value={historySearch}
-                onChange={(e) => setHistorySearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && fetchHistory()}
-                className="h-8 text-xs pl-8 w-36 sm:w-48 bg-slate-50 dark:bg-slate-950"
-              />
-            </div>
+                  {[
+                    { label: 'Today', value: 'TODAY' },
+                    { label: 'Yesterday', value: 'YESTERDAY' },
+                    { label: 'This Week', value: 'THIS_WEEK' },
+                    { label: 'This Month', value: 'THIS_MONTH' },
+                    { label: 'Custom Range', value: 'CUSTOM' },
+                    { label: 'All Received', value: 'ALL' },
+                  ].map((p) => (
+                    <Button
+                      key={p.value}
+                      type="button"
+                      size="sm"
+                      variant={receivedPreset === p.value ? "default" : "outline"}
+                      className={cn(
+                        "h-8 text-xs font-semibold px-2.5",
+                        receivedPreset === p.value
+                          ? "bg-cyan-600 text-white hover:bg-cyan-700 shadow-xs"
+                          : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
+                      )}
+                      onClick={() => {
+                        setReceivedPreset(p.value);
+                        setReceivedPage(1);
+                      }}
+                    >
+                      {p.label}
+                    </Button>
+                  ))}
+                </div>
 
-            <select
-              value={historyStatusFilter}
-              onChange={(e) => {
-                setHistoryStatusFilter(e.target.value);
-                setTimeout(fetchHistory, 50);
-              }}
-              aria-label="Filter notification history by status"
-              className="h-8 text-xs rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-2 text-slate-700 dark:text-slate-300"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="STAFF_CONFIRMED_SENT">Confirmed Sent</option>
-              <option value="PENDING">Pending / Draft</option>
-              <option value="FAILED">Failed</option>
-            </select>
+                {/* Search Box */}
+                <div className="relative w-full lg:w-72">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    placeholder="Search repair #, phone, customer..."
+                    value={receivedSearch}
+                    onChange={(e) => {
+                      setReceivedSearch(e.target.value);
+                      setReceivedPage(1);
+                    }}
+                    className="h-8 text-xs pl-8.5 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                  />
+                </div>
+              </div>
 
-            <select
-              value={historyChannelFilter}
-              onChange={(e) => {
-                setHistoryChannelFilter(e.target.value);
-                setTimeout(fetchHistory, 50);
-              }}
-              aria-label="Filter notification history by channel"
-              className="h-8 text-xs rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-2 text-slate-700 dark:text-slate-300"
-            >
-              <option value="ALL">All Channels</option>
-              <option value="WINDOWS_PHONE_LINK">Phone Link</option>
-              <option value="SMS_PROTOCOL">SMS Protocol</option>
-              <option value="WHATSAPP">WhatsApp</option>
-            </select>
+              {/* Custom Date Inputs if CUSTOM selected */}
+              {receivedPreset === 'CUSTOM' && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-3 flex-wrap text-xs">
+                  <span className="font-bold text-slate-700 dark:text-slate-300">Select Date Bounds:</span>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="received-start" className="text-[11px] text-slate-500">From:</Label>
+                    <Input
+                      id="received-start"
+                      type="date"
+                      value={receivedCustomStart}
+                      onChange={(e) => setReceivedCustomStart(e.target.value)}
+                      className="h-8 text-xs w-36 bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="received-end" className="text-[11px] text-slate-500">To:</Label>
+                    <Input
+                      id="received-end"
+                      type="date"
+                      value={receivedCustomEnd}
+                      onChange={(e) => setReceivedCustomEnd(e.target.value)}
+                      className="h-8 text-xs w-36 bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs bg-cyan-600 hover:bg-cyan-700 text-white font-bold"
+                    onClick={() => {
+                      setReceivedPage(1);
+                      fetchReceivedDevices();
+                    }}
+                  >
+                    Apply Filter
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchHistory}
-              className="h-8 text-xs"
-            >
-              <Filter className="w-3 h-3 mr-1" />
-              Apply
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {historyLoading ? (
-            <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-cyan-600" />
-              <span>Loading notification records...</span>
-            </div>
-          ) : historyList.length === 0 ? (
-            <div className="py-12 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-              No notification logs found matching the filter criteria.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-                    <th className="py-2.5 px-3">Repair #</th>
-                    <th className="py-2.5 px-3">Customer</th>
-                    <th className="py-2.5 px-3">Phone</th>
-                    <th className="py-2.5 px-3">Channel</th>
-                    <th className="py-2.5 px-3">Status</th>
-                    <th className="py-2.5 px-3">Staff Member</th>
-                    <th className="py-2.5 px-3">Date & Time</th>
-                    <th className="py-2.5 px-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {historyList.map((item) => {
-                    const isConfirmed = item.status === 'STAFF_CONFIRMED_SENT' || item.status === 'SENT';
-                    const isFailed = item.status === 'FAILED';
-                    const isWa = item.channel === 'WHATSAPP';
+          {/* Received Devices Results Table */}
+          <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+            <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/80 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-cyan-500" />
+                  <span>Devices Received at MTS Lab ({receivedTotal})</span>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Intake records filtered by device received date. Confirmation SMS provides tracking link to customer.
+                </CardDescription>
+              </div>
 
-                    return (
-                      <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
-                        <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-slate-100">
-                          #{item.repairNumber}
-                        </td>
-                        <td className="py-2.5 px-3 font-medium text-slate-800 dark:text-slate-200">
-                          {item.customerName}
-                        </td>
-                        <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400">
-                          {item.customerPhoneNormalized || item.customerPhoneRaw}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <Badge variant="outline" className={cn(
-                            "text-[10px]",
-                            isWa ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400" : "text-slate-600 dark:text-slate-300"
-                          )}>
-                            {isWa ? 'WhatsApp' : item.channel?.replace(/_/g, ' ') || 'SMS'}
-                          </Badge>
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <Badge variant="outline" className={cn(
-                            "text-[10px] font-bold",
-                            isConfirmed
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400"
-                              : isFailed
-                              ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400"
-                              : "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300"
-                          )}>
-                            {item.status.replace(/_/g, ' ')}
-                          </Badge>
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400">
-                          {item.senderStaffName} ({item.senderStaffRole})
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-400 text-[11px]">
-                          {item.createdAt ? new Date(item.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—'}
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs text-cyan-600 hover:text-cyan-700"
-                            onClick={() => {
-                              setModalRepair({
-                                id: item.repairId,
-                                repairNumber: item.repairNumber,
-                                customerName: item.customerName,
-                                customerPhone: item.customerPhoneRaw || item.customerPhoneNormalized,
-                                deviceModel: item.deviceModel,
-                                deviceBrand: item.deviceBrand,
-                              });
-                              setIsModalOpen(true);
-                            }}
-                          >
-                            <span>Open Details</span>
-                          </Button>
-                        </td>
+              <div className="text-xs text-slate-400">
+                Page {receivedPage} of {receivedTotalPages}
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {receivedError ? (
+                <div className="py-12 text-center text-xs text-rose-500 bg-rose-50/50 dark:bg-rose-950/20 m-4 rounded-xl border border-rose-200 dark:border-rose-900/50 space-y-3 p-4">
+                  <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 flex items-center justify-center mx-auto">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-rose-700 dark:text-rose-300">{receivedError}</p>
+                    <p className="text-[11px] text-rose-500/80 mt-0.5">An error occurred while communicating with the database.</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/30"
+                    onClick={() => fetchReceivedDevices()}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                    Retry Loading
+                  </Button>
+                </div>
+              ) : receivedLoading ? (
+                <div className="py-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-cyan-600" />
+                  <span>Retrieving received devices from database...</span>
+                </div>
+              ) : receivedList.length === 0 ? (
+                <div className="py-16 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-slate-950/20 m-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 space-y-1">
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">No received devices found for this period.</p>
+                  <p className="text-[11px] text-slate-400">Try adjusting your date filters or clearing search input.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 bg-slate-50/60 dark:bg-slate-950/60">
+                        <th className="py-3 px-3.5">Repair #</th>
+                        <th className="py-3 px-3">Customer</th>
+                        <th className="py-3 px-3">Phone</th>
+                        <th className="py-3 px-3">Device Model</th>
+                        <th className="py-3 px-3">Reported Problem</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-3">Received (NPT)</th>
+                        <th className="py-3 px-3">SMS Status</th>
+                        <th className="py-3 px-3 text-right">Actions</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                      {receivedList.map((item) => {
+                        const hasSent = item.smsSummary?.status === 'SENT';
+                        const isPhoneValid = item.phoneValidation?.isValid;
 
-      {/* Modal Popup helper if launched */}
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/60 transition-colors">
+                            {/* Repair Number */}
+                            <td className="py-3 px-3.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+                              <span className="text-cyan-600 hover:underline cursor-pointer" onClick={() => navigate(`/dashboard/repairs/${item.id}`)}>
+                                #{item.repairNumber}
+                              </span>
+                            </td>
+
+                            {/* Customer Name */}
+                            <td className="py-3 px-3 font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[130px]">
+                              {item.customerName}
+                            </td>
+
+                            {/* Customer Phone */}
+                            <td className="py-3 px-3 font-mono">
+                              <span className={cn("text-xs font-semibold", isPhoneValid ? "text-slate-700 dark:text-slate-300" : "text-rose-600")}>
+                                {item.phoneValidation?.displayFormatted || item.customerPhoneRaw}
+                              </span>
+                            </td>
+
+                            {/* Device Model */}
+                            <td className="py-3 px-3 text-slate-700 dark:text-slate-300 truncate max-w-[140px]">
+                              <span className="font-semibold">{item.deviceBrand}</span> {item.deviceModel}
+                            </td>
+
+                            {/* Problem */}
+                            <td className="py-3 px-3 text-slate-500 truncate max-w-[160px] italic">
+                              {item.problemDescription || 'Inspection'}
+                            </td>
+
+                            {/* Status */}
+                            <td className="py-3 px-3">
+                              <Badge variant="outline" className="text-[10px]">
+                                {item.status}
+                              </Badge>
+                            </td>
+
+                            {/* Received Date */}
+                            <td className="py-3 px-3 font-mono text-[11px] text-slate-500">
+                              {item.receivedDate ? toNepalDateString(item.receivedDate) : '—'}
+                            </td>
+
+                            {/* SMS Status */}
+                            <td className="py-3 px-3">
+                              {hasSent ? (
+                                <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400">
+                                  Notified ({item.smsSummary?.count}x)
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400">
+                                  Unnotified
+                                </Badge>
+                              )}
+                            </td>
+
+                            {/* Action Buttons */}
+                            <td className="py-3 px-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-[11px] font-bold px-2.5 bg-cyan-600 hover:bg-cyan-700 text-white shadow-xs"
+                                  onClick={() => handleOpenNotificationModal(item, 'DEVICE_RECEIVED')}
+                                  title="Send Received Confirmation SMS"
+                                >
+                                  <Smartphone className="w-3 h-3 mr-1" />
+                                  <span>Send SMS</span>
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[11px] font-bold px-2 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                  onClick={() => handleDirectWhatsApp(item, 'DEVICE_RECEIVED')}
+                                  title="Send WhatsApp Confirmation"
+                                >
+                                  <MessageSquare className="w-3 h-3 text-emerald-600" />
+                                  <span className="hidden sm:inline ml-1">WhatsApp</span>
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs text-slate-500 px-1.5"
+                                  onClick={() => navigate(`/dashboard/repairs/${item.id}`)}
+                                  title="View Repair Ticket Details"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Pagination Controls */}
+              {receivedTotalPages > 1 && (
+                <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-500">
+                    Showing {receivedList.length} of {receivedTotal} records
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      disabled={receivedPage <= 1 || receivedLoading}
+                      onClick={() => setReceivedPage((p) => Math.max(1, p - 1))}
+                    >
+                      <ChevronLeft className="w-3 h-3 mr-1" />
+                      Previous
+                    </Button>
+                    <span className="px-2 font-mono font-bold text-slate-700 dark:text-slate-300">
+                      {receivedPage} / {receivedTotalPages}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      disabled={receivedPage >= receivedTotalPages || receivedLoading}
+                      onClick={() => setReceivedPage((p) => p + 1)}
+                    >
+                      Next
+                      <ChevronRight className="w-3 h-3 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------------------------------------------- */}
+        {/* TAB 3: COMPLETE NOTIFICATION AUDIT HISTORY           */}
+        {/* ---------------------------------------------------- */}
+        <TabsContent value="HISTORY" className="space-y-4 pt-1">
+          <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+            <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-cyan-500" />
+                  <span>Notification Audit History ({historyTotal})</span>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Comprehensive log of all customer notification attempts, staff confirmations, and status transitions.
+                </CardDescription>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <Input
+                    placeholder="Search logs..."
+                    value={historySearch}
+                    onChange={(e) => setHistorySearch(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && fetchHistory()}
+                    className="h-8 text-xs pl-8 w-36 sm:w-48 bg-slate-50 dark:bg-slate-950"
+                  />
+                </div>
+
+                <select
+                  value={historyStatusFilter}
+                  onChange={(e) => {
+                    setHistoryStatusFilter(e.target.value);
+                  }}
+                  aria-label="Filter notification logs by status"
+                  className="h-8 text-xs rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-2 text-slate-700 dark:text-slate-300"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="STAFF_CONFIRMED_SENT">Confirmed Sent</option>
+                  <option value="PENDING">Pending / Draft</option>
+                  <option value="FAILED">Failed</option>
+                </select>
+
+                <select
+                  value={historyChannelFilter}
+                  onChange={(e) => {
+                    setHistoryChannelFilter(e.target.value);
+                  }}
+                  aria-label="Filter notification logs by channel"
+                  className="h-8 text-xs rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-2 text-slate-700 dark:text-slate-300"
+                >
+                  <option value="ALL">All Channels</option>
+                  <option value="WINDOWS_PHONE_LINK">Phone Link</option>
+                  <option value="SMS_PROTOCOL">SMS Protocol</option>
+                  <option value="WHATSAPP">WhatsApp</option>
+                </select>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchHistory}
+                  className="h-8 text-xs"
+                >
+                  <Filter className="w-3 h-3 mr-1" />
+                  Filter
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {historyLoading ? (
+                <div className="py-16 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-cyan-600" />
+                  <span>Loading history logs...</span>
+                </div>
+              ) : historyList.length === 0 ? (
+                <div className="py-16 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                  No notification logs found matching the filter criteria.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                        <th className="py-2.5 px-3">Repair #</th>
+                        <th className="py-2.5 px-3">Customer</th>
+                        <th className="py-2.5 px-3">Phone</th>
+                        <th className="py-2.5 px-3">Channel</th>
+                        <th className="py-2.5 px-3">Status</th>
+                        <th className="py-2.5 px-3">Staff Member</th>
+                        <th className="py-2.5 px-3">Message Preview</th>
+                        <th className="py-2.5 px-3 text-right">Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {historyList.map((item) => {
+                        const isConfirmed = item.status === 'STAFF_CONFIRMED_SENT' || item.status === 'SENT';
+                        const isFailed = item.status === 'FAILED';
+                        const isWa = item.channel === 'WHATSAPP';
+
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-slate-100">
+                              <span className="text-cyan-600 hover:underline cursor-pointer" onClick={() => navigate(`/dashboard/repairs/${item.repairId}`)}>
+                                #{item.repairNumber}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-medium text-slate-800 dark:text-slate-200">
+                              {item.customerName}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400">
+                              {item.customerPhoneNormalized || item.customerPhoneRaw}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <Badge variant="outline" className={cn(
+                                "text-[10px]",
+                                isWa ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400" : "text-slate-600 dark:text-slate-300"
+                              )}>
+                                {isWa ? 'WhatsApp' : item.channel?.replace(/_/g, ' ') || 'SMS'}
+                              </Badge>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <Badge variant="outline" className={cn(
+                                "text-[10px] font-bold",
+                                isConfirmed
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400"
+                                  : isFailed
+                                  ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400"
+                                  : "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                              )}>
+                                {item.status.replace(/_/g, ' ')}
+                              </Badge>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400">
+                              {item.senderStaffName} ({item.senderStaffRole})
+                            </td>
+                            <td className="py-2.5 px-3 max-w-[240px] truncate text-slate-500 italic">
+                              "{item.messageContent}"
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-slate-400 text-[11px] font-mono">
+                              {item.createdAt ? new Date(item.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Reusable Send & Preview Modal */}
       {modalRepair && (
         <SendSmsModal
           open={isModalOpen}
@@ -1035,15 +1228,18 @@ export default function SmsCenter() {
             setIsModalOpen(val);
             if (!val) {
               fetchStats();
-              fetchHistory();
-              fetchPendingRepairs();
+              if (activeTab === 'REPAIRED') fetchRepairedDevices();
+              if (activeTab === 'RECEIVED') fetchReceivedDevices();
+              if (activeTab === 'HISTORY') fetchHistory();
             }
           }}
           repair={modalRepair}
+          defaultNotificationType={modalNotificationType}
           onSuccess={() => {
             fetchStats();
-            fetchHistory();
-            fetchPendingRepairs();
+            if (activeTab === 'REPAIRED') fetchRepairedDevices();
+            if (activeTab === 'RECEIVED') fetchReceivedDevices();
+            if (activeTab === 'HISTORY') fetchHistory();
           }}
         />
       )}

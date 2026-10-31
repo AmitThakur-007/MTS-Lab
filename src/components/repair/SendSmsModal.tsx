@@ -27,20 +27,26 @@ import {
   Info,
   ExternalLink,
   XCircle,
-  HelpCircle,
+  Tag,
+  CheckSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { validateAndFormatNepalPhone } from '@/lib/nepalPhone';
-import { analyzeSmsEncoding, generateRepairCompletedMessage } from '@/lib/smsEncoding';
+import {
+  analyzeSmsEncoding,
+  generateRepairedDeviceSmsMessage,
+  generateReceivedDeviceSmsMessage,
+} from '@/lib/smsEncoding';
 import { cn } from '@/lib/utils';
 
-interface SendSmsModalProps {
+export interface SendSmsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repair: any;
   onSuccess?: (record?: any) => void;
+  defaultNotificationType?: 'REPAIR_COMPLETED' | 'DEVICE_RECEIVED';
 }
 
 const ALLOWED_SEND_ROLES = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'];
@@ -50,11 +56,13 @@ export default function SendSmsModal({
   onOpenChange,
   repair,
   onSuccess,
+  defaultNotificationType,
 }: SendSmsModalProps) {
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+  const [notificationType, setNotificationType] = useState<'REPAIR_COMPLETED' | 'DEVICE_RECEIVED'>('REPAIR_COMPLETED');
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
@@ -74,28 +82,38 @@ export default function SendSmsModal({
   const isManager = userRole === 'MANAGER';
 
   const customerName = repair?.customerName || repair?.customer?.name || 'Customer';
-  const customerPhoneRaw = repair?.customerPhone || repair?.customer?.phone || '';
+  const customerPhoneRaw = repair?.customerPhone || repair?.customer?.phone || repair?.customerPhoneRaw || '';
   const deviceModel = `${repair?.deviceBrand ? `${repair.deviceBrand} ` : ''}${repair?.deviceModel || 'Device'}`.trim();
   const repairNumber = repair?.repairNumber || repair?.id?.substring(0, 8) || 'MTS-Job';
 
   // Authoritative phone validation
   const phoneInfo = validateAndFormatNepalPhone(customerPhoneRaw);
 
-  // Default standard message
-  const defaultTemplate = generateRepairCompletedMessage({
-    customerName,
-    deviceModel,
-    repairNumber,
-  });
-
   // SMS encoding analysis
   const encodingInfo = analyzeSmsEncoding(message);
+
+  // Switch template
+  const handleSelectTemplateType = (type: 'REPAIR_COMPLETED' | 'DEVICE_RECEIVED') => {
+    setNotificationType(type);
+    const newMsg = type === 'REPAIR_COMPLETED'
+      ? generateRepairedDeviceSmsMessage(repairNumber)
+      : generateReceivedDeviceSmsMessage(repairNumber);
+    setMessage(newMsg);
+  };
 
   // Fetch status and history from server when modal opens
   useEffect(() => {
     if (!open || !repair?.id) return;
 
-    setMessage(defaultTemplate);
+    const isRepairedStatus = repair?.status && ['REPAIRED', 'READY_FOR_PICKUP', 'READY', 'READY_FOR_DELIVERY', 'REPROBLEM_FIXED'].includes(String(repair.status).toUpperCase());
+    const initialType = defaultNotificationType || (isRepairedStatus ? 'REPAIR_COMPLETED' : 'DEVICE_RECEIVED');
+    setNotificationType(initialType);
+
+    const initialTemplate = initialType === 'REPAIR_COMPLETED'
+      ? generateRepairedDeviceSmsMessage(repairNumber)
+      : generateReceivedDeviceSmsMessage(repairNumber);
+
+    setMessage(initialTemplate);
     setCopiedMessage(false);
     setCopiedPhone(false);
     setActiveSmsRecordId(null);
@@ -109,9 +127,6 @@ export default function SendSmsModal({
       .get(`/sms/repair/${repair.id}`)
       .then((data) => {
         if (isMounted && data) {
-          if (data.defaultMessage) {
-            setMessage(data.defaultMessage);
-          }
           if (Array.isArray(data.history)) {
             setHistory(data.history);
             const activeDraft = data.history.find(
@@ -123,17 +138,8 @@ export default function SendSmsModal({
           }
         }
       })
-      .catch(() => {
-        // Fallback to legacy endpoint if /sms/repair fails
-        api
-          .get(`/repairs/${repair.id}/sms-status`)
-          .then((legacyData) => {
-            if (isMounted && legacyData) {
-              if (legacyData.defaultMessage) setMessage(legacyData.defaultMessage);
-              if (Array.isArray(legacyData.history)) setHistory(legacyData.history);
-            }
-          })
-          .catch((err) => console.warn('[SMS STATUS FETCH WARN]', err));
+      .catch((err) => {
+        console.warn('[SMS STATUS FETCH WARN]', err);
       })
       .finally(() => {
         if (isMounted) setLoading(false);
@@ -142,7 +148,7 @@ export default function SendSmsModal({
     return () => {
       isMounted = false;
     };
-  }, [open, repair?.id]);
+  }, [open, repair?.id, defaultNotificationType, repairNumber]);
 
   const handleCopyMessage = async () => {
     try {
@@ -192,18 +198,17 @@ export default function SendSmsModal({
     setSubmitting(true);
 
     try {
-      // 1. Copy message and phone to clipboard automatically for convenient backup
       try {
         await navigator.clipboard.writeText(cleanMsg);
         setCopiedMessage(true);
       } catch (_) {}
 
-      // 2. Open notification attempt on backend
       const res = await api.post('/sms/open', {
         repairId: repair.id,
         smsRecordId: activeSmsRecordId || undefined,
         customMessage: cleanMsg,
         channel: 'WINDOWS_PHONE_LINK',
+        notificationType,
       });
 
       const record = res?.record;
@@ -212,23 +217,19 @@ export default function SendSmsModal({
         setHistory((prev) => [record, ...prev.filter((p) => p.id !== record.id)]);
       }
 
-      // 3. Launch protocol: sms:${phone}?body=${encoded}
-      // On Windows with Phone Link paired, this automatically triggers Microsoft Phone Link or default SMS app.
+      // Universal SMS protocol handoff (compatible with Phone Link on Windows, Android SMS, iOS Messages)
       const smsUrl = `sms:${phoneInfo.international}?body=${encodeURIComponent(cleanMsg)}`;
-      
-      // Also try ms-phone-link if preferred, but standard sms: is universal
       window.location.href = smsUrl;
 
-      // 4. Activate post-send confirmation modal state
       setPendingConfirmation({
         channel: 'WINDOWS_PHONE_LINK',
         recordId: record?.id || activeSmsRecordId || '',
       });
 
-      toast.info('Windows Phone Link / SMS triggered. Please confirm once sent.', { duration: 5000 });
+      toast.info('SMS application / Phone Link opened. Please confirm once sent.', { duration: 5000 });
       if (onSuccess) onSuccess(record);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to initiate Windows Phone Link.');
+      toast.error(err.message || 'Failed to initiate SMS dispatch.');
     } finally {
       setSubmitting(false);
       setTimeout(() => {
@@ -265,6 +266,7 @@ export default function SendSmsModal({
         smsRecordId: activeSmsRecordId || undefined,
         customMessage: cleanMsg,
         channel: 'WHATSAPP',
+        notificationType,
       });
 
       const record = res?.record;
@@ -273,7 +275,6 @@ export default function SendSmsModal({
         setHistory((prev) => [record, ...prev.filter((p) => p.id !== record.id)]);
       }
 
-      // WhatsApp Click-to-Chat URL
       const waUrl = `https://wa.me/${phoneInfo.whatsappPhone}?text=${encodeURIComponent(cleanMsg)}`;
       window.open(waUrl, '_blank', 'noopener,noreferrer');
 
@@ -373,7 +374,7 @@ export default function SendSmsModal({
             </div>
             <div>
               <DialogTitle className="text-lg sm:text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-2">
-                <span>Customer SMS & Notification Center</span>
+                <span>Customer Notification Dispatch</span>
                 {isManager && (
                   <Badge variant="outline" className="text-[10px] font-bold border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/40">
                     Read-Only (Manager)
@@ -381,7 +382,7 @@ export default function SendSmsModal({
                 )}
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
-                Staff-assisted notifications via Windows Phone Link, native SMS protocol, or WhatsApp.
+                Staff-assisted single-segment SMS and WhatsApp notification with tracking link.
               </DialogDescription>
             </div>
           </div>
@@ -390,7 +391,7 @@ export default function SendSmsModal({
         {loading ? (
           <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
             <Loader2 className="w-7 h-7 animate-spin text-cyan-600" />
-            <p className="text-xs font-semibold text-slate-500">Inspecting repair readiness & customer phone...</p>
+            <p className="text-xs font-semibold text-slate-500">Loading repair notification details...</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -454,6 +455,46 @@ export default function SendSmsModal({
               )}
             </div>
 
+            {/* Template Selector Pills */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Standard Notification Template:
+              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={notificationType === 'REPAIR_COMPLETED' ? "default" : "outline"}
+                  onClick={() => handleSelectTemplateType('REPAIR_COMPLETED')}
+                  className={cn(
+                    "h-8 text-xs font-semibold px-3",
+                    notificationType === 'REPAIR_COMPLETED'
+                      ? "bg-cyan-600 hover:bg-cyan-700 text-white"
+                      : "border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                  )}
+                >
+                  <CheckSquare className="w-3.5 h-3.5 mr-1.5" />
+                  Repaired & Ready for Pickup
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={notificationType === 'DEVICE_RECEIVED' ? "default" : "outline"}
+                  onClick={() => handleSelectTemplateType('DEVICE_RECEIVED')}
+                  className={cn(
+                    "h-8 text-xs font-semibold px-3",
+                    notificationType === 'DEVICE_RECEIVED'
+                      ? "bg-cyan-600 hover:bg-cyan-700 text-white"
+                      : "border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                  )}
+                >
+                  <Tag className="w-3.5 h-3.5 mr-1.5" />
+                  Device Received Confirmation
+                </Button>
+              </div>
+            </div>
+
             {/* Post-Trigger Confirmation Banner (Visible when messaging was opened) */}
             {pendingConfirmation && (
               <div className="p-4 rounded-2xl bg-cyan-50 dark:bg-cyan-950/60 border-2 border-cyan-400 dark:border-cyan-600 shadow-lg space-y-3 animate-in fade-in zoom-in-95">
@@ -510,7 +551,7 @@ export default function SendSmsModal({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="sms-message" className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <span>Message Content</span>
+                  <span>Message Content (Max 160 Characters)</span>
                   <Badge variant="outline" className={cn(
                     "text-[10px] font-mono",
                     encodingInfo.encoding === 'GSM_7'
@@ -527,11 +568,11 @@ export default function SendSmsModal({
                     variant="ghost"
                     size="sm"
                     className="h-6 text-[11px] text-slate-500 hover:text-slate-800"
-                    onClick={() => setMessage(defaultTemplate)}
+                    onClick={() => handleSelectTemplateType(notificationType)}
                     disabled={!canSend}
                   >
                     <RefreshCw className="w-3 h-3 mr-1" />
-                    Reset Template
+                    Reset
                   </Button>
                   <Button
                     type="button"
@@ -557,7 +598,7 @@ export default function SendSmsModal({
                     "font-sans text-xs sm:text-sm resize-none pr-4 focus:ring-cyan-500",
                     !encodingInfo.isSingleSegment && "border-rose-400 focus:border-rose-500 focus:ring-rose-500"
                   )}
-                  placeholder="Type repair completion message..."
+                  placeholder="Type customer message..."
                 />
               </div>
 
@@ -611,7 +652,7 @@ export default function SendSmsModal({
                   className="h-11 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-cyan-600/20"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
-                  <span>Send via Windows Phone Link</span>
+                  <span>Send via SMS / Phone Link</span>
                 </Button>
 
                 <Button
@@ -716,7 +757,7 @@ export default function SendSmsModal({
         <DialogFooter className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center sm:justify-between">
           <span className="text-[11px] text-slate-400 flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 text-cyan-600" />
-            <span>MTS Lab Secure Messaging Hub</span>
+            <span>MTS Lab Secure Notification Dispatch</span>
           </span>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             Close

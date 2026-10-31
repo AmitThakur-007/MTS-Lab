@@ -8,6 +8,8 @@ import { broadcastServerChange } from '../services/realtimeSync';
 import {
   validateAndNormalizeNepalPhone,
   generateRepairCompletedSmsMessage,
+  generateRepairedDeviceSmsMessage,
+  generateReceivedDeviceSmsMessage,
   analyzeSmsEncodingServer,
   recordSmsNotification,
   updateSmsNotification,
@@ -20,6 +22,7 @@ import {
   SmsNotificationStatus,
   SmsNotificationChannel,
 } from '../services/smsStorage';
+import { getNptIsoBoundsForPreset, DateFilterPreset } from '../services/repairStatsService';
 
 const router = Router();
 
@@ -139,7 +142,7 @@ router.get('/pending-repairs', authenticate, authorize(SMS_VIEW_ROLES), async (_
   try {
     const { data: repairs, error } = await supabaseAdmin
       .from('Repair')
-      .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, status, priority, completedAt, createdAt, updatedAt')
+      .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, status, priority, createdAt, updatedAt')
       .in('status', ['REPAIRED', 'READY_FOR_PICKUP', 'READY', 'READY_FOR_DELIVERY'])
       .order('updatedAt', { ascending: false })
       .limit(100);
@@ -168,7 +171,7 @@ router.get('/pending-repairs', authenticate, authorize(SMS_VIEW_ROLES), async (_
         deviceModel: deviceModelFull,
         deviceBrand: repair.deviceBrand || null,
         status: repair.status,
-        completedAt: repair.completedAt || repair.updatedAt,
+        completedAt: repair.updatedAt,
         defaultMessage: defaultMsg,
         smsSummary: summary,
       };
@@ -186,6 +189,275 @@ router.get('/pending-repairs', authenticate, authorize(SMS_VIEW_ROLES), async (_
 });
 
 /**
+ * 3.1 GET /api/sms/devices/repaired — Retrieve repaired devices filtered by date (NPT) and search
+ * Roles: SUPER_ADMIN, ADMIN, RECEPTIONIST, MANAGER
+ */
+router.get('/devices/repaired', authenticate, authorize(SMS_VIEW_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      preset = 'THIS_MONTH',
+      startDate,
+      endDate,
+      search,
+      page = '1',
+      limit = '20',
+    } = req.query as {
+      preset?: string;
+      startDate?: string;
+      endDate?: string;
+      search?: string;
+      page?: string;
+      limit?: string;
+    };
+
+    const rawPreset = (typeof preset === 'string' && preset.trim()) ? preset.trim().toUpperCase() : 'THIS_MONTH';
+    const validPreset: DateFilterPreset = (['ALL', 'TODAY', 'YESTERDAY', 'THIS_WEEK', 'THIS_MONTH', 'CUSTOM'].includes(rawPreset)
+      ? rawPreset
+      : 'THIS_MONTH') as DateFilterPreset;
+    const { startIso, endIso } = getNptIsoBoundsForPreset(validPreset, startDate, endDate);
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+
+    const REPAIRED_STATUSES = ['REPAIRED', 'READY_FOR_PICKUP', 'READY', 'READY_FOR_DELIVERY', 'REPROBLEM_FIXED'];
+
+    let query = supabaseAdmin
+      .from('Repair')
+      .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, problemDescription, status, priority, courierReceivedDate, isCourierIn, expectedCompletionDate, createdAt, updatedAt')
+      .in('status', REPAIRED_STATUSES);
+
+    if (search && search.trim()) {
+      const term = search.trim();
+      query = query.or(`repairNumber.ilike.%${term}%,customerName.ilike.%${term}%,customerPhone.ilike.%${term}%,deviceModel.ilike.%${term}%`);
+    }
+
+    const { data: repairs, error } = await query.order('updatedAt', { ascending: false });
+
+    if (error) {
+      console.error('[REPAIRED DEVICES QUERY ERROR]', error);
+      return res.status(500).json({ error: error.message || 'Failed to retrieve repaired devices.' });
+    }
+
+    const rawList = Array.isArray(repairs) ? repairs : [];
+    const repairIds = rawList.map((r) => r.id);
+
+    // Fetch relevant repair completion logs to determine authoritative completion date
+    let completionLogsMap: Record<string, string> = {};
+    if (repairIds.length > 0) {
+      try {
+        const { data: logs, error: logsError } = await supabaseAdmin
+          .from('RepairLog')
+          .select('repairId, status, createdAt')
+          .in('repairId', repairIds)
+          .in('status', REPAIRED_STATUSES)
+          .order('createdAt', { ascending: false });
+
+        if (!logsError && Array.isArray(logs)) {
+          for (const log of logs) {
+            if (!completionLogsMap[log.repairId]) {
+              completionLogsMap[log.repairId] = log.createdAt;
+            }
+          }
+        }
+      } catch (logErr) {
+        console.warn('[REPAIR LOG COMPLETION LOOKUP WARN]', logErr);
+      }
+    }
+
+    // Filter by NPT bounds on actual completion date
+    const startMs = startIso ? new Date(startIso).getTime() : null;
+    const endMs = endIso ? new Date(endIso).getTime() : null;
+
+    const filtered = rawList.filter((repair) => {
+      const completedDate = completionLogsMap[repair.id] || repair.updatedAt;
+      if (!completedDate) return true;
+      const compMs = new Date(completedDate).getTime();
+      if (startMs !== null && compMs < startMs) return false;
+      if (endMs !== null && compMs > endMs) return false;
+      return true;
+    });
+
+    // Sort by completion date descending
+    filtered.sort((a, b) => {
+      const aComp = new Date(completionLogsMap[a.id] || a.updatedAt).getTime();
+      const bComp = new Date(completionLogsMap[b.id] || b.updatedAt).getTime();
+      return bComp - aComp;
+    });
+
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / limitNum) || 1;
+    const offset = (pageNum - 1) * limitNum;
+    const pagedItems = filtered.slice(offset, offset + limitNum);
+
+    const items = pagedItems.map((repair) => {
+      const phoneValidation = validateAndNormalizeNepalPhone(repair.customerPhone);
+      const summary = getRepairSmsSummary(repair.id);
+      const isCourier = Boolean(repair.isCourierIn);
+      const receivedDate = (isCourier && repair.courierReceivedDate ? repair.courierReceivedDate : repair.createdAt);
+      const completedDate = completionLogsMap[repair.id] || repair.updatedAt;
+      const suggestedMessage = generateRepairedDeviceSmsMessage(repair.repairNumber);
+
+      return {
+        id: repair.id,
+        repairId: repair.id,
+        repairNumber: repair.repairNumber,
+        customerId: repair.customerId,
+        customerName: repair.customerName,
+        customerPhoneRaw: repair.customerPhone,
+        customerPhone: phoneValidation.normalized || repair.customerPhone,
+        phoneValidation,
+        deviceBrand: repair.deviceBrand || '',
+        deviceModel: repair.deviceModel || 'Device',
+        problemDescription: repair.problemDescription || 'Inspection & Repair',
+        status: repair.status,
+        receivedDate,
+        completedDate,
+        smsSummary: summary,
+        suggestedSms: suggestedMessage,
+        suggestedWhatsApp: suggestedMessage,
+      };
+    });
+
+    return res.json({
+      success: true,
+      items,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages,
+      filter: {
+        preset: validPreset,
+        startIso,
+        endIso,
+      },
+    });
+  } catch (err: any) {
+    console.error('[GET /api/sms/devices/repaired ERROR]', err);
+    return res.status(500).json({ error: 'Failed to retrieve repaired devices.' });
+  }
+});
+
+/**
+ * 3.2 GET /api/sms/devices/received — Retrieve received devices filtered by date (NPT) and search
+ * Roles: SUPER_ADMIN, ADMIN, RECEPTIONIST, MANAGER
+ */
+router.get('/devices/received', authenticate, authorize(SMS_VIEW_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      preset = 'THIS_MONTH',
+      startDate,
+      endDate,
+      search,
+      page = '1',
+      limit = '20',
+    } = req.query as {
+      preset?: string;
+      startDate?: string;
+      endDate?: string;
+      search?: string;
+      page?: string;
+      limit?: string;
+    };
+
+    const rawPreset = (typeof preset === 'string' && preset.trim()) ? preset.trim().toUpperCase() : 'THIS_MONTH';
+    const validPreset: DateFilterPreset = (['ALL', 'TODAY', 'YESTERDAY', 'THIS_WEEK', 'THIS_MONTH', 'CUSTOM'].includes(rawPreset)
+      ? rawPreset
+      : 'THIS_MONTH') as DateFilterPreset;
+    const { startIso, endIso } = getNptIsoBoundsForPreset(validPreset, startDate, endDate);
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+
+    let query = supabaseAdmin
+      .from('Repair')
+      .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, problemDescription, status, priority, courierReceivedDate, isCourierIn, expectedCompletionDate, createdAt, updatedAt');
+
+    if (search && search.trim()) {
+      const term = search.trim();
+      query = query.or(`repairNumber.ilike.%${term}%,customerName.ilike.%${term}%,customerPhone.ilike.%${term}%,deviceModel.ilike.%${term}%`);
+    }
+
+    const { data: repairs, error } = await query.order('createdAt', { ascending: false });
+
+    if (error) {
+      console.error('[RECEIVED DEVICES QUERY ERROR]', error);
+      return res.status(500).json({ error: error.message || 'Failed to retrieve received devices.' });
+    }
+
+    const rawList = Array.isArray(repairs) ? repairs : [];
+
+    const startMs = startIso ? new Date(startIso).getTime() : null;
+    const endMs = endIso ? new Date(endIso).getTime() : null;
+
+    // Filter by NPT bounds on actual device received date
+    const filtered = rawList.filter((repair) => {
+      const isCourier = Boolean(repair.isCourierIn);
+      const receivedDate = (isCourier && repair.courierReceivedDate ? repair.courierReceivedDate : repair.createdAt);
+      if (!receivedDate) return true;
+      const recMs = new Date(receivedDate).getTime();
+      if (startMs !== null && recMs < startMs) return false;
+      if (endMs !== null && recMs > endMs) return false;
+      return true;
+    });
+
+    filtered.sort((a, b) => {
+      const aDate = new Date(a.isCourierIn && a.courierReceivedDate ? a.courierReceivedDate : a.createdAt).getTime();
+      const bDate = new Date(b.isCourierIn && b.courierReceivedDate ? b.courierReceivedDate : b.createdAt).getTime();
+      return bDate - aDate;
+    });
+
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / limitNum) || 1;
+    const offset = (pageNum - 1) * limitNum;
+    const pagedItems = filtered.slice(offset, offset + limitNum);
+
+    const items = pagedItems.map((repair) => {
+      const phoneValidation = validateAndNormalizeNepalPhone(repair.customerPhone);
+      const summary = getRepairSmsSummary(repair.id);
+      const isCourier = Boolean(repair.isCourierIn);
+      const receivedDate = (isCourier && repair.courierReceivedDate ? repair.courierReceivedDate : repair.createdAt);
+      const suggestedMessage = generateReceivedDeviceSmsMessage(repair.repairNumber);
+
+      return {
+        id: repair.id,
+        repairId: repair.id,
+        repairNumber: repair.repairNumber,
+        customerId: repair.customerId,
+        customerName: repair.customerName,
+        customerPhoneRaw: repair.customerPhone,
+        customerPhone: phoneValidation.normalized || repair.customerPhone,
+        phoneValidation,
+        deviceBrand: repair.deviceBrand || '',
+        deviceModel: repair.deviceModel || 'Device',
+        problemDescription: repair.problemDescription || 'Inspection & Repair',
+        status: repair.status,
+        receivedDate,
+        smsSummary: summary,
+        suggestedSms: suggestedMessage,
+        suggestedWhatsApp: suggestedMessage,
+      };
+    });
+
+    return res.json({
+      success: true,
+      items,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages,
+      filter: {
+        preset: validPreset,
+        startIso,
+        endIso,
+      },
+    });
+  } catch (err: any) {
+    console.error('[GET /api/sms/devices/received ERROR]', err);
+    return res.status(500).json({ error: 'Failed to retrieve received devices.' });
+  }
+});
+
+/**
  * 4. GET /api/sms/repair/:id — SMS status, validation & history for a specific repair
  * Roles: SUPER_ADMIN, ADMIN, MANAGER, RECEPTIONIST
  */
@@ -194,7 +466,7 @@ router.get('/repair/:id', authenticate, authorize(SMS_VIEW_ROLES), async (req: A
     const { id } = req.params;
     const { data: repair, error } = await supabaseAdmin
       .from('Repair')
-      .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, status, priority, estimatedCompletionDate, completedAt')
+      .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, status, priority, expectedCompletionDate, createdAt, updatedAt')
       .or(`id.eq.${id},repairNumber.eq.${id}`)
       .single();
 
@@ -311,6 +583,7 @@ router.post('/open', authenticate, authorize(SMS_SEND_ROLES), async (req: AuthRe
       smsRecordId,
       customMessage,
       channel = 'WINDOWS_PHONE_LINK',
+      notificationType = 'REPAIR_COMPLETED',
     } = req.body;
 
     if (!repairId && !smsRecordId) {
@@ -336,15 +609,13 @@ router.post('/open', authenticate, authorize(SMS_SEND_ROLES), async (req: AuthRe
       });
     }
 
-    // Analyze message encoding & single-segment limit
-    const deviceModelFull = `${repair.deviceBrand ? `${repair.deviceBrand} ` : ''}${repair.deviceModel || ''}`.trim();
+    // Generate standard message based on notificationType if customMessage not provided
+    const isReceivedNotification = notificationType === 'DEVICE_RECEIVED';
     const finalMessage = customMessage && typeof customMessage === 'string' && customMessage.trim()
       ? customMessage.trim()
-      : generateRepairCompletedSmsMessage({
-          customerName: repair.customerName,
-          deviceModel: deviceModelFull,
-          repairNumber: repair.repairNumber,
-        });
+      : isReceivedNotification
+      ? generateReceivedDeviceSmsMessage(repair.repairNumber)
+      : generateRepairedDeviceSmsMessage(repair.repairNumber);
 
     const encodingInfo = analyzeSmsEncodingServer(finalMessage);
     if (!encodingInfo.isSingleSegment) {
@@ -366,6 +637,10 @@ router.post('/open', authenticate, authorize(SMS_SEND_ROLES), async (req: AuthRe
       });
     }
 
+    const calculatedMessageType = isReceivedNotification
+      ? (channel === 'WHATSAPP' ? 'DEVICE_RECEIVED_WHATSAPP' : 'DEVICE_RECEIVED_SMS')
+      : (channel === 'WHATSAPP' ? 'REPAIR_COMPLETED_WHATSAPP' : 'REPAIR_COMPLETED_SMS');
+
     if (!record) {
       // Find existing prepared draft
       const history = getSmsNotificationsForRepair(repair.id);
@@ -381,6 +656,7 @@ router.post('/open', authenticate, authorize(SMS_SEND_ROLES), async (req: AuthRe
           messageContent: finalMessage,
         });
       } else {
+        const deviceModelFull = `${repair.deviceBrand ? `${repair.deviceBrand} ` : ''}${repair.deviceModel || ''}`.trim();
         record = await recordSmsNotification({
           repairId: repair.id,
           repairNumber: repair.repairNumber,
@@ -391,14 +667,14 @@ router.post('/open', authenticate, authorize(SMS_SEND_ROLES), async (req: AuthRe
           customerPhoneInternational: phoneValidation.international,
           deviceModel: deviceModelFull,
           deviceBrand: repair.deviceBrand || null,
-          messageType: channel === 'WHATSAPP' ? 'REPAIR_COMPLETED_WHATSAPP' : 'REPAIR_COMPLETED_SMS',
+          messageType: calculatedMessageType,
           messageContent: finalMessage,
           status: 'OPENED',
           channel: channel as SmsNotificationChannel,
           senderStaffId: req.user!.id,
           senderStaffName: req.user!.name || 'Staff',
           senderStaffRole: req.user!.role,
-          notes: `Messaging opened via ${channel} by ${req.user!.name}`,
+          notes: `Messaging opened via ${channel} (${notificationType}) by ${req.user!.name}`,
           initiatedAt: nowIso,
           openedAt: nowIso,
         });
