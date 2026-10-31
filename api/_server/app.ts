@@ -24,6 +24,7 @@ import uploadRoutes from './routes/upload';
 import eventsRoutes from './routes/events';
 import publicRoutes from './routes/public';
 import seoRoutes from './routes/seo';
+import smsRoutes from './routes/sms';
 import { getSystemThemeConfigAsync } from './services/systemThemeService';
 
 export function createApp() {
@@ -93,6 +94,7 @@ export function createApp() {
   app.use('/api/approved-devices', securityRoutes);
   app.use('/api/upload', uploadRoutes);
   app.use('/api/events', eventsRoutes);
+  app.use('/api/sms', smsRoutes);
   app.use('/api/public', publicRoutes);
   app.use('/api', publicRoutes);
 

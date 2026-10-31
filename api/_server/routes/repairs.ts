@@ -29,6 +29,7 @@ import {
   hasRecentSmsNotification,
   getRepairSmsSummary,
   getAllRepairSmsSummaries,
+  prepareOrGetPendingNotification,
 } from '../services/smsStorage';
 
 const router = Router();
@@ -1546,6 +1547,24 @@ const handleRepairUpdate = async (req: AuthRequest, res: Response) => {
                           (updateData.totalPaid !== undefined && updateData.totalPaid !== existingRepair.totalPaid);
 
     if (statusChanged) {
+      if (isRepairedStatusEligible(updated.status)) {
+        try {
+          const deviceModelFull = `${updated.deviceBrand ? `${updated.deviceBrand} ` : ''}${updated.deviceModel || ''}`.trim();
+          prepareOrGetPendingNotification({
+            repairId: updated.id,
+            repairNumber: updated.repairNumber,
+            customerId: updated.customerId,
+            customerName: updated.customerName,
+            customerPhone: updated.customerPhone,
+            deviceModel: deviceModelFull,
+            deviceBrand: updated.deviceBrand,
+            staffId: req.user!.id,
+            staffName: req.user!.name || 'Staff',
+            staffRole: req.user!.role,
+          }).catch((e) => console.warn('[AUTO PREPARE SMS WARN]', e));
+        } catch (_) {}
+      }
+
       await logAuditFromRequest(req, {
         action: 'REPAIR_STATUS_CHANGED',
         resource: 'Repair',
@@ -1741,6 +1760,24 @@ router.patch('/:id/technician-update', authenticate, async (req: AuthRequest, re
         await broadcastServerChange('RepairLog', 'CREATE', logId);
       } catch (logErr) {
         console.warn('[REPAIR LOG NON FATAL]', logErr);
+      }
+
+      if (isRepairedStatusEligible(status)) {
+        try {
+          const devModel = `${updatedRepair.deviceBrand ? `${updatedRepair.deviceBrand} ` : ''}${updatedRepair.deviceModel || ''}`.trim();
+          prepareOrGetPendingNotification({
+            repairId: updatedRepair.id,
+            repairNumber: updatedRepair.repairNumber,
+            customerId: updatedRepair.customerId,
+            customerName: updatedRepair.customerName,
+            customerPhone: updatedRepair.customerPhone,
+            deviceModel: devModel,
+            deviceBrand: updatedRepair.deviceBrand,
+            staffId: req.user!.id,
+            staffName: req.user!.name || 'Staff',
+            staffRole: req.user!.role,
+          }).catch((e) => console.warn('[AUTO PREPARE SMS WARN]', e));
+        } catch (_) {}
       }
     }
 
