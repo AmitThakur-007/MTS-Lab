@@ -103,16 +103,30 @@ async function request<T = any>(endpoint: string, options: any = {}): Promise<T>
     ...(deviceId ? { 'x-device-identifier': deviceId } : {}),
   };
 
-  let res;
+  const fetchOptions = {
+    ...options,
+    headers,
+    credentials: 'include' as RequestCredentials,
+  };
+
+  let res: Response;
   try {
-    res = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers,
-      credentials: 'include'
-    });
+    res = await fetch(`${API_BASE}${endpoint}`, fetchOptions);
   } catch (netErr: any) {
-    console.error("[NETWORK ERROR]", netErr);
-    throw new Error("Unable to connect to the API server. Please check your internet connection or verify the server is online.");
+    // If request is GET or idempotent and fails due to temporary connection reset or server restart, retry once after 350ms
+    const isRetryable = !options.method || options.method === 'GET' || options.method === 'HEAD';
+    if (isRetryable) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      try {
+        res = await fetch(`${API_BASE}${endpoint}`, fetchOptions);
+      } catch (retryErr: any) {
+        console.warn("[NETWORK NOTICE] Request to", endpoint, "failed after retry:", retryErr?.message || retryErr);
+        throw new Error("Unable to connect to the API server. Please check your internet connection or verify the server is online.");
+      }
+    } else {
+      console.warn("[NETWORK NOTICE] Request to", endpoint, "failed:", netErr?.message || netErr);
+      throw new Error("Unable to connect to the API server. Please check your internet connection or verify the server is online.");
+    }
   }
 
   // Handle 401 - try synchronized refresh if token exists and endpoint is not auth/refresh or auth/login
@@ -190,12 +204,12 @@ async function request<T = any>(endpoint: string, options: any = {}): Promise<T>
 
   const rawSuccessText = await res.text();
   if (!rawSuccessText || !rawSuccessText.trim()) {
-    return null;
+    return null as T;
   }
   try {
     return JSON.parse(rawSuccessText);
   } catch {
-    return rawSuccessText;
+    return rawSuccessText as unknown as T;
   }
 }
 

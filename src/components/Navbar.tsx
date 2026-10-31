@@ -400,14 +400,8 @@ export default function Navbar() {
                 })}
               </div>
 
-              {/* Theme Preference Switcher & Bottom Actions */}
+              {/* Bottom Actions & Socials */}
               <div className="p-5 sm:p-6 border-t border-slate-200/80 dark:border-slate-800 space-y-4 shrink-0 bg-slate-50/50 dark:bg-slate-900/30">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                    Theme Mode
-                  </span>
-                  <ThemeToggle variant="segmented" size="sm" />
-                </div>
                 {!isAuthenticated ? (
                   <Button 
                     onClick={() => {
@@ -460,10 +454,6 @@ export default function Navbar() {
                     ))}
                   </div>
                 </div>
-
-                <p className="text-center text-slate-500 dark:text-slate-400 text-xs font-medium pt-1">
-                  MTS Lab Repair Management System
-                </p>
               </div>
             </motion.div>
           </>
