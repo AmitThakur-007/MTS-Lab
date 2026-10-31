@@ -685,14 +685,14 @@ export default function TechnicianDashboard() {
       inProgressCount: inProgress.length,
       waitingPartsCount: waitingParts.length,
       testingCount: testing.length,
-      repairedCount: serverStats?.repaired !== undefined ? Number(serverStats.repaired) : repaired.length,
+      repairedCount: repaired.length,
       urgentCount: urgentRepairs.length,
       highCount: highRepairs.length,
       mediumCount: mediumRepairs.length,
       priorityTotal,
       pendingTransfersCount: transferRequests.pendingIncomingCount
     };
-  }, [repairs, urgentRepairs, highRepairs, mediumRepairs, serverStats, transferRequests]);
+  }, [repairs, urgentRepairs, highRepairs, mediumRepairs, transferRequests]);
 
   const filteredRepairs = useMemo(() => {
     // Technician dashboard must never show CANCELLED repairs in any queue
@@ -827,6 +827,29 @@ export default function TechnicianDashboard() {
             variant="outline"
             className="h-10 sm:h-11 rounded-2xl border-slate-200 dark:border-slate-700 font-bold text-xs shrink-0"
           />
+        </div>
+      </div>
+
+      {/* Synchronized Laboratory System Overview Strip (Ensures all roles see identical laboratory totals) */}
+      <div className="bg-white dark:bg-slate-900 px-5 py-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+            <Layers className="h-3.5 w-3.5" />
+          </div>
+          <span className="font-extrabold text-slate-800 dark:text-slate-200">
+            Laboratory System Metrics:
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-600 dark:text-slate-300 font-medium">
+          <span>Total Records: <strong className="text-slate-900 dark:text-white font-bold">{serverStats?.totalRecords || serverStats?.totalRepairs || serverStats?.total || 0}</strong></span>
+          <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+          <span>Active Lab-Wide: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{serverStats?.activeTotal || serverStats?.activeRepairs || 0}</strong></span>
+          <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+          <span>Unassigned: <strong className="text-amber-600 dark:text-amber-400 font-bold">{serverStats?.unassigned || serverStats?.unassignedRepairs || 0}</strong></span>
+          <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+          <span>In Progress: <strong className="text-blue-600 dark:text-blue-400 font-bold">{serverStats?.inProgress || 0}</strong></span>
+          <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+          <span>Ready & Delivered: <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{(serverStats?.repaired || 0) + (serverStats?.ready || 0) + (serverStats?.delivered || 0)}</strong></span>
         </div>
       </div>
 

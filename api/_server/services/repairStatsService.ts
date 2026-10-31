@@ -161,29 +161,17 @@ export async function computeRepairDashboardStats(params: ComputeRepairStatsPara
   const calInfo = getNepalCalendarInfo();
   const { startIso, endIso } = getNptIsoBoundsForPreset(preset, startDate, endDate);
 
+  // System-wide query across all valid registered repairs
   let query = supabaseAdmin
     .from('Repair')
-    .select('id, status, priority, estimatedCost, totalCost, advancePaid, totalPaid, createdAt, technicianId, branchId');
+    .select('id, status, priority, estimatedCost, totalCost, advancePaid, totalPaid, createdAt, updatedAt, technicianId, branchId');
 
-  // Role-based filtering
-  const role = normalizeRole(userRole);
-  const isTechRole = ['TECHNICIAN', 'LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT', 'TECH'].includes(role);
-
-  if (role === 'TECHNICIAN' || (isTechRole && (!technicianId || technicianId === String(userId)))) {
-    // Technicians strictly see only their own assigned repairs
-    query = query.eq('technicianId', String(userId));
-  } else if (technicianId && technicianId !== 'ALL') {
-    if (String(technicianId).toLowerCase() === 'unassigned' || technicianId === 'null') {
-      query = query.is('technicianId', null);
-    } else {
-      query = query.eq('technicianId', String(technicianId));
-    }
-  }
-
+  // Filter by branch if specified
   if (branchId && branchId !== 'ALL') {
     query = query.eq('branchId', String(branchId));
   }
 
+  // Filter by date range bounds if specified
   if (startIso) {
     query = query.gte('createdAt', startIso);
   }
@@ -196,28 +184,73 @@ export async function computeRepairDashboardStats(params: ComputeRepairStatsPara
     throw error;
   }
 
-  let total = 0;
+  const allRecords = Array.isArray(records) ? records : [];
+
+  // Canonical Status Sets
+  const PENDING_LIST = ['PENDING'];
+  const RECEIVED_LIST = ['RECEIVED'];
+  const IN_PROGRESS_LIST = ['IN_PROCESS', 'IN_PROGRESS', 'DIAGNOSING', 'WAITING_FOR_PARTS', 'TESTING', 'REPAIRING'];
+  const REPAIRED_LIST = ['REPAIRED', 'REPROBLEM_FIXED'];
+  const READY_LIST = ['READY_FOR_PICKUP', 'READY', 'READY_FOR_DELIVERY'];
+  const REPAIRED_OR_READY_LIST = ['REPAIRED', 'READY_FOR_PICKUP', 'READY', 'READY_FOR_DELIVERY', 'REPROBLEM_FIXED'];
+  const DELIVERED_LIST = ['DELIVERED', 'COMPLETED'];
+  const RE_PROBLEM_LIST = ['RE_PROBLEM', 'REPROBLEM'];
+  const CANNOT_REPAIR_LIST = ['CANNOT_REPAIR'];
+  const CANCELLED_LIST = ['CANCELLED'];
+
+  // 1. Authoritative System-Wide Accumulators
+  let totalRecords = 0;
+  let activeRepairs = 0;
   let pending = 0;
   let received = 0;
   let inProgress = 0;
   let repaired = 0;
+  let ready = 0;
   let delivered = 0;
   let reProblem = 0;
+  let cannotRepair = 0;
   let cancelled = 0;
+  let unassigned = 0;
+  let assigned = 0;
+  let urgentPriorityCount = 0;
+  let highPriorityCount = 0;
   let estimatedTotalSum = 0;
   let totalPaidSum = 0;
+  let pendingReceivables = 0;
 
-  const PENDING_LIST = ['PENDING'];
-  const RECEIVED_LIST = ['RECEIVED'];
-  const IN_PROGRESS_LIST = ['IN_PROCESS', 'IN_PROGRESS', 'DIAGNOSING', 'WAITING_FOR_PARTS', 'TESTING', 'REPAIRING'];
-  const REPAIRED_LIST = ['REPAIRED', 'READY_FOR_PICKUP', 'READY', 'READY_FOR_DELIVERY'];
-  const DELIVERED_LIST = ['DELIVERED', 'COMPLETED'];
-  const RE_PROBLEM_LIST = ['RE_PROBLEM', 'REPROBLEM'];
-  const CANCELLED_LIST = ['CANCELLED', 'CANNOT_REPAIR'];
+  // 2. Personal / User-Assigned Accumulators (for the authenticated user or requested technician)
+  const targetUserId = userId || (technicianId && technicianId !== 'ALL' && technicianId !== 'unassigned' ? technicianId : null);
+  let myAssignedTotal = 0;
+  let myActiveTotal = 0;
+  let myInProgress = 0;
+  let myWaitingParts = 0;
+  let myPending = 0;
+  let myRepaired = 0;
+  let myDelivered = 0;
+  let myUrgent = 0;
+  let myHigh = 0;
+  let myReProblem = 0;
 
-  for (const r of (records || [])) {
-    total++;
+  for (const r of allRecords) {
+    totalRecords++;
     const s = (r.status || '').toUpperCase().trim();
+    const p = (r.priority || 'NORMAL').toUpperCase().trim();
+
+    const isDelivered = DELIVERED_LIST.includes(s);
+    const isCancelled = CANCELLED_LIST.includes(s);
+    const isCannotRepair = CANNOT_REPAIR_LIST.includes(s);
+    const isActive = !isDelivered && !isCancelled && !isCannotRepair;
+
+    if (isActive) {
+      activeRepairs++;
+      if (!r.technicianId) {
+        unassigned++;
+      } else {
+        assigned++;
+      }
+      if (p === 'URGENT') urgentPriorityCount++;
+      if (p === 'HIGH') highPriorityCount++;
+    }
 
     if (PENDING_LIST.includes(s)) {
       pending++;
@@ -227,11 +260,15 @@ export async function computeRepairDashboardStats(params: ComputeRepairStatsPara
       inProgress++;
     } else if (REPAIRED_LIST.includes(s)) {
       repaired++;
-    } else if (DELIVERED_LIST.includes(s)) {
+    } else if (READY_LIST.includes(s)) {
+      ready++;
+    } else if (isDelivered) {
       delivered++;
     } else if (RE_PROBLEM_LIST.includes(s)) {
       reProblem++;
-    } else if (CANCELLED_LIST.includes(s)) {
+    } else if (isCannotRepair) {
+      cannotRepair++;
+    } else if (isCancelled) {
       cancelled++;
     }
 
@@ -239,26 +276,86 @@ export async function computeRepairDashboardStats(params: ComputeRepairStatsPara
     const est = Number(r.estimatedCost) || Number(r.totalCost) || 0;
     totalPaidSum += isNaN(paid) ? 0 : paid;
     estimatedTotalSum += isNaN(est) ? 0 : est;
+
+    if (isActive && paid < est) {
+      pendingReceivables += (est - paid);
+    }
+
+    // Accumulate target user personal workbench statistics if matching
+    if (targetUserId && String(r.technicianId) === String(targetUserId)) {
+      myAssignedTotal++;
+      if (isActive) {
+        myActiveTotal++;
+        if (IN_PROGRESS_LIST.includes(s)) myInProgress++;
+        if (s === 'WAITING_FOR_PARTS') myWaitingParts++;
+        if (PENDING_LIST.includes(s) || RECEIVED_LIST.includes(s)) myPending++;
+        if (p === 'URGENT') myUrgent++;
+        if (p === 'HIGH') myHigh++;
+        if (RE_PROBLEM_LIST.includes(s)) myReProblem++;
+      }
+      if (REPAIRED_OR_READY_LIST.includes(s)) myRepaired++;
+      if (isDelivered) myDelivered++;
+    }
   }
+
+  const systemMetrics = {
+    total: totalRecords,
+    totalRecords,
+    totalRepairs: totalRecords,
+    activeTotal: activeRepairs,
+    activeRepairs,
+    pending,
+    received,
+    pendingRepairs: pending + received,
+    inProgress,
+    inProgressRepairs: inProgress,
+    repaired,
+    ready,
+    readyForPickup: ready,
+    readyForPickupRepairs: ready,
+    repairedOrReady: repaired + ready,
+    delivered,
+    completed: delivered,
+    completedRepairs: delivered,
+    reProblem,
+    reproblem: reProblem,
+    cannotRepair,
+    cannotRepairCount: cannotRepair,
+    cancelled,
+    cancelledCount: cancelled,
+    unassigned,
+    unassignedRepairs: unassigned,
+    assigned,
+    urgentPriorityCount,
+    highPriorityCount,
+    estimatedTotalSum,
+    totalPaidSum,
+    totalRevenue: totalPaidSum,
+    pendingReceivables
+  };
+
+  const userAssignedMetrics = {
+    assignedTotal: myAssignedTotal,
+    activeTotal: myActiveTotal,
+    inProgress: myInProgress,
+    waitingParts: myWaitingParts,
+    pending: myPending,
+    repaired: myRepaired,
+    delivered: myDelivered,
+    urgent: myUrgent,
+    high: myHigh,
+    reProblem: myReProblem
+  };
 
   return {
     preset,
     startIso,
     endIso,
     calendar: calInfo,
-    metrics: {
-      total: Math.max(0, total - cancelled),
-      activeTotal: Math.max(0, total - cancelled),
-      totalRecords: total,
-      pending,
-      received,
-      inProgress,
-      repaired,
-      delivered,
-      reProblem,
-      cancelled,
-      estimatedTotalSum,
-      totalPaidSum
-    }
+    metrics: systemMetrics,
+    system: systemMetrics,
+    userAssigned: userAssignedMetrics,
+    myBench: userAssignedMetrics,
+    ...systemMetrics
   };
 }

@@ -7,6 +7,7 @@ import { filterPubliclyTrackableRepairs } from '../services/trackingExpiration';
 import { createNotification } from '../services/notificationStorage';
 import { sendEmail, sendEmailDetailed } from '../services/emailService';
 import { getSystemThemeConfig, getSystemThemeConfigAsync } from '../services/systemThemeService';
+import { computeRepairDashboardStats } from '../services/repairStatsService';
 import fs from 'fs';
 
 import path from 'path';
@@ -881,55 +882,50 @@ router.post('/contact', handlePublicContact);
 router.post('/public/contact', handlePublicContact);
 
 // 2. GET /api/manager/stats
-router.get('/manager/stats', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER']), async (req: AuthRequest, res: Response) => {
+router.get('/manager/stats', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'TECHNICIAN', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   try {
-    const { data: repairs } = await supabaseAdmin.from('Repair').select('technicianId, status, priority, estimatedCost, advancePaid, totalPaid');
-
-    let totalRepairs = 0;
-    let pending = 0;
-    let assigned = 0;
-    let inProgress = 0;
-    let repaired = 0;
-    let ready = 0;
-    let delivered = 0;
-    let reproblem = 0;
-    let unassigned = 0;
-    let urgentCount = 0;
-    let highCount = 0;
-    let totalRevenue = 0;
-
-    (repairs || []).forEach((r: any) => {
-      totalRepairs++;
-      totalRevenue += Number(r.totalPaid || r.advancePaid || 0);
-
-      const s = (r.status || '').toUpperCase();
-      if (!r.technicianId && s !== 'DELIVERED' && s !== 'CANCELLED') unassigned++;
-      if (r.technicianId && s !== 'DELIVERED' && s !== 'CANCELLED') assigned++;
-
-      if (['PENDING', 'RECEIVED'].includes(s)) pending++;
-      if (['IN_PROCESS', 'DIAGNOSING', 'TESTING', 'WAITING_FOR_PARTS', 'IN_PROGRESS', 'REPAIRING'].includes(s)) inProgress++;
-      if (['REPAIRED'].includes(s)) repaired++;
-      if (['READY_FOR_PICKUP', 'READY_FOR_DELIVERY'].includes(s)) ready++;
-      if (['DELIVERED', 'COMPLETED'].includes(s)) delivered++;
-      if (['RE_PROBLEM', 'REPROBLEM'].includes(s)) reproblem++;
-
-      if (r.priority === 'URGENT') urgentCount++;
-      if (r.priority === 'HIGH') highCount++;
+    const stats = await computeRepairDashboardStats({
+      preset: (req.query.preset as any) || 'ALL',
+      startDate: req.query.startDate ? String(req.query.startDate) : undefined,
+      endDate: req.query.endDate ? String(req.query.endDate) : undefined,
+      technicianId: req.query.technicianId ? String(req.query.technicianId) : undefined,
+      branchId: req.query.branchId ? String(req.query.branchId) : undefined,
+      userRole: req.user?.role,
+      userId: req.user?.id
     });
 
+    const m = stats.metrics;
+
     return res.json({
-      totalRepairs,
-      pending,
-      assigned,
-      inProgress,
-      repaired,
-      ready,
-      delivered,
-      reproblem,
-      unassigned,
-      urgentCount,
-      highCount,
-      totalRevenue,
+      totalRepairs: m.totalRecords,
+      total: m.totalRecords,
+      activeTotal: m.activeTotal,
+      activeRepairs: m.activeTotal,
+      pending: m.pending + m.received,
+      pendingOnly: m.pending,
+      received: m.received,
+      assigned: m.assigned,
+      inProgress: m.inProgress,
+      repaired: m.repaired,
+      ready: m.ready,
+      readyForPickup: m.ready,
+      repairedOrReady: m.repairedOrReady,
+      delivered: m.delivered,
+      completed: m.delivered,
+      reproblem: m.reProblem,
+      reProblem: m.reProblem,
+      cannotRepair: m.cannotRepair,
+      cancelled: m.cancelled,
+      unassigned: m.unassigned,
+      urgentCount: m.urgentPriorityCount,
+      highCount: m.highPriorityCount,
+      totalRevenue: m.totalRevenue,
+      pendingReceivables: m.pendingReceivables,
+      calendar: stats.calendar,
+      metrics: m,
+      system: m,
+      userAssigned: stats.userAssigned,
+      myBench: stats.userAssigned
     });
   } catch (err: any) {
     console.error('[MANAGER STATS ERROR]', err);
@@ -998,29 +994,26 @@ router.get('/manager/workload', authenticate, authorize(['SUPER_ADMIN', 'ADMIN',
 // 4. GET /api/dashboard/stats
 router.get('/dashboard/stats', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { data: repairs } = await supabaseAdmin.from('Repair').select('status, priority, totalPaid, advancePaid, estimatedCost');
+    const stats = await computeRepairDashboardStats({
+      preset: (req.query.preset as any) || 'ALL',
+      startDate: req.query.startDate ? String(req.query.startDate) : undefined,
+      endDate: req.query.endDate ? String(req.query.endDate) : undefined,
+      userRole: req.user?.role,
+      userId: req.user?.id
+    });
+
     const { count: totalCustomers } = await supabaseAdmin.from('Customer').select('*', { count: 'exact', head: true });
     const { count: totalStaff } = await supabaseAdmin.from('User').select('*', { count: 'exact', head: true }).is('deletedAt', null);
 
-    let activeRepairs = 0;
-    let completedRepairs = 0;
-    let totalRevenue = 0;
-
-    (repairs || []).forEach((r: any) => {
-      totalRevenue += Number(r.totalPaid || r.advancePaid || 0);
-      if (['COMPLETED', 'DELIVERED'].includes((r.status || '').toUpperCase())) {
-        completedRepairs++;
-      } else {
-        activeRepairs++;
-      }
-    });
-
     return res.json({
-      activeRepairs,
-      completedRepairs,
+      activeRepairs: stats.metrics.activeRepairs,
+      completedRepairs: stats.metrics.delivered,
+      totalRepairs: stats.metrics.totalRecords,
       totalCustomers: totalCustomers || 0,
       totalStaff: totalStaff || 0,
-      totalRevenue,
+      totalRevenue: stats.metrics.totalRevenue,
+      metrics: stats.metrics,
+      userAssigned: stats.userAssigned
     });
   } catch (err: any) {
     console.error('[DASHBOARD STATS ERROR]', err);

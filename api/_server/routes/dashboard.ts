@@ -8,6 +8,7 @@ import {
   getAuthorizedStaffList,
   AttendanceRecord
 } from '../services/attendanceStorage';
+import { computeRepairDashboardStats } from '../services/repairStatsService';
 
 const router = Router();
 
@@ -92,7 +93,7 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
     const { todayStr, yesterdayStr, monthStr, past7Days } = getNepalDates();
     const serverTimeInfo = getNepalBusinessTime();
 
-    // 1. Fetch repairs from Supabase for overview calculations (limit to recent 1000 records to optimize memory)
+    // 1. Fetch repairs from Supabase for overview calculations across all records
     const { data: repairsData, error: repairsErr } = await supabaseAdmin
       .from('Repair')
       .select(`
@@ -118,8 +119,7 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
         updatedAt,
         courierOutDeliveredDate
       `)
-      .order('createdAt', { ascending: false })
-      .limit(1000);
+      .order('createdAt', { ascending: false });
 
     if (repairsErr) {
       console.error('[OVERVIEW REPAIRS QUERY ERROR]', repairsErr);
@@ -238,10 +238,12 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
     let completedRepairs = 0;
     let pendingRepairs = 0;
     let inProgressRepairs = 0;
+    let repairedRepairs = 0;
     let readyForPickupRepairs = 0;
     let deliveredRepairs = 0;
     let reProblemRepairs = 0;
     let cannotRepairCount = 0;
+    let cancelledCount = 0;
     let unassignedRepairs = 0;
     let urgentPriorityCount = 0;
     let highPriorityCount = 0;
@@ -356,10 +358,12 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
       if (['IN_PROCESS', 'DIAGNOSING', 'TESTING', 'WAITING_FOR_PARTS', 'IN_PROGRESS', 'REPAIRING'].includes(s)) {
         inProgressRepairs++;
       }
-      if (['READY_FOR_PICKUP', 'READY_FOR_DELIVERY'].includes(s)) readyForPickupRepairs++;
+      if (['REPAIRED', 'REPROBLEM_FIXED'].includes(s)) repairedRepairs++;
+      if (['READY_FOR_PICKUP', 'READY', 'READY_FOR_DELIVERY'].includes(s)) readyForPickupRepairs++;
       if (['DELIVERED', 'COMPLETED'].includes(s)) deliveredRepairs++;
       if (['RE_PROBLEM', 'REPROBLEM'].includes(s)) reProblemRepairs++;
-      if (['CANNOT_REPAIR', 'CANCELLED'].includes(s)) cannotRepairCount++;
+      if (s === 'CANNOT_REPAIR') cannotRepairCount++;
+      if (s === 'CANCELLED') cancelledCount++;
 
       // Status Map
       if (statusMap[s] !== undefined) {
@@ -543,15 +547,20 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
       },
       systemSummary: {
         totalRepairs,
+        totalRecords: totalRepairs,
         activeRepairs,
         completedRepairs,
         pendingRepairs,
         inProgressRepairs,
+        repairedRepairs,
         readyForPickupRepairs,
+        ready: readyForPickupRepairs,
         deliveredRepairs,
         reProblemRepairs,
         cannotRepairCount,
+        cancelledCount,
         unassignedRepairs,
+        assignedRepairs: Math.max(0, activeRepairs - unassignedRepairs),
         urgentPriorityCount,
         highPriorityCount,
         totalCustomers: totalCustomersCount || 0,
@@ -654,9 +663,14 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
 // ============================================================================
 router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { data: repairs } = await supabaseAdmin
-      .from('Repair')
-      .select('status, priority, totalPaid, advancePaid, estimatedCost');
+    const stats = await computeRepairDashboardStats({
+      preset: (req.query.preset as any) || 'ALL',
+      startDate: req.query.startDate ? String(req.query.startDate) : undefined,
+      endDate: req.query.endDate ? String(req.query.endDate) : undefined,
+      userRole: req.user?.role,
+      userId: req.user?.id
+    });
+
     const { count: totalCustomers } = await supabaseAdmin
       .from('Customer')
       .select('*', { count: 'exact', head: true })
@@ -666,26 +680,16 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       .select('*', { count: 'exact', head: true })
       .is('deletedAt', null);
 
-    let activeRepairs = 0;
-    let completedRepairs = 0;
-    let totalRevenue = 0;
-
-    (repairs || []).forEach((r: any) => {
-      totalRevenue += Number(r.totalPaid || r.advancePaid || 0);
-      if (['COMPLETED', 'DELIVERED'].includes((r.status || '').toUpperCase())) {
-        completedRepairs++;
-      } else {
-        activeRepairs++;
-      }
-    });
-
     res.setHeader('Cache-Control', 'private, max-age=10, stale-while-revalidate=30');
     return res.json({
-      activeRepairs,
-      completedRepairs,
+      activeRepairs: stats.metrics.activeRepairs,
+      completedRepairs: stats.metrics.delivered,
+      totalRepairs: stats.metrics.totalRecords,
       totalCustomers: totalCustomers || 0,
       totalStaff: totalStaff || 0,
-      totalRevenue,
+      totalRevenue: stats.metrics.totalRevenue,
+      metrics: stats.metrics,
+      userAssigned: stats.userAssigned
     });
   } catch (err: any) {
     console.error('[DASHBOARD STATS ERROR]', err);

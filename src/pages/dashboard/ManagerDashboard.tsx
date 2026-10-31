@@ -94,6 +94,7 @@ import {
   RepairTimelineOverviewBanner
 } from '@/components/repair/RepairTimelineTracker';
 import { getRepairTimelineMetrics } from '@/lib/repairTimeline';
+import { calculateRepairMetrics } from '@/lib/repairStatus';
 
 
 const statusConfig: Record<string, { label: string; badge: string; bgSoft: string; textClass: string }> = {
@@ -220,44 +221,21 @@ export default function ManagerDashboard() {
       if (statsRes) {
         setStats(statsRes);
       } else {
-        // Fallback local computation
-        let unassigned = 0;
-        let inProg = 0;
-        let rep = 0;
-        let ready = 0;
-        let delivered = 0;
-        let reproblem = 0;
-        let urgent = 0;
-        let high = 0;
-        let pending = 0;
-        let assigned = 0;
-
-        repairList.forEach((r: any) => {
-          const s = (r.status || '').toUpperCase();
-          if (!r.technicianId && s !== 'DELIVERED' && s !== 'CANCELLED') unassigned++;
-          if (r.technicianId && s !== 'DELIVERED' && s !== 'CANCELLED') assigned++;
-          if (s === 'PENDING' || s === 'RECEIVED') pending++;
-          if (s === 'IN_PROCESS' || s === 'DIAGNOSING' || s === 'TESTING' || s === 'WAITING_FOR_PARTS') inProg++;
-          if (s === 'REPAIRED') rep++;
-          if (s === 'READY_FOR_PICKUP') ready++;
-          if (s === 'DELIVERED') delivered++;
-          if (s === 'RE_PROBLEM' || s === 'REPROBLEM') reproblem++;
-          if (r.priority === 'URGENT') urgent++;
-          if (r.priority === 'HIGH') high++;
-        });
-
+        // Authoritative fallback local computation using unified repairStatus service
+        const m = calculateRepairMetrics(repairList);
         setStats({
-          totalRepairs: repairList.length,
-          pending,
-          assigned,
-          inProgress: inProg,
-          repaired: rep,
-          ready,
-          delivered,
-          reproblem,
-          unassigned,
-          urgentCount: urgent,
-          highCount: high
+          totalRepairs: m.totalRecords,
+          pending: m.pending + m.received,
+          assigned: m.assigned,
+          inProgress: m.inProgress,
+          repaired: m.repaired - m.ready,
+          ready: m.ready,
+          delivered: m.delivered,
+          reproblem: m.reProblem,
+          unassigned: m.unassigned,
+          urgentCount: m.urgentCount,
+          highCount: m.highCount,
+          totalRevenue: m.totalRevenue
         });
       }
 

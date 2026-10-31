@@ -666,6 +666,18 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
     if (error) {
       return res.status(500).json({ error: 'Failed to bulk delete repairs.' });
     }
+
+    // Broadcast realtime event for each deleted record to synchronize all open role dashboards
+    for (const delId of ids) {
+      await broadcastServerChange('Repair', 'DELETE', delId);
+    }
+
+    await logAuditFromRequest(req, {
+      action: 'BULK_DELETE_REPAIRS',
+      resource: 'Repair',
+      details: { count: ids.length, ids }
+    }).catch(() => {});
+
     return res.json({ success: true, message: `Successfully deleted ${ids.length} repair records.` });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to bulk delete repairs.' });
