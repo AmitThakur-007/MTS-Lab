@@ -24,6 +24,8 @@ import RepairRelatedDamage from './dashboard/RepairRelatedDamage';
 import ThemeController from './dashboard/ThemeController';
 import SmsCenter from './dashboard/SmsCenter';
 import SmsReports from './dashboard/SmsReports';
+import CustomerHub from './dashboard/CustomerHub';
+import CustomerProfile from './dashboard/CustomerProfile';
 import { useAuthStore } from '@/store/authStore';
 
 export default function Dashboard() {
@@ -65,6 +67,10 @@ export default function Dashboard() {
           <Route path="repairs" element={isTechnician ? <TechnicianDashboard /> : <Repairs />} />
           <Route path="repairs/new" element={<NewRepair />} />
           <Route path="repairs/:id" element={<RepairDetails />} />
+
+          {/* Customer Hub & Customer Profiles */}
+          <Route path="customers" element={<CustomerHub />} />
+          <Route path="customers/:id" element={<CustomerProfile />} />
 
           {/* SMS Notification Center & Reports */}
           <Route path="sms-center" element={<SmsCenter />} />

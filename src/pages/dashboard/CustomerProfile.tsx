@@ -308,8 +308,12 @@ export default function CustomerProfile() {
     if (!customer) return;
     setArchiveBusy(true);
     try {
-      await api.delete(`/customers/${customer.id}`);
-      toast.success('Customer permanently deleted.');
+      const res: any = await api.delete(`/customers/${customer.id}`);
+      if (res?.archived) {
+        toast.info(res.message || 'Customer was safely archived to protect warranty and repair records.');
+      } else {
+        toast.success(res?.message || 'Customer permanently deleted.');
+      }
       setIsArchiveOpen(false);
       navigate('/dashboard/customers');
     } catch (err: any) {
