@@ -119,6 +119,8 @@ export default function BatteryWarrantyManagement() {
   const [sendingOtp, setSendingOtp] = useState(false);
   const [maskedEmail, setMaskedEmail] = useState('');
   const [targetDeleteWarranties, setTargetDeleteWarranties] = useState<any[]>([]);
+  const [mfaTicket, setMfaTicket] = useState<string>('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Modals
   const [selectedWarranty, setSelectedWarranty] = useState<any | null>(null);
@@ -411,17 +413,35 @@ export default function BatteryWarrantyManagement() {
     setTargetDeleteWarranties(targets);
     setTwoFactorCode('');
     setOtpSent(false);
+    setTwoFactorCode('');
     setIsDeleteModalOpen(true);
-    handleRequest2FACode();
+    handleRequest2FACode(targets);
   };
 
-  const handleRequest2FACode = async () => {
+  // Cooldown timer for 2FA resend
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setResendCooldown(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
+  const handleRequest2FACode = async (explicitTargets?: any[]) => {
+    if (resendCooldown > 0) {
+      toast.info(`Please wait ${resendCooldown}s before requesting a new code.`);
+      return;
+    }
     setSendingOtp(true);
     try {
-      const res: any = await api.post('/battery-warranties/delete-2fa/request', {});
+      const targets = explicitTargets || targetDeleteWarranties;
+      const ids = targets.map((w: any) => w.id);
+      const res: any = await api.post('/battery-warranties/delete-2fa/request', { warrantyIds: ids });
       if (res?.success) {
         setOtpSent(true);
+        setMfaTicket(res.ticket || '');
         setMaskedEmail(res.emailMasked || user?.email || '');
+        setResendCooldown(60);
         toast.success(res.message || "2FA verification code sent to your registered email.");
       } else {
         toast.error(res?.message || "Failed to send 2FA verification code.");
@@ -445,7 +465,8 @@ export default function BatteryWarrantyManagement() {
       const idsToDelete = targetDeleteWarranties.map(w => w.id);
       const res: any = await api.post('/battery-warranties/bulk-delete', {
         ids: idsToDelete,
-        code: twoFactorCode.trim()
+        code: twoFactorCode.trim(),
+        ticket: mfaTicket
       });
 
       if (res?.success) {
@@ -454,6 +475,7 @@ export default function BatteryWarrantyManagement() {
         setSelectedWarrantyIds(prev => prev.filter(id => !idsToDelete.includes(id)));
         setTargetDeleteWarranties([]);
         setTwoFactorCode('');
+        setMfaTicket('');
         fetchWarranties();
       } else {
         toast.error(res?.error || res?.message || "Failed to delete warranty records.");
@@ -1207,14 +1229,25 @@ export default function BatteryWarrantyManagement() {
                               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                               {item.warrantyNumber}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => item.repairId && navigate(`/dashboard/repairs/${item.repairId}`)}
-                              className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold text-left mt-0.5 hover:underline cursor-pointer inline-flex items-center gap-1"
-                            >
-                              Job #{item.repairNumber}
-                              <ExternalLink className="w-2.5 h-2.5" />
-                            </button>
+                            {item.repairId ? (
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/dashboard/repairs/${item.repairId}`)}
+                                className="text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-800 font-semibold text-left mt-0.5 hover:underline cursor-pointer inline-flex items-center gap-1"
+                              >
+                                Job #{item.repairNumber}
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                                  Job #{item.repairNumber || 'N/A'}
+                                </span>
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800">
+                                  Retained
+                                </Badge>
+                              </div>
+                            )}
                           </div>
                         </td>
 
@@ -1923,11 +1956,11 @@ export default function BatteryWarrantyManagement() {
                   <span>Code expires in 5 minutes</span>
                   <button
                     type="button"
-                    onClick={handleRequest2FACode}
-                    disabled={sendingOtp}
+                    onClick={() => handleRequest2FACode()}
+                    disabled={sendingOtp || resendCooldown > 0}
                     className="text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer disabled:opacity-50"
                   >
-                    {sendingOtp ? "Sending Code..." : "Resend 2FA Code"}
+                    {sendingOtp ? "Sending Code..." : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend 2FA Code"}
                   </button>
                 </div>
               </div>

@@ -82,6 +82,8 @@ export default function PermanentDeletionHub() {
   const [sendingOtp, setSendingOtp] = useState(false);
   const [maskedEmail, setMaskedEmail] = useState('');
   const [warrantyDeleting, setWarrantyDeleting] = useState(false);
+  const [mfaTicket, setMfaTicket] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Fetch Data
   const fetchRepairs = async (silent = false) => {
@@ -253,16 +255,33 @@ export default function PermanentDeletionHub() {
     setTwoFactorCode('');
     setOtpSent(false);
     setIsWarrantyDeleteDialogOpen(true);
-    handleRequestWarranty2FACode();
+    handleRequestWarranty2FACode(targets);
   };
 
-  const handleRequestWarranty2FACode = async () => {
+  // Cooldown timer for 2FA resend
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setResendCooldown(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
+  const handleRequestWarranty2FACode = async (explicitTargets?: any[]) => {
+    if (resendCooldown > 0) {
+      toast.info(`Please wait ${resendCooldown}s before requesting a new code.`);
+      return;
+    }
     setSendingOtp(true);
     try {
-      const res: any = await api.post('/battery-warranties/delete-2fa/request', {});
+      const targets = explicitTargets || targetDeleteWarranties;
+      const ids = targets.map((w: any) => w.id);
+      const res: any = await api.post('/battery-warranties/delete-2fa/request', { warrantyIds: ids });
       if (res?.success) {
         setOtpSent(true);
+        setMfaTicket(res.ticket || '');
         setMaskedEmail(res.emailMasked || user?.email || '');
+        setResendCooldown(60);
         toast.success(res.message || "2FA verification code sent to your registered email.");
       } else {
         toast.error(res?.message || "Failed to dispatch 2FA verification code.");
@@ -287,7 +306,8 @@ export default function PermanentDeletionHub() {
     try {
       const res: any = await api.post('/battery-warranties/bulk-delete', {
         ids: idsToDelete,
-        code: twoFactorCode.trim()
+        code: twoFactorCode.trim(),
+        ticket: mfaTicket
       });
 
       if (res?.success) {
@@ -296,6 +316,7 @@ export default function PermanentDeletionHub() {
         setSelectedWarrantyIds(prev => prev.filter(id => !idsToDelete.includes(id)));
         setTargetDeleteWarranties([]);
         setTwoFactorCode('');
+        setMfaTicket('');
         fetchWarranties();
       } else {
         toast.error(res?.error || res?.message || "Failed to delete battery warranties.");
@@ -975,11 +996,11 @@ export default function PermanentDeletionHub() {
                   <span>Code expires in 5 minutes</span>
                   <button
                     type="button"
-                    onClick={handleRequestWarranty2FACode}
-                    disabled={sendingOtp}
+                    onClick={() => handleRequestWarranty2FACode()}
+                    disabled={sendingOtp || resendCooldown > 0}
                     className="text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer disabled:opacity-50"
                   >
-                    {sendingOtp ? "Sending Code..." : "Resend 2FA Code"}
+                    {sendingOtp ? "Sending Code..." : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend 2FA Code"}
                   </button>
                 </div>
               </div>

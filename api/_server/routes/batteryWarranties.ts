@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { broadcastServerChange } from '../services/realtimeSync';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
@@ -7,12 +8,10 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
 import { createExcelBuffer, parseExcelBuffer } from '../services/excelService';
 import { sendEmail } from '../services/emailService';
+import { logAudit } from '../services/auditService';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-
-// In-memory OTP store for 2FA deletion (expires in 5 minutes)
-const otpStore: { [userId: string]: { code: string; expiresAt: number } } = {};
 
 /**
  * Parses warranty period into months (6, 12, 24, etc.)
@@ -939,19 +938,80 @@ router.post('/:id/send-email', authenticate, async (req: AuthRequest, res: Respo
   }
 });
 
-// 11. POST /api/battery-warranties/delete-2fa/request — 2FA code generation
-router.post('/delete-2fa/request', authenticate, async (req: AuthRequest, res: Response) => {
+// 11. POST /api/battery-warranties/delete-2fa/request — Database-backed 2FA code generation
+router.post('/delete-2fa/request', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user!.id;
-    const userEmail = req.user!.email || 'mtsmobilelab@gmail.com';
+    // Only SUPER_ADMIN is authorized to request 2FA for permanent warranty deletion
+    if (req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Access denied: Only Super Admin can request 2FA for permanent battery warranty deletion.'
+      });
+    }
 
-    // Generate random 6-digit OTP code
-    const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes validity
+    const userId = req.user.id;
+    const userEmail = req.user.email;
 
-    otpStore[userId] = { code: generatedCode, expiresAt };
+    if (!userEmail) {
+      return res.status(400).json({ error: 'No registered email found for Super Admin account.' });
+    }
 
-    console.log(`[2FA OTP GENERATED] For User: ${userEmail}, OTP: ${generatedCode}`);
+    // Rate limiting: 60-second cooldown between OTP requests for this user & purpose
+    const { data: recentOtps } = await supabaseAdmin
+      .from('OTPVerification')
+      .select('createdAt')
+      .eq('userId', userId)
+      .eq('purpose', 'WARRANTY_DELETION_2FA')
+      .order('createdAt', { ascending: false })
+      .limit(1);
+
+    if (recentOtps && recentOtps.length > 0) {
+      const elapsedMs = Date.now() - new Date(recentOtps[0].createdAt).getTime();
+      if (elapsedMs < 60 * 1000) {
+        const remainingSec = Math.ceil((60 * 1000 - elapsedMs) / 1000);
+        return res.status(429).json({
+          error: `Please wait ${remainingSec} second(s) before requesting a new 2FA code.`,
+          cooldownRemaining: remainingSec,
+        });
+      }
+    }
+
+    // Invalidate previous unused OTPs for this user and purpose
+    await supabaseAdmin
+      .from('OTPVerification')
+      .update({ isUsed: true })
+      .eq('userId', userId)
+      .eq('purpose', 'WARRANTY_DELETION_2FA')
+      .eq('isUsed', false);
+
+    // Generate cryptographically strong 6-digit random code
+    const generatedCode = crypto.randomInt(100000, 999999).toString();
+    const codeHash = crypto.createHash('sha256').update(generatedCode).digest('hex');
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes validity
+    const otpId = uuidv4();
+
+    // Store in database OTPVerification table
+    const { error: insertErr } = await supabaseAdmin
+      .from('OTPVerification')
+      .insert([{
+        id: otpId,
+        userId,
+        email: userEmail.toLowerCase().trim(),
+        purpose: 'WARRANTY_DELETION_2FA',
+        codeHash,
+        attempts: 0,
+        maxAttempts: 5,
+        expiresAt,
+        isUsed: false,
+        createdAt: new Date().toISOString(),
+      }]);
+
+    if (insertErr) {
+      console.error('[2FA OTP DB INSERT ERROR]', insertErr);
+      return res.status(500).json({ error: 'Failed to generate 2FA verification session.' });
+    }
+
+    console.log(`[2FA OTP GENERATED] Purpose: WARRANTY_DELETION_2FA, User: ${userEmail}, OTP: ${generatedCode}`);
 
     // Mask email for display in UI (e.g. m***b@gmail.com)
     let masked = userEmail;
@@ -960,7 +1020,7 @@ router.post('/delete-2fa/request', authenticate, async (req: AuthRequest, res: R
       masked = `${name.slice(0, 2)}***${name.slice(-1)}@${domain}`;
     }
 
-    // Send the OTP email to registered address
+    // Send the OTP email to registered Super Admin address
     try {
       await sendEmail({
         to: userEmail,
@@ -970,8 +1030,8 @@ router.post('/delete-2fa/request', authenticate, async (req: AuthRequest, res: R
             <div style="text-align: center; margin-bottom: 20px;">
               <span style="font-size: 24px; font-weight: bold; color: #dc2626;">MTS Lab Security Alert</span>
             </div>
-            <p style="color: #374151; font-size: 14px;">A request was made to permanently delete battery warranty records.</p>
-            <p style="color: #374151; font-size: 14px;">Your 6-digit verification code is:</p>
+            <p style="color: #374151; font-size: 14px;">A request was made to permanently delete battery warranty records from the Battery Warranty Hub.</p>
+            <p style="color: #374151; font-size: 14px;">Your 6-digit 2FA verification code is:</p>
             <div style="background-color: #fef2f2; border: 2px dashed #f87171; border-radius: 8px; text-align: center; padding: 16px; margin: 20px 0;">
               <span style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #991b1b; font-family: monospace;">${generatedCode}</span>
             </div>
@@ -983,78 +1043,227 @@ router.post('/delete-2fa/request', authenticate, async (req: AuthRequest, res: R
       console.error('[2FA EMAIL SEND WARNING]', emailErr);
     }
 
+    await logAudit({
+      userId,
+      userEmail,
+      userName: req.user.name,
+      userRole: req.user.role,
+      action: 'WARRANTY_DELETION_2FA_REQUESTED',
+      resource: 'BatteryWarranty',
+      resourceId: otpId,
+      status: 'SUCCESS',
+      ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+      userAgent: req.headers['user-agent'] || null,
+      details: { emailMasked: masked, expiresAt },
+    });
+
     return res.json({
       success: true,
+      ticket: otpId,
       message: '2FA verification code sent to your registered email.',
       emailMasked: masked,
     });
   } catch (err: any) {
     console.error('[2FA REQUEST ERROR]', err);
-    return res.status(500).json({ error: 'Failed to generate 2FA code.' });
+    return res.status(500).json({ error: 'Failed to process 2FA request.' });
   }
 });
 
-// 12. POST /api/battery-warranties/bulk-delete — 2FA protected permanent deletion
-router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
-  try {
-    const { ids, code } = req.body;
-    const userId = req.user!.id;
-
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: 'No warranty IDs provided for deletion.' });
-    }
-
-    const trimmedCode = String(code || '').trim();
-    const storedOtp = otpStore[userId];
-
-    // Verification check: accept live OTP or Super Admin emergency bypass PIN (007007)
-    const isMasterBypass = trimmedCode === '007007';
-    const isOtpValid = storedOtp && storedOtp.code === trimmedCode && storedOtp.expiresAt > Date.now();
-
-    if (!isOtpValid && !isMasterBypass) {
-      return res.status(401).json({ error: 'Invalid or expired 2FA code. Please request a new code or use backup PIN.' });
-    }
-
-    // Clear used OTP
-    delete otpStore[userId];
-
-    // Delete associated claims first
-    await supabaseAdmin.from('BatteryWarrantyClaim').delete().in('warrantyId', ids);
-
-    // Delete the warranties
-    const { error } = await supabaseAdmin.from('BatteryWarranty').delete().in('id', ids);
-
-    if (error) {
-      console.error('[BULK DELETE ERROR]', error);
-      return res.status(500).json({ error: error.message || 'Failed to delete warranty records.' });
-    }
-
-    for (const id of ids) {
-      await broadcastServerChange('BatteryWarranty', 'DELETE', id);
-    }
-
-    return res.json({
-      success: true,
-      message: `Successfully and permanently deleted ${ids.length} warranty record(s).`,
+// Helper for 2FA verification and deletion execution
+async function verifyAndExecuteWarrantyDeletion(
+  req: AuthRequest,
+  res: Response,
+  ids: string[],
+  code: string,
+  ticket?: string
+) {
+  // Enforce SUPER_ADMIN role strictly
+  if (req.user?.role !== 'SUPER_ADMIN') {
+    return res.status(403).json({
+      error: 'Forbidden',
+      message: 'Access denied: Only Super Admin can permanently delete records from the Battery Warranty Hub.'
     });
+  }
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'No warranty IDs provided for deletion.' });
+  }
+
+  const trimmedCode = String(code || '').trim();
+  if (!trimmedCode || trimmedCode.length !== 6) {
+    return res.status(400).json({ error: 'Please enter a valid 6-digit 2FA verification code.' });
+  }
+
+  const userId = req.user.id;
+
+  // Look up active OTPVerification session for this user
+  let query = supabaseAdmin
+    .from('OTPVerification')
+    .select('*')
+    .eq('userId', userId)
+    .eq('purpose', 'WARRANTY_DELETION_2FA')
+    .eq('isUsed', false)
+    .order('createdAt', { ascending: false });
+
+  if (ticket) {
+    query = query.eq('id', ticket);
+  }
+
+  const { data: otps, error: otpErr } = await query.limit(1);
+
+  if (otpErr || !otps || otps.length === 0) {
+    return res.status(401).json({
+      error: 'Invalid or expired 2FA verification session. Please request a new 2FA code.'
+    });
+  }
+
+  const otp = otps[0];
+
+  // Expiration check
+  if (new Date(otp.expiresAt) < new Date()) {
+    await logAudit({
+      userId,
+      userEmail: req.user.email,
+      action: 'WARRANTY_DELETION_2FA_FAILED',
+      resource: 'BatteryWarranty',
+      resourceId: otp.id,
+      status: 'FAILED',
+      details: { reason: '2FA code expired', warrantyIds: ids },
+    });
+    return res.status(401).json({
+      error: 'Verification code has expired. Please request a new code.'
+    });
+  }
+
+  // Attempt limit check
+  if ((otp.attempts || 0) >= (otp.maxAttempts || 5)) {
+    await supabaseAdmin.from('OTPVerification').update({ isUsed: true }).eq('id', otp.id);
+    await logAudit({
+      userId,
+      userEmail: req.user.email,
+      action: 'WARRANTY_DELETION_2FA_LOCKED',
+      resource: 'BatteryWarranty',
+      resourceId: otp.id,
+      status: 'BLOCKED',
+      details: { reason: 'Exceeded maximum verification attempts', attempts: otp.attempts },
+    });
+    return res.status(429).json({
+      error: 'Maximum verification attempts exceeded. Please request a fresh 2FA code.'
+    });
+  }
+
+  // Verify hash
+  const inputHash = crypto.createHash('sha256').update(trimmedCode).digest('hex');
+
+  if (otp.codeHash !== inputHash) {
+    const attempts = (otp.attempts || 0) + 1;
+    await supabaseAdmin.from('OTPVerification').update({ attempts }).eq('id', otp.id);
+
+    await logAudit({
+      userId,
+      userEmail: req.user.email,
+      action: 'WARRANTY_DELETION_2FA_FAILED',
+      resource: 'BatteryWarranty',
+      resourceId: otp.id,
+      status: 'FAILED',
+      details: { attemptNumber: attempts, reason: 'Incorrect verification code', warrantyIds: ids },
+    });
+
+    const remaining = (otp.maxAttempts || 5) - attempts;
+    return res.status(400).json({
+      error: `Incorrect 2FA verification code. ${remaining} attempt(s) remaining.`
+    });
+  }
+
+  // Code matches! Invalidate OTP immediately to prevent reuse
+  await supabaseAdmin.from('OTPVerification').update({ isUsed: true }).eq('id', otp.id);
+
+  // Fetch warranty records before deletion to record forensic snapshot in audit logs
+  const { data: targetWarranties } = await supabaseAdmin
+    .from('BatteryWarranty')
+    .select('id, warrantyNumber, repairNumber, customerName, customerPhone, deviceBrand, deviceModel')
+    .in('id', ids);
+
+  // Atomically delete associated claims first
+  await supabaseAdmin.from('BatteryWarrantyClaim').delete().in('warrantyId', ids);
+
+  // Atomically delete warranty records
+  const { error: delErr } = await supabaseAdmin.from('BatteryWarranty').delete().in('id', ids);
+
+  if (delErr) {
+    console.error('[WARRANTY DELETE ERROR]', delErr);
+    return res.status(500).json({ error: 'Database error occurred during warranty deletion.' });
+  }
+
+  // Broadcast realtime updates for each deleted warranty
+  for (const delId of ids) {
+    await broadcastServerChange('BatteryWarranty', 'DELETE', delId);
+  }
+
+  // Write immutable audit log
+  await logAudit({
+    userId,
+    userEmail: req.user.email,
+    userName: req.user.name,
+    userRole: req.user.role,
+    action: 'WARRANTY_PERMANENTLY_DELETED',
+    resource: 'BatteryWarranty',
+    status: 'SUCCESS',
+    ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+    userAgent: req.headers['user-agent'] || null,
+    details: {
+      count: ids.length,
+      warrantyIds: ids,
+      warranties: targetWarranties || [],
+      twoFactorVerified: true,
+      verifiedAt: new Date().toISOString()
+    },
+  });
+
+  return res.json({
+    success: true,
+    deletedCount: ids.length,
+    message: `Successfully and permanently deleted ${ids.length} battery warranty record(s).`,
+  });
+}
+
+// 12. POST /api/battery-warranties/bulk-delete — 2FA protected bulk permanent deletion
+router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids, code, ticket } = req.body;
+    return await verifyAndExecuteWarrantyDeletion(req, res, ids, code, ticket);
   } catch (err: any) {
     console.error('[BULK DELETE EXCEPTION]', err);
-    return res.status(500).json({ error: 'Failed to execute bulk deletion.' });
+    return res.status(500).json({ error: 'Failed to execute bulk warranty deletion.' });
   }
 });
 
-// 13. DELETE /api/battery-warranties/:id — Delete single warranty
-router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
+// 12.5 POST /api/battery-warranties/delete-2fa/verify — Dedicated 2FA verify & delete endpoint
+router.post('/delete-2fa/verify', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids, warrantyIds, code, ticket } = req.body;
+    const targetIds = ids || warrantyIds || [];
+    return await verifyAndExecuteWarrantyDeletion(req, res, targetIds, code, ticket);
+  } catch (err: any) {
+    console.error('[2FA VERIFY DELETE EXCEPTION]', err);
+    return res.status(500).json({ error: 'Failed to execute 2FA warranty deletion.' });
+  }
+});
+
+// 13. DELETE /api/battery-warranties/:id — 2FA protected single warranty deletion
+router.delete('/:id', authenticate, authorize(['SUPER_ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    await supabaseAdmin.from('BatteryWarrantyClaim').delete().eq('warrantyId', id);
-    const { error } = await supabaseAdmin.from('BatteryWarranty').delete().eq('id', id);
+    const code = (req.body?.code || req.query?.code || '') as string;
+    const ticket = (req.body?.ticket || req.query?.ticket || '') as string;
 
-    if (error) return res.status(500).json({ error: 'Failed to delete warranty.' });
+    if (!code) {
+      return res.status(401).json({
+        error: '2FA verification code is mandatory for permanent deletion of warranty records. Please request a 2FA code first.'
+      });
+    }
 
-    await broadcastServerChange('BatteryWarranty', 'DELETE', id);
-
-    return res.json({ success: true, message: 'Warranty deleted successfully.' });
+    return await verifyAndExecuteWarrantyDeletion(req, res, [id], code, ticket);
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to delete warranty.' });
   }

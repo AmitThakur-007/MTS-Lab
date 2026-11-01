@@ -342,7 +342,7 @@ router.get('/:id/repairs', authenticate, async (req: AuthRequest, res: Response)
       return res.status(500).json({ error: 'Failed to fetch customer repair records.' });
     }
 
-    const totalCount = typeof count === 'number' ? count : (Array.isArray(repairs) ? repairs.length : 0);
+    const totalCount = typeof count === 'number' ? count : (Array.isArray(repairs) ? (repairs as any[]).length : 0);
     const totalPages = Math.max(1, Math.ceil(totalCount / limitNum));
 
     return res.json({
@@ -696,6 +696,13 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER'
     // Customer has ZERO associated records:
     // Only SUPER_ADMIN can execute permanent deletion from the database
     if (userRole === 'SUPER_ADMIN') {
+      // CRITICAL DATA RETENTION: Preserve associated Battery Warranty Hub records independently.
+      // Detach customerId so warranty records and claim histories remain fully accessible in Battery Warranty Hub.
+      await supabaseAdmin
+        .from('BatteryWarranty')
+        .update({ customerId: null, updatedAt: new Date().toISOString() })
+        .eq('customerId', id);
+
       const { error: deleteErr } = await supabaseAdmin.from('Customer').delete().eq('id', id);
 
       if (deleteErr) {
@@ -826,6 +833,11 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MA
         } else {
           // Zero repairs
           if (userRole === 'SUPER_ADMIN' && permanent) {
+            await supabaseAdmin
+              .from('BatteryWarranty')
+              .update({ customerId: null, updatedAt: new Date().toISOString() })
+              .eq('customerId', id);
+
             await supabaseAdmin.from('Customer').delete().eq('id', id);
             deletedCount++;
             detailsList.push({

@@ -205,18 +205,16 @@ async function syncBatteryWarrantyFromRepair(repairData: any, reqUser: any) {
       repairData.hasBatteryWarranty === 'true';
 
     if (!isWarrantyActive) {
-      const { data: existing } = await supabaseAdmin
+      // CRITICAL DATA RETENTION: Never delete Battery Warranty Hub records or claims.
+      // If warranty is deactivated on the repair, mark its status as CANCELLED or detach,
+      // ensuring warranty history and audit records remain permanently accessible.
+      await supabaseAdmin
         .from('BatteryWarranty')
-        .select('id')
+        .update({
+          status: 'CANCELLED',
+          updatedAt: new Date().toISOString()
+        })
         .eq('repairId', repairData.id);
-
-      if (existing && existing.length > 0) {
-        for (const w of existing) {
-          await supabaseAdmin.from('BatteryWarrantyClaim').delete().eq('warrantyId', w.id);
-          await supabaseAdmin.from('BatteryWarranty').delete().eq('id', w.id);
-          await broadcastServerChange('BatteryWarranty', 'DELETE', w.id);
-        }
-      }
       return;
     }
 
@@ -663,6 +661,14 @@ router.post('/bulk-delete', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), a
     await supabaseAdmin.from('RepairLog').delete().in('repairId', ids);
     await supabaseAdmin.from('TechnicianNote').delete().in('repairId', ids);
     await supabaseAdmin.from('Payment').delete().in('repairId', ids);
+
+    // CRITICAL DATA RETENTION: Preserve associated Battery Warranty Hub records independently.
+    // Detach repairId so warranty records and their claim histories remain available in the Battery Warranty Hub.
+    await supabaseAdmin
+      .from('BatteryWarranty')
+      .update({ repairId: null, updatedAt: new Date().toISOString() })
+      .in('repairId', ids);
+
     const { error } = await supabaseAdmin.from('Repair').delete().in('id', ids);
     if (error) {
       return res.status(500).json({ error: 'Failed to bulk delete repairs.' });
@@ -2447,6 +2453,14 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (
     await supabaseAdmin.from('RepairLog').delete().eq('repairId', id);
     await supabaseAdmin.from('TechnicianNote').delete().eq('repairId', id);
     await supabaseAdmin.from('Payment').delete().eq('repairId', id);
+
+    // CRITICAL DATA RETENTION: Preserve associated Battery Warranty Hub records independently.
+    // Detach repairId so warranty records and their claim histories remain available in the Battery Warranty Hub.
+    await supabaseAdmin
+      .from('BatteryWarranty')
+      .update({ repairId: null, updatedAt: new Date().toISOString() })
+      .eq('repairId', id);
+
     const { error } = await supabaseAdmin.from('Repair').delete().eq('id', id);
 
     if (error) {
