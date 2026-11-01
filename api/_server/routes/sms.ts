@@ -54,25 +54,18 @@ router.get('/stats', authenticate, authorize(SMS_REPORT_ROLES), async (req: Auth
     let computedStartDate = startDate;
     let computedEndDate = endDate;
 
-    if (filterPreset && !startDate && !endDate) {
-      const now = new Date();
-      if (filterPreset === 'TODAY') {
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        computedStartDate = start.toISOString();
-      } else if (filterPreset === 'YESTERDAY') {
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        computedStartDate = start.toISOString();
-        computedEndDate = end.toISOString();
+    if (filterPreset && filterPreset !== 'ALL' && !startDate && !endDate) {
+      const validPresets: DateFilterPreset[] = ['TODAY', 'YESTERDAY', 'THIS_WEEK', 'THIS_MONTH'];
+      if (validPresets.includes(filterPreset as DateFilterPreset)) {
+        const bounds = getNptIsoBoundsForPreset(filterPreset as DateFilterPreset);
+        computedStartDate = bounds.startIso || undefined;
+        computedEndDate = bounds.endIso || undefined;
       } else if (filterPreset === 'LAST_7_DAYS') {
-        const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        computedStartDate = start.toISOString();
+        const now = new Date();
+        computedStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
       } else if (filterPreset === 'LAST_30_DAYS') {
-        const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        computedStartDate = start.toISOString();
-      } else if (filterPreset === 'THIS_MONTH') {
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        computedStartDate = start.toISOString();
+        const now = new Date();
+        computedStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
       }
     }
 
@@ -201,6 +194,8 @@ router.get('/devices/repaired', authenticate, authorize(SMS_VIEW_ROLES), async (
       search,
       page = '1',
       limit = '20',
+      refDate: queryRefDate,
+      referenceDate,
     } = req.query as {
       preset?: string;
       startDate?: string;
@@ -208,30 +203,38 @@ router.get('/devices/repaired', authenticate, authorize(SMS_VIEW_ROLES), async (
       search?: string;
       page?: string;
       limit?: string;
+      refDate?: string;
+      referenceDate?: string;
     };
 
     const rawPreset = (typeof preset === 'string' && preset.trim()) ? preset.trim().toUpperCase() : 'THIS_MONTH';
     const validPreset: DateFilterPreset = (['ALL', 'TODAY', 'YESTERDAY', 'THIS_WEEK', 'THIS_MONTH', 'CUSTOM'].includes(rawPreset)
       ? rawPreset
       : 'THIS_MONTH') as DateFilterPreset;
-    const { startIso, endIso } = getNptIsoBoundsForPreset(validPreset, startDate, endDate);
+
+    const evaluationRefDate = (queryRefDate || referenceDate)
+      ? new Date(String(queryRefDate || referenceDate))
+      : new Date();
+
+    const { startIso, endIso } = getNptIsoBoundsForPreset(validPreset, startDate, endDate, evaluationRefDate);
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
-    const REPAIRED_STATUSES = ['REPAIRED', 'READY_FOR_PICKUP', 'READY', 'READY_FOR_DELIVERY', 'REPROBLEM_FIXED'];
+    const REPAIRED_STATUS_LIST = ['REPAIRED', 'READY_FOR_PICKUP', 'repaired', 'ready_for_pickup', 'Repaired'];
 
-    let query = supabaseAdmin
+    // 1. Query Repair records whose current status is REPAIRED (devices waiting for customer collection)
+    let repairQuery = supabaseAdmin
       .from('Repair')
       .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, problemDescription, status, priority, courierReceivedDate, isCourierIn, expectedCompletionDate, createdAt, updatedAt')
-      .in('status', REPAIRED_STATUSES);
+      .in('status', REPAIRED_STATUS_LIST);
 
     if (search && search.trim()) {
       const term = search.trim();
-      query = query.or(`repairNumber.ilike.%${term}%,customerName.ilike.%${term}%,customerPhone.ilike.%${term}%,deviceModel.ilike.%${term}%`);
+      repairQuery = repairQuery.or(`repairNumber.ilike.%${term}%,customerName.ilike.%${term}%,customerPhone.ilike.%${term}%,deviceModel.ilike.%${term}%`);
     }
 
-    const { data: repairs, error } = await query.order('updatedAt', { ascending: false });
+    const { data: repairs, error } = await repairQuery;
 
     if (error) {
       console.error('[REPAIRED DEVICES QUERY ERROR]', error);
@@ -239,48 +242,55 @@ router.get('/devices/repaired', authenticate, authorize(SMS_VIEW_ROLES), async (
     }
 
     const rawList = Array.isArray(repairs) ? repairs : [];
-    const repairIds = rawList.map((r) => r.id);
 
-    // Fetch relevant repair completion logs to determine authoritative completion date
-    let completionLogsMap: Record<string, string> = {};
+    // 2. Lookup authoritative completion timestamps from RepairLog
+    const completionDatesMap: Record<string, string> = {};
+    const repairIds = rawList.map(r => r.id);
+
     if (repairIds.length > 0) {
       try {
         const { data: logs, error: logsError } = await supabaseAdmin
           .from('RepairLog')
           .select('repairId, status, createdAt')
           .in('repairId', repairIds)
-          .in('status', REPAIRED_STATUSES)
+          .in('status', REPAIRED_STATUS_LIST)
           .order('createdAt', { ascending: false });
 
         if (!logsError && Array.isArray(logs)) {
           for (const log of logs) {
-            if (!completionLogsMap[log.repairId]) {
-              completionLogsMap[log.repairId] = log.createdAt;
+            if (!completionDatesMap[log.repairId]) {
+              completionDatesMap[log.repairId] = log.createdAt;
             }
           }
         }
       } catch (logErr) {
-        console.warn('[REPAIR LOG COMPLETION LOOKUP WARN]', logErr);
+        console.warn('[REPAIR LOG LOOKUP WARN]', logErr);
       }
     }
 
-    // Filter by NPT bounds on actual completion date
+    // 3. Filter by NPT bounds on actual completion date using strict half-open interval [startIso, endIso)
     const startMs = startIso ? new Date(startIso).getTime() : null;
     const endMs = endIso ? new Date(endIso).getTime() : null;
 
     const filtered = rawList.filter((repair) => {
-      const completedDate = completionLogsMap[repair.id] || repair.updatedAt;
-      if (!completedDate) return true;
-      const compMs = new Date(completedDate).getTime();
-      if (startMs !== null && compMs < startMs) return false;
-      if (endMs !== null && compMs > endMs) return false;
+      const compDate = completionDatesMap[repair.id] || repair.updatedAt || repair.createdAt;
+      if (!compDate) {
+        return validPreset === 'ALL';
+      }
+
+      if (startMs !== null || endMs !== null) {
+        const compMs = new Date(compDate).getTime();
+        if (startMs !== null && compMs < startMs) return false;
+        if (endMs !== null && compMs >= endMs) return false; // Strict half-open: < endMs
+      }
+
       return true;
     });
 
-    // Sort by completion date descending
+    // 4. Sort by completion date descending
     filtered.sort((a, b) => {
-      const aComp = new Date(completionLogsMap[a.id] || a.updatedAt).getTime();
-      const bComp = new Date(completionLogsMap[b.id] || b.updatedAt).getTime();
+      const aComp = new Date(completionDatesMap[a.id] || a.updatedAt || a.createdAt).getTime();
+      const bComp = new Date(completionDatesMap[b.id] || b.updatedAt || b.createdAt).getTime();
       return bComp - aComp;
     });
 
@@ -289,12 +299,15 @@ router.get('/devices/repaired', authenticate, authorize(SMS_VIEW_ROLES), async (
     const offset = (pageNum - 1) * limitNum;
     const pagedItems = filtered.slice(offset, offset + limitNum);
 
+    // Diagnostic logging without customer PII
+    console.log(`[SMS CENTER REPAIRED DEVICES] Preset: ${validPreset}, Start: ${startIso || 'NONE'}, End: ${endIso || 'NONE'}, Status: REPAIRED, ResultCount: ${pagedItems.length}, Total: ${total}`);
+
     const items = pagedItems.map((repair) => {
       const phoneValidation = validateAndNormalizeNepalPhone(repair.customerPhone);
       const summary = getRepairSmsSummary(repair.id);
       const isCourier = Boolean(repair.isCourierIn);
       const receivedDate = (isCourier && repair.courierReceivedDate ? repair.courierReceivedDate : repair.createdAt);
-      const completedDate = completionLogsMap[repair.id] || repair.updatedAt;
+      const completedDate = completionDatesMap[repair.id] || repair.updatedAt;
       const suggestedMessage = generateRepairedDeviceSmsMessage(repair.repairNumber);
 
       return {
@@ -350,6 +363,8 @@ router.get('/devices/received', authenticate, authorize(SMS_VIEW_ROLES), async (
       search,
       page = '1',
       limit = '20',
+      refDate: queryRefDate,
+      referenceDate,
     } = req.query as {
       preset?: string;
       startDate?: string;
@@ -357,46 +372,107 @@ router.get('/devices/received', authenticate, authorize(SMS_VIEW_ROLES), async (
       search?: string;
       page?: string;
       limit?: string;
+      refDate?: string;
+      referenceDate?: string;
     };
 
     const rawPreset = (typeof preset === 'string' && preset.trim()) ? preset.trim().toUpperCase() : 'THIS_MONTH';
     const validPreset: DateFilterPreset = (['ALL', 'TODAY', 'YESTERDAY', 'THIS_WEEK', 'THIS_MONTH', 'CUSTOM'].includes(rawPreset)
       ? rawPreset
       : 'THIS_MONTH') as DateFilterPreset;
-    const { startIso, endIso } = getNptIsoBoundsForPreset(validPreset, startDate, endDate);
+
+    const evaluationRefDate = (queryRefDate || referenceDate)
+      ? new Date(String(queryRefDate || referenceDate))
+      : new Date();
+
+    const { startIso, endIso } = getNptIsoBoundsForPreset(validPreset, startDate, endDate, evaluationRefDate);
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
-    let query = supabaseAdmin
-      .from('Repair')
-      .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, problemDescription, status, priority, courierReceivedDate, isCourierIn, expectedCompletionDate, createdAt, updatedAt');
+    let repairsMap = new Map<string, any>();
 
-    if (search && search.trim()) {
-      const term = search.trim();
-      query = query.or(`repairNumber.ilike.%${term}%,customerName.ilike.%${term}%,customerPhone.ilike.%${term}%,deviceModel.ilike.%${term}%`);
+    if (startIso && endIso) {
+      // 1. Database-side query by createdAt in [startIso, endIso)
+      let standardQuery = supabaseAdmin
+        .from('Repair')
+        .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, problemDescription, status, priority, courierReceivedDate, isCourierIn, expectedCompletionDate, createdAt, updatedAt')
+        .gte('createdAt', startIso)
+        .lt('createdAt', endIso);
+
+      if (search && search.trim()) {
+        const term = search.trim();
+        standardQuery = standardQuery.or(`repairNumber.ilike.%${term}%,customerName.ilike.%${term}%,customerPhone.ilike.%${term}%,deviceModel.ilike.%${term}%`);
+      }
+
+      const { data: regularRepairs, error: regError } = await standardQuery.order('createdAt', { ascending: false });
+      if (regError) {
+        console.error('[RECEIVED REGULAR QUERY ERROR]', regError);
+      }
+      if (Array.isArray(regularRepairs)) {
+        for (const r of regularRepairs) {
+          repairsMap.set(r.id, r);
+        }
+      }
+
+      // 2. Query courier-in repairs where courierReceivedDate is in [startIso, endIso)
+      let courierQuery = supabaseAdmin
+        .from('Repair')
+        .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, problemDescription, status, priority, courierReceivedDate, isCourierIn, expectedCompletionDate, createdAt, updatedAt')
+        .eq('isCourierIn', true)
+        .gte('courierReceivedDate', startIso)
+        .lt('courierReceivedDate', endIso);
+
+      if (search && search.trim()) {
+        const term = search.trim();
+        courierQuery = courierQuery.or(`repairNumber.ilike.%${term}%,customerName.ilike.%${term}%,customerPhone.ilike.%${term}%,deviceModel.ilike.%${term}%`);
+      }
+
+      const { data: courierRepairs, error: courError } = await courierQuery;
+      if (Array.isArray(courierRepairs)) {
+        for (const r of courierRepairs) {
+          repairsMap.set(r.id, r);
+        }
+      }
+    } else {
+      // ALL preset: query all repairs
+      let allQuery = supabaseAdmin
+        .from('Repair')
+        .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, problemDescription, status, priority, courierReceivedDate, isCourierIn, expectedCompletionDate, createdAt, updatedAt');
+
+      if (search && search.trim()) {
+        const term = search.trim();
+        allQuery = allQuery.or(`repairNumber.ilike.%${term}%,customerName.ilike.%${term}%,customerPhone.ilike.%${term}%,deviceModel.ilike.%${term}%`);
+      }
+
+      const { data: allRepairs, error: allError } = await allQuery.order('createdAt', { ascending: false });
+      if (allError) {
+        console.error('[RECEIVED ALL QUERY ERROR]', allError);
+        return res.status(500).json({ error: allError.message || 'Failed to retrieve received devices.' });
+      }
+      if (Array.isArray(allRepairs)) {
+        for (const r of allRepairs) {
+          repairsMap.set(r.id, r);
+        }
+      }
     }
 
-    const { data: repairs, error } = await query.order('createdAt', { ascending: false });
-
-    if (error) {
-      console.error('[RECEIVED DEVICES QUERY ERROR]', error);
-      return res.status(500).json({ error: error.message || 'Failed to retrieve received devices.' });
-    }
-
-    const rawList = Array.isArray(repairs) ? repairs : [];
+    const rawList = Array.from(repairsMap.values());
 
     const startMs = startIso ? new Date(startIso).getTime() : null;
     const endMs = endIso ? new Date(endIso).getTime() : null;
 
-    // Filter by NPT bounds on actual device received date
+    // Filter by NPT bounds on actual device received date (courierReceivedDate if courier, else createdAt)
+    // with strict half-open interval: recMs >= startMs && recMs < endMs
     const filtered = rawList.filter((repair) => {
       const isCourier = Boolean(repair.isCourierIn);
       const receivedDate = (isCourier && repair.courierReceivedDate ? repair.courierReceivedDate : repair.createdAt);
       if (!receivedDate) return true;
-      const recMs = new Date(receivedDate).getTime();
-      if (startMs !== null && recMs < startMs) return false;
-      if (endMs !== null && recMs > endMs) return false;
+      if (startMs !== null || endMs !== null) {
+        const recMs = new Date(receivedDate).getTime();
+        if (startMs !== null && recMs < startMs) return false;
+        if (endMs !== null && recMs >= endMs) return false; // Strict half-open: < endMs
+      }
       return true;
     });
 

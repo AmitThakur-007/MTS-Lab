@@ -65,10 +65,12 @@ export function getNepalCalendarInfo(refDate: Date = new Date()): NepalCalendarI
   const yesterdayDate = new Date(todayMidnightUtc - 24 * 60 * 60 * 1000 + NPT_OFFSET_MS);
   const yesterdayNpt = `${yesterdayDate.getUTCFullYear()}-${pad(yesterdayDate.getUTCMonth() + 1)}-${pad(yesterdayDate.getUTCDate())}`;
 
-  // Week: Sunday (0) to Saturday (6) in Nepal
+  // Week: Monday to Sunday in Nepal (dow: 0=Sun, 1=Mon, ..., 6=Sat)
+  // daysSinceMonday: Mon=0, Tue=1, ..., Sat=5, Sun=6
   const dow = new Date(todayMidnightUtc + NPT_OFFSET_MS).getUTCDay();
-  const weekStartDate = new Date(todayMidnightUtc - dow * 24 * 60 * 60 * 1000 + NPT_OFFSET_MS);
-  const weekEndDate = new Date(todayMidnightUtc + (6 - dow) * 24 * 60 * 60 * 1000 + NPT_OFFSET_MS);
+  const daysSinceMonday = dow === 0 ? 6 : dow - 1;
+  const weekStartDate = new Date(todayMidnightUtc - daysSinceMonday * 24 * 60 * 60 * 1000 + NPT_OFFSET_MS);
+  const weekEndDate = new Date(todayMidnightUtc + (6 - daysSinceMonday) * 24 * 60 * 60 * 1000 + NPT_OFFSET_MS);
   const weekStartNpt = `${weekStartDate.getUTCFullYear()}-${pad(weekStartDate.getUTCMonth() + 1)}-${pad(weekStartDate.getUTCDate())}`;
   const weekEndNpt = `${weekEndDate.getUTCFullYear()}-${pad(weekEndDate.getUTCMonth() + 1)}-${pad(weekEndDate.getUTCDate())}`;
 
@@ -126,41 +128,41 @@ export function getNptIsoBoundsForPreset(
   };
 
   const todayMidnightUtc = nptMidnightToUtc(y, m, d);
-  const todayEndUtc = todayMidnightUtc + 24 * 60 * 60 * 1000 - 1;
+  const tomorrowMidnightUtc = todayMidnightUtc + 24 * 60 * 60 * 1000;
 
   if (preset === 'TODAY') {
     return {
       startIso: new Date(todayMidnightUtc).toISOString(),
-      endIso: new Date(todayEndUtc).toISOString()
+      endIso: new Date(tomorrowMidnightUtc).toISOString()
     };
   }
 
   if (preset === 'YESTERDAY') {
     const yesterdayMidnightUtc = todayMidnightUtc - 24 * 60 * 60 * 1000;
-    const yesterdayEndUtc = yesterdayMidnightUtc + 24 * 60 * 60 * 1000 - 1;
     return {
       startIso: new Date(yesterdayMidnightUtc).toISOString(),
-      endIso: new Date(yesterdayEndUtc).toISOString()
+      endIso: new Date(todayMidnightUtc).toISOString()
     };
   }
 
   if (preset === 'THIS_WEEK') {
+    // Current calendar week, Monday through Sunday
     const dow = new Date(todayMidnightUtc + NPT_OFFSET_MS).getUTCDay();
-    const weekStartUtc = todayMidnightUtc - dow * 24 * 60 * 60 * 1000;
-    const weekEndUtc = weekStartUtc + 7 * 24 * 60 * 60 * 1000 - 1;
+    const daysSinceMonday = dow === 0 ? 6 : dow - 1;
+    const weekStartUtc = todayMidnightUtc - daysSinceMonday * 24 * 60 * 60 * 1000;
+    const nextWeekStartUtc = weekStartUtc + 7 * 24 * 60 * 60 * 1000;
     return {
       startIso: new Date(weekStartUtc).toISOString(),
-      endIso: new Date(weekEndUtc).toISOString()
+      endIso: new Date(nextWeekStartUtc).toISOString()
     };
   }
 
   if (preset === 'THIS_MONTH') {
     const monthStartUtc = nptMidnightToUtc(y, m, 1);
     const nextMonthStartUtc = nptMidnightToUtc(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1, 1);
-    const monthEndUtc = nextMonthStartUtc - 1;
     return {
       startIso: new Date(monthStartUtc).toISOString(),
-      endIso: new Date(monthEndUtc).toISOString()
+      endIso: new Date(nextMonthStartUtc).toISOString()
     };
   }
 
@@ -170,15 +172,23 @@ export function getNptIsoBoundsForPreset(
     let endIso: string | null = null;
 
     if (customStart) {
-      const [sy, sm, sd] = customStart.split('-').map(Number);
-      if (!isNaN(sy) && !isNaN(sm) && !isNaN(sd)) {
-        startIso = new Date(nptMidnightToUtc(sy, sm, sd)).toISOString();
+      if (customStart.includes('T')) {
+        startIso = new Date(customStart).toISOString();
+      } else {
+        const [sy, sm, sd] = customStart.split('-').map(Number);
+        if (!isNaN(sy) && !isNaN(sm) && !isNaN(sd)) {
+          startIso = new Date(nptMidnightToUtc(sy, sm, sd)).toISOString();
+        }
       }
     }
     if (customEnd) {
-      const [ey, em, ed] = customEnd.split('-').map(Number);
-      if (!isNaN(ey) && !isNaN(em) && !isNaN(ed)) {
-        endIso = new Date(nptMidnightToUtc(ey, em, ed) + 24 * 60 * 60 * 1000 - 1).toISOString();
+      if (customEnd.includes('T')) {
+        endIso = new Date(customEnd).toISOString();
+      } else {
+        const [ey, em, ed] = customEnd.split('-').map(Number);
+        if (!isNaN(ey) && !isNaN(em) && !isNaN(ed)) {
+          endIso = new Date(nptMidnightToUtc(ey, em, ed) + 24 * 60 * 60 * 1000).toISOString();
+        }
       }
     }
     return { startIso, endIso };

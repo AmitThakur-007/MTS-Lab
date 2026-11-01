@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Smartphone,
   MessageSquare,
@@ -63,7 +63,12 @@ export default function SmsCenter() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const userRole = (user?.role || '').toUpperCase().trim();
-  const isAuthorized = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(userRole);
+  const isAuthorized = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(userRole);
+  const isReadOnly = userRole === 'MANAGER';
+
+  // Sequence refs to prevent race conditions during rapid preset toggling
+  const repairedSeqRef = useRef<number>(0);
+  const receivedSeqRef = useRef<number>(0);
 
   // Active Category Tab: 'REPAIRED' | 'RECEIVED' | 'HISTORY'
   const [activeTab, setActiveTab] = useState<'REPAIRED' | 'RECEIVED' | 'HISTORY'>('REPAIRED');
@@ -147,6 +152,7 @@ export default function SmsCenter() {
 
   // Load Repaired Devices
   const fetchRepairedDevices = useCallback(async () => {
+    const seq = ++repairedSeqRef.current;
     try {
       setRepairedLoading(true);
       setRepairedError(null);
@@ -165,23 +171,29 @@ export default function SmsCenter() {
 
       const queryStr = new URLSearchParams(params).toString();
       const res = await api.get(`/sms/devices/repaired?${queryStr}`);
+      if (seq !== repairedSeqRef.current) return;
+
       if (res && res.success) {
         setRepairedList(res.items || []);
         setRepairedTotal(res.total || 0);
         setRepairedTotalPages(res.totalPages || 1);
       }
     } catch (err: any) {
+      if (seq !== repairedSeqRef.current) return;
       console.warn('[FETCH REPAIRED DEVICES WARN]', err);
       const msg = err?.response?.data?.error || err?.message || 'Failed to load repaired devices.';
       setRepairedError(msg);
       toast.error(msg, { id: 'sms-repaired-device-error' });
     } finally {
-      setRepairedLoading(false);
+      if (seq === repairedSeqRef.current) {
+        setRepairedLoading(false);
+      }
     }
   }, [repairedPreset, repairedCustomStart, repairedCustomEnd, repairedSearch, repairedPage]);
 
   // Load Received Devices
   const fetchReceivedDevices = useCallback(async () => {
+    const seq = ++receivedSeqRef.current;
     try {
       setReceivedLoading(true);
       setReceivedError(null);
@@ -200,18 +212,23 @@ export default function SmsCenter() {
 
       const queryStr = new URLSearchParams(params).toString();
       const res = await api.get(`/sms/devices/received?${queryStr}`);
+      if (seq !== receivedSeqRef.current) return;
+
       if (res && res.success) {
         setReceivedList(res.items || []);
         setReceivedTotal(res.total || 0);
         setReceivedTotalPages(res.totalPages || 1);
       }
     } catch (err: any) {
+      if (seq !== receivedSeqRef.current) return;
       console.warn('[FETCH RECEIVED DEVICES WARN]', err);
       const msg = err?.response?.data?.error || err?.message || 'Failed to load received devices.';
       setReceivedError(msg);
       toast.error(msg, { id: 'sms-received-device-error' });
     } finally {
-      setReceivedLoading(false);
+      if (seq === receivedSeqRef.current) {
+        setReceivedLoading(false);
+      }
     }
   }, [receivedPreset, receivedCustomStart, receivedCustomEnd, receivedSearch, receivedPage]);
 
@@ -276,7 +293,7 @@ export default function SmsCenter() {
         </div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Access Restricted</h2>
         <p className="text-sm text-slate-500">
-          The SMS Notification Center is only accessible by Super Admin, Admin, and Receptionist roles.
+          The SMS Notification Center is accessible by Super Admin, Admin, Manager, and Receptionist roles.
         </p>
       </div>
     );
@@ -299,6 +316,11 @@ export default function SmsCenter() {
                 <Badge variant="outline" className="text-[10px] font-mono text-cyan-600 border-cyan-500/30 bg-cyan-50/50 dark:bg-cyan-950/30">
                   NPT (UTC+05:45)
                 </Badge>
+                {isReadOnly && (
+                  <Badge variant="secondary" className="text-[10px] font-semibold text-amber-700 bg-amber-50 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-300/60">
+                    Manager View (Read-Only)
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Retrieve repaired and received devices by date and notify customers via single-segment SMS and WhatsApp.
@@ -603,9 +625,37 @@ export default function SmsCenter() {
                   <span>Retrieving completed repairs from database...</span>
                 </div>
               ) : repairedList.length === 0 ? (
-                <div className="py-16 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-slate-950/20 m-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 space-y-1">
-                  <p className="font-semibold text-slate-600 dark:text-slate-300">No completed repairs found for this period.</p>
-                  <p className="text-[11px] text-slate-400">Try selecting another date filter or clearing your search query.</p>
+                <div className="py-16 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-slate-950/20 m-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">
+                    No completed repairs found for {repairedPreset === 'TODAY' ? 'Today' : repairedPreset === 'YESTERDAY' ? 'Yesterday' : repairedPreset === 'THIS_WEEK' ? 'This Week' : repairedPreset === 'THIS_MONTH' ? 'This Month' : 'the selected period'}.
+                  </p>
+                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                    Try selecting another date filter like This Month or All Repaired, or adjust your search term.
+                  </p>
+                  <div className="pt-1 flex items-center justify-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs font-semibold"
+                      onClick={() => {
+                        setRepairedPreset('THIS_MONTH');
+                        setRepairedPage(1);
+                      }}
+                    >
+                      View This Month
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs font-semibold"
+                      onClick={() => {
+                        setRepairedPreset('ALL');
+                        setRepairedPage(1);
+                      }}
+                    >
+                      View All Repaired
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -689,26 +739,34 @@ export default function SmsCenter() {
                             {/* Action Buttons */}
                             <td className="py-3 px-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">
-                                <Button
-                                  size="sm"
-                                  className="h-7 text-[11px] font-bold px-2.5 bg-cyan-600 hover:bg-cyan-700 text-white shadow-xs"
-                                  onClick={() => handleOpenNotificationModal(item, 'REPAIR_COMPLETED')}
-                                  title="Send Repaired SMS Notification"
-                                >
-                                  <Smartphone className="w-3 h-3 mr-1" />
-                                  <span>Send SMS</span>
-                                </Button>
+                                {isReadOnly ? (
+                                  <Badge variant="outline" className="text-[10px] text-slate-500 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                                    Audit Only
+                                  </Badge>
+                                ) : (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      className="h-7 text-[11px] font-bold px-2.5 bg-cyan-600 hover:bg-cyan-700 text-white shadow-xs"
+                                      onClick={() => handleOpenNotificationModal(item, 'REPAIR_COMPLETED')}
+                                      title="Send Repaired SMS Notification"
+                                    >
+                                      <Smartphone className="w-3 h-3 mr-1" />
+                                      <span>Send SMS</span>
+                                    </Button>
 
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-[11px] font-bold px-2 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-                                  onClick={() => handleDirectWhatsApp(item, 'REPAIR_COMPLETED')}
-                                  title="Send WhatsApp Notification"
-                                >
-                                  <MessageSquare className="w-3 h-3 text-emerald-600" />
-                                  <span className="hidden sm:inline ml-1">WhatsApp</span>
-                                </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-[11px] font-bold px-2 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                      onClick={() => handleDirectWhatsApp(item, 'REPAIR_COMPLETED')}
+                                      title="Send WhatsApp Notification"
+                                    >
+                                      <MessageSquare className="w-3 h-3 text-emerald-600" />
+                                      <span className="hidden sm:inline ml-1">WhatsApp</span>
+                                    </Button>
+                                  </>
+                                )}
 
                                 <Button
                                   size="sm"
@@ -907,9 +965,37 @@ export default function SmsCenter() {
                   <span>Retrieving received devices from database...</span>
                 </div>
               ) : receivedList.length === 0 ? (
-                <div className="py-16 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-slate-950/20 m-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 space-y-1">
-                  <p className="font-semibold text-slate-600 dark:text-slate-300">No received devices found for this period.</p>
-                  <p className="text-[11px] text-slate-400">Try adjusting your date filters or clearing search input.</p>
+                <div className="py-16 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-slate-950/20 m-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">
+                    No received devices found for {receivedPreset === 'TODAY' ? 'Today' : receivedPreset === 'YESTERDAY' ? 'Yesterday' : receivedPreset === 'THIS_WEEK' ? 'This Week' : receivedPreset === 'THIS_MONTH' ? 'This Month' : 'the selected period'}.
+                  </p>
+                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                    Try adjusting your date filters like This Month or All Received, or clear your search input.
+                  </p>
+                  <div className="pt-1 flex items-center justify-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs font-semibold"
+                      onClick={() => {
+                        setReceivedPreset('THIS_MONTH');
+                        setReceivedPage(1);
+                      }}
+                    >
+                      View This Month
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs font-semibold"
+                      onClick={() => {
+                        setReceivedPreset('ALL');
+                        setReceivedPage(1);
+                      }}
+                    >
+                      View All Received
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -991,26 +1077,34 @@ export default function SmsCenter() {
                             {/* Action Buttons */}
                             <td className="py-3 px-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">
-                                <Button
-                                  size="sm"
-                                  className="h-7 text-[11px] font-bold px-2.5 bg-cyan-600 hover:bg-cyan-700 text-white shadow-xs"
-                                  onClick={() => handleOpenNotificationModal(item, 'DEVICE_RECEIVED')}
-                                  title="Send Received Confirmation SMS"
-                                >
-                                  <Smartphone className="w-3 h-3 mr-1" />
-                                  <span>Send SMS</span>
-                                </Button>
+                                {isReadOnly ? (
+                                  <Badge variant="outline" className="text-[10px] text-slate-500 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                                    Audit Only
+                                  </Badge>
+                                ) : (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      className="h-7 text-[11px] font-bold px-2.5 bg-cyan-600 hover:bg-cyan-700 text-white shadow-xs"
+                                      onClick={() => handleOpenNotificationModal(item, 'DEVICE_RECEIVED')}
+                                      title="Send Received Confirmation SMS"
+                                    >
+                                      <Smartphone className="w-3 h-3 mr-1" />
+                                      <span>Send SMS</span>
+                                    </Button>
 
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-[11px] font-bold px-2 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-                                  onClick={() => handleDirectWhatsApp(item, 'DEVICE_RECEIVED')}
-                                  title="Send WhatsApp Confirmation"
-                                >
-                                  <MessageSquare className="w-3 h-3 text-emerald-600" />
-                                  <span className="hidden sm:inline ml-1">WhatsApp</span>
-                                </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-[11px] font-bold px-2 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                      onClick={() => handleDirectWhatsApp(item, 'DEVICE_RECEIVED')}
+                                      title="Send WhatsApp Confirmation"
+                                    >
+                                      <MessageSquare className="w-3 h-3 text-emerald-600" />
+                                      <span className="hidden sm:inline ml-1">WhatsApp</span>
+                                    </Button>
+                                  </>
+                                )}
 
                                 <Button
                                   size="sm"

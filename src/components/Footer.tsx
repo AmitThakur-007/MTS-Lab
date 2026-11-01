@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import BrandLogo from '@/components/BrandLogo';
 import OperatingHours from '@/components/OperatingHours';
+import ThemeToggle from '@/components/common/ThemeToggle';
 import { 
   Smartphone, 
   MapPin, 
@@ -242,6 +243,8 @@ export default function Footer() {
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 font-medium">
+            <ThemeToggle className="h-8 px-2.5 text-xs text-slate-400 hover:text-white border-slate-800" />
+            <span className="text-slate-700">|</span>
             <Link 
               id="footer-terms-link"
               to="/terms" 

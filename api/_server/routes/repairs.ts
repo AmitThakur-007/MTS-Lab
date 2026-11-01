@@ -417,7 +417,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     if (effectiveEnd) {
-      query = query.lte('createdAt', effectiveEnd);
+      query = query.lt('createdAt', effectiveEnd);
     }
 
     if (search) {
