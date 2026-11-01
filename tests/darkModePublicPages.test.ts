@@ -92,11 +92,11 @@ test('ThemeToggle Component Integration', () => {
     'Navbar must import and render ThemeToggle'
   );
 
-  // Verify Footer integrates ThemeToggle
+  // Requirement 10: Verify public Footer strictly removes ThemeToggle/theme controls
   const footerContent = fs.readFileSync(path.resolve(process.cwd(), 'src/components/Footer.tsx'), 'utf8');
   assert.ok(
-    footerContent.includes('ThemeToggle'),
-    'Footer must import and render ThemeToggle'
+    !footerContent.includes('ThemeToggle'),
+    'Public Footer must strictly remove ThemeToggle and theme controls'
   );
 });
 

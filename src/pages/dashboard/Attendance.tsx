@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
+import { useDashboardCache } from '@/store/dashboardCache';
 import { useRealtimeSync } from '@/services/realtime';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
@@ -118,20 +119,16 @@ export default function Attendance() {
   // 1. Fetch Server Time and NPT status
   const fetchServerTime = useCallback(async () => {
     try {
-      const data = await api.get<{
-        dateString: string;
-        timeString: string;
-        isWithinWindow: boolean;
-        secondsRemaining: number;
-        secondsUntilOpen: number;
-      }>('/attendance/server-time');
+      const data = await api.get<any>('/attendance/server-time');
 
       if (data) {
-        setServerDate(data.dateString);
-        setServerTime(data.timeString);
-        setIsWithinWindow(data.isWithinWindow);
-        setSecondsRemaining(data.secondsRemaining || 0);
-        setSecondsUntilOpen(data.secondsUntilOpen || 0);
+        const dateStr = data.dateString || data.serverDate || new Date().toISOString().split('T')[0];
+        const timeStr = data.timeString || data.serverTime || '';
+        setServerDate(dateStr);
+        setServerTime(timeStr);
+        setIsWithinWindow(Boolean(data.isWithinWindow));
+        setSecondsRemaining(data.secondsRemaining ?? data.secondsRemainingInWindow ?? 0);
+        setSecondsUntilOpen(data.secondsUntilOpen ?? data.secondsUntilWindowOpens ?? 0);
       }
     } catch (err) {
       console.warn('[SERVER TIME FETCH]', err);
@@ -141,17 +138,22 @@ export default function Attendance() {
   // 2. Fetch Today Roster
   const fetchRoster = useCallback(async (targetDate: string) => {
     try {
-      const data = await api.get<{
-        success: boolean;
-        roster: StaffRosterItem[];
-        stats: any;
-        windowInfo: any;
-      }>(`/attendance/roster?date=${targetDate}`);
+      const data = await api.get<any>(`/attendance/roster?date=${targetDate}`);
 
       if (data && data.roster) {
         setRoster(data.roster);
-        if (data.stats) {
-          setStats(data.stats);
+        const statsData = data.stats || data.summary;
+        if (statsData) {
+          setStats({
+            totalStaff: statsData.totalStaff ?? 0,
+            presentCount: statsData.presentCount ?? 0,
+            absentCount: statsData.absentCount ?? 0,
+            lateCount: statsData.lateCount ?? 0,
+            halfDayCount: statsData.halfDayCount ?? 0,
+            notMarkedCount: statsData.notMarkedCount ?? 0,
+            pendingCount: statsData.pendingCount ?? 0,
+            attendanceRate: statsData.attendanceRate ?? statsData.overallRate ?? 100,
+          });
         }
       }
     } catch (err) {
@@ -223,17 +225,20 @@ export default function Attendance() {
     }
   }, [user?.id, selectedMonth]);
 
-  // Refresh all (with silent background support)
+  // Refresh all (with silent background support & SWR cache persistence)
   const refreshAllData = useCallback(async (isBackground = false) => {
     if (!isBackground) setIsLoading(true);
-    await Promise.all([
-      fetchServerTime(),
-      isManagement ? fetchRoster(selectedDate) : Promise.resolve(),
-      isManagement ? fetchMonthlyReport(selectedMonth) : Promise.resolve(),
-      isManagement ? fetchHistory() : Promise.resolve(),
-      fetchPersonalData(),
-    ]);
-    if (!isBackground) setIsLoading(false);
+    try {
+      await Promise.all([
+        fetchServerTime(),
+        isManagement ? fetchRoster(selectedDate) : Promise.resolve(),
+        isManagement ? fetchMonthlyReport(selectedMonth) : Promise.resolve(),
+        isManagement ? fetchHistory() : Promise.resolve(),
+        fetchPersonalData(),
+      ]);
+    } finally {
+      if (!isBackground) setIsLoading(false);
+    }
   }, [
     fetchServerTime,
     isManagement,
@@ -245,10 +250,37 @@ export default function Attendance() {
     fetchPersonalData,
   ]);
 
-  // Initial load
+  // Initial load with SWR cache check: render instantly if cached, revalidate in background
   useEffect(() => {
-    refreshAllData(false);
-  }, [refreshAllData]);
+    const cached = useDashboardCache.getState().attendance;
+    const isCachedValid = cached.userId === user?.id && cached.roster && cached.roster.length > 0;
+    if (isCachedValid) {
+      setRoster(cached.roster);
+      if (cached.stats) setStats(cached.stats);
+      if (cached.monthlyReport && cached.monthlyReport.length > 0) setMonthlyReport(cached.monthlyReport);
+      if (cached.historyRecords && cached.historyRecords.length > 0) setHistoryRecords(cached.historyRecords);
+      if (cached.auditLogs && cached.auditLogs.length > 0) setAuditLogs(cached.auditLogs);
+      setIsLoading(false);
+      // Quiet background revalidation
+      refreshAllData(true);
+    } else {
+      refreshAllData(false);
+    }
+  }, [refreshAllData, user?.id]);
+
+  // Sync state back to cache whenever roster or stats update
+  useEffect(() => {
+    if (roster.length > 0 || stats.totalStaff > 0) {
+      useDashboardCache.getState().setAttendance({
+        date: selectedDate,
+        roster,
+        stats,
+        monthlyReport,
+        historyRecords,
+        auditLogs,
+      }, user?.id);
+    }
+  }, [roster, stats, monthlyReport, historyRecords, auditLogs, selectedDate, user?.id]);
 
   // Smooth local second ticking for clock without hammering API
   useEffect(() => {

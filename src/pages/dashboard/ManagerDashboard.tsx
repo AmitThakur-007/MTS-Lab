@@ -70,6 +70,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
+import { useRepairCache } from '@/store/repairCache';
 import { useRealtimeSync } from '@/services/realtime';
 import { toast } from 'sonner';
 import {
@@ -122,24 +123,46 @@ export default function ManagerDashboard() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
 
+  const cachedRepairs = useRepairCache.getState().repairs;
+  const hasCachedRepairs = Boolean(cachedRepairs && cachedRepairs.length > 0 && useRepairCache.getState().userId === user?.id);
+
   // Core Data States
-  const [repairs, setRepairs] = useState<any[]>([]);
+  const [repairs, setRepairs] = useState<any[]>(hasCachedRepairs ? cachedRepairs : []);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [workload, setWorkload] = useState<any[]>([]);
-  const [stats, setStats] = useState<any>({
-    totalRepairs: 0,
-    pending: 0,
-    assigned: 0,
-    inProgress: 0,
-    repaired: 0,
-    ready: 0,
-    delivered: 0,
-    reproblem: 0,
-    unassigned: 0,
-    urgentCount: 0,
-    highCount: 0
+  const [stats, setStats] = useState<any>(() => {
+    if (hasCachedRepairs) {
+      const m = calculateRepairMetrics(cachedRepairs);
+      return {
+        totalRepairs: m.totalRecords,
+        pending: m.pending + m.received,
+        assigned: m.assigned,
+        inProgress: m.inProgress,
+        repaired: m.repaired - m.ready,
+        ready: m.ready,
+        delivered: m.delivered,
+        reproblem: m.reProblem,
+        unassigned: m.unassigned,
+        urgentCount: m.urgentCount,
+        highCount: m.highCount,
+        totalRevenue: m.totalRevenue
+      };
+    }
+    return {
+      totalRepairs: 0,
+      pending: 0,
+      assigned: 0,
+      inProgress: 0,
+      repaired: 0,
+      ready: 0,
+      delivered: 0,
+      reproblem: 0,
+      unassigned: 0,
+      urgentCount: 0,
+      highCount: 0
+    };
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!hasCachedRepairs);
 
   // Filters and Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -217,6 +240,7 @@ export default function ManagerDashboard() {
 
       const repairList = Array.isArray(repairsRes) ? repairsRes : (repairsRes?.repairs || []);
       setRepairs(repairList);
+      useRepairCache.getState().setRepairs(repairList, user?.id);
 
       if (statsRes) {
         setStats(statsRes);
@@ -254,11 +278,17 @@ export default function ManagerDashboard() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (hasCachedRepairs) {
+      if (useRepairCache.getState().isStale(user?.id, 60 * 1000)) {
+        fetchData(true);
+      }
+    } else {
+      fetchData(false);
+    }
+  }, [fetchData, hasCachedRepairs, user?.id]);
 
   // Debounced realtime synchronization to prevent infinite re-render cycles
   const realtimeDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);

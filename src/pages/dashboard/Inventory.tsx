@@ -76,6 +76,7 @@ import {
 } from '@/components/ui/select';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
+import { useDashboardCache } from '@/store/dashboardCache';
 import { toast } from 'sonner';
 import { formatNPR } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -382,6 +383,18 @@ export default function Inventory() {
       if (Array.isArray(locRes)) {
         setLocationsList(locRes);
       }
+
+      // Cache inventory state
+      if (Array.isArray(itemsRes)) {
+        useDashboardCache.getState().setInventory({
+          items: itemsRes,
+          stats: statsRes && typeof statsRes.totalProducts === 'number' ? statsRes : undefined,
+          categories: Array.isArray(catRes) ? catRes.map((c: any) => c.name) : undefined,
+          folders: Array.isArray(foldersRes) ? foldersRes : undefined,
+          suppliers: Array.isArray(supRes) ? supRes : undefined,
+          locations: Array.isArray(locRes) ? locRes : undefined,
+        }, user?.id);
+      }
     } catch (err: any) {
       console.error("[INVENTORY FETCH ERROR]", err);
       toast.error(err.message || 'Failed to load inventory data');
@@ -391,8 +404,26 @@ export default function Inventory() {
   };
 
   useEffect(() => {
-    fetchData(false);
-  }, [token]);
+    const cached = useDashboardCache.getState().inventory;
+    const isCachedValid = cached.userId === user?.id && cached.items && cached.items.length > 0;
+    if (isCachedValid) {
+      setItems(cached.items);
+      if (cached.stats) setStats(cached.stats);
+      if (cached.categories && cached.categories.length > 0) {
+        setCategories(Array.from(new Set([...REPAIR_CATEGORIES, ...cached.categories])));
+      }
+      if (cached.folders && cached.folders.length > 0) setCustomFolders(cached.folders);
+      if (cached.suppliers && cached.suppliers.length > 0) setSuppliersList(cached.suppliers);
+      if (cached.locations && cached.locations.length > 0) setLocationsList(cached.locations);
+      setLoading(false);
+      // Revalidate in background if stale
+      if (useDashboardCache.getState().isStale('inventory', user?.id, 120 * 1000)) {
+        fetchData(true);
+      }
+    } else {
+      fetchData(false);
+    }
+  }, [token, user?.id]);
 
   // Real-Time Database Synchronization across dashboards
   useRealtimeSync(['inventory'], () => {

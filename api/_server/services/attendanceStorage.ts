@@ -119,6 +119,8 @@ export async function getAuthorizedStaffList(): Promise<any[]> {
     'TECHNICIAN',
     'RECEPTIONIST',
     'TECHNICAL_ASSISTANT',
+    'ACCOUNTANT',
+    'INVENTORY_MANAGER',
     'STAFF',
   ];
 

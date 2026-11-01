@@ -57,6 +57,7 @@ import {
 } from '@/components/ui/select';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
+import { useDashboardCache } from '@/store/dashboardCache';
 import { useRealtimeSync } from '@/services/realtime';
 import { syncRepairToSupabase as syncRepairToRtdb } from '@/lib/supabase';
 import { formatTimeAgo, formatShortTimeAgo } from '@/lib/timeUtils';
@@ -296,7 +297,8 @@ export default function TechnicianDashboard() {
   // DATA FETCHING
   // ============================================================================
 
-  const fetchDashboardData = useCallback(async () => {
+  const fetchDashboardData = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     try {
       // Build server-side query params for technician repairs
       const params: Record<string, string> = {
@@ -334,17 +336,20 @@ export default function TechnicianDashboard() {
         })
       ]);
 
+      let isolatedRepairs: any[] = [];
       if (repairsData.status === 'fulfilled') {
         const rawList = Array.isArray(repairsData.value) ? repairsData.value : [];
         // Strict client-side isolation guard: ensure no unassigned or other technician's repairs leak
-        const myIsolatedRepairs = user?.id
+        isolatedRepairs = user?.id
           ? rawList.filter((r: any) => r.technicianId === user.id || r.technician?.id === user.id)
           : rawList;
-        setRepairs(myIsolatedRepairs);
+        setRepairs(isolatedRepairs);
       }
 
+      let parsedStats: any = null;
       if (statsData.status === 'fulfilled' && statsData.value) {
-        setServerStats(statsData.value.metrics || statsData.value || {});
+        parsedStats = statsData.value.metrics || statsData.value || {};
+        setServerStats(parsedStats);
       }
 
       if (staffData.status === 'fulfilled') {
@@ -354,29 +359,56 @@ export default function TechnicianDashboard() {
         setTechnicians(techStaff);
       }
 
+      let transfersPayload: any = null;
       if (transfersData.status === 'fulfilled' && transfersData.value) {
-        setTransferRequests({
+        transfersPayload = {
           incoming: transfersData.value.incoming || [],
           outgoing: transfersData.value.outgoing || [],
           pendingIncomingCount: transfersData.value.pendingIncomingCount || 0
-        });
+        };
+        setTransferRequests(transfersPayload);
       }
 
+      let notifsList: any[] = [];
       if (notifsData.status === 'fulfilled' && notifsData.value) {
-        const list = Array.isArray(notifsData.value) ? notifsData.value : (notifsData.value.notifications || []);
-        setNotifications(list);
-        setUnreadNotificationCount(typeof notifsData.value.unreadCount === 'number' ? notifsData.value.unreadCount : list.filter((n: any) => !n.isRead).length);
+        notifsList = Array.isArray(notifsData.value) ? notifsData.value : (notifsData.value.notifications || []);
+        setNotifications(notifsList);
+        setUnreadNotificationCount(typeof notifsData.value.unreadCount === 'number' ? notifsData.value.unreadCount : notifsList.filter((n: any) => !n.isRead).length);
+      }
+
+      // Save to client-side SWR cache
+      if (datePreset === 'ALL' && activeTab === 'ACTIVE') {
+        useDashboardCache.getState().setTechnician({
+          repairs: isolatedRepairs,
+          stats: parsedStats,
+          transfers: transfersPayload,
+          notifications: notifsList,
+        }, user?.id);
       }
     } catch (err: any) {
       console.error("[TECHNICIAN DASHBOARD FETCH ERROR]", err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   }, [datePreset, customStartDate, customEndDate, activeTab, user?.id]);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData, token]);
+    const cached = useDashboardCache.getState().technician;
+    const isCachedValid = cached.userId === user?.id && cached.repairs && cached.repairs.length > 0;
+    if (isCachedValid && datePreset === 'ALL' && activeTab === 'ACTIVE') {
+      setRepairs(cached.repairs);
+      if (cached.stats) setServerStats(cached.stats);
+      if (cached.transfers) setTransferRequests(cached.transfers);
+      if (cached.notifications) setNotifications(cached.notifications);
+      setLoading(false);
+      // Quiet background revalidation
+      if (useDashboardCache.getState().isStale('technician', user?.id, 60 * 1000)) {
+        fetchDashboardData(true);
+      }
+    } else {
+      fetchDashboardData(false);
+    }
+  }, [fetchDashboardData, token, user?.id]);
 
   // ============================================================================
   // REAL-TIME SYNCHRONIZATION (TECHNICIAN-SPECIFIC PRIORITY ALERTS)

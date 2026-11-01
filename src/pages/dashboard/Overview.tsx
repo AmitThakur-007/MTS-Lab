@@ -15,10 +15,15 @@ import { CustomerOverview } from '@/components/dashboard/overview/CustomerOvervi
 import { OverviewLoadingSkeleton } from '@/components/dashboard/overview/OverviewLoadingSkeleton';
 import { OverviewErrorState } from '@/components/dashboard/overview/OverviewErrorState';
 
+import { useDashboardCache } from '@/store/dashboardCache';
+
 export default function Overview() {
   const { user } = useAuthStore();
-  const [data, setData] = useState<OverviewData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedOverview = useDashboardCache.getState().overview;
+  const hasValidCache = cachedOverview.userId === user?.id && Boolean(cachedOverview.data);
+
+  const [data, setData] = useState<OverviewData | null>(hasValidCache ? cachedOverview.data : null);
+  const [loading, setLoading] = useState(!hasValidCache);
   const [error, setError] = useState<string | null>(null);
 
   const fetchOverview = useCallback(async (showSkeleton = false) => {
@@ -28,6 +33,7 @@ export default function Overview() {
       const res = await api.get<OverviewData>('/dashboard/overview');
       if (res && typeof res === 'object') {
         setData(res);
+        useDashboardCache.getState().setOverview(res, user?.id);
       } else {
         throw new Error('Invalid data payload received from server.');
       }
@@ -37,11 +43,18 @@ export default function Overview() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
-    fetchOverview(true);
-  }, [fetchOverview]);
+    if (hasValidCache) {
+      // Data already shown immediately from cache; check if stale (> 60s) for quiet revalidation
+      if (useDashboardCache.getState().isStale('overview', user?.id, 60 * 1000)) {
+        fetchOverview(false);
+      }
+    } else {
+      fetchOverview(true);
+    }
+  }, [fetchOverview, hasValidCache, user?.id]);
 
   // Real-time synchronization when any database event occurs
   useRealtimeSync(['repair', 'payment', 'product', 'user', 'attendance', 'transfer', 'inventory', 'sync'], () => {

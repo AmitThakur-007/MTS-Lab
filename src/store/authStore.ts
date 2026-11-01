@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useRepairCache } from './repairCache';
+import { useDashboardCache } from './dashboardCache';
 
 interface User {
   id: string;
@@ -57,6 +58,7 @@ export const useAuthStore = create<AuthState>()(
         } catch {}
         try {
           useRepairCache.getState().clear();
+          useDashboardCache.getState().clearAll();
         } catch {}
         set({ user: null, token: null, refreshToken: null });
       },

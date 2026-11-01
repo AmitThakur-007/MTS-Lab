@@ -998,7 +998,7 @@ export default function Repairs() {
 
           {canCreate && (
             <Link to="/dashboard/repairs/new">
-              <Button className="h-10 rounded-xl bg-slate-900 hover:bg-black text-white font-semibold shadow-md gap-2 px-4">
+              <Button className="h-10 rounded-xl bg-slate-900 hover:bg-black text-white dark:bg-indigo-600 dark:hover:bg-indigo-500 font-semibold shadow-md gap-2 px-4 cursor-pointer">
                 <Plus className="h-4 w-4" /> Register Repair
               </Button>
             </Link>

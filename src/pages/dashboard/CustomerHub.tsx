@@ -58,6 +58,7 @@ import {
 } from '@/components/ui/dialog';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
+import { useDashboardCache } from '@/store/dashboardCache';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -202,21 +203,47 @@ export default function CustomerHub() {
 
         const res: any = await api.get(`/customers?${params.toString()}`);
         const list = Array.isArray(res) ? res : (Array.isArray(res?.customers) ? res.customers : []);
+        const total = res?.total ?? list.length;
+        const totalP = res?.totalPages ?? Math.max(1, Math.ceil(total / pageLimit));
         setCustomers(list);
-        setTotalCount(res?.total ?? list.length);
-        setTotalPages(res?.totalPages ?? Math.max(1, Math.ceil((res?.total ?? list.length) / pageLimit)));
+        setTotalCount(total);
+        setTotalPages(totalP);
+
+        // Cache initial or un-filtered view
+        if (!query && dist === 'ALL' && stat === 'ACTIVE' && filter === 'ALL' && requestedPage === 1) {
+          useDashboardCache.getState().setCustomers({
+            list,
+            total,
+            totalPages: totalP,
+          }, user?.id);
+        }
       } catch (err: any) {
         toast.error(err.message || 'Failed to load customers');
       } finally {
         if (!isBackground) setLoading(false);
       }
     },
-    [searchQuery, districtFilter, statusFilter, timeFilter, sortBy, sortOrder, page, limit]
+    [searchQuery, districtFilter, statusFilter, timeFilter, sortBy, sortOrder, page, limit, user?.id]
   );
 
   useEffect(() => {
-    fetchStats();
-    fetchCustomers();
+    const cached = useDashboardCache.getState().customers;
+    const isCachedValid = cached.userId === user?.id && cached.list && cached.list.length > 0;
+    if (isCachedValid) {
+      setCustomers(cached.list);
+      if (cached.stats) setStats(cached.stats);
+      setTotalCount(cached.total);
+      setTotalPages(cached.totalPages);
+      setLoading(false);
+      // Quiet background revalidation if stale
+      if (useDashboardCache.getState().isStale('customers', user?.id, 90 * 1000)) {
+        fetchStats();
+        fetchCustomers(searchQuery, districtFilter, statusFilter, timeFilter, sortBy, sortOrder, page, limit, true);
+      }
+    } else {
+      fetchStats();
+      fetchCustomers();
+    }
   }, []);
 
   // Real-time synchronization

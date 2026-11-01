@@ -99,10 +99,10 @@ export const OverviewHeader: React.FC<OverviewHeaderProps> = ({ data, loading, o
             <Button
               id="overview-new-repair-btn"
               size="sm"
-              onClick={() => navigate('/dashboard/repairs')}
-              className="h-9 px-3.5 text-xs font-medium bg-primary hover:bg-primary/90 text-white shadow-xs"
+              onClick={() => navigate('/dashboard/repairs/new')}
+              className="h-9 px-3.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white shadow-sm transition-all rounded-xl flex items-center gap-1.5 cursor-pointer border border-transparent dark:border-indigo-500/40"
             >
-              <PlusCircle className="w-4 h-4 mr-1.5" />
+              <PlusCircle className="w-4 h-4 mr-1.5 shrink-0 text-white" />
               <span>New Repair</span>
             </Button>
           )}
@@ -112,9 +112,9 @@ export const OverviewHeader: React.FC<OverviewHeaderProps> = ({ data, loading, o
               id="overview-my-repairs-btn"
               size="sm"
               onClick={() => navigate('/dashboard/repairs')}
-              className="h-9 px-3.5 text-xs font-medium bg-primary hover:bg-primary/90 text-white shadow-xs"
+              className="h-9 px-3.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white shadow-sm transition-all rounded-xl flex items-center gap-1.5 cursor-pointer border border-transparent dark:border-indigo-500/40"
             >
-              <Wrench className="w-4 h-4 mr-1.5" />
+              <Wrench className="w-4 h-4 mr-1.5 shrink-0 text-white" />
               <span>Repair Queue</span>
             </Button>
           )}

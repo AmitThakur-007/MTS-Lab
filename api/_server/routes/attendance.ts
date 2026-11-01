@@ -32,12 +32,16 @@ router.get('/server-time', (req, res) => {
     return res.json({
       serverTime: time.timeString,
       serverDate: time.dateString,
+      timeString: time.timeString,
+      dateString: time.dateString,
       hours: time.hours,
       minutes: time.minutes,
       seconds: time.seconds,
       totalMinutes: time.totalMinutes,
       isWithinWindow: time.isWithinWindow,
+      secondsRemaining: time.secondsRemainingInWindow,
       secondsRemainingInWindow: time.secondsRemainingInWindow,
+      secondsUntilOpen: time.secondsUntilWindowOpens,
       secondsUntilWindowOpens: time.secondsUntilWindowOpens,
       windowStart: time.windowStart,
       windowEnd: time.windowEnd,
@@ -131,27 +135,45 @@ const handleGetRoster = async (req: AuthRequest, res: Response) => {
       };
     });
 
-    // Summary counts
+    // Summary counts derived accurately from the full active staff roster for targetDate
     const totalStaff = roster.length;
-    const presentCount = roster.filter((s) => s.status === 'PRESENT' || s.status === 'LATE' || s.status === 'HALF_DAY').length;
-    const absentCount = roster.filter((s) => s.status === 'ABSENT').length;
-    const pendingCount = roster.filter((s) => s.status === 'PENDING').length;
-    const notMarkedCount = roster.filter((s) => s.status === 'NOT_MARKED').length;
+    const presentRecords = roster.filter((s) => s.status === 'PRESENT');
+    const lateRecords = roster.filter((s) => s.status === 'LATE');
+    const halfDayRecords = roster.filter((s) => s.status === 'HALF_DAY');
+    const absentRecords = roster.filter((s) => s.status === 'ABSENT');
+    const pendingRecords = roster.filter((s) => s.status === 'PENDING');
+    const notMarkedRecords = roster.filter((s) => s.status === 'NOT_MARKED');
+
+    const presentCount = presentRecords.length;
+    const lateCount = lateRecords.length;
+    const halfDayCount = halfDayRecords.length;
+    const absentCount = absentRecords.length;
+    const pendingCount = pendingRecords.length;
+    const notMarkedCount = notMarkedRecords.length;
+    const attendedCount = presentCount + lateCount + halfDayCount;
+    const attendanceRate = totalStaff > 0 ? Math.round((attendedCount / totalStaff) * 100) : 0;
+
+    const statsPayload = {
+      totalStaff,
+      presentCount,
+      lateCount,
+      halfDayCount,
+      absentCount,
+      pendingCount,
+      notMarkedCount,
+      markedCount: totalStaff - notMarkedCount,
+      overallRate: attendanceRate,
+      attendanceRate,
+    };
 
     return res.json({
       success: true,
       date: targetDate,
       serverTime: time.timeString,
+      serverDate: time.dateString,
       isWithinWindow: time.isWithinWindow,
-      summary: {
-        totalStaff,
-        presentCount,
-        absentCount,
-        pendingCount,
-        notMarkedCount,
-        markedCount: totalStaff - notMarkedCount,
-        overallRate: totalStaff > 0 ? Math.round((presentCount / totalStaff) * 100) : 0,
-      },
+      summary: statsPayload,
+      stats: statsPayload,
       roster: isManagement ? roster : roster.filter((r) => r.id === currentUser.id),
     });
   } catch (err: any) {
