@@ -60,6 +60,7 @@ import { toNepalDateString } from '@/lib/nepalDate';
 import { cn } from '@/lib/utils';
 import SendSmsModal from '@/components/repair/SendSmsModal';
 import { useRealtimeSync } from '@/services/realtime';
+import { useDashboardCache } from '@/store/dashboardCache';
 
 export default function SmsCenter() {
   const navigate = useNavigate();
@@ -75,11 +76,14 @@ export default function SmsCenter() {
   // Active Category Tab: 'REPAIRED' | 'RECEIVED' | 'CONFIRMATION' | 'HISTORY'
   const [activeTab, setActiveTab] = useState<'REPAIRED' | 'RECEIVED' | 'CONFIRMATION' | 'HISTORY'>('REPAIRED');
 
+  // Cached state access
+  const cachedSmsCenter = useDashboardCache.getState().smsCenter;
+
   // Pending Confirmations State
   const [pendingConfirmationsList, setPendingConfirmationsList] = useState<any[]>([]);
   const [pendingConfirmationsLoading, setPendingConfirmationsLoading] = useState<boolean>(false);
 
-  // Stats
+  // Stats - prehydrated from cache if present
   const [stats, setStats] = useState<{
     totalSmsSent: number;
     staffConfirmedSms: number;
@@ -93,7 +97,7 @@ export default function SmsCenter() {
     totalNotifications: number;
     uniqueCustomersNotified: number;
     uniqueCustomersNotNotified: number;
-  }>({
+  }>(() => cachedSmsCenter.stats || {
     totalSmsSent: 0,
     staffConfirmedSms: 0,
     carrierConfirmedDelivered: 0,
@@ -109,27 +113,27 @@ export default function SmsCenter() {
   });
   const [statsLoading, setStatsLoading] = useState(false);
 
-  // Repaired Devices State
+  // Repaired Devices State - prehydrated from cache if present
   const [repairedPreset, setRepairedPreset] = useState<string>('TODAY');
   const [repairedCustomStart, setRepairedCustomStart] = useState<string>('');
   const [repairedCustomEnd, setRepairedCustomEnd] = useState<string>('');
   const [repairedSearch, setRepairedSearch] = useState<string>('');
   const [repairedPage, setRepairedPage] = useState<number>(1);
-  const [repairedTotal, setRepairedTotal] = useState<number>(0);
+  const [repairedTotal, setRepairedTotal] = useState<number>(() => cachedSmsCenter.repairedTotal || 0);
   const [repairedTotalPages, setRepairedTotalPages] = useState<number>(1);
-  const [repairedList, setRepairedList] = useState<any[]>([]);
+  const [repairedList, setRepairedList] = useState<any[]>(() => cachedSmsCenter.repairedList || []);
   const [repairedLoading, setRepairedLoading] = useState<boolean>(false);
   const [repairedError, setRepairedError] = useState<string | null>(null);
 
-  // Received Devices State
+  // Received Devices State - prehydrated from cache if present
   const [receivedPreset, setReceivedPreset] = useState<string>('TODAY');
   const [receivedCustomStart, setReceivedCustomStart] = useState<string>('');
   const [receivedCustomEnd, setReceivedCustomEnd] = useState<string>('');
   const [receivedSearch, setReceivedSearch] = useState<string>('');
   const [receivedPage, setReceivedPage] = useState<number>(1);
-  const [receivedTotal, setReceivedTotal] = useState<number>(0);
+  const [receivedTotal, setReceivedTotal] = useState<number>(() => cachedSmsCenter.receivedTotal || 0);
   const [receivedTotalPages, setReceivedTotalPages] = useState<number>(1);
-  const [receivedList, setReceivedList] = useState<any[]>([]);
+  const [receivedList, setReceivedList] = useState<any[]>(() => cachedSmsCenter.receivedList || []);
   const [receivedLoading, setReceivedLoading] = useState<boolean>(false);
   const [receivedError, setReceivedError] = useState<string | null>(null);
 
@@ -152,7 +156,7 @@ export default function SmsCenter() {
       setStatsLoading(true);
       const res = await api.get('/sms/stats');
       if (res) {
-        setStats({
+        const newStats = {
           totalSmsSent: res.totalSmsSent || 0,
           staffConfirmedSms: res.staffConfirmedSms || 0,
           carrierConfirmedDelivered: res.carrierConfirmedDelivered || 0,
@@ -165,7 +169,9 @@ export default function SmsCenter() {
           totalNotifications: res.totalNotifications || 0,
           uniqueCustomersNotified: res.uniqueCustomersNotified || 0,
           uniqueCustomersNotNotified: res.uniqueCustomersNotNotified || 0,
-        });
+        };
+        setStats(newStats);
+        useDashboardCache.getState().setSmsCenter({ stats: newStats }, user?.id);
       }
     } catch (err) {
       console.warn('[FETCH SMS STATS WARN]', err);
@@ -201,6 +207,10 @@ export default function SmsCenter() {
         setRepairedList(res.items || []);
         setRepairedTotal(res.total || 0);
         setRepairedTotalPages(res.totalPages || 1);
+        useDashboardCache.getState().setSmsCenter({
+          repairedList: res.items || [],
+          repairedTotal: res.total || 0,
+        }, user?.id);
       }
     } catch (err: any) {
       if (seq !== repairedSeqRef.current) return;
@@ -213,7 +223,7 @@ export default function SmsCenter() {
         setRepairedLoading(false);
       }
     }
-  }, [repairedPreset, repairedCustomStart, repairedCustomEnd, repairedSearch, repairedPage]);
+  }, [repairedPreset, repairedCustomStart, repairedCustomEnd, repairedSearch, repairedPage, user?.id]);
 
   // Load Received Devices
   const fetchReceivedDevices = useCallback(async () => {
@@ -242,6 +252,10 @@ export default function SmsCenter() {
         setReceivedList(res.items || []);
         setReceivedTotal(res.total || 0);
         setReceivedTotalPages(res.totalPages || 1);
+        useDashboardCache.getState().setSmsCenter({
+          receivedList: res.items || [],
+          receivedTotal: res.total || 0,
+        }, user?.id);
       }
     } catch (err: any) {
       if (seq !== receivedSeqRef.current) return;

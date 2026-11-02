@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { getRecentEvents } from '../services/realtimeSync';
 
 const router = Router();
 
@@ -26,6 +27,22 @@ router.get('/', (req: Request, res: Response) => {
   });
 });
 
+/**
+ * GET /api/events/recent — Retrieve events missed during temporary disconnection
+ */
+router.get('/recent', (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  const since = req.query.since ? parseInt(String(req.query.since), 10) : 0;
+  const events = getRecentEvents(since);
+  return res.json({
+    success: true,
+    count: events.length,
+    events,
+    serverTimestamp: Date.now(),
+  });
+});
+
 export default router;
+
 
 

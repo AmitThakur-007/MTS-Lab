@@ -59,6 +59,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           useRepairCache.getState().clear();
           useDashboardCache.getState().clearAll();
+          import('@/services/api').then(({ api }) => api.clearCache()).catch(() => {});
         } catch {}
         set({ user: null, token: null, refreshToken: null });
       },

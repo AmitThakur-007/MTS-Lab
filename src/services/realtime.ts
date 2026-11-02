@@ -20,6 +20,7 @@ class RealtimeService {
   private healthCheckInterval: any = null;
   private supabaseChannel: any = null;
   private isConnecting = false;
+  private lastEventTimestamp = Date.now();
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -37,6 +38,23 @@ class RealtimeService {
     }
   }
 
+  /**
+   * Replay any events missed while offline or disconnected
+   */
+  private async syncMissedEvents() {
+    try {
+      const res = await fetch(`/api/events/recent?since=${this.lastEventTimestamp}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json && Array.isArray(json.events) && json.events.length > 0) {
+          for (const ev of json.events) {
+            this.handleIncomingEvent(ev);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   private initSupabaseRealtimeListeners() {
     try {
       if (!supabase) return;
@@ -52,7 +70,20 @@ class RealtimeService {
       });
 
       // Listen to native postgres table changes if enabled on supabase backend
-      const tablesToTrack = ['Repair', 'repair', 'RepairPrice', 'repairprice', 'Customer', 'customer', 'TechnicianNote', 'techniciannote', 'RepairLog', 'repairlog', 'Notification', 'notification'];
+      const tablesToTrack = [
+        'Repair', 'repair',
+        'RepairPrice', 'repairprice',
+        'Customer', 'customer',
+        'TechnicianNote', 'techniciannote',
+        'RepairLog', 'repairlog',
+        'Notification', 'notification',
+        'AttendanceRecord', 'attendancerecord',
+        'InventoryItem', 'inventoryitem',
+        'RepairTransferRequest', 'repairtransferrequest',
+        'AccessRequest', 'accessrequest',
+        'RepairRelatedDamage', 'repairrelateddamage',
+        'BatteryWarranty', 'batterywarranty'
+      ];
 
       tablesToTrack.forEach((tableName) => {
         this.supabaseChannel.on(
@@ -86,11 +117,17 @@ class RealtimeService {
             this.handleIncomingEvent(payload);
           }
         })
+        .on('broadcast', { event: 'db_event' }, ({ payload }: { payload: any }) => {
+          if (payload && payload.entity) {
+            this.handleIncomingEvent(payload);
+          }
+        })
         .subscribe((status: string) => {
           this.isConnecting = false;
           if (status === 'SUBSCRIBED') {
             this.supabaseConnected = true;
             this.updateAggregateStatus();
+            this.syncMissedEvents();
           } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
             this.supabaseConnected = false;
             this.updateAggregateStatus();
@@ -221,6 +258,18 @@ class RealtimeService {
     if (incomingNormalized === 'heartbeat' || incomingNormalized === 'globalfocus' || incomingNormalized === 'ping') {
       return;
     }
+
+    if (event.timestamp) {
+      this.lastEventTimestamp = Math.max(this.lastEventTimestamp, event.timestamp);
+    }
+
+    // Invalidate API query cache for this entity
+    try {
+      import('@/services/api').then(({ api }) => {
+        api.invalidate(incomingRaw);
+        api.invalidate('/dashboard');
+      }).catch(() => {});
+    } catch (_) {}
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('mts-realtime-update', { detail: event }));

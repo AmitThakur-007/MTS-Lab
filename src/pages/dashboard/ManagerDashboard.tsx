@@ -71,6 +71,7 @@ import {
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { useRepairCache } from '@/store/repairCache';
+import { useDashboardCache } from '@/store/dashboardCache';
 import { useRealtimeSync } from '@/services/realtime';
 import { toast } from 'sonner';
 import {
@@ -125,12 +126,17 @@ export default function ManagerDashboard() {
 
   const cachedRepairs = useRepairCache.getState().repairs;
   const hasCachedRepairs = Boolean(cachedRepairs && cachedRepairs.length > 0 && useRepairCache.getState().userId === user?.id);
+  const cachedManager = useDashboardCache.getState().manager;
+  const hasCachedManager = Boolean(cachedManager?.stats && cachedManager.userId === user?.id);
 
   // Core Data States
   const [repairs, setRepairs] = useState<any[]>(hasCachedRepairs ? cachedRepairs : []);
   const [technicians, setTechnicians] = useState<any[]>([]);
-  const [workload, setWorkload] = useState<any[]>([]);
+  const [workload, setWorkload] = useState<any[]>(() => (hasCachedManager && Array.isArray(cachedManager.workload)) ? cachedManager.workload : []);
   const [stats, setStats] = useState<any>(() => {
+    if (hasCachedManager && cachedManager.stats) {
+      return cachedManager.stats;
+    }
     if (hasCachedRepairs) {
       const m = calculateRepairMetrics(cachedRepairs);
       return {
@@ -266,6 +272,11 @@ export default function ManagerDashboard() {
       if (Array.isArray(workloadRes) && workloadRes.length > 0) {
         setWorkload(workloadRes);
       }
+
+      useDashboardCache.getState().setManager({
+        stats: statsRes || stats,
+        workload: Array.isArray(workloadRes) ? workloadRes : [],
+      }, user?.id);
 
       const activeTechs = (Array.isArray(staffRes) ? staffRes : []).filter(
         (s: any) => ['TECHNICIAN', 'LEAD_TECHNICIAN'].includes(s.role) && s.isActive !== false

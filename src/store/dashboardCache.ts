@@ -52,15 +52,59 @@ export interface DashboardCacheState {
     lastFetched: number;
   };
 
+  // Super Admin Section
+  superAdmin: {
+    auditLogs: any[];
+    auditTotal: number;
+    auditTotalPages: number;
+    history: any[];
+    sharingHistory: any[];
+    userId: string | null;
+    lastFetched: number;
+  };
+
+  // SMS Center Section
+  smsCenter: {
+    stats: any | null;
+    repairedList: any[];
+    repairedTotal: number;
+    receivedList: any[];
+    receivedTotal: number;
+    userId: string | null;
+    lastFetched: number;
+  };
+
+  // Revenue Section
+  revenue: {
+    summary: any | null;
+    metrics: any | null;
+    chartData: any[];
+    transactions: any[];
+    userId: string | null;
+    lastFetched: number;
+  };
+
+  // Manager Section
+  manager: {
+    stats: any | null;
+    workload: any[];
+    userId: string | null;
+    lastFetched: number;
+  };
+
   // Actions
   setOverview: (data: any, userId?: string | null) => void;
   setCustomers: (payload: { list: any[]; stats?: any; total?: number; totalPages?: number }, userId?: string | null) => void;
   setAttendance: (payload: { date?: string; roster?: any[]; stats?: any; monthlyReport?: any[]; historyRecords?: any[]; auditLogs?: any[] }, userId?: string | null) => void;
   setInventory: (payload: { items: any[]; stats?: any; categories?: string[]; folders?: any[]; suppliers?: any[]; locations?: any[] }, userId?: string | null) => void;
   setTechnician: (payload: { repairs: any[]; stats?: any; transfers?: any; notifications?: any[] }, userId?: string | null) => void;
+  setSuperAdmin: (payload: { auditLogs?: any[]; auditTotal?: number; auditTotalPages?: number; history?: any[]; sharingHistory?: any[] }, userId?: string | null) => void;
+  setSmsCenter: (payload: { stats?: any; repairedList?: any[]; repairedTotal?: number; receivedList?: any[]; receivedTotal?: number }, userId?: string | null) => void;
+  setRevenue: (payload: { summary?: any; metrics?: any; chartData?: any[]; transactions?: any[] }, userId?: string | null) => void;
+  setManager: (payload: { stats?: any; workload?: any[] }, userId?: string | null) => void;
 
-  isStale: (section: 'overview' | 'customers' | 'attendance' | 'inventory' | 'technician', currentUserId?: string | null, maxAgeMs?: number) => boolean;
-  invalidate: (section?: 'overview' | 'customers' | 'attendance' | 'inventory' | 'technician' | 'all') => void;
+  isStale: (section: 'overview' | 'customers' | 'attendance' | 'inventory' | 'technician' | 'superAdmin' | 'smsCenter' | 'revenue' | 'manager', currentUserId?: string | null, maxAgeMs?: number) => boolean;
+  invalidate: (section?: 'overview' | 'customers' | 'attendance' | 'inventory' | 'technician' | 'superAdmin' | 'smsCenter' | 'revenue' | 'manager' | 'all') => void;
   clearAll: () => void;
 }
 
@@ -105,6 +149,38 @@ export const useDashboardCache = create<DashboardCacheState>((set, get) => ({
     stats: null,
     transfers: null,
     notifications: [],
+    userId: null,
+    lastFetched: 0,
+  },
+  superAdmin: {
+    auditLogs: [],
+    auditTotal: 0,
+    auditTotalPages: 1,
+    history: [],
+    sharingHistory: [],
+    userId: null,
+    lastFetched: 0,
+  },
+  smsCenter: {
+    stats: null,
+    repairedList: [],
+    repairedTotal: 0,
+    receivedList: [],
+    receivedTotal: 0,
+    userId: null,
+    lastFetched: 0,
+  },
+  revenue: {
+    summary: null,
+    metrics: null,
+    chartData: [],
+    transactions: [],
+    userId: null,
+    lastFetched: 0,
+  },
+  manager: {
+    stats: null,
+    workload: [],
     userId: null,
     lastFetched: 0,
   },
@@ -170,6 +246,54 @@ export const useDashboardCache = create<DashboardCacheState>((set, get) => ({
       },
     })),
 
+  setSuperAdmin: (payload, userId) =>
+    set((state) => ({
+      superAdmin: {
+        auditLogs: payload.auditLogs !== undefined ? payload.auditLogs : state.superAdmin.auditLogs,
+        auditTotal: payload.auditTotal !== undefined ? payload.auditTotal : state.superAdmin.auditTotal,
+        auditTotalPages: payload.auditTotalPages !== undefined ? payload.auditTotalPages : state.superAdmin.auditTotalPages,
+        history: payload.history !== undefined ? payload.history : state.superAdmin.history,
+        sharingHistory: payload.sharingHistory !== undefined ? payload.sharingHistory : state.superAdmin.sharingHistory,
+        userId: userId !== undefined ? userId : state.superAdmin.userId,
+        lastFetched: Date.now(),
+      },
+    })),
+
+  setSmsCenter: (payload, userId) =>
+    set((state) => ({
+      smsCenter: {
+        stats: payload.stats !== undefined ? payload.stats : state.smsCenter.stats,
+        repairedList: payload.repairedList !== undefined ? payload.repairedList : state.smsCenter.repairedList,
+        repairedTotal: payload.repairedTotal !== undefined ? payload.repairedTotal : state.smsCenter.repairedTotal,
+        receivedList: payload.receivedList !== undefined ? payload.receivedList : state.smsCenter.receivedList,
+        receivedTotal: payload.receivedTotal !== undefined ? payload.receivedTotal : state.smsCenter.receivedTotal,
+        userId: userId !== undefined ? userId : state.smsCenter.userId,
+        lastFetched: Date.now(),
+      },
+    })),
+
+  setRevenue: (payload, userId) =>
+    set((state) => ({
+      revenue: {
+        summary: payload.summary !== undefined ? payload.summary : state.revenue.summary,
+        metrics: payload.metrics !== undefined ? payload.metrics : state.revenue.metrics,
+        chartData: payload.chartData !== undefined ? payload.chartData : state.revenue.chartData,
+        transactions: payload.transactions !== undefined ? payload.transactions : state.revenue.transactions,
+        userId: userId !== undefined ? userId : state.revenue.userId,
+        lastFetched: Date.now(),
+      },
+    })),
+
+  setManager: (payload, userId) =>
+    set((state) => ({
+      manager: {
+        stats: payload.stats !== undefined ? payload.stats : state.manager.stats,
+        workload: payload.workload !== undefined ? payload.workload : state.manager.workload,
+        userId: userId !== undefined ? userId : state.manager.userId,
+        lastFetched: Date.now(),
+      },
+    })),
+
   isStale: (section, currentUserId, maxAgeMs = DEFAULT_TTL_MS) => {
     const s = get()[section];
     if (!s) return true;
@@ -198,5 +322,10 @@ export const useDashboardCache = create<DashboardCacheState>((set, get) => ({
       attendance: { date: null, roster: [], stats: null, monthlyReport: [], historyRecords: [], auditLogs: [], userId: null, lastFetched: 0 },
       inventory: { items: [], stats: null, categories: [], folders: [], suppliers: [], locations: [], userId: null, lastFetched: 0 },
       technician: { repairs: [], stats: null, transfers: null, notifications: [], userId: null, lastFetched: 0 },
+      superAdmin: { auditLogs: [], auditTotal: 0, auditTotalPages: 1, history: [], sharingHistory: [], userId: null, lastFetched: 0 },
+      smsCenter: { stats: null, repairedList: [], repairedTotal: 0, receivedList: [], receivedTotal: 0, userId: null, lastFetched: 0 },
+      revenue: { summary: null, metrics: null, chartData: [], transactions: [], userId: null, lastFetched: 0 },
+      manager: { stats: null, workload: [], userId: null, lastFetched: 0 },
     }),
 }));
+

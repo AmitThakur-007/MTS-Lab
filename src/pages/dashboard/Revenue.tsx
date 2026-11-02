@@ -58,9 +58,13 @@ import RevenueSummaryCards from '@/components/revenue/RevenueSummaryCards';
 import RevenueCharts from '@/components/revenue/RevenueCharts';
 import RepairProfitabilityTable from '@/components/revenue/RepairProfitabilityTable';
 import FinancialTransactionsJournal from '@/components/revenue/FinancialTransactionsJournal';
+import { useDashboardCache } from '@/store/dashboardCache';
 
 export default function Revenue() {
   const user = useAuthStore((state) => state.user);
+  const cachedRevenue = useDashboardCache.getState().revenue;
+  const hasCachedRevenue = Boolean(cachedRevenue?.summary && cachedRevenue.userId === user?.id);
+
   const [timeframe, setTimeframe] = useState<string>('THIS_MONTH');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
@@ -71,9 +75,9 @@ export default function Revenue() {
   const [brandFilter, setBrandFilter] = useState<string>('ALL');
   const [staffList, setStaffList] = useState<any[]>([]);
 
-  // Overview Data
-  const [overviewData, setOverviewData] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Overview Data - prehydrated from cache if present
+  const [overviewData, setOverviewData] = useState<any>(() => hasCachedRevenue ? cachedRevenue.summary : null);
+  const [loading, setLoading] = useState<boolean>(!hasCachedRevenue);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
 
   // Fetch Staff List for Filters
@@ -90,7 +94,7 @@ export default function Revenue() {
   // Fetch Authoritative Financial Overview
   const fetchOverview = async () => {
     try {
-      setLoading(true);
+      if (!overviewData) setLoading(true);
       const params: any = {
         timeframe,
         technicianId: technicianFilter,
@@ -105,6 +109,9 @@ export default function Revenue() {
       const res: any = await api.get('/revenue/overview', { params });
       if (res?.success) {
         setOverviewData(res);
+        if (timeframe === 'THIS_MONTH' && technicianFilter === 'ALL' && brandFilter === 'ALL') {
+          useDashboardCache.getState().setRevenue({ summary: res }, user?.id);
+        }
       }
     } catch (err: any) {
       console.error('[FETCH REVENUE OVERVIEW ERROR]', err);

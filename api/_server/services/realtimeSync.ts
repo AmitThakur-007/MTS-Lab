@@ -2,6 +2,17 @@
 import { Response } from 'express';
 import { supabaseAdmin } from '../config/supabase';
 
+export interface RealtimeServerEvent {
+  entity: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE';
+  id: string;
+  data?: any;
+  timestamp: number;
+}
+
+const MAX_EVENT_BUFFER = 200;
+const recentEventsBuffer: RealtimeServerEvent[] = [];
+
 let serverBroadcastChannel: any = null;
 let isChannelSubscribing = false;
 
@@ -32,17 +43,33 @@ export function registerSSEClient(_id: string, _res: Response, _user?: { id?: st
 }
 
 /**
- * Broadcast change to Supabase realtime channel
+ * Get recent events broadcasted since a given timestamp (for client reconnect / offline recovery)
+ */
+export function getRecentEvents(sinceTimestamp: number = 0): RealtimeServerEvent[] {
+  if (!sinceTimestamp || isNaN(sinceTimestamp)) {
+    return recentEventsBuffer.slice(-50);
+  }
+  return recentEventsBuffer.filter((e) => e.timestamp > sinceTimestamp);
+}
+
+/**
+ * Broadcast change to Supabase realtime channel and append to in-memory recovery buffer
  */
 export async function broadcastServerChange(entityName: string, action: 'CREATE' | 'UPDATE' | 'DELETE', id: string, data?: any) {
   const entityLower = entityName.toLowerCase();
-  const payload = {
+  const payload: RealtimeServerEvent = {
     entity: entityLower,
     action,
     id: String(id),
     data,
     timestamp: Date.now(),
   };
+
+  // Add to in-memory sliding buffer for offline/reconnect catching up
+  recentEventsBuffer.push(payload);
+  if (recentEventsBuffer.length > MAX_EVENT_BUFFER) {
+    recentEventsBuffer.shift();
+  }
 
   // Broadcast to Supabase Realtime channel
   try {
@@ -58,5 +85,6 @@ export async function broadcastServerChange(entityName: string, action: 'CREATE'
     // Non-fatal if Supabase channel is disconnected
   }
 }
+
 
 

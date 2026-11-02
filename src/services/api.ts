@@ -213,8 +213,73 @@ async function request<T = any>(endpoint: string, options: any = {}): Promise<T>
   }
 }
 
+// ============================================================================
+// Smart Client Query Cache & In-Flight Request Deduplication Layer
+// ============================================================================
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+const queryCache = new Map<string, CacheEntry>();
+const inFlightRequests = new Map<string, Promise<any>>();
+const DEFAULT_API_TTL_MS = 15 * 1000; // 15 seconds SWR memory window for GET requests
+
+export interface ApiGetOptions {
+  params?: Record<string, any>;
+  ttl?: number;
+  forceFresh?: boolean;
+}
+
+function invalidateMatchingCache(pattern?: string | RegExp) {
+  if (!pattern) {
+    queryCache.clear();
+    return;
+  }
+  for (const key of queryCache.keys()) {
+    if (typeof pattern === 'string') {
+      if (key.includes(pattern)) {
+        queryCache.delete(key);
+      }
+    } else if (pattern.test(key)) {
+      queryCache.delete(key);
+    }
+  }
+}
+
+function autoInvalidateForMutation(endpoint: string) {
+  const lower = endpoint.toLowerCase();
+  if (lower.includes('/repairs') || lower.includes('/repair')) {
+    invalidateMatchingCache('/repairs');
+    invalidateMatchingCache('/repair');
+    invalidateMatchingCache('/dashboard');
+    invalidateMatchingCache('/customers');
+  } else if (lower.includes('/customer')) {
+    invalidateMatchingCache('/customers');
+    invalidateMatchingCache('/customer');
+    invalidateMatchingCache('/dashboard');
+  } else if (lower.includes('/attendance')) {
+    invalidateMatchingCache('/attendance');
+    invalidateMatchingCache('/dashboard');
+  } else if (lower.includes('/inventory') || lower.includes('/products')) {
+    invalidateMatchingCache('/inventory');
+    invalidateMatchingCache('/products');
+    invalidateMatchingCache('/dashboard');
+  } else if (lower.includes('/sms')) {
+    invalidateMatchingCache('/sms');
+    invalidateMatchingCache('/dashboard');
+  } else if (lower.includes('/users') || lower.includes('/staff') || lower.includes('/admin')) {
+    invalidateMatchingCache('/users');
+    invalidateMatchingCache('/staff');
+    invalidateMatchingCache('/admin');
+    invalidateMatchingCache('/dashboard');
+  } else {
+    invalidateMatchingCache('/dashboard');
+  }
+}
+
 export const api = {
-  get: <T = any>(endpoint: string, options?: { params?: Record<string, any> }) => {
+  get: <T = any>(endpoint: string, options?: ApiGetOptions): Promise<T> => {
     let url = endpoint;
     if (options?.params) {
       const searchParams = new URLSearchParams();
@@ -228,8 +293,47 @@ export const api = {
         url += (url.includes('?') ? '&' : '?') + qs;
       }
     }
-    return request<T>(url);
+
+    const ttl = options?.ttl ?? DEFAULT_API_TTL_MS;
+    const forceFresh = Boolean(options?.forceFresh);
+
+    // 1. Check in-memory query cache if not forcing fresh fetch
+    if (!forceFresh) {
+      const cached = queryCache.get(url);
+      if (cached && Date.now() - cached.timestamp < ttl) {
+        return Promise.resolve(cached.data as T);
+      }
+    }
+
+    // 2. In-flight request deduplication: reuse running promise for identical concurrent queries
+    if (inFlightRequests.has(url)) {
+      return inFlightRequests.get(url)!;
+    }
+
+    const promise = request<T>(url)
+      .then((data) => {
+        if (data !== null && data !== undefined) {
+          queryCache.set(url, { data, timestamp: Date.now() });
+        }
+        return data;
+      })
+      .finally(() => {
+        inFlightRequests.delete(url);
+      });
+
+    inFlightRequests.set(url, promise);
+    return promise;
   },
+
+  invalidate: (pattern?: string | RegExp) => {
+    invalidateMatchingCache(pattern);
+  },
+
+  clearCache: () => {
+    queryCache.clear();
+    inFlightRequests.clear();
+  },
+
   getBlob: async (endpoint: string, options: any = {}) => {
     const { token } = useAuthStore.getState();
     const headers = {
@@ -267,6 +371,7 @@ export const api = {
     }
     return res.blob();
   },
+
   download: async (endpoint: string, fallbackFilename?: string) => {
     const { token } = useAuthStore.getState();
     const headers: any = {
@@ -318,28 +423,46 @@ export const api = {
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
   },
-  post: <T = any>(endpoint: string, data?: any, options: any = {}) => {
+
+  post: async <T = any>(endpoint: string, data?: any, options: any = {}): Promise<T> => {
     const isFormData = data instanceof FormData;
-    return request<T>(endpoint, {
+    const res = await request<T>(endpoint, {
       method: 'POST',
       headers: isFormData ? {} : { 'Content-Type': 'application/json', ...options.headers },
       body: isFormData ? data : data !== undefined ? JSON.stringify(data) : undefined,
       ...options
     });
+    autoInvalidateForMutation(endpoint);
+    return res;
   },
-  put: <T = any>(endpoint: string, data?: any) => request<T>(endpoint, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: data !== undefined ? JSON.stringify(data) : undefined,
-  }),
-  patch: <T = any>(endpoint: string, data?: any) => request<T>(endpoint, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: data !== undefined ? JSON.stringify(data) : undefined,
-  }),
-  delete: <T = any>(endpoint: string, data?: any) => request<T>(endpoint, {
-    method: 'DELETE',
-    headers: data ? { 'Content-Type': 'application/json' } : {},
-    body: data ? JSON.stringify(data) : undefined
-  }),
+
+  put: async <T = any>(endpoint: string, data?: any): Promise<T> => {
+    const res = await request<T>(endpoint, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+    });
+    autoInvalidateForMutation(endpoint);
+    return res;
+  },
+
+  patch: async <T = any>(endpoint: string, data?: any): Promise<T> => {
+    const res = await request<T>(endpoint, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+    });
+    autoInvalidateForMutation(endpoint);
+    return res;
+  },
+
+  delete: async <T = any>(endpoint: string, data?: any): Promise<T> => {
+    const res = await request<T>(endpoint, {
+      method: 'DELETE',
+      headers: data ? { 'Content-Type': 'application/json' } : {},
+      body: data ? JSON.stringify(data) : undefined
+    });
+    autoInvalidateForMutation(endpoint);
+    return res;
+  },
 };

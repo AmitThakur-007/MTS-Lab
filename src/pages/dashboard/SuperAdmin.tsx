@@ -63,8 +63,10 @@ import ThemeController from './ThemeController';
 import SlideshowManagement from './SlideshowManagement';
 import { Layers } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { useDashboardCache } from '@/store/dashboardCache';
 
 export default function SuperAdmin() {
+  const cachedSuperAdmin = useDashboardCache.getState().superAdmin;
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletionType, setDeletionType] = useState<'ALL' | 'DATE' | 'MONTH' | 'YEAR' | 'RANGE'>('ALL');
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -76,7 +78,7 @@ export default function SuperAdmin() {
   const [password, setPassword] = useState('');
   const [confirmText, setConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>(() => cachedSuperAdmin.history || []);
   const navigate = useNavigate();
 
   // Applet Sharing states
@@ -87,7 +89,7 @@ export default function SuperAdmin() {
     sharingTarget: '',
     allowFork: true
   });
-  const [sharingHistory, setSharingHistory] = useState<any[]>([]);
+  const [sharingHistory, setSharingHistory] = useState<any[]>(() => cachedSuperAdmin.sharingHistory || []);
   const [shareLoading, setShareLoading] = useState(false);
 
   const { user } = useAuthStore();
@@ -192,11 +194,11 @@ export default function SuperAdmin() {
     }
   };
 
-  // Security Audit Logs state
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
-  const [auditTotal, setAuditTotal] = useState(0);
+  // Security Audit Logs state - prehydrated from cache if present
+  const [auditLogs, setAuditLogs] = useState<any[]>(() => cachedSuperAdmin.auditLogs || []);
+  const [auditTotal, setAuditTotal] = useState(() => cachedSuperAdmin.auditTotal || 0);
   const [auditPage, setAuditPage] = useState(1);
-  const [auditTotalPages, setAuditTotalPages] = useState(1);
+  const [auditTotalPages, setAuditTotalPages] = useState(() => cachedSuperAdmin.auditTotalPages || 1);
   const [auditLimit] = useState(15);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
@@ -234,6 +236,7 @@ export default function SuperAdmin() {
     try {
       const data = await api.get('/admin/deletion-history');
       setHistory(data || []);
+      useDashboardCache.getState().setSuperAdmin({ history: data || [] }, user?.id);
     } catch (err) {
       console.error(err);
     }
@@ -244,6 +247,7 @@ export default function SuperAdmin() {
       const response = await api.get('/share/history');
       if (response && response.success) {
         setSharingHistory(response.data || []);
+        useDashboardCache.getState().setSuperAdmin({ sharingHistory: response.data || [] }, user?.id);
       }
     } catch (err: any) {
       console.error("[SHARE HISTORY LOAD ERROR]", err);
@@ -281,6 +285,13 @@ export default function SuperAdmin() {
         setAuditTotal(res.total ?? (res.logs?.length || 0));
         setAuditTotalPages(res.totalPages || Math.ceil((res.total || 0) / auditLimit) || 1);
         setAuditError(null);
+        if (targetPage === 1 && !targetSearch && targetAction === 'ALL') {
+          useDashboardCache.getState().setSuperAdmin({
+            auditLogs: res.logs || [],
+            auditTotal: res.total ?? (res.logs?.length || 0),
+            auditTotalPages: res.totalPages || Math.ceil((res.total || 0) / auditLimit) || 1,
+          }, user?.id);
+        }
       } else {
         throw new Error(res?.error || 'Invalid response from audit logs server');
       }

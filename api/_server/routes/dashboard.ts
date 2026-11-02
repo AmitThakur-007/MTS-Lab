@@ -93,53 +93,108 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
     const { todayStr, yesterdayStr, monthStr, past7Days } = getNepalDates();
     const serverTimeInfo = getNepalBusinessTime();
 
-    // 1. Fetch repairs from Supabase for overview calculations across all records
-    const { data: repairsData, error: repairsErr } = await supabaseAdmin
-      .from('Repair')
-      .select(`
-        id,
-        repairNumber,
-        customerId,
-        customerName,
-        customerPhone,
-        customerEmail,
-        deviceBrand,
-        deviceModel,
-        status,
-        priority,
-        estimatedCost,
-        advancePaid,
-        totalPaid,
-        technicianId,
-        isCourierIn,
-        courierInStatus,
-        isCourierOut,
-        courierOutStatus,
-        createdAt,
-        updatedAt,
-        courierOutDeliveredDate
-      `)
-      .order('createdAt', { ascending: false });
+    // Execute all independent database queries in parallel for high-performance dashboard loading
+    const [
+      repairsResult,
+      customersResult,
+      authorizedStaff,
+      todayAttendanceList,
+      monthAttendanceList,
+      inventoryResult,
+      totalWarrantiesResult,
+      activeWarrantiesResult,
+      transferRequestsResult,
+      accessReqsResult,
+      damageRecordsResult,
+      unreadNotificationsResult,
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('Repair')
+        .select(`
+          id,
+          repairNumber,
+          customerId,
+          customerName,
+          customerPhone,
+          customerEmail,
+          deviceBrand,
+          deviceModel,
+          status,
+          priority,
+          estimatedCost,
+          advancePaid,
+          totalPaid,
+          technicianId,
+          isCourierIn,
+          courierInStatus,
+          isCourierOut,
+          courierOutStatus,
+          createdAt,
+          updatedAt,
+          courierOutDeliveredDate
+        `)
+        .order('createdAt', { ascending: false }),
 
-    if (repairsErr) {
-      console.error('[OVERVIEW REPAIRS QUERY ERROR]', repairsErr);
+      supabaseAdmin
+        .from('Customer')
+        .select('*', { count: 'exact', head: true })
+        .eq('archived', false),
+
+      getAuthorizedStaffList(),
+      getAllAttendanceRecords({ date: todayStr }),
+      getAllAttendanceRecords({ month: monthStr }),
+
+      supabaseAdmin
+        .from('InventoryItem')
+        .select('id, name, brand, model, category, currentStock, minStockLevel, unit, status')
+        .eq('status', 'ACTIVE')
+        .limit(200),
+
+      supabaseAdmin
+        .from('BatteryWarranty')
+        .select('*', { count: 'exact', head: true }),
+
+      supabaseAdmin
+        .from('BatteryWarranty')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'ACTIVE'),
+
+      supabaseAdmin
+        .from('RepairTransferRequest')
+        .select('*')
+        .order('createdAt', { ascending: false })
+        .limit(20),
+
+      (role === 'SUPER_ADMIN' || role === 'ADMIN')
+        ? supabaseAdmin
+            .from('AccessRequest')
+            .select('*')
+            .eq('status', 'PENDING')
+            .order('createdAt', { ascending: false })
+            .limit(20)
+        : Promise.resolve({ data: [] as any[] }),
+
+      supabaseAdmin
+        .from('RepairRelatedDamage')
+        .select('id, recordNumber, staffId, staffName, staffRole, repairNumber, damagedComponent, damageDate, estimatedCost, status')
+        .eq('isArchived', false)
+        .limit(100),
+
+      supabaseAdmin
+        .from('Notification')
+        .select('*', { count: 'exact', head: true })
+        .eq('userId', currentUser.id)
+        .eq('isRead', false),
+    ]);
+
+    if (repairsResult?.error) {
+      console.error('[OVERVIEW REPAIRS QUERY ERROR]', repairsResult.error);
     }
 
-    const allRepairs = Array.isArray(repairsData) ? repairsData : [];
+    const allRepairs = Array.isArray(repairsResult?.data) ? repairsResult.data : [];
+    const totalCustomersCount = customersResult?.count ?? 0;
 
-    // 2. Fetch Customers Count
-    const { count: totalCustomersCount } = await supabaseAdmin
-      .from('Customer')
-      .select('*', { count: 'exact', head: true })
-      .eq('archived', false);
-
-    // 3. Fetch Staff Users Directory
-    const authorizedStaff = await getAuthorizedStaffList();
-
-    // 4. Fetch Today's Attendance Records & Roster
-    const todayAttendanceList = await getAllAttendanceRecords({ date: todayStr });
-    const monthAttendanceList = await getAllAttendanceRecords({ month: monthStr });
-
+    // Process Attendance Map
     const attendanceMap = new Map<string, AttendanceRecord>();
     todayAttendanceList.forEach((r) => attendanceMap.set(r.userId, r));
 
@@ -166,69 +221,27 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
       }
     });
 
-    // 5. Fetch Inventory Items for stock alerts (limit to 200)
-    const { data: inventoryItems } = await supabaseAdmin
-      .from('InventoryItem')
-      .select('id, name, brand, model, category, currentStock, minStockLevel, unit, status')
-      .eq('status', 'ACTIVE')
-      .limit(200);
-
-    const allInventory = Array.isArray(inventoryItems) ? inventoryItems : [];
+    // Process Inventory Items
+    const allInventory = Array.isArray(inventoryResult?.data) ? inventoryResult.data : [];
     const lowStockItems = allInventory.filter(
       (item) => (item.currentStock ?? 0) <= (item.minStockLevel ?? 5) && (item.currentStock ?? 0) > 0
     );
     const outOfStockItems = allInventory.filter((item) => (item.currentStock ?? 0) <= 0);
 
-    // 6. Fetch Battery Warranties active and total counts using lightweight exact head counts
-    const { count: totalWarrantiesCount } = await supabaseAdmin
-      .from('BatteryWarranty')
-      .select('*', { count: 'exact', head: true });
+    const totalWarrantiesCount = totalWarrantiesResult?.count ?? 0;
+    const activeWarrantiesCount = activeWarrantiesResult?.count ?? 0;
 
-    const { count: activeWarrantiesCount } = await supabaseAdmin
-      .from('BatteryWarranty')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'ACTIVE');
-
-    // 7. Fetch Pending Transfer Requests
-    const { data: transferRequests } = await supabaseAdmin
-      .from('RepairTransferRequest')
-      .select('*')
-      .order('createdAt', { ascending: false })
-      .limit(20);
-
-    const allTransfers = Array.isArray(transferRequests) ? transferRequests : [];
+    const allTransfers = Array.isArray(transferRequestsResult?.data) ? transferRequestsResult.data : [];
     const pendingTransfers = allTransfers.filter((t) => t.status === 'PENDING');
 
-    // 8. Fetch Pending Access Requests (Super Admin / Security)
-    let pendingAccessRequests: any[] = [];
-    if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
-      const { data: accessReqs } = await supabaseAdmin
-        .from('AccessRequest')
-        .select('*')
-        .eq('status', 'PENDING')
-        .order('createdAt', { ascending: false })
-        .limit(20);
-      pendingAccessRequests = Array.isArray(accessReqs) ? accessReqs : [];
-    }
+    const pendingAccessRequests = Array.isArray(accessReqsResult?.data) ? accessReqsResult.data : [];
 
-    // 9. Fetch Damage Records Overview
-    const { data: damageRecords } = await supabaseAdmin
-      .from('RepairRelatedDamage')
-      .select('id, recordNumber, staffId, staffName, staffRole, repairNumber, damagedComponent, damageDate, estimatedCost, status')
-      .eq('isArchived', false)
-      .limit(100);
-
-    const allDamages = Array.isArray(damageRecords) ? damageRecords : [];
+    const allDamages = Array.isArray(damageRecordsResult?.data) ? damageRecordsResult.data : [];
     const todayDamages = allDamages.filter((d) => d.damageDate === todayStr);
     const thisMonthDamages = allDamages.filter((d) => (d.damageDate || '').startsWith(monthStr));
     const totalDamageCost = allDamages.reduce((sum, d) => sum + (Number(d.estimatedCost) || 0), 0);
 
-    // 10. Fetch Unread Notifications for User
-    const { count: unreadNotificationsCount } = await supabaseAdmin
-      .from('Notification')
-      .select('*', { count: 'exact', head: true })
-      .eq('userId', currentUser.id)
-      .eq('isRead', false);
+    const unreadNotificationsCount = unreadNotificationsResult?.count ?? 0;
 
     // ========================================================================
     // PROCESS REPAIRS METRICS & AGGREGATIONS
@@ -663,30 +676,31 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
 // ============================================================================
 router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const stats = await computeRepairDashboardStats({
-      preset: (req.query.preset as any) || 'ALL',
-      startDate: req.query.startDate ? String(req.query.startDate) : undefined,
-      endDate: req.query.endDate ? String(req.query.endDate) : undefined,
-      userRole: req.user?.role,
-      userId: req.user?.id
-    });
-
-    const { count: totalCustomers } = await supabaseAdmin
-      .from('Customer')
-      .select('*', { count: 'exact', head: true })
-      .eq('archived', false);
-    const { count: totalStaff } = await supabaseAdmin
-      .from('User')
-      .select('*', { count: 'exact', head: true })
-      .is('deletedAt', null);
+    const [stats, customersRes, staffRes] = await Promise.all([
+      computeRepairDashboardStats({
+        preset: (req.query.preset as any) || 'ALL',
+        startDate: req.query.startDate ? String(req.query.startDate) : undefined,
+        endDate: req.query.endDate ? String(req.query.endDate) : undefined,
+        userRole: req.user?.role,
+        userId: req.user?.id
+      }),
+      supabaseAdmin
+        .from('Customer')
+        .select('*', { count: 'exact', head: true })
+        .eq('archived', false),
+      supabaseAdmin
+        .from('User')
+        .select('*', { count: 'exact', head: true })
+        .is('deletedAt', null),
+    ]);
 
     res.setHeader('Cache-Control', 'private, max-age=10, stale-while-revalidate=30');
     return res.json({
       activeRepairs: stats.metrics.activeRepairs,
       completedRepairs: stats.metrics.delivered,
       totalRepairs: stats.metrics.totalRecords,
-      totalCustomers: totalCustomers || 0,
-      totalStaff: totalStaff || 0,
+      totalCustomers: customersRes.count || 0,
+      totalStaff: staffRes.count || 0,
       totalRevenue: stats.metrics.totalRevenue,
       metrics: stats.metrics,
       userAssigned: stats.userAssigned

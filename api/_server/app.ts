@@ -26,12 +26,22 @@ import publicRoutes from './routes/public';
 import seoRoutes from './routes/seo';
 import smsRoutes from './routes/sms';
 import { getSystemThemeConfigAsync } from './services/systemThemeService';
+import { supabaseAdmin } from './config/supabase';
 
 export function createApp() {
   const app = express();
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   app.use(cookieParser());
+
+  // Production Security Headers
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
 
   // Asynchronously pre-hydrate system theme from persistent store
   getSystemThemeConfigAsync().catch(() => {});
@@ -101,11 +111,57 @@ export function createApp() {
   // Mount SEO router for crawler-readable HTML and sitemap.xml
   app.use('/', seoRoutes);
 
-  app.get('/api/health', (req, res) => {
-    res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+  // Operational System Health Check
+  app.get('/api/health', async (_req, res) => {
+    let dbStatus = 'connected';
+    try {
+      const { error } = await supabaseAdmin.from('User').select('id').limit(1);
+      if (error) dbStatus = 'degraded';
+    } catch (_) {
+      dbStatus = 'unavailable';
+    }
+
+    const mem = process.memoryUsage();
+    const isHealthy = dbStatus === 'connected';
+    return res.status(isHealthy ? 200 : 503).json({
+      status: isHealthy ? 'healthy' : 'degraded',
+      database: dbStatus,
+      uptimeSeconds: Math.floor(process.uptime()),
+      memory: {
+        rssMb: Math.round(mem.rss / 1024 / 1024),
+        heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
+      },
+      environment: process.env.NODE_ENV || 'development',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Global API 404 Handler (ensures frontend receives JSON instead of HTML error pages)
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({
+      success: false,
+      error: 'NotFound',
+      message: `API route ${req.method} ${req.path} not found.`,
+    });
+  });
+
+  // Centralized Production Error Handling Middleware
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error(`[EXPRESS API ERROR] ${req.method} ${req.url}:`, err?.message || err);
+    if (res.headersSent) {
+      return next(err);
+    }
+    const statusCode = typeof err?.status === 'number' && err.status >= 400 && err.status <= 599 ? err.status : 500;
+    return res.status(statusCode).json({
+      success: false,
+      error: err?.name || 'InternalServerError',
+      message: err?.message || 'An unexpected internal server error occurred.',
+      status: statusCode,
+    });
   });
 
   return app;
 }
 
 export default createApp();
+
