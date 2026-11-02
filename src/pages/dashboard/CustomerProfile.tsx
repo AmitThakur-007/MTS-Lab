@@ -24,7 +24,10 @@ import {
   Archive,
   RotateCcw,
   AlertTriangle,
+  MessageSquare,
+  CheckCircle2,
 } from 'lucide-react';
+import SendSmsModal from '@/components/repair/SendSmsModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -124,6 +127,11 @@ export default function CustomerProfile() {
   const canEdit = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '');
   const canCreateRepair = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST', 'MANAGER'].includes(user?.role || '');
   const canHardDelete = user?.role === 'SUPER_ADMIN';
+  const canSendSms = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'].includes(user?.role || '');
+
+  // SMS Modal State
+  const [selectedRepairForSms, setSelectedRepairForSms] = useState<any | null>(null);
+  const [isSmsModalOpen, setIsSmsModalOpen] = useState(false);
 
   const editDirty = JSON.stringify(editForm) !== JSON.stringify(editInitial);
 
@@ -552,6 +560,147 @@ export default function CustomerProfile() {
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   + New Repair
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Customer Notification Tracking Card (SMS & WhatsApp) */}
+          <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden bg-white dark:bg-slate-900">
+            <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">Customer Notifications</h4>
+                  <p className="text-[11px] text-slate-400 font-medium">SMS & WhatsApp Dispatch Tracking</p>
+                </div>
+              </div>
+            </div>
+
+            <CardContent className="p-4 sm:p-5 space-y-4">
+              {/* Separate Status Badges */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* SMS Status */}
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1">
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">SMS Status</span>
+                  {customer.notificationSummary?.smsStatus === 'SENT' ? (
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold text-[10px] py-0.5 px-1.5 gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      <span>Sent</span>
+                    </Badge>
+                  ) : customer.notificationSummary?.smsStatus === 'OPENED' ? (
+                    <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-300 font-bold text-[10px] py-0.5 px-1.5 gap-1">
+                      <Clock className="w-3 h-3 text-sky-600" />
+                      <span>Awaiting Conf.</span>
+                    </Badge>
+                  ) : customer.notificationSummary?.smsStatus === 'FAILED' ? (
+                    <Badge variant="outline" className="bg-rose-50 text-rose-800 border-rose-300 font-bold text-[10px] py-0.5 px-1.5">
+                      <span>Failed</span>
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-slate-100 text-slate-500 font-bold text-[10px] py-0.5 px-1.5">
+                      <span>Not Sent</span>
+                    </Badge>
+                  )}
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    Sent count: <strong>{customer.notificationSummary?.smsCount || 0}</strong>
+                  </p>
+                </div>
+
+                {/* WhatsApp Status */}
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1">
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">WhatsApp Status</span>
+                  {customer.notificationSummary?.whatsappStatus === 'SENT' ? (
+                    <Badge variant="outline" className="bg-teal-50 text-teal-800 border-teal-300 font-bold text-[10px] py-0.5 px-1.5 gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-teal-600" />
+                      <span>Sent</span>
+                    </Badge>
+                  ) : customer.notificationSummary?.whatsappStatus === 'OPENED' ? (
+                    <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 font-bold text-[10px] py-0.5 px-1.5 gap-1">
+                      <Clock className="w-3 h-3 text-amber-600" />
+                      <span>Awaiting Conf.</span>
+                    </Badge>
+                  ) : customer.notificationSummary?.whatsappStatus === 'FAILED' ? (
+                    <Badge variant="outline" className="bg-rose-50 text-rose-800 border-rose-300 font-bold text-[10px] py-0.5 px-1.5">
+                      <span>Failed</span>
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-slate-100 text-slate-500 font-bold text-[10px] py-0.5 px-1.5">
+                      <span>Not Sent</span>
+                    </Badge>
+                  )}
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    Sent count: <strong>{customer.notificationSummary?.whatsappCount || 0}</strong>
+                  </p>
+                </div>
+              </div>
+
+              {/* Last Notification Date */}
+              {customer.notificationSummary?.lastContactedAt && (
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40">
+                  <span>Last Message Sent:</span>
+                  <strong className="text-slate-800 dark:text-slate-200">
+                    {format(parseISO(customer.notificationSummary.lastContactedAt), 'dd MMM yyyy, h:mm a')}
+                  </strong>
+                </div>
+              )}
+
+              {/* Notification History List */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                  Communication History ({customer.notificationHistory?.length || 0})
+                </span>
+
+                {(!customer.notificationHistory || customer.notificationHistory.length === 0) ? (
+                  <p className="text-xs text-slate-400 italic text-center py-2">
+                    No SMS or WhatsApp messages dispatched to this customer yet.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {customer.notificationHistory.map((item: any) => (
+                      <div
+                        key={item.id}
+                        className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between gap-1 flex-wrap">
+                          <span className="font-bold text-[11px] text-slate-900 dark:text-slate-100 flex items-center gap-1">
+                            {item.channel === 'WHATSAPP' ? 'WhatsApp' : 'SMS'}
+                            <span className="text-slate-400 font-normal">#{item.repairNumber || 'N/A'}</span>
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400">
+                            {item.createdAt ? format(parseISO(item.createdAt), 'dd MMM, h:mm a') : ''}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 italic">
+                          "{item.messageContent}"
+                        </p>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
+                          <span>By: {item.senderStaffName || 'Staff'}</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">
+                            {item.status?.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Direct Messaging Trigger if repairs exist */}
+              {canSendSms && repairs.length > 0 && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const candidateRepair = repairs.find((r: any) => ['REPAIRED', 'READY_FOR_PICKUP'].includes(r.status)) || repairs[0];
+                    setSelectedRepairForSms(candidateRepair);
+                    setIsSmsModalOpen(true);
+                  }}
+                  className="w-full h-9 rounded-xl font-bold text-xs bg-teal-600 hover:bg-teal-700 text-white cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Send Notification (SMS / WhatsApp)</span>
                 </Button>
               )}
             </CardContent>
@@ -1091,6 +1240,18 @@ export default function CustomerProfile() {
           </div>
         </DialogContent>
       </Dialog>
+      {/* Send Customer SMS Modal */}
+      {selectedRepairForSms && (
+        <SendSmsModal
+          open={isSmsModalOpen}
+          onOpenChange={setIsSmsModalOpen}
+          repair={selectedRepairForSms}
+          onSuccess={() => {
+            fetchCustomer();
+            fetchRepairs(currentPage, statusFilter, dateFilter);
+          }}
+        />
+      )}
     </div>
   );
 }

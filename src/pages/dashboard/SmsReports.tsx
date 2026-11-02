@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils';
 export default function SmsReports() {
   const { user } = useAuthStore();
   const userRole = (user?.role || '').toUpperCase().trim();
-  const isAuthorized = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(userRole);
+  const isAuthorized = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'].includes(userRole);
 
   const [filterPreset, setFilterPreset] = useState<string>('THIS_MONTH');
   const [customStart, setCustomStart] = useState<string>('');

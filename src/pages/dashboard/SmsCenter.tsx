@@ -9,6 +9,7 @@ import {
   Send,
   Copy,
   Check,
+  X,
   RefreshCw,
   ExternalLink,
   XCircle,
@@ -58,6 +59,7 @@ import {
 import { toNepalDateString } from '@/lib/nepalDate';
 import { cn } from '@/lib/utils';
 import SendSmsModal from '@/components/repair/SendSmsModal';
+import { useRealtimeSync } from '@/services/realtime';
 
 export default function SmsCenter() {
   const navigate = useNavigate();
@@ -70,8 +72,12 @@ export default function SmsCenter() {
   const repairedSeqRef = useRef<number>(0);
   const receivedSeqRef = useRef<number>(0);
 
-  // Active Category Tab: 'REPAIRED' | 'RECEIVED' | 'HISTORY'
-  const [activeTab, setActiveTab] = useState<'REPAIRED' | 'RECEIVED' | 'HISTORY'>('REPAIRED');
+  // Active Category Tab: 'REPAIRED' | 'RECEIVED' | 'CONFIRMATION' | 'HISTORY'
+  const [activeTab, setActiveTab] = useState<'REPAIRED' | 'RECEIVED' | 'CONFIRMATION' | 'HISTORY'>('REPAIRED');
+
+  // Pending Confirmations State
+  const [pendingConfirmationsList, setPendingConfirmationsList] = useState<any[]>([]);
+  const [pendingConfirmationsLoading, setPendingConfirmationsLoading] = useState<boolean>(false);
 
   // Stats
   const [stats, setStats] = useState<{
@@ -256,11 +262,52 @@ export default function SmsCenter() {
     }
   }, [historySearch, historyStatusFilter, historyChannelFilter]);
 
+  // Fetch pending messages awaiting staff verification
+  const fetchPendingConfirmations = useCallback(async () => {
+    try {
+      setPendingConfirmationsLoading(true);
+      const res: any = await api.get('/sms/pending-confirmations');
+      if (res && Array.isArray(res.items)) {
+        setPendingConfirmationsList(res.items);
+      }
+    } catch (err) {
+      console.warn('[PENDING CONFIRMATIONS WARN]', err);
+    } finally {
+      setPendingConfirmationsLoading(false);
+    }
+  }, []);
+
+  // Inline Confirmation Action (YES - Sent / NO - Not Sent / Cancel)
+  const handleInlineConfirm = async (
+    recordId: string,
+    status: 'STAFF_CONFIRMED_SENT' | 'FAILED' | 'CANCELLED'
+  ) => {
+    try {
+      await api.post('/sms/confirm', {
+        smsRecordId: recordId,
+        status,
+      });
+      toast.success(
+        status === 'STAFF_CONFIRMED_SENT'
+          ? 'Customer notification verified as sent!'
+          : `Notification marked as ${status.replace(/_/g, ' ')}.`
+      );
+      fetchPendingConfirmations();
+      fetchStats();
+      if (activeTab === 'REPAIRED') fetchRepairedDevices();
+      if (activeTab === 'RECEIVED') fetchReceivedDevices();
+      if (activeTab === 'HISTORY') fetchHistory();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update confirmation status');
+    }
+  };
+
   // Trigger data fetches based on active tab and filters
   useEffect(() => {
     if (!isAuthorized) return;
     fetchStats();
-  }, [isAuthorized]);
+    fetchPendingConfirmations();
+  }, [isAuthorized, fetchPendingConfirmations]);
 
   useEffect(() => {
     if (!isAuthorized) return;
@@ -268,10 +315,21 @@ export default function SmsCenter() {
       fetchRepairedDevices();
     } else if (activeTab === 'RECEIVED') {
       fetchReceivedDevices();
+    } else if (activeTab === 'CONFIRMATION') {
+      fetchPendingConfirmations();
     } else if (activeTab === 'HISTORY') {
       fetchHistory();
     }
-  }, [activeTab, fetchRepairedDevices, fetchReceivedDevices, fetchHistory, isAuthorized]);
+  }, [activeTab, fetchRepairedDevices, fetchReceivedDevices, fetchPendingConfirmations, fetchHistory, isAuthorized]);
+
+  // Realtime synchronization across all tabs and dashboards
+  useRealtimeSync(['smsNotification', 'repair', 'repairLog'], () => {
+    fetchStats();
+    fetchPendingConfirmations();
+    if (activeTab === 'REPAIRED') fetchRepairedDevices();
+    if (activeTab === 'RECEIVED') fetchReceivedDevices();
+    if (activeTab === 'HISTORY') fetchHistory();
+  });
 
   // Open modal with specific repair and notification type
   const handleOpenNotificationModal = (repair: any, type: 'REPAIR_COMPLETED' | 'DEVICE_RECEIVED') => {
@@ -465,6 +523,19 @@ export default function SmsCenter() {
               {receivedTotal > 0 && (
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-cyan-100 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-300">
                   {receivedTotal}
+                </Badge>
+              )}
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="CONFIRMATION"
+              className="text-xs font-bold py-2 px-3.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-xs rounded-lg flex items-center gap-2"
+            >
+              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span>Awaiting Confirmation</span>
+              {pendingConfirmationsList.length > 0 && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 font-bold animate-pulse">
+                  {pendingConfirmationsList.length}
                 </Badge>
               )}
             </TabsTrigger>
@@ -1163,7 +1234,151 @@ export default function SmsCenter() {
         </TabsContent>
 
         {/* ---------------------------------------------------- */}
-        {/* TAB 3: COMPLETE NOTIFICATION AUDIT HISTORY           */}
+        {/* TAB 3: AWAITING CONFIRMATION QUEUE                   */}
+        {/* ---------------------------------------------------- */}
+        <TabsContent value="CONFIRMATION" className="space-y-4 pt-1">
+          <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+            <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-500" />
+                  <span>Awaiting Staff Delivery Confirmation ({pendingConfirmationsList.length})</span>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  When Windows Phone Link or WhatsApp is opened, the app cannot detect when the OS 'Send' button is pressed. Staff must verify delivery here.
+                </CardDescription>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchPendingConfirmations}
+                disabled={pendingConfirmationsLoading}
+                className="h-8 text-xs border-slate-200 dark:border-slate-800"
+              >
+                <RefreshCw className={cn("w-3 h-3 mr-1.5", pendingConfirmationsLoading && "animate-spin")} />
+                Refresh Queue
+              </Button>
+            </CardHeader>
+
+            <CardContent>
+              {pendingConfirmationsLoading ? (
+                <div className="py-16 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
+                  <span>Checking awaiting confirmations...</span>
+                </div>
+              ) : pendingConfirmationsList.length === 0 ? (
+                <div className="py-16 text-center text-xs text-slate-400 bg-emerald-50/40 dark:bg-emerald-950/20 rounded-xl border border-dashed border-emerald-200 dark:border-emerald-800/40 space-y-2">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+                  <p className="font-semibold text-slate-700 dark:text-slate-300">All launched notifications have been verified!</p>
+                  <p className="text-[11px] text-slate-500">There are no messages currently waiting for staff confirmation.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                        <th className="py-2.5 px-3">Repair #</th>
+                        <th className="py-2.5 px-3">Customer & Recipient</th>
+                        <th className="py-2.5 px-3">Channel</th>
+                        <th className="py-2.5 px-3">Message Preview</th>
+                        <th className="py-2.5 px-3">Opened By</th>
+                        <th className="py-2.5 px-3">Launched At</th>
+                        <th className="py-2.5 px-3 text-right">Confirm Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {pendingConfirmationsList.map((item) => {
+                        const isWa = item.channel === 'WHATSAPP';
+                        return (
+                          <tr key={item.id} className="hover:bg-amber-50/30 dark:hover:bg-amber-950/10">
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-slate-100">
+                              <span
+                                className="text-cyan-600 hover:underline cursor-pointer"
+                                onClick={() => navigate(`/dashboard/repairs/${item.repairId}`)}
+                              >
+                                #{item.repairNumber}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="font-semibold text-slate-800 dark:text-slate-200">{item.customerName}</div>
+                              <div className="font-mono text-[11px] text-slate-500">{item.customerPhoneNormalized || item.customerPhoneRaw}</div>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] font-bold",
+                                  isWa
+                                    ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400"
+                                    : "text-cyan-700 bg-cyan-50 border-cyan-200 dark:bg-cyan-950/50 dark:text-cyan-400"
+                                )}
+                              >
+                                {isWa ? 'WhatsApp' : 'Phone Link / SMS'}
+                              </Badge>
+                            </td>
+                            <td className="py-2.5 px-3 max-w-[220px]">
+                              <span className="truncate block text-slate-600 dark:text-slate-300 italic" title={item.messageContent}>
+                                "{item.messageContent}"
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400">
+                              {item.senderStaffName}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-400 text-[11px] font-mono">
+                              {item.openedAt || item.createdAt
+                                ? new Date(item.openedAt || item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : '—'}
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              {isReadOnly ? (
+                                <Badge variant="secondary" className="text-[10px] text-amber-700 bg-amber-50">
+                                  Awaiting Staff Confirmation
+                                </Badge>
+                              ) : (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <Button
+                                    size="sm"
+                                    className="h-7 text-[11px] font-bold px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                                    onClick={() => handleInlineConfirm(item.id, 'STAFF_CONFIRMED_SENT')}
+                                  >
+                                    <Check className="w-3 h-3 mr-1" />
+                                    YES — Sent
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-[11px] font-semibold px-2 text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                                    onClick={() => handleInlineConfirm(item.id, 'FAILED')}
+                                  >
+                                    <X className="w-3 h-3 mr-1" />
+                                    NO — Not Sent
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 text-[11px] text-slate-400 hover:text-slate-600 px-1.5"
+                                    onClick={() => handleInlineConfirm(item.id, 'CANCELLED')}
+                                    title="Cancel notification record"
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------------------------------------------- */}
+        {/* TAB 4: COMPLETE NOTIFICATION AUDIT HISTORY           */}
         {/* ---------------------------------------------------- */}
         <TabsContent value="HISTORY" className="space-y-4 pt-1">
           <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">

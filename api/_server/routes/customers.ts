@@ -5,6 +5,11 @@ import { supabaseAdmin } from '../config/supabase';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authorize, normalizeRole } from '../middleware/rbac';
 import { logAudit } from '../services/auditService';
+import {
+  getAllCustomerNotificationSummaries,
+  getCustomerNotificationSummary,
+  getSmsNotificationsForCustomer,
+} from '../services/smsStorage';
 
 const router = Router();
 
@@ -45,8 +50,8 @@ async function generateCustomerId(): Promise<string> {
   return `CUS-${(baseNum + randomSuffix).toString().padStart(5, '0')}`;
 }
 
-// 1. GET /api/customers/stats - Overview statistics for Super Admin, Admin & Manager
-router.get('/stats', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER']), async (req: AuthRequest, res: Response) => {
+// 1. GET /api/customers/stats - Overview statistics for Super Admin, Admin, Manager & Receptionist
+router.get('/stats', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST']), async (req: AuthRequest, res: Response) => {
   try {
     // Total active customers
     const { count: totalActive } = await supabaseAdmin
@@ -122,6 +127,7 @@ router.get('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'REC
       sortOrder = 'desc',
       page = '1',
       limit = '25',
+      notificationFilter = 'ALL',
     } = req.query;
 
     const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
@@ -183,17 +189,74 @@ router.get('/', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'REC
       return res.status(500).json({ error: 'Failed to fetch customers.' });
     }
 
-    // Format customer response with repair count
-    let formatted = (customers || []).map((c: any) => ({
-      ...c,
-      totalRepairs: Array.isArray(c.repairs) ? c.repairs[0]?.count || 0 : (c.repairs?.count || 0),
-    }));
+    // Load customer notification summaries from authoritative SMS storage
+    const allNotificationSummaries = getAllCustomerNotificationSummaries();
+
+    // Format customer response with repair count and separate SMS & WhatsApp notification summaries
+    let formatted = (customers || []).map((c: any) => {
+      const cleanPhone = cleanNepalPhone(c.phone || '');
+      const notifSummary =
+        allNotificationSummaries[c.id] ||
+        (cleanPhone ? allNotificationSummaries[`phone:${cleanPhone}`] : null) || {
+          customerId: c.id,
+          customerPhone: c.phone,
+          smsStatus: 'NOT_SENT',
+          whatsappStatus: 'NOT_SENT',
+          overallStatus: 'NOT_SENT',
+          smsCount: 0,
+          whatsappCount: 0,
+          totalSent: 0,
+          totalAttempts: 0,
+          lastContactedAt: null,
+          lastChannel: null,
+          lastStaffName: null,
+          hasPendingConfirmation: false,
+          pendingRecordId: null,
+        };
+
+      return {
+        ...c,
+        totalRepairs: Array.isArray(c.repairs) ? c.repairs[0]?.count || 0 : (c.repairs?.count || 0),
+        notificationSummary: notifSummary,
+        smsStatus: notifSummary.smsStatus,
+        whatsappStatus: notifSummary.whatsappStatus,
+      };
+    });
 
     // In-memory filter if WITH_REPAIRS / WITHOUT_REPAIRS requested
     if (filter === 'WITH_REPAIRS') {
       formatted = formatted.filter((c: any) => (c.totalRepairs || 0) > 0);
     } else if (filter === 'WITHOUT_REPAIRS') {
       formatted = formatted.filter((c: any) => (c.totalRepairs || 0) === 0);
+    }
+
+    // Filter by Notification Delivery Status
+    if (notificationFilter && notificationFilter !== 'ALL') {
+      const nf = String(notificationFilter).toUpperCase();
+      if (nf === 'BOTH_SENT') {
+        formatted = formatted.filter(
+          (c: any) => c.notificationSummary?.smsStatus === 'SENT' && c.notificationSummary?.whatsappStatus === 'SENT'
+        );
+      } else if (nf === 'SMS_SENT_ONLY') {
+        formatted = formatted.filter(
+          (c: any) => c.notificationSummary?.smsStatus === 'SENT' && c.notificationSummary?.whatsappStatus !== 'SENT'
+        );
+      } else if (nf === 'WHATSAPP_SENT_ONLY') {
+        formatted = formatted.filter(
+          (c: any) => c.notificationSummary?.whatsappStatus === 'SENT' && c.notificationSummary?.smsStatus !== 'SENT'
+        );
+      } else if (nf === 'NEITHER_SENT') {
+        formatted = formatted.filter(
+          (c: any) => c.notificationSummary?.smsStatus !== 'SENT' && c.notificationSummary?.whatsappStatus !== 'SENT'
+        );
+      } else if (nf === 'AWAITING_CONFIRMATION') {
+        formatted = formatted.filter(
+          (c: any) =>
+            c.notificationSummary?.hasPendingConfirmation ||
+            c.notificationSummary?.smsStatus === 'OPENED' ||
+            c.notificationSummary?.whatsappStatus === 'OPENED'
+        );
+      }
     }
 
     // In-memory sort if requested by totalRepairs
@@ -299,9 +362,14 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       ? customer.repairs[0]?.count || 0
       : (customer.repairs?.count || 0);
 
+    const notificationSummary = getCustomerNotificationSummary(customer.id, customer.phone);
+    const notificationHistory = getSmsNotificationsForCustomer(customer.id, customer.phone);
+
     return res.json({
       ...customer,
       totalRepairs,
+      notificationSummary,
+      notificationHistory,
     });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to retrieve customer details.' });

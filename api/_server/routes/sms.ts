@@ -18,6 +18,9 @@ import {
   getSmsStatistics,
   getRepairSmsSummary,
   prepareOrGetPendingNotification,
+  getPendingConfirmations,
+  getSmsNotificationsForCustomer,
+  getCustomerNotificationSummary,
   SmsNotificationRecord,
   SmsNotificationStatus,
   SmsNotificationChannel,
@@ -124,6 +127,49 @@ router.get('/notifications', authenticate, authorize(SMS_VIEW_ROLES), async (req
   } catch (err: any) {
     console.error('[GET /api/sms/notifications ERROR]', err);
     return res.status(500).json({ error: 'Failed to retrieve SMS notifications.' });
+  }
+});
+
+/**
+ * 2.5 GET /api/sms/pending-confirmations — List of all messages opened/prepared awaiting staff verification
+ * Roles: SUPER_ADMIN, ADMIN, MANAGER, RECEPTIONIST
+ */
+router.get('/pending-confirmations', authenticate, authorize(SMS_VIEW_ROLES), async (_req: AuthRequest, res: Response) => {
+  try {
+    const pending = getPendingConfirmations();
+    return res.json({
+      success: true,
+      items: pending,
+      total: pending.length,
+    });
+  } catch (err: any) {
+    console.error('[GET /api/sms/pending-confirmations ERROR]', err);
+    return res.status(500).json({ error: 'Failed to retrieve pending confirmations.' });
+  }
+});
+
+/**
+ * 2.6 GET /api/sms/customer/:id — Complete notification history and summary for a customer
+ * Roles: SUPER_ADMIN, ADMIN, MANAGER, RECEPTIONIST
+ */
+router.get('/customer/:id', authenticate, authorize(SMS_VIEW_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { phone } = req.query as { phone?: string };
+
+    const history = getSmsNotificationsForCustomer(id, phone);
+    const summary = getCustomerNotificationSummary(id, phone);
+
+    return res.json({
+      success: true,
+      customerId: id,
+      summary,
+      history,
+      total: history.length,
+    });
+  } catch (err: any) {
+    console.error('[GET /api/sms/customer/:id ERROR]', err);
+    return res.status(500).json({ error: 'Failed to retrieve customer notification records.' });
   }
 });
 

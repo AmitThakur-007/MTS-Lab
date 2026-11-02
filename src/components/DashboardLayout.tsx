@@ -301,9 +301,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const navItems = [
     { name: user?.role === 'MANAGER' ? 'Manager Hub' : 'Overview', path: '/dashboard', icon: user?.role === 'MANAGER' ? Briefcase : LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'INVENTORY_MANAGER', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN'] },
     { name: 'Repairs', path: '/dashboard/repairs', icon: ClipboardList, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN'] },
-    { name: 'Customer Hub', path: '/dashboard/customers', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
-    { name: 'SMS Center', path: '/dashboard/sms-center', icon: Smartphone, roles: ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'] },
-    { name: 'SMS Reports', path: '/dashboard/sms-reports', icon: MessageSquare, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
+    { name: 'Customer Hub', path: '/dashboard/customers', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+    { name: 'SMS Center', path: '/dashboard/sms-center', icon: Smartphone, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+    { name: 'SMS Reports', path: '/dashboard/sms-reports', icon: MessageSquare, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
     { name: 'New Repair', path: '/dashboard/repairs/new', icon: PlusCircle, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
     { name: 'Courier Hub', path: '/dashboard/courier', icon: Truck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
     { name: 'Battery Warranty Hub', path: '/dashboard/battery-warranty', icon: BatteryCharging, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },

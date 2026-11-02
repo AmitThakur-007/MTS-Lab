@@ -494,19 +494,48 @@ export async function prepareOrGetPendingNotification(params: {
 }
 
 /**
- * Summary structure for repair SMS status and counts
+ * Summary structure for repair SMS and WhatsApp status and counts
  */
 export interface RepairSmsSummary {
   repairId: string;
   repairNumber?: string;
   status: 'NOT_SENT' | 'INITIATED' | 'SENT';
   normalizedStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'STAFF_CONFIRMED_SENT' | 'FAILED';
-  count: number; // confirmed sent messages count
+  smsStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'SENT' | 'FAILED';
+  whatsappStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'SENT' | 'FAILED';
+  count: number; // total confirmed sent messages (SMS + WhatsApp)
+  smsCount: number; // confirmed sent SMS count
+  whatsappCount: number; // confirmed sent WhatsApp count
   totalAttempts: number; // total attempts including initiated
   lastSentAt: string | null;
+  lastSmsSentAt: string | null;
+  lastWhatsappSentAt: string | null;
   lastChannel: SmsNotificationChannel | null;
   lastStaffName: string | null;
   lastRecordId: string | null;
+  hasPendingConfirmation: boolean;
+  pendingRecordId: string | null;
+  pendingChannel: SmsNotificationChannel | null;
+}
+
+/**
+ * Summary structure for customer-level notification tracking
+ */
+export interface CustomerNotificationSummary {
+  customerId?: string | null;
+  customerPhone?: string | null;
+  smsStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'SENT' | 'FAILED';
+  whatsappStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'SENT' | 'FAILED';
+  overallStatus: 'NOT_SENT' | 'AWAITING_CONFIRMATION' | 'SENT' | 'FAILED';
+  smsCount: number;
+  whatsappCount: number;
+  totalSent: number;
+  totalAttempts: number;
+  lastContactedAt: string | null;
+  lastChannel: SmsNotificationChannel | null;
+  lastStaffName: string | null;
+  hasPendingConfirmation: boolean;
+  pendingRecordId: string | null;
 }
 
 /**
@@ -788,67 +817,121 @@ export function getSmsStatistics(options: {
 }
 
 /**
- * Get aggregated SMS status summary for a single repair
+ * Helper to compute RepairSmsSummary from a repair's history
  */
-export function getRepairSmsSummary(repairIdOrNumber: string): RepairSmsSummary {
-  initializeSmsStorage();
-  const history = getSmsNotificationsForRepair(repairIdOrNumber);
-
+function buildRepairSmsSummary(repairIdOrNumber: string, history: SmsNotificationRecord[]): RepairSmsSummary {
   if (!history || history.length === 0) {
     return {
       repairId: repairIdOrNumber,
       status: 'NOT_SENT',
       normalizedStatus: 'NOT_SENT',
+      smsStatus: 'NOT_SENT',
+      whatsappStatus: 'NOT_SENT',
       count: 0,
+      smsCount: 0,
+      whatsappCount: 0,
       totalAttempts: 0,
       lastSentAt: null,
+      lastSmsSentAt: null,
+      lastWhatsappSentAt: null,
       lastChannel: null,
       lastStaffName: null,
       lastRecordId: null,
+      hasPendingConfirmation: false,
+      pendingRecordId: null,
+      pendingChannel: null,
     };
   }
 
-  const sentRecords = history.filter(
-    (h) => h.status === 'STAFF_CONFIRMED_SENT' || h.status === 'SENT' || h.status === 'CARRIER_CONFIRMED_DELIVERED'
+  const sorted = [...history].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
-  const openedOrPendingRecords = history.filter(
-    (h) => h.status === 'PREPARED' || h.status === 'OPENED' || h.status === 'INITIATED' || h.status === 'READY_TO_SEND'
-  );
-  const failedRecords = history.filter((h) => h.status === 'FAILED');
-  const latestRecord = history[0];
 
-  const hasSent = sentRecords.length > 0;
+  const smsRecords = sorted.filter((h) => h.channel !== 'WHATSAPP');
+  const whatsappRecords = sorted.filter((h) => h.channel === 'WHATSAPP');
+
+  const isConfirmedSent = (r: SmsNotificationRecord) =>
+    r.status === 'STAFF_CONFIRMED_SENT' || r.status === 'SENT' || r.status === 'CARRIER_CONFIRMED_DELIVERED';
+  const isOpenedOrPending = (r: SmsNotificationRecord) =>
+    r.status === 'OPENED' || r.status === 'PREPARED' || r.status === 'INITIATED' || r.status === 'READY_TO_SEND';
+
+  const sentSms = smsRecords.filter(isConfirmedSent);
+  const pendingSms = smsRecords.filter(isOpenedOrPending);
+  const failedSms = smsRecords.filter((r) => r.status === 'FAILED');
+
+  const sentWhatsapp = whatsappRecords.filter(isConfirmedSent);
+  const pendingWhatsapp = whatsappRecords.filter(isOpenedOrPending);
+  const failedWhatsapp = whatsappRecords.filter((r) => r.status === 'FAILED');
+
+  let smsStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'SENT' | 'FAILED' = 'NOT_SENT';
+  if (sentSms.length > 0) smsStatus = 'SENT';
+  else if (pendingSms.some((r) => r.status === 'OPENED' || r.status === 'INITIATED')) smsStatus = 'OPENED';
+  else if (pendingSms.length > 0) smsStatus = 'PREPARED';
+  else if (failedSms.length > 0) smsStatus = 'FAILED';
+
+  let whatsappStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'SENT' | 'FAILED' = 'NOT_SENT';
+  if (sentWhatsapp.length > 0) whatsappStatus = 'SENT';
+  else if (pendingWhatsapp.some((r) => r.status === 'OPENED' || r.status === 'INITIATED')) whatsappStatus = 'OPENED';
+  else if (pendingWhatsapp.length > 0) whatsappStatus = 'PREPARED';
+  else if (failedWhatsapp.length > 0) whatsappStatus = 'FAILED';
+
+  const allSent = sorted.filter(isConfirmedSent);
+  const allPending = sorted.filter(isOpenedOrPending);
+  const latestPending = sorted.find((r) => r.status === 'OPENED' || r.status === 'INITIATED');
+
+  const latestRecord = sorted[0];
+  const mostRecentSent = allSent[0] || latestRecord;
+  const mostRecentSmsSent = sentSms[0];
+  const mostRecentWhatsappSent = sentWhatsapp[0];
+
+  const hasSent = allSent.length > 0;
   const status: 'NOT_SENT' | 'INITIATED' | 'SENT' = hasSent
     ? 'SENT'
-    : openedOrPendingRecords.length > 0
+    : allPending.length > 0
     ? 'INITIATED'
     : 'NOT_SENT';
 
   let normalizedStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'STAFF_CONFIRMED_SENT' | 'FAILED' = 'NOT_SENT';
   if (hasSent) {
     normalizedStatus = 'STAFF_CONFIRMED_SENT';
-  } else if (openedOrPendingRecords.some((r) => r.status === 'OPENED' || r.status === 'INITIATED')) {
+  } else if (allPending.some((r) => r.status === 'OPENED' || r.status === 'INITIATED')) {
     normalizedStatus = 'OPENED';
-  } else if (openedOrPendingRecords.length > 0) {
+  } else if (allPending.length > 0) {
     normalizedStatus = 'PREPARED';
-  } else if (failedRecords.length > 0) {
+  } else if (sorted.some((r) => r.status === 'FAILED')) {
     normalizedStatus = 'FAILED';
   }
-
-  const mostRecentSent = sentRecords[0] || latestRecord;
 
   return {
     repairId: latestRecord?.repairId || repairIdOrNumber,
     repairNumber: latestRecord?.repairNumber,
     status,
     normalizedStatus,
-    count: sentRecords.length,
-    totalAttempts: history.length,
+    smsStatus,
+    whatsappStatus,
+    count: allSent.length,
+    smsCount: sentSms.length,
+    whatsappCount: sentWhatsapp.length,
+    totalAttempts: sorted.length,
     lastSentAt: mostRecentSent?.sentAt || mostRecentSent?.confirmedAt || mostRecentSent?.createdAt || null,
+    lastSmsSentAt: mostRecentSmsSent?.sentAt || mostRecentSmsSent?.confirmedAt || null,
+    lastWhatsappSentAt: mostRecentWhatsappSent?.sentAt || mostRecentWhatsappSent?.confirmedAt || null,
     lastChannel: mostRecentSent?.channel || null,
     lastStaffName: mostRecentSent?.senderStaffName || null,
     lastRecordId: latestRecord?.id || null,
+    hasPendingConfirmation: Boolean(latestPending),
+    pendingRecordId: latestPending?.id || null,
+    pendingChannel: latestPending?.channel || null,
   };
+}
+
+/**
+ * Get aggregated SMS status summary for a single repair
+ */
+export function getRepairSmsSummary(repairIdOrNumber: string): RepairSmsSummary {
+  initializeSmsStorage();
+  const history = getSmsNotificationsForRepair(repairIdOrNumber);
+  return buildRepairSmsSummary(repairIdOrNumber, history);
 }
 
 /**
@@ -867,38 +950,194 @@ export function getAllRepairSmsSummaries(): Record<string, RepairSmsSummary> {
   }
 
   for (const [repId, records] of Object.entries(grouped)) {
-    const sorted = records.sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-    const sent = sorted.filter(
-      (h) => h.status === 'STAFF_CONFIRMED_SENT' || h.status === 'SENT' || h.status === 'CARRIER_CONFIRMED_DELIVERED'
-    );
-    const initiated = sorted.filter(
-      (h) => h.status === 'PREPARED' || h.status === 'OPENED' || h.status === 'INITIATED'
-    );
-    const latest = sorted[0];
-    const mostRecentSent = sent[0] || latest;
-
-    const summary: RepairSmsSummary = {
-      repairId: repId,
-      repairNumber: latest?.repairNumber,
-      status: sent.length > 0 ? 'SENT' : initiated.length > 0 ? 'INITIATED' : 'NOT_SENT',
-      normalizedStatus: sent.length > 0 ? 'STAFF_CONFIRMED_SENT' : initiated.length > 0 ? 'OPENED' : 'NOT_SENT',
-      count: sent.length,
-      totalAttempts: sorted.length,
-      lastSentAt: mostRecentSent?.sentAt || mostRecentSent?.confirmedAt || mostRecentSent?.createdAt || null,
-      lastChannel: mostRecentSent?.channel || null,
-      lastStaffName: mostRecentSent?.senderStaffName || null,
-      lastRecordId: latest?.id || null,
-    };
-
+    const summary = buildRepairSmsSummary(repId, records);
     map[repId] = summary;
-    if (latest?.repairNumber) {
-      map[latest.repairNumber] = summary;
+    if (summary.repairNumber) {
+      map[summary.repairNumber] = summary;
     }
   }
 
   return map;
+}
+
+/**
+ * Get all notifications for a specific customer by ID or phone number
+ */
+export function getSmsNotificationsForCustomer(
+  customerId?: string | null,
+  customerPhone?: string | null
+): SmsNotificationRecord[] {
+  initializeSmsStorage();
+
+  const cId = (customerId || '').trim().toLowerCase();
+  const cPhone = (customerPhone || '').replace(/\D/g, '');
+  const cPhoneNorm = cPhone.length > 10 && cPhone.startsWith('977') ? cPhone.substring(3) : cPhone;
+
+  const results: SmsNotificationRecord[] = [];
+
+  for (const record of smsCache.values()) {
+    let match = false;
+    if (cId && record.customerId && record.customerId.toLowerCase() === cId) {
+      match = true;
+    }
+    if (!match && cPhoneNorm) {
+      const recPhone = (record.customerPhoneNormalized || record.customerPhoneRaw || '').replace(/\D/g, '');
+      const recPhoneNorm = recPhone.length > 10 && recPhone.startsWith('977') ? recPhone.substring(3) : recPhone;
+      if (recPhoneNorm && recPhoneNorm === cPhoneNorm) {
+        match = true;
+      }
+    }
+    if (match) {
+      results.push(record);
+    }
+  }
+
+  return results.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+/**
+ * Get aggregated CustomerNotificationSummary for a specific customer
+ */
+export function getCustomerNotificationSummary(
+  customerId?: string | null,
+  customerPhone?: string | null
+): CustomerNotificationSummary {
+  const history = getSmsNotificationsForCustomer(customerId, customerPhone);
+
+  if (!history || history.length === 0) {
+    return {
+      customerId: customerId || null,
+      customerPhone: customerPhone || null,
+      smsStatus: 'NOT_SENT',
+      whatsappStatus: 'NOT_SENT',
+      overallStatus: 'NOT_SENT',
+      smsCount: 0,
+      whatsappCount: 0,
+      totalSent: 0,
+      totalAttempts: 0,
+      lastContactedAt: null,
+      lastChannel: null,
+      lastStaffName: null,
+      hasPendingConfirmation: false,
+      pendingRecordId: null,
+    };
+  }
+
+  const isConfirmedSent = (r: SmsNotificationRecord) =>
+    r.status === 'STAFF_CONFIRMED_SENT' || r.status === 'SENT' || r.status === 'CARRIER_CONFIRMED_DELIVERED';
+  const isOpenedOrPending = (r: SmsNotificationRecord) =>
+    r.status === 'OPENED' || r.status === 'PREPARED' || r.status === 'INITIATED' || r.status === 'READY_TO_SEND';
+
+  const smsRecords = history.filter((h) => h.channel !== 'WHATSAPP');
+  const whatsappRecords = history.filter((h) => h.channel === 'WHATSAPP');
+
+  const sentSms = smsRecords.filter(isConfirmedSent);
+  const pendingSms = smsRecords.filter(isOpenedOrPending);
+  const failedSms = smsRecords.filter((r) => r.status === 'FAILED');
+
+  const sentWhatsapp = whatsappRecords.filter(isConfirmedSent);
+  const pendingWhatsapp = whatsappRecords.filter(isOpenedOrPending);
+  const failedWhatsapp = whatsappRecords.filter((r) => r.status === 'FAILED');
+
+  let smsStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'SENT' | 'FAILED' = 'NOT_SENT';
+  if (sentSms.length > 0) smsStatus = 'SENT';
+  else if (pendingSms.some((r) => r.status === 'OPENED' || r.status === 'INITIATED')) smsStatus = 'OPENED';
+  else if (pendingSms.length > 0) smsStatus = 'PREPARED';
+  else if (failedSms.length > 0) smsStatus = 'FAILED';
+
+  let whatsappStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'SENT' | 'FAILED' = 'NOT_SENT';
+  if (sentWhatsapp.length > 0) whatsappStatus = 'SENT';
+  else if (pendingWhatsapp.some((r) => r.status === 'OPENED' || r.status === 'INITIATED')) whatsappStatus = 'OPENED';
+  else if (pendingWhatsapp.length > 0) whatsappStatus = 'PREPARED';
+  else if (failedWhatsapp.length > 0) whatsappStatus = 'FAILED';
+
+  const allSent = history.filter(isConfirmedSent);
+  const allPending = history.filter(isOpenedOrPending);
+  const latestPending = history.find((r) => r.status === 'OPENED' || r.status === 'INITIATED');
+
+  let overallStatus: 'NOT_SENT' | 'AWAITING_CONFIRMATION' | 'SENT' | 'FAILED' = 'NOT_SENT';
+  if (allSent.length > 0) {
+    overallStatus = 'SENT';
+  } else if (allPending.some((r) => r.status === 'OPENED' || r.status === 'INITIATED')) {
+    overallStatus = 'AWAITING_CONFIRMATION';
+  } else if (history.some((r) => r.status === 'FAILED')) {
+    overallStatus = 'FAILED';
+  }
+
+  const latestRecord = history[0];
+  const mostRecentSent = allSent[0] || latestRecord;
+
+  return {
+    customerId: customerId || latestRecord?.customerId || null,
+    customerPhone: customerPhone || latestRecord?.customerPhoneNormalized || null,
+    smsStatus,
+    whatsappStatus,
+    overallStatus,
+    smsCount: sentSms.length,
+    whatsappCount: sentWhatsapp.length,
+    totalSent: allSent.length,
+    totalAttempts: history.length,
+    lastContactedAt: mostRecentSent?.sentAt || mostRecentSent?.confirmedAt || mostRecentSent?.createdAt || null,
+    lastChannel: mostRecentSent?.channel || null,
+    lastStaffName: mostRecentSent?.senderStaffName || null,
+    hasPendingConfirmation: Boolean(latestPending),
+    pendingRecordId: latestPending?.id || null,
+  };
+}
+
+/**
+ * Get all CustomerNotificationSummaries indexed by customerId and normalized phone
+ */
+export function getAllCustomerNotificationSummaries(): Record<string, CustomerNotificationSummary> {
+  initializeSmsStorage();
+  const map: Record<string, CustomerNotificationSummary> = {};
+
+  const groupedByCustomer: Record<string, SmsNotificationRecord[]> = {};
+
+  for (const record of smsCache.values()) {
+    const keys: string[] = [];
+    if (record.customerId) keys.push(record.customerId);
+    const p = (record.customerPhoneNormalized || record.customerPhoneRaw || '').replace(/\D/g, '');
+    const pNorm = p.length > 10 && p.startsWith('977') ? p.substring(3) : p;
+    if (pNorm) keys.push(`phone:${pNorm}`);
+
+    for (const key of keys) {
+      if (!groupedByCustomer[key]) groupedByCustomer[key] = [];
+      groupedByCustomer[key].push(record);
+    }
+  }
+
+  for (const [key, records] of Object.entries(groupedByCustomer)) {
+    const summary = getCustomerNotificationSummary(
+      records[0]?.customerId || null,
+      records[0]?.customerPhoneNormalized || null
+    );
+    map[key] = summary;
+  }
+
+  return map;
+}
+
+/**
+ * Get all notifications that are OPENED or PREPARED and awaiting staff confirmation
+ */
+export function getPendingConfirmations(): SmsNotificationRecord[] {
+  initializeSmsStorage();
+  const list = Array.from(smsCache.values());
+
+  const pending = list.filter(
+    (r) =>
+      r.status === 'OPENED' ||
+      r.status === 'PREPARED' ||
+      r.status === 'INITIATED' ||
+      r.status === 'READY_TO_SEND'
+  );
+
+  return pending.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 }
 
 /**

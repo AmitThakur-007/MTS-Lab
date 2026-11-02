@@ -111,6 +111,7 @@ export default function CustomerHub() {
   const [districtFilter, setDistrictFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'ARCHIVED' | 'ALL'>('ACTIVE');
   const [timeFilter, setTimeFilter] = useState<'ALL' | 'TODAY' | 'THIS_WEEK' | 'THIS_MONTH' | 'WITH_REPAIRS' | 'WITHOUT_REPAIRS'>('ALL');
+  const [notificationFilter, setNotificationFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
@@ -187,7 +188,8 @@ export default function CustomerHub() {
       order = sortOrder,
       requestedPage = page,
       pageLimit = limit,
-      isBackground = false
+      isBackground = false,
+      notifFilter = notificationFilter
     ) => {
       if (!isBackground) setLoading(true);
       try {
@@ -196,6 +198,7 @@ export default function CustomerHub() {
         if (dist && dist !== 'ALL') params.set('district', dist);
         params.set('status', stat);
         if (filter !== 'ALL') params.set('filter', filter);
+        if (notifFilter && notifFilter !== 'ALL') params.set('notificationFilter', notifFilter);
         params.set('sortBy', sort);
         params.set('sortOrder', order);
         params.set('page', String(requestedPage));
@@ -210,7 +213,7 @@ export default function CustomerHub() {
         setTotalPages(totalP);
 
         // Cache initial or un-filtered view
-        if (!query && dist === 'ALL' && stat === 'ACTIVE' && filter === 'ALL' && requestedPage === 1) {
+        if (!query && dist === 'ALL' && stat === 'ACTIVE' && filter === 'ALL' && notifFilter === 'ALL' && requestedPage === 1) {
           useDashboardCache.getState().setCustomers({
             list,
             total,
@@ -223,7 +226,7 @@ export default function CustomerHub() {
         if (!isBackground) setLoading(false);
       }
     },
-    [searchQuery, districtFilter, statusFilter, timeFilter, sortBy, sortOrder, page, limit, user?.id]
+    [searchQuery, districtFilter, statusFilter, timeFilter, notificationFilter, sortBy, sortOrder, page, limit, user?.id]
   );
 
   useEffect(() => {
@@ -722,7 +725,7 @@ export default function CustomerHub() {
               onValueChange={(val: any) => {
                 setStatusFilter(val);
                 setPage(1);
-                fetchCustomers(searchQuery, districtFilter, val, timeFilter, sortBy, sortOrder, 1, limit);
+                fetchCustomers(searchQuery, districtFilter, val, timeFilter, sortBy, sortOrder, 1, limit, false, notificationFilter);
               }}
             >
               <SelectTrigger className="w-[125px] h-10 rounded-xl border-slate-200 dark:border-slate-800 text-xs font-semibold cursor-pointer">
@@ -732,6 +735,28 @@ export default function CustomerHub() {
                 <SelectItem value="ACTIVE" className="text-xs font-medium">Active Only</SelectItem>
                 <SelectItem value="ARCHIVED" className="text-xs font-medium">Archived Only</SelectItem>
                 <SelectItem value="ALL" className="text-xs font-medium">All (Inc. Archived)</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Notification Filter */}
+            <Select
+              value={notificationFilter}
+              onValueChange={(val: string) => {
+                setNotificationFilter(val);
+                setPage(1);
+                fetchCustomers(searchQuery, districtFilter, statusFilter, timeFilter, sortBy, sortOrder, 1, limit, false, val);
+              }}
+            >
+              <SelectTrigger className="w-[155px] h-10 rounded-xl border-slate-200 dark:border-slate-800 text-xs font-semibold cursor-pointer">
+                <SelectValue placeholder="Notification" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="ALL" className="text-xs font-medium">All Messages</SelectItem>
+                <SelectItem value="BOTH_SENT" className="text-xs font-medium">Both Sent (SMS+WA)</SelectItem>
+                <SelectItem value="SMS_SENT_ONLY" className="text-xs font-medium">SMS Sent Only</SelectItem>
+                <SelectItem value="WHATSAPP_SENT_ONLY" className="text-xs font-medium">WhatsApp Sent Only</SelectItem>
+                <SelectItem value="AWAITING_CONFIRMATION" className="text-xs font-medium">Awaiting Confirmation</SelectItem>
+                <SelectItem value="NEITHER_SENT" className="text-xs font-medium">Neither Sent</SelectItem>
               </SelectContent>
             </Select>
 
@@ -924,6 +949,7 @@ export default function CustomerHub() {
                   <th className="py-3.5 px-4">Phone & Contacts</th>
                   <th className="py-3.5 px-4">Location</th>
                   <th className="py-3.5 px-4 text-center">Repairs</th>
+                  <th className="py-3.5 px-4">Notifications</th>
                   <th className="py-3.5 px-4">Registered</th>
                   <th className="py-3.5 px-4">Last Activity</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -1041,6 +1067,53 @@ export default function CustomerHub() {
                             {totalRepairs} repair{totalRepairs !== 1 ? 's' : ''}
                           </Badge>
                         </button>
+                      </td>
+
+                      {/* Notification Status (SMS & WhatsApp) */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="flex flex-col items-start gap-1">
+                          {c.smsStatus === 'SENT' ? (
+                            <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                              <span>SMS: Sent</span>
+                            </Badge>
+                          ) : c.smsStatus === 'OPENED' ? (
+                            <Badge variant="outline" className="bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <Clock className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+                              <span>SMS: Awaiting Conf.</span>
+                            </Badge>
+                          ) : c.smsStatus === 'FAILED' ? (
+                            <Badge variant="outline" className="bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <AlertTriangle className="w-3 h-3 text-rose-600" />
+                              <span>SMS: Failed</span>
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 font-bold text-[10px] py-0.5 px-2">
+                              <span>SMS: Not Sent</span>
+                            </Badge>
+                          )}
+
+                          {c.whatsappStatus === 'SENT' ? (
+                            <Badge variant="outline" className="bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border-teal-300 dark:border-teal-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                              <span>WhatsApp: Sent</span>
+                            </Badge>
+                          ) : c.whatsappStatus === 'OPENED' ? (
+                            <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                              <span>WhatsApp: Awaiting Conf.</span>
+                            </Badge>
+                          ) : c.whatsappStatus === 'FAILED' ? (
+                            <Badge variant="outline" className="bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <AlertTriangle className="w-3 h-3 text-rose-600" />
+                              <span>WhatsApp: Failed</span>
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 font-bold text-[10px] py-0.5 px-2">
+                              <span>WhatsApp: Not Sent</span>
+                            </Badge>
+                          )}
+                        </div>
                       </td>
 
                       {/* Registered Date */}
@@ -1184,6 +1257,37 @@ export default function CustomerHub() {
                     <div className="flex items-center gap-2">
                       <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span>Reg: {c.createdAt ? format(parseISO(c.createdAt), 'MMM dd, yyyy') : '—'}</span>
+                    </div>
+
+                    {/* Notification Status Badges */}
+                    <div className="pt-1.5 flex items-center gap-1.5 flex-wrap">
+                      {c.smsStatus === 'SENT' ? (
+                        <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 font-bold text-[9px] py-0 px-1.5">
+                          SMS: Sent
+                        </Badge>
+                      ) : c.smsStatus === 'OPENED' ? (
+                        <Badge variant="outline" className="bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300 font-bold text-[9px] py-0 px-1.5">
+                          SMS: Awaiting Conf.
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold text-[9px] py-0 px-1.5">
+                          SMS: Not Sent
+                        </Badge>
+                      )}
+
+                      {c.whatsappStatus === 'SENT' ? (
+                        <Badge variant="outline" className="bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border-teal-300 font-bold text-[9px] py-0 px-1.5">
+                          WA: Sent
+                        </Badge>
+                      ) : c.whatsappStatus === 'OPENED' ? (
+                        <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 font-bold text-[9px] py-0 px-1.5">
+                          WA: Awaiting Conf.
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold text-[9px] py-0 px-1.5">
+                          WA: Not Sent
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -1400,7 +1400,7 @@ export default function Repairs() {
                     <th className="py-3.5 px-4">Technician</th>
                     <th className="py-3.5 px-4">Status</th>
                     {activeStatusTab === 'REPAIRED' && (
-                      <th className="py-3.5 px-4">Customer SMS</th>
+                      <th className="py-3.5 px-4">Notifications (SMS / WA)</th>
                     )}
                     <th className="py-3.5 px-4">Payment</th>
                     <th className="py-3.5 px-4 text-right">Actions</th>
@@ -1545,35 +1545,57 @@ export default function Repairs() {
                           </Badge>
                         </td>
 
-                        {/* Customer SMS Status (Repaired Tab) */}
+                        {/* Customer Notifications (Repaired Tab) */}
                         {activeStatusTab === 'REPAIRED' && (
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             <div className="flex flex-col items-start gap-1">
-                              {smsSummary.status === 'SENT' ? (
-                                <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                  <span>SMS: Sent</span>
-                                </Badge>
-                              ) : smsSummary.status === 'INITIATED' ? (
-                                <Badge variant="outline" className="bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
-                                  <Clock className="w-3 h-3 text-sky-600 dark:text-sky-400" />
-                                  <span>SMS: Initiated</span>
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
-                                  SMS: Not Sent
-                                </Badge>
-                              )}
+                              {/* SMS Status Badge */}
+                              <div className="flex items-center gap-1.5">
+                                {smsSummary.smsStatus === 'SENT' ? (
+                                  <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                    <span>SMS: Sent</span>
+                                  </Badge>
+                                ) : smsSummary.smsStatus === 'OPENED' ? (
+                                  <Badge variant="outline" className="bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                                    <Clock className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+                                    <span>SMS: Awaiting Conf.</span>
+                                  </Badge>
+                                ) : smsSummary.smsStatus === 'FAILED' ? (
+                                  <Badge variant="outline" className="bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                    <span>SMS: Failed</span>
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
+                                    SMS: Not Sent
+                                  </Badge>
+                                )}
+                              </div>
 
-                              {smsSummary.count > 0 ? (
-                                <span className="text-[11px] text-slate-700 dark:text-slate-300 font-medium">
-                                  Messages Sent: <strong className="text-slate-900 dark:text-white font-bold">{smsSummary.count}</strong>
-                                </span>
-                              ) : smsSummary.totalAttempts > 0 ? (
-                                <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                                  Initiated: {smsSummary.totalAttempts}
-                                </span>
-                              ) : null}
+                              {/* WhatsApp Status Badge */}
+                              <div className="flex items-center gap-1.5">
+                                {smsSummary.whatsappStatus === 'SENT' ? (
+                                  <Badge variant="outline" className="bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border-teal-300 dark:border-teal-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                                    <CheckCircle2 className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                                    <span>WA: Sent</span>
+                                  </Badge>
+                                ) : smsSummary.whatsappStatus === 'OPENED' ? (
+                                  <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                                    <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                                    <span>WA: Awaiting Conf.</span>
+                                  </Badge>
+                                ) : smsSummary.whatsappStatus === 'FAILED' ? (
+                                  <Badge variant="outline" className="bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                    <span>WA: Failed</span>
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
+                                    WA: Not Sent
+                                  </Badge>
+                                )}
+                              </div>
 
                               {smsSummary.lastSentAt && (
                                 <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
@@ -1928,32 +1950,41 @@ export default function Repairs() {
                   {/* SMS Status & Action Box for Repaired devices */}
                   {isRepairedOrReadyStatus(repair.status) && (
                     <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/90 dark:border-slate-700/80 flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5">
-                          {smsSummary.status === 'SENT' ? (
-                            <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* SMS badge */}
+                          {smsSummary.smsStatus === 'SENT' ? (
+                            <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                               <span>SMS: Sent</span>
                             </Badge>
-                          ) : smsSummary.status === 'INITIATED' ? (
-                            <Badge variant="outline" className="bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-700 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                          ) : smsSummary.smsStatus === 'OPENED' ? (
+                            <Badge variant="outline" className="bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
                               <Clock className="w-3 h-3 text-sky-600 dark:text-sky-400" />
-                              <span>SMS: Initiated</span>
+                              <span>SMS: Awaiting Conf.</span>
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
+                            <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
                               SMS: Not Sent
                             </Badge>
                           )}
-                          {smsSummary.count > 0 ? (
-                            <span className="text-[11px] text-slate-700 dark:text-slate-300 font-medium">
-                              Messages Sent: <strong className="text-slate-900 dark:text-slate-100 font-bold">{smsSummary.count}</strong>
-                            </span>
-                          ) : smsSummary.totalAttempts > 0 ? (
-                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                              Initiated: {smsSummary.totalAttempts}
-                            </span>
-                          ) : null}
+
+                          {/* WhatsApp badge */}
+                          {smsSummary.whatsappStatus === 'SENT' ? (
+                            <Badge variant="outline" className="bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border-teal-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                              <span>WA: Sent</span>
+                            </Badge>
+                          ) : smsSummary.whatsappStatus === 'OPENED' ? (
+                            <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 font-bold text-[10px] py-0.5 px-2 gap-1 shadow-2xs">
+                              <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                              <span>WA: Awaiting Conf.</span>
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 font-bold text-[10px] py-0.5 px-2 shadow-2xs">
+                              WA: Not Sent
+                            </Badge>
+                          )}
                         </div>
                         {smsSummary.lastSentAt && (
                           <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
@@ -1970,14 +2001,10 @@ export default function Repairs() {
                             setSmsModalRepair(repair);
                             setIsSmsModalOpen(true);
                           }}
-                          className={`h-7 px-2.5 rounded-lg text-xs font-bold gap-1 cursor-pointer shadow-xs ${
-                            smsSummary.status === 'SENT'
-                              ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
-                              : 'border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-800 dark:text-teal-300'
-                          }`}
+                          className="h-7 px-2.5 rounded-lg text-xs font-bold gap-1 cursor-pointer shadow-xs border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-800 dark:text-teal-300"
                         >
-                          <MessageSquare className={`h-3 w-3 ${smsSummary.status === 'SENT' ? 'text-emerald-600 dark:text-emerald-400' : 'text-teal-600 dark:text-teal-400'}`} />
-                          <span>{smsSummary.status === 'SENT' ? 'Send SMS Again' : 'Send SMS'}</span>
+                          <MessageSquare className="h-3 w-3 text-teal-600 dark:text-teal-400" />
+                          <span>{smsSummary.count > 0 ? 'Notify Again' : 'Notify Customer'}</span>
                         </Button>
                       )}
                     </div>
