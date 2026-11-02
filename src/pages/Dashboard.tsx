@@ -14,6 +14,7 @@ import SlideshowManagement from './dashboard/SlideshowManagement';
 import Settings from './dashboard/Settings';
 import Revenue from './dashboard/Revenue';
 import SuperAdmin from './dashboard/SuperAdmin';
+import ThemeController from './dashboard/ThemeController';
 import AccessRequests from './dashboard/AccessRequests';
 import SecuritySurveillance from './dashboard/SecuritySurveillance';
 import TechnicianDashboard from './dashboard/TechnicianDashboard';
@@ -21,7 +22,6 @@ import ManagerDashboard from './dashboard/ManagerDashboard';
 import Attendance from './dashboard/Attendance';
 import CourierManagement from './dashboard/CourierManagement';
 import RepairRelatedDamage from './dashboard/RepairRelatedDamage';
-import ThemeController from './dashboard/ThemeController';
 import SmsCenter from './dashboard/SmsCenter';
 import SmsReports from './dashboard/SmsReports';
 import CustomerHub from './dashboard/CustomerHub';
@@ -109,6 +109,7 @@ export default function Dashboard() {
           <Route path="super-admin" element={<SuperAdmin />} />
           {isSuperAdmin && (
             <>
+              <Route path="theme-controller" element={<ThemeController />} />
               <Route path="access-requests" element={<SecuritySurveillance />} />
               <Route path="security-surveillance" element={<SecuritySurveillance />} />
               <Route path="security" element={<SecuritySurveillance />} />

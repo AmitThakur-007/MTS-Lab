@@ -32,7 +32,7 @@ const router = Router();
 // Roles with full or send permissions
 const SMS_SEND_ROLES = ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'];
 // Roles with read-only or full access to stats and reports
-const SMS_REPORT_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'];
+const SMS_REPORT_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'];
 // Roles allowed to view history
 const SMS_VIEW_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'];
 
@@ -829,7 +829,7 @@ router.post('/confirm', authenticate, authorize(SMS_SEND_ROLES), async (req: Aut
     const {
       smsRecordId,
       repairId,
-      status = 'STAFF_CONFIRMED_SENT', // 'STAFF_CONFIRMED_SENT' | 'FAILED' | 'CANCELLED'
+      status = 'STAFF_CONFIRMED_SENT', // 'STAFF_CONFIRMED_SENT' | 'FAILED' | 'NOT_SENT' | 'CANCELLED'
       failureReason,
       notes,
     } = req.body;
@@ -839,15 +839,39 @@ router.post('/confirm', authenticate, authorize(SMS_SEND_ROLES), async (req: Aut
     }
 
     let recordId = smsRecordId;
-    let targetRepairId = repairId;
+    const targetRepairId = repairId;
 
     if (!recordId && targetRepairId) {
       const history = getSmsNotificationsForRepair(targetRepairId);
       const active = history.find(
-        (h) => h.status === 'OPENED' || h.status === 'PREPARED' || h.status === 'INITIATED'
+        (h) => h.status === 'OPENED' || h.status === 'PREPARED' || h.status === 'INITIATED' || h.status === 'DRAFT' || h.status === 'PENDING_CONFIRMATION'
       );
       if (active) {
         recordId = active.id;
+      } else {
+        // Fallback: If no pending draft exists, prepare one on the fly for this repair
+        const { data: repairTicket } = await supabaseAdmin
+          .from('Repair')
+          .select('*')
+          .or(`id.eq.${targetRepairId},repairNumber.eq.${targetRepairId}`)
+          .single();
+
+        if (repairTicket) {
+          const deviceModelFull = `${repairTicket.deviceBrand ? `${repairTicket.deviceBrand} ` : ''}${repairTicket.deviceModel || ''}`.trim();
+          const prepared = await prepareOrGetPendingNotification({
+            repairId: repairTicket.id,
+            repairNumber: repairTicket.repairNumber,
+            customerId: repairTicket.customerId || null,
+            customerName: repairTicket.customerName,
+            customerPhone: repairTicket.customerPhone,
+            deviceModel: deviceModelFull,
+            deviceBrand: repairTicket.deviceBrand || null,
+            staffId: req.user!.id,
+            staffName: req.user!.name || 'Staff',
+            staffRole: req.user!.role,
+          });
+          recordId = prepared.id;
+        }
       }
     }
 
@@ -858,22 +882,30 @@ router.post('/confirm', authenticate, authorize(SMS_SEND_ROLES), async (req: Aut
     const nowIso = new Date().toISOString();
     const isSent = status === 'STAFF_CONFIRMED_SENT';
     const isFailed = status === 'FAILED';
+    const isNotSent = status === 'NOT_SENT';
+
+    const targetStatus = isSent
+      ? 'STAFF_CONFIRMED_SENT'
+      : isFailed
+      ? 'FAILED'
+      : isNotSent
+      ? 'NOT_SENT'
+      : 'CANCELLED';
 
     const updated = await updateSmsNotification(recordId, {
-      status: isSent
-        ? 'STAFF_CONFIRMED_SENT'
-        : isFailed
-        ? 'FAILED'
-        : 'CANCELLED',
+      status: targetStatus,
       sentAt: isSent ? nowIso : undefined,
       confirmedAt: isSent ? nowIso : undefined,
       failedAt: isFailed ? nowIso : undefined,
       failureReason: isFailed ? (failureReason || 'Staff reported failed') : undefined,
-      notes: notes || undefined,
+      notes: notes || (isNotSent ? 'Staff confirmed not sent' : undefined),
+      senderStaffId: req.user!.id,
+      senderStaffName: req.user!.name || 'Staff',
+      senderStaffRole: req.user!.role,
     });
 
     if (!updated) {
-      return res.status(404).json({ error: 'Notification record could not be updated.' });
+      return res.status(404).json({ error: 'Notification record could not be updated in the database.' });
     }
 
     // Append to repair log for traceability
@@ -895,7 +927,7 @@ router.post('/confirm', authenticate, authorize(SMS_SEND_ROLES), async (req: Aut
           status: 'REPAIRED',
           message: isSent
             ? `Customer notification confirmed sent via ${channelLabel} to ${updated.customerPhoneNormalized} by ${req.user!.name} (${req.user!.role}).`
-            : `Customer notification via ${channelLabel} marked as ${status}: ${failureReason || 'No reason provided'} by ${req.user!.name} (${req.user!.role}).`,
+            : `Customer notification via ${channelLabel} marked as ${targetStatus}: ${failureReason || 'No reason provided'} by ${req.user!.name} (${req.user!.role}).`,
           createdAt: nowIso,
         },
       ]);
@@ -908,12 +940,17 @@ router.post('/confirm', authenticate, authorize(SMS_SEND_ROLES), async (req: Aut
       resource: 'Repair',
       resourceId: updated.repairId,
       details: {
+        notificationId: updated.id,
         repairNumber: updated.repairNumber,
         customerName: updated.customerName,
         phone: updated.customerPhoneNormalized,
         channel: updated.channel,
         status: updated.status,
         failureReason: updated.failureReason,
+        confirmedByStaffId: req.user!.id,
+        confirmedByStaffName: req.user!.name,
+        confirmedByStaffRole: req.user!.role,
+        confirmedAt: nowIso,
       },
     });
 
@@ -921,13 +958,13 @@ router.post('/confirm', authenticate, authorize(SMS_SEND_ROLES), async (req: Aut
 
     return res.json({
       success: true,
-      message: isSent ? 'Notification confirmed sent successfully.' : `Notification marked as ${status}.`,
+      message: isSent ? 'Notification confirmed sent successfully.' : `Notification marked as ${targetStatus}.`,
       record: updated,
       smsSummary: getRepairSmsSummary(updated.repairId),
     });
   } catch (err: any) {
     console.error('[POST /api/sms/confirm ERROR]', err);
-    return res.status(500).json({ error: 'Failed to confirm SMS notification.' });
+    return res.status(500).json({ error: err.message || 'Failed to confirm SMS notification.' });
   }
 });
 

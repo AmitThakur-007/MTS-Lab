@@ -5,16 +5,22 @@ import { supabaseAdmin } from '../config/supabase';
 import { broadcastServerChange } from './realtimeSync';
 
 export type SmsNotificationStatus =
-  | 'PREPARED'
+  | 'DRAFT'
   | 'OPENED'
+  | 'PENDING_CONFIRMATION'
   | 'STAFF_CONFIRMED_SENT'
-  | 'CARRIER_CONFIRMED_DELIVERED'
+  | 'PROVIDER_ACCEPTED'
+  | 'DELIVERED'
+  | 'READ'
   | 'FAILED'
+  | 'NOT_SENT'
   | 'CANCELLED'
   // Legacy aliases for backward compatibility with existing DB records
+  | 'PREPARED'
   | 'READY_TO_SEND'
   | 'INITIATED'
   | 'SENT'
+  | 'CARRIER_CONFIRMED_DELIVERED'
   | 'REQUIRES_GOOGLE_MESSAGES'
   | 'INVALID_PHONE';
 
@@ -155,8 +161,10 @@ if (!fs.existsSync(DATA_DIR)) {
   }
 }
 
+// In-memory cache synced with authoritative database
 let smsCache: Map<string, SmsNotificationRecord> = new Map();
 let isInitialized = false;
+let isSyncingPromise: Promise<void> | null = null;
 
 function loadLocalFile(): SmsNotificationRecord[] {
   try {
@@ -184,16 +192,251 @@ function saveLocalFile(data: SmsNotificationRecord[]): void {
   }
 }
 
+function safeJsonParse(val: any): any {
+  if (!val) return null;
+  if (typeof val === 'object') return val;
+  try {
+    return JSON.parse(val);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Standardize status helpers
+ */
+export function isStatusSent(status?: string | null): boolean {
+  if (!status) return false;
+  const s = status.toUpperCase().trim();
+  return [
+    'STAFF_CONFIRMED_SENT',
+    'SENT',
+    'PROVIDER_ACCEPTED',
+    'DELIVERED',
+    'READ',
+    'CARRIER_CONFIRMED_DELIVERED',
+  ].includes(s);
+}
+
+export function isStatusStaffConfirmed(status?: string | null): boolean {
+  if (!status) return false;
+  const s = status.toUpperCase().trim();
+  return ['STAFF_CONFIRMED_SENT', 'SENT'].includes(s);
+}
+
+export function isStatusDelivered(status?: string | null): boolean {
+  if (!status) return false;
+  const s = status.toUpperCase().trim();
+  return ['DELIVERED', 'CARRIER_CONFIRMED_DELIVERED'].includes(s);
+}
+
+export function isStatusPending(status?: string | null): boolean {
+  if (!status) return false;
+  const s = status.toUpperCase().trim();
+  return [
+    'DRAFT',
+    'PREPARED',
+    'OPENED',
+    'PENDING_CONFIRMATION',
+    'READY_TO_SEND',
+    'INITIATED',
+  ].includes(s);
+}
+
+export function isStatusFailed(status?: string | null): boolean {
+  if (!status) return false;
+  const s = status.toUpperCase().trim();
+  return s === 'FAILED';
+}
+
+export function isStatusNotSent(status?: string | null): boolean {
+  if (!status) return false;
+  const s = status.toUpperCase().trim();
+  return ['NOT_SENT', 'CANCELLED'].includes(s);
+}
+
+/**
+ * Format a Nepal date string (YYYY-MM-DD) in Asia/Kathmandu timezone
+ */
+export function getNptDateKey(isoDateString?: string | null): string {
+  if (!isoDateString) return 'Unknown';
+  try {
+    const d = new Date(isoDateString);
+    if (isNaN(d.getTime())) return String(isoDateString).substring(0, 10);
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kathmandu',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    return formatter.format(d); // produces YYYY-MM-DD
+  } catch {
+    return String(isoDateString).substring(0, 10);
+  }
+}
+
+/**
+ * Synchronize authoritative records from Supabase PostgreSQL Notification, AuditLog, and RepairLog
+ */
+export async function syncSmsStorageFromDatabase(): Promise<void> {
+  if (isSyncingPromise) {
+    return isSyncingPromise;
+  }
+
+  isSyncingPromise = (async () => {
+    try {
+      // 1. First populate from local cache file if exists
+      const localItems = loadLocalFile();
+      for (const item of localItems) {
+        if (item.id) {
+          smsCache.set(item.id, item);
+        }
+      }
+
+      // 2. Fetch authoritative records from Supabase Notification table
+      const { data: dbNotifications, error: dbError } = await supabaseAdmin
+        .from('Notification')
+        .select('*')
+        .in('type', ['CUSTOMER_SMS', 'CUSTOMER_WHATSAPP'])
+        .order('createdAt', { ascending: false });
+
+      if (!dbError && Array.isArray(dbNotifications)) {
+        for (const row of dbNotifications) {
+          const meta = safeJsonParse(row.metadata) || {};
+          const status = (row.priority || meta.status || 'STAFF_CONFIRMED_SENT') as SmsNotificationStatus;
+          const channel = (meta.channel || (row.type === 'CUSTOMER_WHATSAPP' ? 'WHATSAPP' : 'WINDOWS_PHONE_LINK')) as SmsNotificationChannel;
+
+          const record: SmsNotificationRecord = {
+            id: row.id,
+            repairId: row.repairId || meta.repairId || '',
+            repairNumber: row.repairNumber || meta.repairNumber || '',
+            customerId: row.userId?.startsWith('customer:') ? null : (row.userId || meta.customerId || null),
+            customerName: meta.customerName || 'Customer',
+            customerPhoneRaw: meta.customerPhoneRaw || meta.phone || '',
+            customerPhoneNormalized: meta.customerPhoneNormalized || meta.phone || '',
+            customerPhoneInternational: meta.customerPhoneInternational || (meta.phone ? `+977${meta.phone}` : ''),
+            deviceModel: meta.deviceModel || 'Device',
+            deviceBrand: meta.deviceBrand || null,
+            messageType: meta.messageType || (channel === 'WHATSAPP' ? 'REPAIR_COMPLETED_WHATSAPP' : 'REPAIR_COMPLETED_SMS'),
+            messageContent: row.message || meta.messageContent || '',
+            characterCount: meta.characterCount || (row.message ? row.message.length : 0),
+            encodingType: meta.encodingType || 'GSM_7',
+            segmentCount: meta.segmentCount || 1,
+            status,
+            channel,
+            senderStaffId: row.senderId || meta.senderStaffId || 'system',
+            senderStaffName: row.senderName || meta.senderStaffName || 'Staff Member',
+            senderStaffRole: meta.senderStaffRole || 'STAFF',
+            failureReason: meta.failureReason || null,
+            retryCount: meta.retryCount || 0,
+            notes: meta.notes || null,
+            initiatedAt: meta.initiatedAt || row.createdAt,
+            openedAt: meta.openedAt || null,
+            sentAt: meta.sentAt || (isStatusSent(status) ? row.createdAt : null),
+            confirmedAt: meta.confirmedAt || (isStatusSent(status) ? row.createdAt : null),
+            failedAt: meta.failedAt || (status === 'FAILED' ? row.createdAt : null),
+            createdAt: row.createdAt,
+            updatedAt: row.createdAt,
+          };
+
+          smsCache.set(record.id, record);
+        }
+      }
+
+      // 3. Historical recovery: Check AuditLog where action = 'SMS_NOTIFICATION_CONFIRMED_SENT'
+      try {
+        const { data: auditRows, error: auditErr } = await supabaseAdmin
+          .from('AuditLog')
+          .select('*')
+          .eq('action', 'SMS_NOTIFICATION_CONFIRMED_SENT')
+          .order('createdAt', { ascending: false });
+
+        if (!auditErr && Array.isArray(auditRows)) {
+          for (const a of auditRows) {
+            const details = safeJsonParse(a.details) || {};
+            const existingId = details.notificationId || a.id;
+            if (!smsCache.has(existingId)) {
+              // Reconstruct verified sent record
+              const isWa = details.channel === 'WHATSAPP';
+              const normPhone = details.phone || '';
+              const rec: SmsNotificationRecord = {
+                id: existingId,
+                repairId: a.resourceId || details.repairId || '',
+                repairNumber: details.repairNumber || '',
+                customerId: details.customerId || null,
+                customerName: details.customerName || 'Customer',
+                customerPhoneRaw: normPhone,
+                customerPhoneNormalized: normPhone,
+                customerPhoneInternational: normPhone ? `+977${normPhone}` : '',
+                deviceModel: details.deviceModel || 'Device',
+                deviceBrand: null,
+                messageType: isWa ? 'REPAIR_COMPLETED_WHATSAPP' : 'REPAIR_COMPLETED_SMS',
+                messageContent: details.messageContent || `Customer notification confirmed sent via ${details.channel || 'SMS'}`,
+                characterCount: (details.messageContent || '').length || 80,
+                encodingType: 'GSM_7',
+                segmentCount: 1,
+                status: 'STAFF_CONFIRMED_SENT',
+                channel: isWa ? 'WHATSAPP' : (details.channel || 'WINDOWS_PHONE_LINK'),
+                senderStaffId: a.userId || details.confirmedByStaffId || 'staff',
+                senderStaffName: details.confirmedByStaffName || 'Staff Member',
+                senderStaffRole: details.confirmedByStaffRole || 'STAFF',
+                initiatedAt: a.createdAt,
+                openedAt: a.createdAt,
+                sentAt: details.confirmedAt || a.createdAt,
+                confirmedAt: details.confirmedAt || a.createdAt,
+                createdAt: a.createdAt,
+                updatedAt: a.createdAt,
+              };
+
+              smsCache.set(existingId, rec);
+
+              // Persist recovered historical confirmation to Notification table
+              await supabaseAdmin.from('Notification').upsert({
+                id: rec.id,
+                userId: rec.customerId || rec.senderStaffId || `customer:${rec.customerPhoneNormalized}`,
+                title: rec.channel === 'WHATSAPP' ? `WhatsApp Notification - Repair #${rec.repairNumber}` : `SMS Notification - Repair #${rec.repairNumber}`,
+                message: rec.messageContent,
+                type: rec.channel === 'WHATSAPP' ? 'CUSTOMER_WHATSAPP' : 'CUSTOMER_SMS',
+                repairId: rec.repairId || null,
+                repairNumber: rec.repairNumber || null,
+                senderId: rec.senderStaffId,
+                senderName: rec.senderStaffName,
+                priority: 'STAFF_CONFIRMED_SENT',
+                isRead: true,
+                metadata: JSON.stringify(rec),
+                createdAt: rec.createdAt,
+              });
+            }
+          }
+        }
+      } catch (auditFetchErr) {
+        console.warn('[SMS AUDIT RECOVERY WARN]', auditFetchErr);
+      }
+
+      // 4. Save synced cache to local file for fast offline reads
+      saveLocalFile(Array.from(smsCache.values()));
+      isInitialized = true;
+    } catch (err) {
+      console.error('[SMS STORAGE SYNC ERROR]', err);
+    } finally {
+      isSyncingPromise = null;
+    }
+  })();
+
+  return isSyncingPromise;
+}
+
 export function initializeSmsStorage(): void {
   if (isInitialized) return;
   const localItems = loadLocalFile();
-  smsCache.clear();
   for (const item of localItems) {
     if (item.id) {
       smsCache.set(item.id, item);
     }
   }
   isInitialized = true;
+  // Trigger background database sync immediately
+  syncSmsStorageFromDatabase().catch((e) => console.warn('[ASYNC DB SYNC WARN]', e));
 }
 
 /**
@@ -257,8 +500,6 @@ export function validateAndNormalizeNepalPhone(rawPhone: string | null | undefin
 /**
  * Generate standard privacy-compliant SMS template for completed repairs.
  * Strict rule: Must fit in exactly ONE SMS (maximum 160 characters).
- * Omits internal diagnostic notes, technician names, staff emails, or internal database keys.
- * Essential elements: Customer name, Device, Repair number, Ready for pickup/collection, MTS Lab.
  */
 export function generateRepairCompletedSmsMessage(params: {
   customerName?: string | null;
@@ -269,10 +510,8 @@ export function generateRepairCompletedSmsMessage(params: {
   let cleanModel = (params.deviceModel || 'device').trim();
   const cleanNumber = (params.repairNumber || 'N/A').trim();
 
-  // Baseline template with all 5 essential requirements:
   let msg = `Dear ${cleanCustomer}, your ${cleanModel} (Repair #${cleanNumber}) is repaired & ready for pickup at MTS Lab. Thank you.`;
 
-  // If long names cause total length to exceed 160 characters, safely shorten customer or model
   if (msg.length > 160 && cleanCustomer.length > 20) {
     cleanCustomer = cleanCustomer.slice(0, 18).trim() + '…';
     msg = `Dear ${cleanCustomer}, your ${cleanModel} (Repair #${cleanNumber}) is repaired & ready for pickup at MTS Lab. Thank you.`;
@@ -309,7 +548,7 @@ export function generateReceivedDeviceSmsMessage(repairNumber: string): string {
 }
 
 /**
- * Record a new SMS/notification record
+ * Record a new SMS/notification record with authoritative Supabase database persistence
  */
 export async function recordSmsNotification(
   data: Omit<SmsNotificationRecord, 'id' | 'createdAt' | 'updatedAt' | 'characterCount' | 'encodingType' | 'segmentCount'> & {
@@ -343,34 +582,37 @@ export async function recordSmsNotification(
     updatedAt: now,
   };
 
+  // Authoritative Database Persistence into Supabase Notification Table
+  const isWhatsApp = record.channel === 'WHATSAPP';
+  const dbUserId = record.customerId || record.senderStaffId || `customer:${record.customerPhoneNormalized}`;
+  const dbTitle = isWhatsApp
+    ? `WhatsApp Notification - Repair #${record.repairNumber || 'N/A'}`
+    : `SMS Notification - Repair #${record.repairNumber || 'N/A'}`;
+
+  const { error: dbError } = await supabaseAdmin.from('Notification').upsert({
+    id: record.id,
+    userId: dbUserId,
+    title: dbTitle,
+    message: record.messageContent,
+    type: isWhatsApp ? 'CUSTOMER_WHATSAPP' : 'CUSTOMER_SMS',
+    repairId: record.repairId || null,
+    repairNumber: record.repairNumber || null,
+    senderId: record.senderStaffId || null,
+    senderName: record.senderStaffName || null,
+    priority: record.status,
+    isRead: isStatusSent(record.status),
+    metadata: JSON.stringify(record),
+    createdAt: record.createdAt,
+  });
+
+  if (dbError) {
+    console.error('[SMS DATABASE RECORD ERROR]', dbError);
+    throw new Error(`Failed to permanently save notification to database: ${dbError.message}`);
+  }
+
+  // Update in-memory cache and local file
   smsCache.set(id, record);
   saveLocalFile(Array.from(smsCache.values()));
-
-  // Attempt database backup (fail-soft if table does not exist)
-  try {
-    await supabaseAdmin.from('SmsNotification').insert([
-      {
-        id: record.id,
-        repairId: record.repairId,
-        repairNumber: record.repairNumber,
-        customerId: record.customerId || null,
-        customerName: record.customerName,
-        customerPhone: record.customerPhoneNormalized,
-        messageContent: record.messageContent,
-        status: record.status,
-        channel: record.channel,
-        senderStaffId: record.senderStaffId,
-        senderStaffName: record.senderStaffName,
-        senderStaffRole: record.senderStaffRole,
-        notes: record.notes || null,
-        initiatedAt: record.initiatedAt,
-        sentAt: record.sentAt || null,
-        createdAt: record.createdAt,
-      },
-    ]);
-  } catch (dbErr) {
-    // Fail-soft: local storage remains fully authoritative
-  }
 
   await broadcastServerChange('SmsNotification', 'CREATE', id, record);
 
@@ -378,7 +620,7 @@ export async function recordSmsNotification(
 }
 
 /**
- * Update an existing SMS notification record
+ * Update an existing SMS notification record with authoritative Supabase database persistence
  */
 export async function updateSmsNotification(
   id: string,
@@ -386,7 +628,54 @@ export async function updateSmsNotification(
 ): Promise<SmsNotificationRecord | null> {
   initializeSmsStorage();
 
-  const existing = smsCache.get(id);
+  let existing = smsCache.get(id);
+
+  // If not found in cache, check directly in Supabase Notification table
+  if (!existing) {
+    const { data: dbRow, error } = await supabaseAdmin
+      .from('Notification')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (!error && dbRow) {
+      const meta = safeJsonParse(dbRow.metadata) || {};
+      existing = {
+        id: dbRow.id,
+        repairId: dbRow.repairId || meta.repairId || '',
+        repairNumber: dbRow.repairNumber || meta.repairNumber || '',
+        customerId: dbRow.userId?.startsWith('customer:') ? null : (dbRow.userId || meta.customerId || null),
+        customerName: meta.customerName || 'Customer',
+        customerPhoneRaw: meta.customerPhoneRaw || meta.phone || '',
+        customerPhoneNormalized: meta.customerPhoneNormalized || meta.phone || '',
+        customerPhoneInternational: meta.customerPhoneInternational || '',
+        deviceModel: meta.deviceModel || 'Device',
+        deviceBrand: meta.deviceBrand || null,
+        messageType: meta.messageType || (dbRow.type === 'CUSTOMER_WHATSAPP' ? 'REPAIR_COMPLETED_WHATSAPP' : 'REPAIR_COMPLETED_SMS'),
+        messageContent: dbRow.message || meta.messageContent || '',
+        characterCount: meta.characterCount || (dbRow.message ? dbRow.message.length : 0),
+        encodingType: meta.encodingType || 'GSM_7',
+        segmentCount: meta.segmentCount || 1,
+        status: (dbRow.priority || meta.status || 'STAFF_CONFIRMED_SENT') as SmsNotificationStatus,
+        channel: (meta.channel || (dbRow.type === 'CUSTOMER_WHATSAPP' ? 'WHATSAPP' : 'WINDOWS_PHONE_LINK')) as SmsNotificationChannel,
+        senderStaffId: dbRow.senderId || meta.senderStaffId || 'staff',
+        senderStaffName: dbRow.senderName || meta.senderStaffName || 'Staff Member',
+        senderStaffRole: meta.senderStaffRole || 'STAFF',
+        failureReason: meta.failureReason || null,
+        retryCount: meta.retryCount || 0,
+        notes: meta.notes || null,
+        initiatedAt: meta.initiatedAt || dbRow.createdAt,
+        openedAt: meta.openedAt || null,
+        sentAt: meta.sentAt || null,
+        confirmedAt: meta.confirmedAt || null,
+        failedAt: meta.failedAt || null,
+        createdAt: dbRow.createdAt,
+        updatedAt: dbRow.createdAt,
+      };
+      smsCache.set(id, existing);
+    }
+  }
+
   if (!existing) return null;
 
   if (updates.messageContent !== undefined) {
@@ -408,18 +697,37 @@ export async function updateSmsNotification(
     updatedAt: now,
   };
 
+  // Authoritative Database Persistence into Supabase Notification Table
+  const isWhatsApp = updated.channel === 'WHATSAPP';
+  const dbUserId = updated.customerId || updated.senderStaffId || `customer:${updated.customerPhoneNormalized}`;
+  const dbTitle = isWhatsApp
+    ? `WhatsApp Notification - Repair #${updated.repairNumber || 'N/A'}`
+    : `SMS Notification - Repair #${updated.repairNumber || 'N/A'}`;
+
+  const { error: dbUpdateError } = await supabaseAdmin.from('Notification').upsert({
+    id: updated.id,
+    userId: dbUserId,
+    title: dbTitle,
+    message: updated.messageContent,
+    type: isWhatsApp ? 'CUSTOMER_WHATSAPP' : 'CUSTOMER_SMS',
+    repairId: updated.repairId || null,
+    repairNumber: updated.repairNumber || null,
+    senderId: updated.senderStaffId || null,
+    senderName: updated.senderStaffName || null,
+    priority: updated.status,
+    isRead: isStatusSent(updated.status),
+    metadata: JSON.stringify(updated),
+    createdAt: updated.createdAt,
+  });
+
+  if (dbUpdateError) {
+    console.error('[SMS DATABASE UPDATE ERROR]', dbUpdateError);
+    throw new Error(`Failed to permanently update notification in database: ${dbUpdateError.message}`);
+  }
+
+  // Update in-memory cache and local file
   smsCache.set(id, updated);
   saveLocalFile(Array.from(smsCache.values()));
-
-  try {
-    await supabaseAdmin.from('SmsNotification').update({
-      status: updated.status,
-      notes: updated.notes || null,
-      sentAt: updated.sentAt || null,
-      confirmedAt: updated.confirmedAt || null,
-      updatedAt: now,
-    }).eq('id', id);
-  } catch (_) {}
 
   await broadcastServerChange('SmsNotification', 'UPDATE', id, updated);
 
@@ -448,17 +756,13 @@ export async function prepareOrGetPendingNotification(params: {
   const existingNotifications = getSmsNotificationsForRepair(params.repairId);
 
   // If there is already a confirmed sent notification, return the latest
-  const sentNotification = existingNotifications.find(
-    (n) => n.status === 'STAFF_CONFIRMED_SENT' || n.status === 'SENT' || n.status === 'CARRIER_CONFIRMED_DELIVERED'
-  );
+  const sentNotification = existingNotifications.find((n) => isStatusSent(n.status));
   if (sentNotification) {
     return sentNotification;
   }
 
   // If there is already an open/prepared draft, return it
-  const draft = existingNotifications.find(
-    (n) => n.status === 'PREPARED' || n.status === 'OPENED' || n.status === 'READY_TO_SEND' || n.status === 'INITIATED'
-  );
+  const draft = existingNotifications.find((n) => isStatusPending(n.status));
   if (draft) {
     return draft;
   }
@@ -483,7 +787,7 @@ export async function prepareOrGetPendingNotification(params: {
     deviceBrand: params.deviceBrand || null,
     messageType: 'REPAIR_COMPLETED_SMS',
     messageContent: defaultMsg,
-    status: 'PREPARED',
+    status: 'DRAFT',
     channel: 'WINDOWS_PHONE_LINK',
     senderStaffId: params.staffId,
     senderStaffName: params.staffName,
@@ -600,9 +904,13 @@ export function getAllSmsNotifications(options: {
   if (options.status && options.status !== 'ALL') {
     const s = options.status.toUpperCase();
     if (s === 'SENT' || s === 'STAFF_CONFIRMED_SENT') {
-      list = list.filter((item) => item.status === 'STAFF_CONFIRMED_SENT' || item.status === 'SENT' || item.status === 'CARRIER_CONFIRMED_DELIVERED');
-    } else if (s === 'PENDING' || s === 'PREPARED') {
-      list = list.filter((item) => item.status === 'PREPARED' || item.status === 'OPENED' || item.status === 'READY_TO_SEND' || item.status === 'INITIATED');
+      list = list.filter((item) => isStatusSent(item.status));
+    } else if (s === 'PENDING' || s === 'PREPARED' || s === 'DRAFT') {
+      list = list.filter((item) => isStatusPending(item.status));
+    } else if (s === 'FAILED') {
+      list = list.filter((item) => isStatusFailed(item.status));
+    } else if (s === 'NOT_SENT') {
+      list = list.filter((item) => isStatusNotSent(item.status));
     } else {
       list = list.filter((item) => item.status === s);
     }
@@ -618,19 +926,29 @@ export function getAllSmsNotifications(options: {
     list = list.filter((item) => item.senderStaffId === options.staffId);
   }
 
-  // Date filters
+  // Date filters (inclusive start, exclusive end for NPT half-open interval)
   if (options.startDate) {
     const startMs = new Date(options.startDate).getTime();
-    list = list.filter((item) => new Date(item.createdAt).getTime() >= startMs);
+    list = list.filter((item) => {
+      const recTime = new Date(item.confirmedAt || item.sentAt || item.createdAt).getTime();
+      return recTime >= startMs;
+    });
   }
 
   if (options.endDate) {
     const endMs = new Date(options.endDate).getTime();
-    list = list.filter((item) => new Date(item.createdAt).getTime() <= endMs);
+    list = list.filter((item) => {
+      const recTime = new Date(item.confirmedAt || item.sentAt || item.createdAt).getTime();
+      return recTime < endMs;
+    });
   }
 
-  // Sort descending by created date
-  list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  // Sort descending by activity date
+  list.sort((a, b) => {
+    const aTime = new Date(a.confirmedAt || a.sentAt || a.createdAt).getTime();
+    const bTime = new Date(b.confirmedAt || b.sentAt || b.createdAt).getTime();
+    return bTime - aTime;
+  });
 
   const total = list.length;
   const offset = options.offset || 0;
@@ -642,18 +960,41 @@ export function getAllSmsNotifications(options: {
 
 /**
  * Aggregated statistics calculation for the SMS Center and SMS Reports
- * Strictly calculates from recorded database entries. Never counts clicks or WhatsApp as SMS!
+ * Strictly calculates from authoritative recorded database entries.
+ * Counts every notification record once, keeps SMS and WhatsApp strictly separate,
+ * and accurately calculates unique customers notified.
  */
 export function getSmsStatistics(options: {
   startDate?: string;
   endDate?: string;
 }): {
+  // SMS statistics
   totalSmsSent: number;
   staffConfirmedSms: number;
   carrierConfirmedDelivered: number;
   failedSms: number;
   pendingSms: number;
+  notSentSms: number;
+
+  // WhatsApp statistics
   whatsappSent: number;
+  whatsappPending: number;
+  whatsappFailed: number;
+  whatsappDelivered: number;
+  whatsappRead: number;
+
+  // Combined statistics
+  totalNotifications: number;
+  totalSms: number;
+  totalWhatsApp: number;
+  totalStaffConfirmed: number;
+  totalPending: number;
+  totalFailed: number;
+  totalDelivered: number;
+  uniqueCustomersNotified: number;
+  uniqueCustomersNotNotified: number;
+
+  // Breakdowns
   staffActivity: Array<{
     staffId: string;
     staffName: string;
@@ -677,20 +1018,40 @@ export function getSmsStatistics(options: {
 
   if (options.startDate) {
     const startMs = new Date(options.startDate).getTime();
-    list = list.filter((item) => new Date(item.createdAt).getTime() >= startMs);
+    list = list.filter((item) => {
+      const itemMs = new Date(item.confirmedAt || item.sentAt || item.createdAt).getTime();
+      return itemMs >= startMs;
+    });
   }
 
   if (options.endDate) {
     const endMs = new Date(options.endDate).getTime();
-    list = list.filter((item) => new Date(item.createdAt).getTime() <= endMs);
+    list = list.filter((item) => {
+      const itemMs = new Date(item.confirmedAt || item.sentAt || item.createdAt).getTime();
+      return itemMs < endMs;
+    });
   }
 
+  // SMS metrics
   let totalSmsSent = 0;
   let staffConfirmedSms = 0;
   let carrierConfirmedDelivered = 0;
   let failedSms = 0;
   let pendingSms = 0;
+  let notSentSms = 0;
+  let totalSms = 0;
+
+  // WhatsApp metrics
   let whatsappSent = 0;
+  let whatsappPending = 0;
+  let whatsappFailed = 0;
+  let whatsappDelivered = 0;
+  let whatsappRead = 0;
+  let totalWhatsApp = 0;
+
+  // Unique customer tracking
+  const notifiedCustomerKeys = new Set<string>();
+  const allCustomerKeys = new Set<string>();
 
   const staffMap: Record<
     string,
@@ -717,40 +1078,62 @@ export function getSmsStatistics(options: {
   > = {};
 
   for (const record of list) {
-    const isWhatsApp = record.channel === 'WHATSAPP';
-    const isSent =
-      record.status === 'STAFF_CONFIRMED_SENT' ||
-      record.status === 'SENT' ||
-      record.status === 'CARRIER_CONFIRMED_DELIVERED';
-    const isCarrierDelivered = record.status === 'CARRIER_CONFIRMED_DELIVERED';
-    const isFailed = record.status === 'FAILED';
-    const isPending =
-      record.status === 'PREPARED' ||
-      record.status === 'OPENED' ||
-      record.status === 'READY_TO_SEND' ||
-      record.status === 'INITIATED';
+    const isWhatsApp = record.channel === 'WHATSAPP' || record.messageType?.includes('WHATSAPP');
+    const isSent = isStatusSent(record.status);
+    const isStaffConfirmed = isStatusStaffConfirmed(record.status);
+    const isDelivered = isStatusDelivered(record.status);
+    const isRead = record.status === 'READ';
+    const isFailed = isStatusFailed(record.status);
+    const isPending = isStatusPending(record.status);
+    const isNotSent = isStatusNotSent(record.status);
+
+    // Customer identifier for uniqueness
+    const custKey = record.customerId || record.customerPhoneNormalized || record.customerPhoneRaw || record.repairNumber;
+    if (custKey) {
+      allCustomerKeys.add(custKey);
+      if (isSent) {
+        notifiedCustomerKeys.add(custKey);
+      }
+    }
 
     if (isWhatsApp) {
+      totalWhatsApp++;
       if (isSent) {
         whatsappSent++;
       }
+      if (isPending) {
+        whatsappPending++;
+      }
+      if (isFailed) {
+        whatsappFailed++;
+      }
+      if (isDelivered) {
+        whatsappDelivered++;
+      }
+      if (isRead) {
+        whatsappRead++;
+      }
     } else {
-      // It is an SMS (Windows Phone Link, SMS protocol, or manual copy)
+      // SMS channels
+      totalSms++;
       if (isSent) {
         totalSmsSent++;
-        staffConfirmedSms++;
-        if (isCarrierDelivered) {
+        if (isStaffConfirmed) {
+          staffConfirmedSms++;
+        }
+        if (isDelivered) {
           carrierConfirmedDelivered++;
         }
       }
-    }
-
-    if (isFailed) {
-      failedSms++;
-    }
-
-    if (isPending) {
-      pendingSms++;
+      if (isPending) {
+        pendingSms++;
+      }
+      if (isFailed) {
+        failedSms++;
+      }
+      if (isNotSent) {
+        notSentSms++;
+      }
     }
 
     // Staff activity aggregation
@@ -777,8 +1160,8 @@ export function getSmsStatistics(options: {
     if (isFailed) staffMap[staffId].failed++;
     if (isPending) staffMap[staffId].pending++;
 
-    // Daily activity aggregation (YYYY-MM-DD)
-    const dateKey = record.createdAt ? record.createdAt.substring(0, 10) : 'Unknown';
+    // Daily activity aggregation using Nepal Timezone (YYYY-MM-DD)
+    const dateKey = getNptDateKey(record.confirmedAt || record.sentAt || record.createdAt);
     if (!dailyMap[dateKey]) {
       dailyMap[dateKey] = {
         date: dateKey,
@@ -796,6 +1179,15 @@ export function getSmsStatistics(options: {
     if (isFailed) dailyMap[dateKey].failed++;
   }
 
+  // Combined metrics
+  const totalNotifications = list.length;
+  const totalStaffConfirmed = staffConfirmedSms + (whatsappSent - whatsappDelivered);
+  const totalPending = pendingSms + whatsappPending;
+  const totalFailed = failedSms + whatsappFailed;
+  const totalDelivered = carrierConfirmedDelivered + whatsappDelivered;
+  const uniqueCustomersNotified = notifiedCustomerKeys.size;
+  const uniqueCustomersNotNotified = Math.max(0, allCustomerKeys.size - uniqueCustomersNotified);
+
   // Sort dailyStats chronologically
   const dailyStats = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
 
@@ -810,7 +1202,24 @@ export function getSmsStatistics(options: {
     carrierConfirmedDelivered,
     failedSms,
     pendingSms,
+    notSentSms,
+
     whatsappSent,
+    whatsappPending,
+    whatsappFailed,
+    whatsappDelivered,
+    whatsappRead,
+
+    totalNotifications,
+    totalSms,
+    totalWhatsApp,
+    totalStaffConfirmed,
+    totalPending,
+    totalFailed,
+    totalDelivered,
+    uniqueCustomersNotified,
+    uniqueCustomersNotNotified,
+
     staffActivity,
     dailyStats,
   };
@@ -847,21 +1256,16 @@ function buildRepairSmsSummary(repairIdOrNumber: string, history: SmsNotificatio
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 
-  const smsRecords = sorted.filter((h) => h.channel !== 'WHATSAPP');
-  const whatsappRecords = sorted.filter((h) => h.channel === 'WHATSAPP');
+  const smsRecords = sorted.filter((h) => h.channel !== 'WHATSAPP' && !h.messageType?.includes('WHATSAPP'));
+  const whatsappRecords = sorted.filter((h) => h.channel === 'WHATSAPP' || h.messageType?.includes('WHATSAPP'));
 
-  const isConfirmedSent = (r: SmsNotificationRecord) =>
-    r.status === 'STAFF_CONFIRMED_SENT' || r.status === 'SENT' || r.status === 'CARRIER_CONFIRMED_DELIVERED';
-  const isOpenedOrPending = (r: SmsNotificationRecord) =>
-    r.status === 'OPENED' || r.status === 'PREPARED' || r.status === 'INITIATED' || r.status === 'READY_TO_SEND';
+  const sentSms = smsRecords.filter((r) => isStatusSent(r.status));
+  const pendingSms = smsRecords.filter((r) => isStatusPending(r.status));
+  const failedSms = smsRecords.filter((r) => isStatusFailed(r.status));
 
-  const sentSms = smsRecords.filter(isConfirmedSent);
-  const pendingSms = smsRecords.filter(isOpenedOrPending);
-  const failedSms = smsRecords.filter((r) => r.status === 'FAILED');
-
-  const sentWhatsapp = whatsappRecords.filter(isConfirmedSent);
-  const pendingWhatsapp = whatsappRecords.filter(isOpenedOrPending);
-  const failedWhatsapp = whatsappRecords.filter((r) => r.status === 'FAILED');
+  const sentWhatsapp = whatsappRecords.filter((r) => isStatusSent(r.status));
+  const pendingWhatsapp = whatsappRecords.filter((r) => isStatusPending(r.status));
+  const failedWhatsapp = whatsappRecords.filter((r) => isStatusFailed(r.status));
 
   let smsStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'SENT' | 'FAILED' = 'NOT_SENT';
   if (sentSms.length > 0) smsStatus = 'SENT';
@@ -875,9 +1279,9 @@ function buildRepairSmsSummary(repairIdOrNumber: string, history: SmsNotificatio
   else if (pendingWhatsapp.length > 0) whatsappStatus = 'PREPARED';
   else if (failedWhatsapp.length > 0) whatsappStatus = 'FAILED';
 
-  const allSent = sorted.filter(isConfirmedSent);
-  const allPending = sorted.filter(isOpenedOrPending);
-  const latestPending = sorted.find((r) => r.status === 'OPENED' || r.status === 'INITIATED');
+  const allSent = sorted.filter((r) => isStatusSent(r.status));
+  const allPending = sorted.filter((r) => isStatusPending(r.status));
+  const latestPending = sorted.find((r) => r.status === 'OPENED' || r.status === 'INITIATED' || r.status === 'PENDING_CONFIRMATION');
 
   const latestRecord = sorted[0];
   const mostRecentSent = allSent[0] || latestRecord;
@@ -894,11 +1298,11 @@ function buildRepairSmsSummary(repairIdOrNumber: string, history: SmsNotificatio
   let normalizedStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'STAFF_CONFIRMED_SENT' | 'FAILED' = 'NOT_SENT';
   if (hasSent) {
     normalizedStatus = 'STAFF_CONFIRMED_SENT';
-  } else if (allPending.some((r) => r.status === 'OPENED' || r.status === 'INITIATED')) {
+  } else if (allPending.some((r) => r.status === 'OPENED' || r.status === 'INITIATED' || r.status === 'PENDING_CONFIRMATION')) {
     normalizedStatus = 'OPENED';
   } else if (allPending.length > 0) {
     normalizedStatus = 'PREPARED';
-  } else if (sorted.some((r) => r.status === 'FAILED')) {
+  } else if (sorted.some((r) => isStatusFailed(r.status))) {
     normalizedStatus = 'FAILED';
   }
 
@@ -1025,21 +1429,16 @@ export function getCustomerNotificationSummary(
     };
   }
 
-  const isConfirmedSent = (r: SmsNotificationRecord) =>
-    r.status === 'STAFF_CONFIRMED_SENT' || r.status === 'SENT' || r.status === 'CARRIER_CONFIRMED_DELIVERED';
-  const isOpenedOrPending = (r: SmsNotificationRecord) =>
-    r.status === 'OPENED' || r.status === 'PREPARED' || r.status === 'INITIATED' || r.status === 'READY_TO_SEND';
+  const smsRecords = history.filter((h) => h.channel !== 'WHATSAPP' && !h.messageType?.includes('WHATSAPP'));
+  const whatsappRecords = history.filter((h) => h.channel === 'WHATSAPP' || h.messageType?.includes('WHATSAPP'));
 
-  const smsRecords = history.filter((h) => h.channel !== 'WHATSAPP');
-  const whatsappRecords = history.filter((h) => h.channel === 'WHATSAPP');
+  const sentSms = smsRecords.filter((r) => isStatusSent(r.status));
+  const pendingSms = smsRecords.filter((r) => isStatusPending(r.status));
+  const failedSms = smsRecords.filter((r) => isStatusFailed(r.status));
 
-  const sentSms = smsRecords.filter(isConfirmedSent);
-  const pendingSms = smsRecords.filter(isOpenedOrPending);
-  const failedSms = smsRecords.filter((r) => r.status === 'FAILED');
-
-  const sentWhatsapp = whatsappRecords.filter(isConfirmedSent);
-  const pendingWhatsapp = whatsappRecords.filter(isOpenedOrPending);
-  const failedWhatsapp = whatsappRecords.filter((r) => r.status === 'FAILED');
+  const sentWhatsapp = whatsappRecords.filter((r) => isStatusSent(r.status));
+  const pendingWhatsapp = whatsappRecords.filter((r) => isStatusPending(r.status));
+  const failedWhatsapp = whatsappRecords.filter((r) => isStatusFailed(r.status));
 
   let smsStatus: 'NOT_SENT' | 'PREPARED' | 'OPENED' | 'SENT' | 'FAILED' = 'NOT_SENT';
   if (sentSms.length > 0) smsStatus = 'SENT';
@@ -1053,16 +1452,16 @@ export function getCustomerNotificationSummary(
   else if (pendingWhatsapp.length > 0) whatsappStatus = 'PREPARED';
   else if (failedWhatsapp.length > 0) whatsappStatus = 'FAILED';
 
-  const allSent = history.filter(isConfirmedSent);
-  const allPending = history.filter(isOpenedOrPending);
-  const latestPending = history.find((r) => r.status === 'OPENED' || r.status === 'INITIATED');
+  const allSent = history.filter((r) => isStatusSent(r.status));
+  const allPending = history.filter((r) => isStatusPending(r.status));
+  const latestPending = history.find((r) => r.status === 'OPENED' || r.status === 'INITIATED' || r.status === 'PENDING_CONFIRMATION');
 
   let overallStatus: 'NOT_SENT' | 'AWAITING_CONFIRMATION' | 'SENT' | 'FAILED' = 'NOT_SENT';
   if (allSent.length > 0) {
     overallStatus = 'SENT';
-  } else if (allPending.some((r) => r.status === 'OPENED' || r.status === 'INITIATED')) {
+  } else if (allPending.some((r) => r.status === 'OPENED' || r.status === 'INITIATED' || r.status === 'PENDING_CONFIRMATION')) {
     overallStatus = 'AWAITING_CONFIRMATION';
-  } else if (history.some((r) => r.status === 'FAILED')) {
+  } else if (history.some((r) => isStatusFailed(r.status))) {
     overallStatus = 'FAILED';
   }
 
@@ -1127,13 +1526,7 @@ export function getPendingConfirmations(): SmsNotificationRecord[] {
   initializeSmsStorage();
   const list = Array.from(smsCache.values());
 
-  const pending = list.filter(
-    (r) =>
-      r.status === 'OPENED' ||
-      r.status === 'PREPARED' ||
-      r.status === 'INITIATED' ||
-      r.status === 'READY_TO_SEND'
-  );
+  const pending = list.filter((r) => isStatusPending(r.status));
 
   return pending.sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -1152,7 +1545,7 @@ export function hasRecentSmsNotification(
   }
 
   const active = history.find(
-    (h) => h.status === 'STAFF_CONFIRMED_SENT' || h.status === 'SENT' || h.status === 'OPENED' || h.status === 'INITIATED'
+    (h) => isStatusSent(h.status) || h.status === 'OPENED' || h.status === 'INITIATED'
   );
 
   return {

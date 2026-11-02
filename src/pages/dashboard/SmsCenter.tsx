@@ -87,6 +87,12 @@ export default function SmsCenter() {
     failedSms: number;
     pendingSms: number;
     whatsappSent: number;
+    notSentSms: number;
+    whatsappPending: number;
+    whatsappFailed: number;
+    totalNotifications: number;
+    uniqueCustomersNotified: number;
+    uniqueCustomersNotNotified: number;
   }>({
     totalSmsSent: 0,
     staffConfirmedSms: 0,
@@ -94,6 +100,12 @@ export default function SmsCenter() {
     failedSms: 0,
     pendingSms: 0,
     whatsappSent: 0,
+    notSentSms: 0,
+    whatsappPending: 0,
+    whatsappFailed: 0,
+    totalNotifications: 0,
+    uniqueCustomersNotified: 0,
+    uniqueCustomersNotNotified: 0,
   });
   const [statsLoading, setStatsLoading] = useState(false);
 
@@ -147,6 +159,12 @@ export default function SmsCenter() {
           failedSms: res.failedSms || 0,
           pendingSms: res.pendingSms || 0,
           whatsappSent: res.whatsappSent || 0,
+          notSentSms: res.notSentSms || 0,
+          whatsappPending: res.whatsappPending || 0,
+          whatsappFailed: res.whatsappFailed || 0,
+          totalNotifications: res.totalNotifications || 0,
+          uniqueCustomersNotified: res.uniqueCustomersNotified || 0,
+          uniqueCustomersNotNotified: res.uniqueCustomersNotNotified || 0,
         });
       }
     } catch (err) {
@@ -491,6 +509,45 @@ export default function SmsCenter() {
             </span>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Extended Metrics & Customer Reach Strip */}
+      <div className="flex items-center justify-between flex-wrap gap-2 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+        <div className="flex items-center gap-4 flex-wrap text-slate-600 dark:text-slate-400">
+          <span className="flex items-center gap-1.5 font-medium">
+            <span className="text-slate-400 font-normal">Total Notifications:</span>
+            <strong className="text-slate-800 dark:text-slate-200 font-bold">{statsLoading ? '...' : stats.totalNotifications}</strong>
+          </span>
+          <span className="text-slate-300 dark:text-slate-700">|</span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <span className="text-slate-400 font-normal">Unique Customers Notified:</span>
+            <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{statsLoading ? '...' : stats.uniqueCustomersNotified}</strong>
+          </span>
+          <span className="text-slate-300 dark:text-slate-700">|</span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <span className="text-slate-400 font-normal">WhatsApp Pending:</span>
+            <strong className="text-amber-600 dark:text-amber-400 font-bold">{statsLoading ? '...' : stats.whatsappPending}</strong>
+          </span>
+          {stats.whatsappFailed > 0 && (
+            <>
+              <span className="text-slate-300 dark:text-slate-700">|</span>
+              <span className="flex items-center gap-1.5 font-medium text-rose-600 dark:text-rose-400">
+                <span>WhatsApp Failed:</span>
+                <strong>{stats.whatsappFailed}</strong>
+              </span>
+            </>
+          )}
+          {stats.notSentSms > 0 && (
+            <>
+              <span className="text-slate-300 dark:text-slate-700">|</span>
+              <span className="flex items-center gap-1.5 font-medium text-slate-500">
+                <span>SMS Skipped:</span>
+                <strong>{stats.notSentSms}</strong>
+              </span>
+            </>
+          )}
+        </div>
+        <span className="text-[11px] text-slate-400 font-medium">Permanent Supabase Store</span>
       </div>
 
       {/* Primary Category Tabs */}
