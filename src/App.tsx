@@ -26,6 +26,7 @@ import { RouteSeo } from '@/components/Seo';
 import { ThemeProvider } from '@/context/ThemeContext';
 
 import BrandLogo from '@/components/BrandLogo';
+import WhatsAppChatWidget from '@/components/common/WhatsAppChatWidget';
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode, roles?: string[] }) {
   const { user, token, hasHydrated } = useAuthStore();
@@ -99,6 +100,7 @@ export default function App() {
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </ErrorBoundary>
+            <WhatsAppChatWidget />
             <Toaster position="top-right" richColors />
           </div>
         </Router>

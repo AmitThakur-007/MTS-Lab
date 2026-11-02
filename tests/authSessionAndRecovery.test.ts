@@ -60,42 +60,43 @@ test('3. ProtectedRoute blocks premature redirection until store hydration finis
   assert.ok(hydrationCheckIndex < tokenCheckIndex, 'Hydration check precedes token evaluation');
 });
 
-test('4. Backend /api/auth/forgot-password returns uniform zero-knowledge response', () => {
+test('4. Backend /api/auth/forgot-password validates staff eligibility against Staff Management DB', () => {
   const routePath = path.join(projectRoot, 'api/_server/routes/auth.ts');
   const content = fs.readFileSync(routePath, 'utf-8');
 
   const expectedMessage =
-    'If an account exists for this email address, password-reset instructions will be sent shortly. Please check your inbox and spam folder.';
+    'Invalid email address. Please enter the email registered with your staff account.';
 
   assert.ok(
     content.includes(expectedMessage),
-    'Backend defines mandatory generic forgot-password privacy message'
+    'Backend returns exact invalid staff email validation message'
   );
   assert.ok(
-    content.includes('maskEmailAddress'),
-    'Backend includes email masking helper to prevent disclosing user identities'
+    content.includes('AUTHORIZED_STAFF_ROLES'),
+    'Backend validates user against AUTHORIZED_STAFF_ROLES'
   );
-
-  // Check that non-existent users and disabled users get the exact same message
   assert.ok(
-    content.includes('UNIFORM_FORGOT_PASSWORD_MESSAGE'),
-    'Uniform message constant is used consistently across forgot-password responses'
+    content.includes('.is(\'deletedAt\', null)'),
+    'Backend excludes soft-deleted accounts'
   );
 });
 
-test('5. Frontend ForgotPassword page enforces zero-knowledge privacy and never leaks registered emails', () => {
+test('5. Frontend ForgotPassword page enforces staff-only recovery and requires registered staff email', () => {
   const forgotPath = path.join(projectRoot, 'src/pages/ForgotPassword.tsx');
   const content = fs.readFileSync(forgotPath, 'utf-8');
 
-  // Verify absence of user enumeration leaks
-  assert.ok(!content.includes('This email is not registered with MTS Lab'), 'Does not leak non-registered email error');
-  assert.ok(!content.includes('Email not found'), 'Does not disclose "Email not found"');
-  assert.ok(!content.includes('No user registered'), 'Does not disclose "No user registered"');
-
-  // Verify presence of mandatory uniform privacy copy
+  // Verify staff email requirement
   assert.ok(
-    content.includes('If an account exists for this email address, password-reset instructions will be sent shortly.'),
-    'Frontend contains the official uniform privacy message'
+    content.includes('Staff Email Address'),
+    'Frontend specifies Staff Email Address requirement'
+  );
+  assert.ok(
+    content.includes('Invalid email address. Please enter the email registered with your staff account.'),
+    'Frontend includes exact staff email error message'
+  );
+  assert.ok(
+    content.includes('recovery-email-error'),
+    'Frontend provides recovery-email-error accessibility ID'
   );
 
   // Verify BrandLogo integration and OTP countdowns

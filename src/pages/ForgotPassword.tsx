@@ -331,7 +331,7 @@ export default function ForgotPassword() {
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between ml-1">
                           <label htmlFor="recovery-email" className="text-xs font-semibold text-foreground">
-                            Staff Account Email Address
+                            Staff Email Address
                           </label>
                           <span className="text-[11px] text-muted-foreground font-medium">Registered Staff Only</span>
                         </div>
