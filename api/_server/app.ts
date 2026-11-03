@@ -25,6 +25,7 @@ import eventsRoutes from './routes/events';
 import publicRoutes from './routes/public';
 import seoRoutes from './routes/seo';
 import smsRoutes from './routes/sms';
+import technicianManagerRoutes from './routes/technicianManager';
 import { getSystemThemeConfigAsync } from './services/systemThemeService';
 import { supabaseAdmin } from './config/supabase';
 
@@ -105,6 +106,8 @@ export function createApp() {
   app.use('/api/upload', uploadRoutes);
   app.use('/api/events', eventsRoutes);
   app.use('/api/sms', smsRoutes);
+  app.use('/api/technician-manager', technicianManagerRoutes);
+  app.use('/api/technicians-manager', technicianManagerRoutes);
   app.use('/api/public', publicRoutes);
   app.use('/api', publicRoutes);
 

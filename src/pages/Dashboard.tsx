@@ -22,6 +22,7 @@ import TechnicianOverview from '@/pages/technician/TechnicianOverview';
 import TechnicianRepairs from '@/pages/technician/TechnicianRepairs';
 import TechnicianTransfers from '@/pages/technician/TechnicianTransfers';
 import ManagerDashboard from './dashboard/ManagerDashboard';
+import TechnicianManager from './dashboard/TechnicianManager';
 import Attendance from './dashboard/Attendance';
 import CourierManagement from './dashboard/CourierManagement';
 import RepairRelatedDamage from './dashboard/RepairRelatedDamage';
@@ -71,6 +72,9 @@ export default function Dashboard() {
           {/* Core Analytics & Operational Dashboards */}
           <Route path="overview" element={isTechnician ? <TechnicianOverview /> : <Overview />} />
           <Route path="manager" element={<ManagerDashboard />} />
+          <Route path="technician-manager/*" element={<TechnicianManager />} />
+          <Route path="technician-manager" element={<TechnicianManager />} />
+          <Route path="technicians-manager" element={<TechnicianManager />} />
 
           {/* Repair Workorders */}
           <Route path="repairs" element={isTechnician ? <TechnicianRepairs /> : <Repairs />} />

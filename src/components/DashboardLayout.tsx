@@ -38,7 +38,8 @@ import {
   Check,
   Smartphone,
   MessageSquare,
-  ArrowLeftRight
+  ArrowLeftRight,
+  UserCog
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
@@ -162,10 +163,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const fetchPendingTransferCount = async () => {
-    if (!isTechnicianRole) return;
+    const isManagementRole = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(user?.role || '');
+    if (!isTechnicianRole && !isManagementRole) return;
     try {
-      const data: any = await api.get('/repair-transfers/my-requests');
-      setPendingTransferCount(typeof data?.pendingIncomingCount === 'number' ? data.pendingIncomingCount : 0);
+      if (isTechnicianRole) {
+        const data: any = await api.get('/repair-transfers/my-requests');
+        setPendingTransferCount(typeof data?.pendingIncomingCount === 'number' ? data.pendingIncomingCount : 0);
+      } else if (isManagementRole) {
+        const data: any = await api.get('/technician-manager/transfers?status=PENDING');
+        setPendingTransferCount(typeof data?.pendingCount === 'number' ? data.pendingCount : 0);
+      }
     } catch {
       setPendingTransferCount(0);
     }
@@ -390,6 +397,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return [
       { name: user?.role === 'MANAGER' ? 'Manager Hub' : 'Overview', path: '/dashboard', icon: user?.role === 'MANAGER' ? Briefcase : LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'INVENTORY_MANAGER'] },
       { name: 'Repairs', path: '/dashboard/repairs', icon: ClipboardList, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+      { name: 'Technician Manager', path: '/dashboard/technician-manager', icon: UserCog, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
       { name: 'Customer Hub', path: '/dashboard/customers', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
       { name: 'SMS Center', path: '/dashboard/sms-center', icon: Smartphone, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
       { name: 'SMS Reports', path: '/dashboard/sms-reports', icon: MessageSquare, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
@@ -508,10 +516,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {navItems.map((item: any) => {
               const hasAlert = (item.name === 'Access Requests' && pendingAccessCount > 0) ||
                 (item.name === 'Attendance' && pendingAttendanceCount > 0) ||
-                (item.name === 'Transfers' && pendingTransferCount > 0);
+                (item.name === 'Transfers' && pendingTransferCount > 0) ||
+                (item.name === 'Technician Manager' && pendingTransferCount > 0);
               const alertCount = item.name === 'Access Requests'
                 ? pendingAccessCount
-                : item.name === 'Transfers'
+                : (item.name === 'Transfers' || item.name === 'Technician Manager')
                 ? pendingTransferCount
                 : pendingAttendanceCount;
               const active = isLinkActive(item);
