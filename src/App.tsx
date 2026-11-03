@@ -97,6 +97,16 @@ export default function App() {
                   } 
                 />
 
+                {/* Protected Dedicated Technician Workspace Routes */}
+                <Route 
+                  path="/technician/*" 
+                  element={
+                    <ProtectedRoute roles={['SUPER_ADMIN', 'ADMIN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'TECHNICIAN', 'TECHNICAL_ASSISTANT']}>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </ErrorBoundary>

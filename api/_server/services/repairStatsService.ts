@@ -174,7 +174,7 @@ export async function computeRepairDashboardStats(params: ComputeRepairStatsPara
   // System-wide query across all valid registered repairs
   let query = supabaseAdmin
     .from('Repair')
-    .select('id, status, priority, estimatedCost, totalCost, advancePaid, totalPaid, createdAt, updatedAt, technicianId, branchId');
+    .select('id, status, priority, estimatedCost, advancePaid, totalPaid, createdAt, updatedAt, technicianId, branchId, expectedCompletionDate');
 
   // Filter by branch if specified
   if (branchId && branchId !== 'ALL') {
@@ -239,7 +239,11 @@ export async function computeRepairDashboardStats(params: ComputeRepairStatsPara
   let myDelivered = 0;
   let myUrgent = 0;
   let myHigh = 0;
+  let myMedium = 0;
+  let myOverdue = 0;
   let myReProblem = 0;
+
+  const nowMs = Date.now();
 
   for (const r of allRecords) {
     totalRecords++;
@@ -283,7 +287,7 @@ export async function computeRepairDashboardStats(params: ComputeRepairStatsPara
     }
 
     const paid = Number(r.totalPaid) || Number(r.advancePaid) || 0;
-    const est = Number(r.estimatedCost) || Number(r.totalCost) || 0;
+    const est = Number(r.estimatedCost) || 0;
     totalPaidSum += isNaN(paid) ? 0 : paid;
     estimatedTotalSum += isNaN(est) ? 0 : est;
 
@@ -301,10 +305,74 @@ export async function computeRepairDashboardStats(params: ComputeRepairStatsPara
         if (PENDING_LIST.includes(s) || RECEIVED_LIST.includes(s)) myPending++;
         if (p === 'URGENT') myUrgent++;
         if (p === 'HIGH') myHigh++;
+        if (p === 'MEDIUM') myMedium++;
         if (RE_PROBLEM_LIST.includes(s)) myReProblem++;
+
+        // Overdue calculation: expectedCompletionDate earlier than current time
+        if (r.expectedCompletionDate) {
+          const dueMs = new Date(r.expectedCompletionDate).getTime();
+          if (!isNaN(dueMs) && dueMs < nowMs) {
+            myOverdue++;
+          }
+        }
       }
       if (REPAIRED_OR_READY_LIST.includes(s)) myRepaired++;
       if (isDelivered) myDelivered++;
+    }
+  }
+
+  // Calculate actual completion timeframes for the technician's completed jobs
+  let myCompletedToday = 0;
+  let myCompletedThisWeek = 0;
+  let myCompletedThisMonth = 0;
+
+  if (targetUserId) {
+    const completedRepairIds = allRecords
+      .filter(r => String(r.technicianId) === String(targetUserId) && (REPAIRED_OR_READY_LIST.includes((r.status || '').toUpperCase()) || DELIVERED_LIST.includes((r.status || '').toUpperCase())))
+      .map(r => r.id);
+
+    if (completedRepairIds.length > 0) {
+      try {
+        const { data: compLogs } = await supabaseAdmin
+          .from('RepairLog')
+          .select('repairId, createdAt')
+          .in('repairId', completedRepairIds)
+          .in('status', ['REPAIRED', 'READY_FOR_PICKUP', 'REPROBLEM_FIXED'])
+          .order('createdAt', { ascending: false });
+
+        const earliestCompMap: Record<string, string> = {};
+        if (Array.isArray(compLogs)) {
+          for (const l of compLogs) {
+            if (!earliestCompMap[l.repairId]) {
+              earliestCompMap[l.repairId] = l.createdAt;
+            }
+          }
+        }
+
+        const todayBounds = getNptIsoBoundsForPreset('TODAY');
+        const weekBounds = getNptIsoBoundsForPreset('THIS_WEEK');
+        const monthBounds = getNptIsoBoundsForPreset('THIS_MONTH');
+
+        const tStart = todayBounds.startIso ? new Date(todayBounds.startIso).getTime() : 0;
+        const tEnd = todayBounds.endIso ? new Date(todayBounds.endIso).getTime() : Infinity;
+        const wStart = weekBounds.startIso ? new Date(weekBounds.startIso).getTime() : 0;
+        const wEnd = weekBounds.endIso ? new Date(weekBounds.endIso).getTime() : Infinity;
+        const mStart = monthBounds.startIso ? new Date(monthBounds.startIso).getTime() : 0;
+        const mEnd = monthBounds.endIso ? new Date(monthBounds.endIso).getTime() : Infinity;
+
+        for (const repId of completedRepairIds) {
+          const repObj = allRecords.find(r => r.id === repId);
+          const compDate = earliestCompMap[repId] || repObj?.updatedAt || repObj?.createdAt;
+          if (compDate) {
+            const cMs = new Date(compDate).getTime();
+            if (cMs >= tStart && cMs < tEnd) myCompletedToday++;
+            if (cMs >= wStart && cMs < wEnd) myCompletedThisWeek++;
+            if (cMs >= mStart && cMs < mEnd) myCompletedThisMonth++;
+          }
+        }
+      } catch (logErr) {
+        console.warn('[TECH COMPLETED STATS WARN]', logErr);
+      }
     }
   }
 
@@ -352,8 +420,17 @@ export async function computeRepairDashboardStats(params: ComputeRepairStatsPara
     pending: myPending,
     repaired: myRepaired,
     delivered: myDelivered,
+    completed: myRepaired + myDelivered,
+    completedTotal: myRepaired + myDelivered,
     urgent: myUrgent,
     high: myHigh,
+    medium: myMedium,
+    priorityTotal: myUrgent + myHigh + myMedium,
+    overdue: myOverdue,
+    overdueCount: myOverdue,
+    completedToday: myCompletedToday,
+    completedThisWeek: myCompletedThisWeek,
+    completedThisMonth: myCompletedThisMonth,
     reProblem: myReProblem
   };
 

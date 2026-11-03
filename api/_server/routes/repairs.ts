@@ -500,6 +500,124 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ----------------------------------------------------
+// 1.8 GET /technician/completed-work — Authoritative Completed Work for Technician
+// ----------------------------------------------------
+router.get('/technician/completed-work', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const role = normalizeRole(req.user!.role);
+    const {
+      preset = 'ALL',
+      startDate,
+      endDate,
+      technicianId,
+      search,
+      page = '1',
+      limit = '20'
+    } = req.query as Record<string, string>;
+
+    const targetTechId = (role === 'TECHNICIAN' || !technicianId) ? req.user!.id : String(technicianId);
+
+    const validPreset: DateFilterPreset = (['ALL', 'TODAY', 'YESTERDAY', 'THIS_WEEK', 'THIS_MONTH', 'CUSTOM'].includes(String(preset).toUpperCase())
+      ? String(preset).toUpperCase()
+      : 'ALL') as DateFilterPreset;
+
+    const { startIso, endIso } = getNptIsoBoundsForPreset(validPreset, startDate, endDate);
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+
+    const COMPLETED_STATUSES = ['REPAIRED', 'READY_FOR_PICKUP', 'READY', 'DELIVERED', 'COMPLETED', 'REPROBLEM_FIXED'];
+
+    let repairQuery = supabaseAdmin
+      .from('Repair')
+      .select('id, repairNumber, customerId, customerName, customerPhone, deviceBrand, deviceModel, problemDescription, status, priority, partsUsed, remarks, technicianId, assignedAt, assignedByName, createdAt, updatedAt')
+      .eq('technicianId', targetTechId)
+      .in('status', COMPLETED_STATUSES);
+
+    if (search && search.trim()) {
+      const q = search.trim();
+      repairQuery = repairQuery.or(`repairNumber.ilike.%${q}%,customerName.ilike.%${q}%,deviceModel.ilike.%${q}%,problemDescription.ilike.%${q}%`);
+    }
+
+    const { data: repairs, error } = await repairQuery;
+
+    if (error) {
+      console.error('[TECHNICIAN COMPLETED WORK QUERY ERROR]', error);
+      return res.status(500).json({ error: 'Failed to load completed repairs.' });
+    }
+
+    const rawList = Array.isArray(repairs) ? repairs : [];
+    const repairIds = rawList.map(r => r.id);
+
+    // Look up exact completion timestamps from RepairLog
+    const completionDatesMap: Record<string, string> = {};
+    if (repairIds.length > 0) {
+      try {
+        const { data: logs } = await supabaseAdmin
+          .from('RepairLog')
+          .select('repairId, status, createdAt')
+          .in('repairId', repairIds)
+          .in('status', ['REPAIRED', 'READY_FOR_PICKUP', 'REPROBLEM_FIXED'])
+          .order('createdAt', { ascending: false });
+
+        if (Array.isArray(logs)) {
+          for (const l of logs) {
+            if (!completionDatesMap[l.repairId]) {
+              completionDatesMap[l.repairId] = l.createdAt;
+            }
+          }
+        }
+      } catch (logErr) {
+        console.warn('[COMPLETED WORK LOG LOOKUP WARN]', logErr);
+      }
+    }
+
+    const startMs = startIso ? new Date(startIso).getTime() : null;
+    const endMs = endIso ? new Date(endIso).getTime() : null;
+
+    const filtered = rawList.filter((repair) => {
+      const compDate = completionDatesMap[repair.id] || repair.updatedAt || repair.createdAt;
+      if (!compDate) return validPreset === 'ALL';
+
+      if (startMs !== null || endMs !== null) {
+        const compMs = new Date(compDate).getTime();
+        if (startMs !== null && compMs < startMs) return false;
+        if (endMs !== null && compMs >= endMs) return false;
+      }
+      return true;
+    });
+
+    // Sort by completion timestamp descending
+    filtered.sort((a, b) => {
+      const aTime = new Date(completionDatesMap[a.id] || a.updatedAt || a.createdAt).getTime();
+      const bTime = new Date(completionDatesMap[b.id] || b.updatedAt || b.createdAt).getTime();
+      return bTime - aTime;
+    });
+
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / limitNum));
+    const offset = (pageNum - 1) * limitNum;
+    const paged = filtered.slice(offset, offset + limitNum).map(r => ({
+      ...r,
+      completedAt: completionDatesMap[r.id] || r.updatedAt || r.createdAt
+    }));
+
+    return res.json({
+      success: true,
+      items: paged,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages,
+      preset: validPreset
+    });
+  } catch (err: any) {
+    console.error('[GET /technician/completed-work ERROR]', err);
+    return res.status(500).json({ error: 'Failed to retrieve technician completed work.' });
+  }
+});
+
+// ----------------------------------------------------
 // 2. GET /export — Export repairs to Excel
 // ----------------------------------------------------
 router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {

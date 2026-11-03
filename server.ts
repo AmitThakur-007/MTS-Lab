@@ -7,10 +7,14 @@ import { createApp } from './api/_server/app';
 
 dotenv.config();
 
-// Ensure base-ui patch is applied without failing if not needed
+// Ensure base-ui patch is applied if needed (fast in-process check)
 try {
-  if (fs.existsSync(path.join(process.cwd(), 'scripts', 'patch-base-ui.cjs'))) {
-    execSync('node scripts/patch-base-ui.cjs', { stdio: 'ignore' });
+  const checkFile = path.join(process.cwd(), 'node_modules/@base-ui/react/floating-ui-react/hooks/useDismiss.mjs');
+  if (fs.existsSync(checkFile)) {
+    const text = fs.readFileSync(checkFile, 'utf8');
+    if (!text.includes('passive: true') && fs.existsSync(path.join(process.cwd(), 'scripts', 'patch-base-ui.cjs'))) {
+      execSync('node scripts/patch-base-ui.cjs', { stdio: 'ignore' });
+    }
   }
 } catch (_) {}
 
@@ -42,7 +46,7 @@ async function startServer() {
         server: {
           middlewareMode: true,
           allowedHosts: true,
-          hmr: process.env.DISABLE_HMR === 'true' ? false : undefined,
+          hmr: false, // HMR disabled per environment constraints
         },
         appType: 'spa',
       });
@@ -71,7 +75,25 @@ async function startServer() {
 
   server.on('error', (err: any) => {
     console.error(`[SERVER ERROR on port ${PORT}]:`, err?.message || err);
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[PORT IN USE] Port ${PORT} occupied. Exiting to allow supervisor restart.`);
+      process.exit(1);
+    }
   });
+
+  const cleanup = () => {
+    server.close(() => {
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 1000).unref();
+  };
+
+  process.on('SIGTERM', cleanup);
+  process.on('SIGINT', cleanup);
 }
 
-startServer().catch(console.error);
+startServer().catch((err) => {
+  console.error('[FATAL SERVER STARTUP ERROR]:', err);
+  process.exit(1);
+});
+

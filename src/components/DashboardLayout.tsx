@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import BrandLogo from '@/components/BrandLogo';
 import { 
@@ -37,7 +37,8 @@ import {
   Laptop,
   Check,
   Smartphone,
-  MessageSquare
+  MessageSquare,
+  ArrowLeftRight
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
@@ -88,8 +89,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [unreadCount, setUnreadCount] = useState(0);
   const [pendingAccessCount, setPendingAccessCount] = useState(0);
   const [pendingAttendanceCount, setPendingAttendanceCount] = useState(0);
+  const [pendingTransferCount, setPendingTransferCount] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
+
+  const isTechnicianRole = [
+    'TECHNICIAN',
+    'LEAD_TECHNICIAN',
+    'HEAD_TECHNICIAN',
+    'TECHNICAL_ASSISTANT'
+  ].includes(user?.role || '');
 
   // Restore user-specific collapsed preference when logged in user changes
   useEffect(() => {
@@ -152,19 +161,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
+  const fetchPendingTransferCount = async () => {
+    if (!isTechnicianRole) return;
+    try {
+      const data: any = await api.get('/repair-transfers/my-requests');
+      setPendingTransferCount(typeof data?.pendingIncomingCount === 'number' ? data.pendingIncomingCount : 0);
+    } catch {
+      setPendingTransferCount(0);
+    }
+  };
+
   useEffect(() => {
     fetchNotifications();
     fetchPendingAccessCount();
     fetchPendingAttendance();
-  }, [user?.role]);
+    fetchPendingTransferCount();
+  }, [user?.role, isTechnicianRole]);
 
-  // Real-time synchronization across devices for notifications, access requests and attendance
+  // Real-time synchronization across devices for notifications, access requests, attendance and transfers
   useRealtimeSync(
-    ['notification', 'accessRequest', 'repair', 'user', 'attendance'],
+    ['notification', 'accessRequest', 'repair', 'user', 'attendance', 'repair_transfer'],
     () => {
       fetchNotifications();
       fetchPendingAccessCount();
       fetchPendingAttendance();
+      fetchPendingTransferCount();
     }
   );
 
@@ -184,7 +205,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     } else if (item.repairId) {
       navigate(`/dashboard/repairs/${item.repairId}`);
     } else if (item.type === 'TRANSFER_REQUEST' && (user?.role === 'TECHNICIAN' || user?.role === 'HEAD_TECHNICIAN' || user?.role === 'LEAD_TECHNICIAN')) {
-      navigate('/dashboard');
+      navigate('/technician/transfers');
     }
 
     const isUnread = !item.isRead && !item.read;
@@ -298,27 +319,96 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const roleInfo = getRoleDetails(user?.role);
   const RoleIcon = roleInfo.icon;
 
-  const navItems = [
-    { name: user?.role === 'MANAGER' ? 'Manager Hub' : 'Overview', path: '/dashboard', icon: user?.role === 'MANAGER' ? Briefcase : LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'INVENTORY_MANAGER', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN'] },
-    { name: 'Repairs', path: '/dashboard/repairs', icon: ClipboardList, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN'] },
-    { name: 'Customer Hub', path: '/dashboard/customers', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
-    { name: 'SMS Center', path: '/dashboard/sms-center', icon: Smartphone, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
-    { name: 'SMS Reports', path: '/dashboard/sms-reports', icon: MessageSquare, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
-    { name: 'New Repair', path: '/dashboard/repairs/new', icon: PlusCircle, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
-    { name: 'Courier Hub', path: '/dashboard/courier', icon: Truck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
-    { name: 'Battery Warranty Hub', path: '/dashboard/battery-warranty', icon: BatteryCharging, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
-    { name: 'Services & Repair Prices', path: '/dashboard/repair-prices', icon: Tag, roles: ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'] },
-    { name: 'Slideshow CMS', path: '/dashboard/slides', icon: Layers, roles: ['SUPER_ADMIN', 'ADMIN'] },
-    { name: 'Inventory Hub', path: '/dashboard/inventory', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER'] },
-    { name: 'Attendance', path: '/dashboard/attendance', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST', 'ACCOUNTANT'] },
-    { name: 'Repair-Related Damage', path: '/dashboard/repair-damage', icon: FileWarning, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST'] },
-    { name: 'Staff Management', path: '/dashboard/staff', icon: Users, roles: ['SUPER_ADMIN'] },
-    { name: 'Security & Surveillance', path: '/dashboard/security-surveillance', icon: ShieldCheck, roles: ['SUPER_ADMIN'] },
-    { name: 'Revenue Hub', path: '/dashboard/revenue', icon: BarChart3, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'ACCOUNTANT', 'LEAD_TECHNICIAN'] },
-    { name: 'Super Admin', path: '/dashboard/super-admin', icon: ShieldAlert, roles: ['SUPER_ADMIN'] },
-    { name: 'Theme Controller', path: '/dashboard/theme-controller', icon: Palette, roles: ['SUPER_ADMIN'] },
-    { name: 'Settings', path: '/dashboard/settings', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN', 'HEAD_TECHNICIAN', 'LEAD_TECHNICIAN', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'ACCOUNTANT'] },
-  ].filter(item => item.roles.includes(user?.role || ''));
+  const isLinkActive = (item: any) => {
+    const current = location.pathname;
+    if (item.path === '/technician/overview') {
+      return current === '/technician/overview' || current === '/technician' || (isTechnicianRole && (current === '/dashboard' || current === '/dashboard/overview'));
+    }
+    if (item.path === '/technician/repairs') {
+      return current === '/technician/repairs' || (isTechnicianRole && (current === '/dashboard/repairs' || current.startsWith('/dashboard/repairs/')));
+    }
+    if (item.path === '/technician/transfers') {
+      return current === '/technician/transfers' || (isTechnicianRole && current === '/dashboard/transfers');
+    }
+    if (item.path === '/dashboard') {
+      return current === '/dashboard' || current === '/dashboard/overview';
+    }
+    return current === item.path || (item.path !== '/dashboard' && current.startsWith(item.path));
+  };
+
+  const navItems = useMemo(() => {
+    if (isTechnicianRole) {
+      return [
+        {
+          name: 'Overview',
+          path: '/technician/overview',
+          icon: LayoutDashboard,
+          roles: ['TECHNICIAN', 'LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT'],
+        },
+        {
+          name: 'Repairs',
+          path: '/technician/repairs',
+          icon: Wrench,
+          roles: ['TECHNICIAN', 'LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT'],
+        },
+        {
+          name: 'Transfers',
+          path: '/technician/transfers',
+          icon: ArrowLeftRight,
+          roles: ['TECHNICIAN', 'LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT'],
+          badgeCount: pendingTransferCount,
+        },
+        {
+          name: 'Attendance',
+          path: '/dashboard/attendance',
+          icon: UserCheck,
+          roles: ['TECHNICIAN', 'LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT'],
+        },
+        {
+          name: 'Repair-Related Damage',
+          path: '/dashboard/repair-damage',
+          icon: FileWarning,
+          roles: ['TECHNICIAN', 'LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT'],
+        },
+        ...(user?.role === 'LEAD_TECHNICIAN' ? [
+          {
+            name: 'Revenue Hub',
+            path: '/dashboard/revenue',
+            icon: BarChart3,
+            roles: ['LEAD_TECHNICIAN'],
+          }
+        ] : []),
+        {
+          name: 'Settings',
+          path: '/dashboard/settings',
+          icon: Settings,
+          roles: ['TECHNICIAN', 'LEAD_TECHNICIAN', 'HEAD_TECHNICIAN', 'TECHNICAL_ASSISTANT'],
+        },
+      ];
+    }
+
+    return [
+      { name: user?.role === 'MANAGER' ? 'Manager Hub' : 'Overview', path: '/dashboard', icon: user?.role === 'MANAGER' ? Briefcase : LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'INVENTORY_MANAGER'] },
+      { name: 'Repairs', path: '/dashboard/repairs', icon: ClipboardList, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+      { name: 'Customer Hub', path: '/dashboard/customers', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+      { name: 'SMS Center', path: '/dashboard/sms-center', icon: Smartphone, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+      { name: 'SMS Reports', path: '/dashboard/sms-reports', icon: MessageSquare, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+      { name: 'New Repair', path: '/dashboard/repairs/new', icon: PlusCircle, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+      { name: 'Courier Hub', path: '/dashboard/courier', icon: Truck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+      { name: 'Battery Warranty Hub', path: '/dashboard/battery-warranty', icon: BatteryCharging, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+      { name: 'Services & Repair Prices', path: '/dashboard/repair-prices', icon: Tag, roles: ['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST'] },
+      { name: 'Slideshow CMS', path: '/dashboard/slides', icon: Layers, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { name: 'Inventory Hub', path: '/dashboard/inventory', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER'] },
+      { name: 'Attendance', path: '/dashboard/attendance', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT'] },
+      { name: 'Repair-Related Damage', path: '/dashboard/repair-damage', icon: FileWarning, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST'] },
+      { name: 'Staff Management', path: '/dashboard/staff', icon: Users, roles: ['SUPER_ADMIN'] },
+      { name: 'Security & Surveillance', path: '/dashboard/security-surveillance', icon: ShieldCheck, roles: ['SUPER_ADMIN'] },
+      { name: 'Revenue Hub', path: '/dashboard/revenue', icon: BarChart3, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'ACCOUNTANT'] },
+      { name: 'Super Admin', path: '/dashboard/super-admin', icon: ShieldAlert, roles: ['SUPER_ADMIN'] },
+      { name: 'Theme Controller', path: '/dashboard/theme-controller', icon: Palette, roles: ['SUPER_ADMIN'] },
+      { name: 'Settings', path: '/dashboard/settings', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'RECEPTIONIST', 'INVENTORY_MANAGER', 'ACCOUNTANT'] },
+    ].filter(item => item.roles.includes(user?.role || ''));
+  }, [user?.role, isTechnicianRole, pendingTransferCount]);
 
   return (
     <div className="flex h-screen bg-[#f8f9fa] dark:bg-slate-950 overflow-hidden font-sans transition-colors">
@@ -415,23 +505,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             )}
 
-            {navItems.map((item) => {
-              const hasAlert = (item.name === 'Access Requests' && pendingAccessCount > 0) || (item.name === 'Attendance' && pendingAttendanceCount > 0);
-              const alertCount = item.name === 'Access Requests' ? pendingAccessCount : pendingAttendanceCount;
+            {navItems.map((item: any) => {
+              const hasAlert = (item.name === 'Access Requests' && pendingAccessCount > 0) ||
+                (item.name === 'Attendance' && pendingAttendanceCount > 0) ||
+                (item.name === 'Transfers' && pendingTransferCount > 0);
+              const alertCount = item.name === 'Access Requests'
+                ? pendingAccessCount
+                : item.name === 'Transfers'
+                ? pendingTransferCount
+                : pendingAttendanceCount;
+              const active = isLinkActive(item);
 
               // When collapsed on desktop, render as icon with Tooltip
               if (isCollapsed) {
                 return (
                   <div key={item.path} className="relative">
-                    {/* Collapsed desktop icon */}
+                    {/* Collapsed desktop icon with Tooltip title */}
                     <div className="hidden md:block">
                       <NavLink
                         to={item.path}
-                        end={item.path === '/dashboard'}
                         title={item.name}
-                        className={({ isActive }) => cn(
+                        className={cn(
                           "relative flex items-center justify-center w-11 h-11 mx-auto rounded-xl transition-all group cursor-pointer",
-                          isActive 
+                          active 
                             ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950 shadow-md font-extrabold" 
                             : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-white"
                         )}
@@ -439,7 +535,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       >
                         <item.icon className="h-4 w-4 shrink-0 transition-transform group-hover:scale-110" />
                         {hasAlert && (
-                          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900 animate-pulse" />
+                          <span className={cn(
+                            "absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-slate-900 animate-pulse",
+                            item.name === 'Transfers' ? "bg-amber-500" : "bg-rose-500"
+                          )} />
                         )}
                       </NavLink>
                     </div>
@@ -448,10 +547,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <div className="md:hidden">
                       <NavLink
                         to={item.path}
-                        end={item.path === '/dashboard'}
-                        className={({ isActive }) => cn(
+                        className={cn(
                           "flex items-center justify-between px-3 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all group min-h-[40px]",
-                          isActive 
+                          active 
                             ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950 shadow-md shadow-slate-950/15 font-extrabold" 
                             : "text-slate-600 dark:text-slate-400 hover:bg-slate-100/90 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-white"
                         )}
@@ -462,7 +560,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           <span className="truncate">{item.name}</span>
                         </span>
                         {hasAlert && (
-                          <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-black rounded-full bg-rose-500 text-white shadow-xs animate-pulse shrink-0">
+                          <span className={cn(
+                            "flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-black rounded-full shadow-xs animate-pulse shrink-0",
+                            item.name === 'Transfers' ? "bg-amber-500 text-slate-950" : "bg-rose-500 text-white"
+                          )}>
                             {alertCount}
                           </span>
                         )}
@@ -477,10 +578,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <NavLink
                   key={item.path}
                   to={item.path}
-                  end={item.path === '/dashboard'}
-                  className={({ isActive }) => cn(
+                  className={cn(
                     "flex items-center justify-between px-3 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all group min-h-[40px]",
-                    isActive 
+                    active 
                       ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950 shadow-md shadow-slate-950/15 font-extrabold" 
                       : "text-slate-600 dark:text-slate-400 hover:bg-slate-100/90 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-white"
                   )}
@@ -490,14 +590,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <item.icon className="h-4 w-4 shrink-0" />
                     <span className="truncate">{item.name}</span>
                   </span>
-                  {item.name === 'Access Requests' && pendingAccessCount > 0 && (
-                    <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-black rounded-full bg-rose-500 text-white shadow-xs animate-pulse shrink-0">
-                      {pendingAccessCount}
-                    </span>
-                  )}
-                  {item.name === 'Attendance' && pendingAttendanceCount > 0 && (
-                    <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-black rounded-full bg-amber-500 text-white shadow-xs animate-pulse shrink-0">
-                      {pendingAttendanceCount}
+                  {hasAlert && (
+                    <span className={cn(
+                      "flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-black rounded-full shadow-xs animate-pulse shrink-0",
+                      item.name === 'Transfers' ? "bg-amber-500 text-slate-950" : "bg-rose-500 text-white"
+                    )}>
+                      {alertCount}
                     </span>
                   )}
                   {item.path.includes('new') && (

@@ -18,6 +18,9 @@ import ThemeController from './dashboard/ThemeController';
 import AccessRequests from './dashboard/AccessRequests';
 import SecuritySurveillance from './dashboard/SecuritySurveillance';
 import TechnicianDashboard from './dashboard/TechnicianDashboard';
+import TechnicianOverview from '@/pages/technician/TechnicianOverview';
+import TechnicianRepairs from '@/pages/technician/TechnicianRepairs';
+import TechnicianTransfers from '@/pages/technician/TechnicianTransfers';
 import ManagerDashboard from './dashboard/ManagerDashboard';
 import Attendance from './dashboard/Attendance';
 import CourierManagement from './dashboard/CourierManagement';
@@ -45,7 +48,7 @@ export default function Dashboard() {
 
   // Compute default landing component based on authenticated role
   const defaultElement = useMemo(() => {
-    if (isTechnician) return <TechnicianDashboard />;
+    if (isTechnician) return <TechnicianOverview />;
     if (isManager) return <ManagerDashboard />;
     return <Overview />;
   }, [isTechnician, isManager]);
@@ -58,13 +61,19 @@ export default function Dashboard() {
           {/* Default Role-Based Index Landing */}
           <Route index element={defaultElement} />
 
+          {/* Dedicated Technician Workspace Destinations */}
+          <Route path="technician" element={<TechnicianOverview />} />
+          <Route path="technician/overview" element={<TechnicianOverview />} />
+          <Route path="technician/repairs" element={<TechnicianRepairs />} />
+          <Route path="technician/transfers" element={<TechnicianTransfers />} />
+          <Route path="transfers" element={isTechnician ? <TechnicianTransfers /> : <Repairs />} />
+
           {/* Core Analytics & Operational Dashboards */}
-          <Route path="overview" element={<Overview />} />
+          <Route path="overview" element={isTechnician ? <TechnicianOverview /> : <Overview />} />
           <Route path="manager" element={<ManagerDashboard />} />
-          <Route path="technician" element={<TechnicianDashboard />} />
 
           {/* Repair Workorders */}
-          <Route path="repairs" element={isTechnician ? <TechnicianDashboard /> : <Repairs />} />
+          <Route path="repairs" element={isTechnician ? <TechnicianRepairs /> : <Repairs />} />
           <Route path="repairs/new" element={<NewRepair />} />
           <Route path="repairs/:id" element={<RepairDetails />} />
 
