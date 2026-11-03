@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useId } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Send, MessageSquare, Sparkles, AlertCircle, ArrowUpRight, Check, Phone } from 'lucide-react';
+import { X, Send, MessageSquare, AlertCircle, ArrowUpRight, Check, Phone } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import { useAppTheme } from '@/context/ThemeContext';
 import { getMtsLabOpenStatus, OPERATING_HOURS } from '@/lib/businessHours';
@@ -371,10 +371,7 @@ export default function WhatsAppChatWidget() {
               {/* Quick Inquiry Options */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-400 px-0.5">
-                  <span className="flex items-center gap-1.5">
-                    <Sparkles className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
-                    <span>Quick Inquiries (click to edit):</span>
-                  </span>
+                  <span>Quick Inquiries (click to edit):</span>
                 </div>
 
                 {/* Wrap pill buttons, compact touch-friendly targets */}

@@ -20,7 +20,6 @@ import {
   RefreshCw,
   ExternalLink,
   MessageSquare,
-  Sparkles,
   Info
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';

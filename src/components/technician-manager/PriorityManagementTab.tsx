@@ -15,7 +15,6 @@ import {
   SlidersHorizontal,
   ChevronRight,
   ShieldAlert,
-  Sparkles,
   Info,
   ArrowUpRight,
   UserCheck

@@ -16,7 +16,6 @@ import {
   Send,
   AlertTriangle,
   RotateCcw,
-  Sparkles,
   ChevronRight,
   ShieldCheck,
   Check,
@@ -285,9 +284,8 @@ export const TransferRequestsTab: React.FC<TransferRequestsTabProps> = ({
         <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
           <Button
             onClick={() => setIsDirectTransferOpen(true)}
-            className="rounded-xl h-10 px-4 font-extrabold text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 gap-2 cursor-pointer w-full sm:w-auto"
+            className="rounded-xl h-10 px-4 font-extrabold text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 cursor-pointer w-full sm:w-auto"
           >
-            <Sparkles className="w-4 h-4" />
             <span>Direct Management Transfer</span>
           </Button>
         </div>
@@ -607,7 +605,7 @@ export const TransferRequestsTab: React.FC<TransferRequestsTabProps> = ({
         <DialogContent className="max-w-lg rounded-3xl p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           <DialogHeader>
             <DialogTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              <ArrowRightLeft className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               <span>Direct Management Transfer</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">

@@ -215,12 +215,16 @@ export default function Navbar() {
                   className={cn(
                     "text-xs sm:text-sm font-semibold px-4 sm:px-4.5 py-1.5 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2",
                     isActive 
-                      ? isHeroOverlay
-                        ? "bg-white text-slate-950 font-bold shadow-md" 
-                        : "bg-slate-950 dark:bg-white text-white dark:text-slate-950 font-bold shadow-md"
-                      : isHeroOverlay
-                        ? "text-slate-200 hover:text-white hover:bg-white/10"
-                        : "text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/15"
+                      ? isDark
+                        ? "bg-slate-800 text-white font-bold border border-slate-700/80 shadow-sm"
+                        : isHeroOverlay
+                          ? "bg-white text-slate-950 dark:bg-slate-800 dark:text-white dark:border dark:border-slate-700/80 font-bold shadow-md" 
+                          : "bg-slate-950 text-white dark:bg-slate-800 dark:text-white dark:border dark:border-slate-700/80 font-bold shadow-md"
+                      : isDark
+                        ? "text-slate-300 hover:text-white hover:bg-slate-800/80"
+                        : isHeroOverlay
+                          ? "text-slate-200 hover:text-white hover:bg-white/10 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/80"
+                          : "text-slate-700 hover:text-slate-950 hover:bg-slate-200/60 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/80"
                   )}
                 >
                   {link.name}

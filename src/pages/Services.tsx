@@ -2076,9 +2076,9 @@ export default function Services() {
                 </Button>
                 <a
                   href={`tel:${MTS_PHONE}`}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-bold text-sm transition-all"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 font-bold text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
                 >
-                  <PhoneCall className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <PhoneCall className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>Call MTS ({MTS_PHONE_DISPLAY})</span>
                 </a>
               </div>
@@ -2395,9 +2395,9 @@ export default function Services() {
               <a
                 id="cta-call-mts"
                 href={`tel:${MTS_PHONE}`}
-                className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-2xl bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-950 font-black text-xs sm:text-sm shadow-md transition-all cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-2xl bg-white hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-950 dark:text-white border border-slate-200 dark:border-slate-600 font-black text-xs sm:text-sm shadow-md transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 active:scale-[0.98]"
               >
-                <PhoneCall className="w-4 h-4 text-emerald-600 shrink-0" />
+                <PhoneCall className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>Call MTS ({MTS_PHONE_DISPLAY})</span>
               </a>
 
