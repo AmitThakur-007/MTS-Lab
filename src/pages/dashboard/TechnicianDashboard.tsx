@@ -83,6 +83,12 @@ import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import UserOverviewCards from '@/components/dashboard/UserOverviewCards';
 import { Pagination } from '@/components/common/Pagination';
 import { REPAIRS_PER_PAGE } from '@/lib/pagination';
+import { detectDeviceCategory } from '@/pages/technician/types';
+import {
+  TechnicianOverviewSkeleton,
+  TechnicianRepairsSkeleton,
+  TechnicianTransfersSkeleton
+} from '@/pages/technician/TechnicianSkeletons';
 
 export type MainWorkspaceSection = 'OVERVIEW' | 'REPAIRS' | 'COMPLETED' | 'TRANSFERS';
 
@@ -902,15 +908,10 @@ export default function TechnicianDashboard() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3 bg-[#f8f9fa] dark:bg-slate-950">
-        <Loader2 className="h-10 w-10 animate-spin text-indigo-600 dark:text-indigo-400" />
-        <p className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-widest">
-          Loading Technician Workspace...
-        </p>
-      </div>
-    );
+  if (loading && repairs.length === 0) {
+    if (mainSection === 'REPAIRS') return <TechnicianRepairsSkeleton viewMode={viewMode} />;
+    if (mainSection === 'TRANSFERS') return <TechnicianTransfersSkeleton />;
+    return <TechnicianOverviewSkeleton />;
   }
 
   return (
@@ -1951,32 +1952,37 @@ export default function TechnicianDashboard() {
                           "rounded-3xl border transition-all hover:shadow-xl overflow-hidden flex flex-col justify-between bg-white dark:bg-slate-900 min-w-0",
                           priorityMeta.cardBorder
                         )}>
-                          <CardHeader className={cn("p-4 sm:p-5 pb-3 space-y-3", priorityMeta.headerBg)}>
-                            <div className="flex items-center justify-between gap-2 flex-wrap">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-mono font-black text-xs bg-slate-950 text-white px-2.5 py-1 rounded-xl shadow-xs">
+                          <CardHeader className={cn("p-4 sm:p-5 pb-3 space-y-2.5", priorityMeta.headerBg)}>
+                            <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                <span className="font-mono font-black text-xs bg-slate-950 text-white px-2.5 py-1 rounded-xl shadow-xs shrink-0">
                                   #{repair.repairNumber}
                                 </span>
-                                <Badge className={cn("text-[10px] uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1 shrink-0", priorityMeta.badgeClass)}>
+                                <Badge variant="outline" className="text-[10px] font-bold px-2.5 py-1 rounded-md border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-800/60 shrink-0">
+                                  {detectDeviceCategory(repair)}
+                                </Badge>
+                                <Badge className={cn("text-[10px] uppercase px-2.5 py-1 rounded-full flex items-center gap-1 shrink-0", priorityMeta.badgeClass)}>
                                   <PriorityIcon className="h-3 w-3" />
                                   <span>{priorityMeta.label}</span>
                                 </Badge>
                                 {repair.isCourierIn && (
-                                  <Badge variant="outline" className="text-[9px] bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 flex items-center gap-1 font-bold">
+                                  <Badge variant="outline" className="text-[9px] bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 flex items-center gap-1 font-bold px-2 py-0.5 shrink-0">
                                     <Truck className="h-2.5 w-2.5" />
                                     Courier
                                   </Badge>
                                 )}
                                 {isOverdue && (
-                                  <Badge className="text-[9px] bg-rose-600 text-white font-extrabold px-2 py-0.5 rounded-full animate-pulse">
+                                  <Badge className="text-[9px] bg-rose-600 text-white font-extrabold px-2 py-0.5 rounded-full animate-pulse shrink-0">
                                     Overdue
                                   </Badge>
                                 )}
                               </div>
 
-                              <Badge className={cn("text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border shrink-0", statusInfo.badge)}>
-                                {statusInfo.label}
-                              </Badge>
+                              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                                <Badge className={cn("text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full border whitespace-nowrap inline-flex items-center shrink-0 shadow-2xs", statusInfo.badge)}>
+                                  {statusInfo.label}
+                                </Badge>
+                              </div>
                             </div>
 
                             <div className="space-y-1 min-w-0">
@@ -2145,26 +2151,26 @@ export default function TechnicianDashboard() {
                           <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-white">
                             #{repair.repairNumber}
                           </td>
-                          <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-200">
+                          <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-200 max-w-[180px] truncate" title={`${repair.deviceBrand} ${repair.deviceModel}`}>
                             {repair.deviceBrand} {repair.deviceModel}
                           </td>
-                          <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
+                          <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 max-w-[160px] truncate" title={repair.customerName || 'Customer'}>
                             {repair.customerName || 'Customer'}
                           </td>
                           <td className="py-3.5 px-4 max-w-xs truncate text-slate-600 dark:text-slate-400" title={repair.problemDescription}>
                             {repair.problemDescription || 'Inspection'}
                           </td>
-                          <td className="py-3.5 px-4">
-                            <Badge className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full", priorityMeta.badgeClass)}>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <Badge className={cn("text-[10px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap inline-flex items-center", priorityMeta.badgeClass)}>
                               {priorityMeta.label}
                             </Badge>
                           </td>
-                          <td className="py-3.5 px-4">
-                            <Badge className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border", statusInfo.badge)}>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <Badge className={cn("text-[10px] font-bold px-3 py-1 rounded-full border whitespace-nowrap inline-flex items-center shrink-0 shadow-2xs", statusInfo.badge)}>
                               {statusInfo.label}
                             </Badge>
                           </td>
-                          <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">
+                          <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap">
                             {repair.expectedCompletionDate ? format(new Date(repair.expectedCompletionDate), 'dd MMM yyyy') : '—'}
                           </td>
                           <td className="py-3.5 px-4 text-right">

@@ -492,8 +492,8 @@ export const PriorityManagementTab: React.FC<PriorityManagementTabProps> = ({
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-3">
-                        <Badge className={`${sStyle.badge} text-xs font-normal border-0`}>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <Badge className={`${sStyle.badge} text-xs font-medium px-3 py-1 rounded-full border-0 whitespace-nowrap inline-flex items-center shrink-0`}>
                           {sStyle.label}
                         </Badge>
                       </td>

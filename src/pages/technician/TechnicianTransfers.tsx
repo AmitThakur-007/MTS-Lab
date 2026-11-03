@@ -48,6 +48,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import TechnicianHeader from './TechnicianHeader';
+import { TechnicianTransfersSkeleton } from './TechnicianSkeletons';
 
 export type TransferTab = 'INCOMING' | 'OUTGOING' | 'HISTORY';
 
@@ -215,15 +216,8 @@ export default function TechnicianTransfers() {
     });
   }, [activeTab, incomingTransfers, outgoingTransfers, historyTransfers, searchQuery]);
 
-  if (loading) {
-    return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3 bg-[#f8f9fa] dark:bg-slate-950">
-        <Loader2 className="h-10 w-10 animate-spin text-amber-500" />
-        <p className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-widest">
-          Loading Device Transfers Hub...
-        </p>
-      </div>
-    );
+  if (loading && incomingTransfers.length === 0 && outgoingTransfers.length === 0 && historyTransfers.length === 0) {
+    return <TechnicianTransfersSkeleton />;
   }
 
   return (
@@ -351,62 +345,64 @@ export default function TechnicianTransfers() {
 
       {/* 3. Tab Bar & Search Toolbar */}
       <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3.5 transition-colors">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          {/* Tabs */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <button
-              type="button"
-              onClick={() => setActiveTab('INCOMING')}
-              className={cn(
-                "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer",
-                activeTab === 'INCOMING'
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-              )}
-            >
-              <Inbox className="h-3.5 w-3.5" />
-              <span>Incoming Transfers</span>
-              <span className={cn(
-                "text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold",
-                pendingIncomingCount > 0 ? "bg-amber-500 text-slate-950" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
-              )}>
-                {incomingTransfers.length}
-              </span>
-            </button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 min-w-0">
+          {/* Responsive Horizontally Scrollable Tabs without Page Blowout */}
+          <div className="w-full sm:w-auto overflow-x-auto no-scrollbar scroll-smooth -mx-1 sm:mx-0 px-1 sm:px-0">
+            <div className="inline-flex items-center gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 min-w-max">
+              <button
+                type="button"
+                onClick={() => setActiveTab('INCOMING')}
+                className={cn(
+                  "px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer",
+                  activeTab === 'INCOMING'
+                    ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                )}
+              >
+                <Inbox className="h-3.5 w-3.5" />
+                <span>Incoming Transfers</span>
+                <span className={cn(
+                  "text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold",
+                  pendingIncomingCount > 0 ? "bg-amber-500 text-slate-950" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                )}>
+                  {incomingTransfers.length}
+                </span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('OUTGOING')}
-              className={cn(
-                "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer",
-                activeTab === 'OUTGOING'
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-              )}
-            >
-              <Send className="h-3.5 w-3.5" />
-              <span>Outgoing Requests</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                {outgoingTransfers.length}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('OUTGOING')}
+                className={cn(
+                  "px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer",
+                  activeTab === 'OUTGOING'
+                    ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                )}
+              >
+                <Send className="h-3.5 w-3.5" />
+                <span>Outgoing Requests</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                  {outgoingTransfers.length}
+                </span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('HISTORY')}
-              className={cn(
-                "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer",
-                activeTab === 'HISTORY'
-                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-              )}
-            >
-              <History className="h-3.5 w-3.5" />
-              <span>Transfer Audit Log</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                {historyTransfers.length}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('HISTORY')}
+                className={cn(
+                  "px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer",
+                  activeTab === 'HISTORY'
+                    ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                )}
+              >
+                <History className="h-3.5 w-3.5" />
+                <span>Transfer Audit Log</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                  {historyTransfers.length}
+                </span>
+              </button>
+            </div>
           </div>
 
           {/* Search Box */}
@@ -463,12 +459,12 @@ export default function TechnicianTransfers() {
                 )}
               >
                 <CardHeader className="p-4 pb-3 border-b border-slate-100 dark:border-slate-800/80 space-y-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono font-bold text-xs bg-slate-950 dark:bg-white text-white dark:text-slate-950 px-2.5 py-0.5 rounded-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                    <span className="font-mono font-bold text-xs bg-slate-950 dark:bg-white text-white dark:text-slate-950 px-2.5 py-1 rounded-lg shrink-0 shadow-xs">
                       #{transfer.repairNumber}
                     </span>
                     <Badge className={cn(
-                      "text-[10px] font-bold px-2.5 py-0.5 rounded-full border",
+                      "text-[10px] font-bold px-3 py-1 rounded-full border whitespace-nowrap inline-flex items-center shrink-0 shadow-2xs",
                       isPending ? "bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border-amber-300" :
                       transfer.status === 'ACCEPTED' ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300" :
                       "bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border-rose-300"
@@ -478,9 +474,9 @@ export default function TechnicianTransfers() {
                   </div>
                 </CardHeader>
 
-                <CardContent className="p-4 sm:p-5 space-y-3.5 flex-1 flex flex-col justify-between">
-                  <div className="space-y-2.5">
-                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                <CardContent className="p-4 sm:p-5 space-y-3.5 flex-1 flex flex-col justify-between min-w-0">
+                  <div className="space-y-2.5 min-w-0">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 min-w-0 truncate" title={isIncoming ? (transfer.senderTechnicianName || 'Technician') : (transfer.targetTechnicianName || 'Specialist')}>
                       {isIncoming ? (
                         <>
                           <span className="font-semibold text-slate-400">From Colleague:</span>{' '}
@@ -494,15 +490,15 @@ export default function TechnicianTransfers() {
                       )}
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 text-xs">
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 text-xs min-w-0">
                       <span className="font-bold text-slate-400 uppercase text-[10px] block mb-0.5">Transfer Reason</span>
-                      <p className="text-slate-700 dark:text-slate-300">{transfer.reason}</p>
+                      <p className="text-slate-700 dark:text-slate-300 break-words leading-relaxed">{transfer.reason}</p>
                     </div>
 
                     {transfer.responseNote && (
-                      <div className="p-2.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-800/40 text-xs">
+                      <div className="p-2.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-800/40 text-xs min-w-0">
                         <span className="font-bold text-indigo-700 dark:text-indigo-300 uppercase text-[10px] block mb-0.5">Response Note</span>
-                        <p className="text-slate-700 dark:text-slate-300">{transfer.responseNote}</p>
+                        <p className="text-slate-700 dark:text-slate-300 break-words leading-relaxed">{transfer.responseNote}</p>
                       </div>
                     )}
 

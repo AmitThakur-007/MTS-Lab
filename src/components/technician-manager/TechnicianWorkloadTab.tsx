@@ -347,11 +347,11 @@ export const TechnicianWorkloadTab: React.FC<TechnicianWorkloadTabProps> = ({
                           <span className="font-mono font-black text-xs text-indigo-600 dark:text-indigo-400">
                             #{repair.repairNumber}
                           </span>
-                          <div className="flex items-center gap-1">
-                            <Badge variant="outline" className={`text-[9px] font-extrabold px-1.5 py-0 ${priorityMeta.badgeClass}`}>
+                          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                            <Badge variant="outline" className={`text-[9px] font-extrabold px-2 py-0.5 whitespace-nowrap shrink-0 ${priorityMeta.badgeClass}`}>
                               {priorityMeta.indicatorText}
                             </Badge>
-                            <Badge variant="outline" className={`text-[9px] font-bold px-1.5 py-0 ${statusMeta.badge}`}>
+                            <Badge variant="outline" className={`text-[9px] font-bold px-2.5 py-0.5 whitespace-nowrap shrink-0 ${statusMeta.badge}`}>
                               {statusMeta.label}
                             </Badge>
                           </div>

@@ -58,6 +58,7 @@ import { formatTimeAgo } from '@/lib/timeUtils';
 import { getNepalCalendarInfo } from '@/lib/nepalDate';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { TechnicianRepairsSkeleton } from './TechnicianSkeletons';
 import { cn } from '@/lib/utils';
 import { Pagination } from '@/components/common/Pagination';
 import { REPAIRS_PER_PAGE } from '@/lib/pagination';
@@ -442,15 +443,8 @@ export default function TechnicianRepairs() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3 bg-[#f8f9fa] dark:bg-slate-950">
-        <Loader2 className="h-10 w-10 animate-spin text-indigo-600 dark:text-indigo-400" />
-        <p className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-widest">
-          Loading Repairs Bench...
-        </p>
-      </div>
-    );
+  if (loading && repairs.length === 0) {
+    return <TechnicianRepairsSkeleton viewMode={viewMode} />;
   }
 
   return (
@@ -762,70 +756,70 @@ export default function TechnicianRepairs() {
                     priorityMeta.cardBorder
                   )}
                 >
-                  <CardHeader className={cn("p-4 pb-3 border-b border-slate-100 dark:border-slate-800/80 space-y-0", priorityMeta.headerBg)}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-mono font-bold text-xs bg-slate-950 dark:bg-white text-white dark:text-slate-950 px-2.5 py-0.5 rounded-lg shrink-0">
+                  <CardHeader className={cn("p-4 pb-3 border-b border-slate-100 dark:border-slate-800/80 space-y-2.5", priorityMeta.headerBg)}>
+                    <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        <span className="font-mono font-bold text-xs bg-slate-950 dark:bg-white text-white dark:text-slate-950 px-2.5 py-1 rounded-lg shrink-0 shadow-xs">
                           #{repair.repairNumber}
                         </span>
-                        <Badge variant="outline" className="text-[10px] font-bold px-2 py-0 rounded-md border-slate-200 dark:border-slate-700">
+                        <Badge variant="outline" className="text-[10px] font-bold px-2.5 py-1 rounded-md border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-800/60 shrink-0">
                           {category}
+                        </Badge>
+                        <Badge className={cn("text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0", priorityMeta.badgeClass)}>
+                          {priorityMeta.label}
                         </Badge>
                       </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Badge className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full", priorityMeta.badgeClass)}>
-                          {priorityMeta.label}
-                        </Badge>
-                        <Badge className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border", statusInfo.badge)}>
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                        <Badge className={cn("text-[10px] font-bold px-3 py-1 rounded-full border whitespace-nowrap inline-flex items-center shrink-0 shadow-2xs", statusInfo.badge)}>
                           {statusInfo.label}
                         </Badge>
                       </div>
                     </div>
                   </CardHeader>
 
-                  <CardContent className="p-4 sm:p-5 space-y-3.5 flex-1 flex flex-col justify-between">
-                    <div className="space-y-2.5">
-                      <div>
-                        <div className="text-sm font-black text-slate-900 dark:text-white truncate">
+                  <CardContent className="p-4 sm:p-5 space-y-3.5 flex-1 flex flex-col justify-between min-w-0">
+                    <div className="space-y-2.5 min-w-0">
+                      <div className="min-w-0">
+                        <div className="text-sm font-black text-slate-900 dark:text-white truncate" title={`${repair.deviceBrand} ${repair.deviceModel}`}>
                           {repair.deviceBrand} {repair.deviceModel}
                         </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate" title={repair.customerName ? `${repair.customerName} ${repair.customerPhone || ''}` : 'Walk-in'}>
                           Customer: <strong className="text-slate-800 dark:text-slate-200">{repair.customerName || 'Walk-in'}</strong>
                           {repair.customerPhone ? ` • ${repair.customerPhone}` : ''}
                         </div>
                       </div>
 
-                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 text-xs">
+                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 text-xs min-w-0">
                         <span className="font-bold text-slate-400 uppercase text-[10px] block mb-0.5">Problem</span>
-                        <p className="text-slate-700 dark:text-slate-300 line-clamp-2">
+                        <p className="text-slate-700 dark:text-slate-300 font-medium line-clamp-2 break-words" title={repair.problemDescription}>
                           {repair.problemDescription || 'Inspection required'}
                         </p>
                       </div>
 
                       {/* Technical Details: Expected due, Serial/IMEI, parts */}
                       <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                        <div>
+                        <div className="min-w-0">
                           <span className="font-semibold block text-[10px] uppercase text-slate-400">Target Delivery</span>
                           <span className={cn(
-                            "font-mono font-bold",
+                            "font-mono font-bold truncate block",
                             isOverdue ? "text-rose-600 dark:text-rose-400" : "text-slate-800 dark:text-slate-200"
                           )}>
                             {repair.expectedCompletionDate ? format(new Date(repair.expectedCompletionDate), 'dd MMM yyyy') : '—'}
                           </span>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <span className="font-semibold block text-[10px] uppercase text-slate-400">IMEI / Serial</span>
-                          <span className="font-mono text-slate-700 dark:text-slate-300 truncate block">
-                            {repair.imei || repair.serialNumber || '—'}
+                          <span className="font-mono text-slate-700 dark:text-slate-300 break-all block text-[10px]" title={repair.imeiNumber || repair.imei || repair.serialNumber || '—'}>
+                            {repair.imeiNumber || repair.imei || repair.serialNumber || '—'}
                           </span>
                         </div>
                       </div>
 
                       {repair.partsUsed && (
-                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 min-w-0">
                           <span className="font-bold text-slate-400 text-[10px] uppercase block">Parts:</span>
-                          <span className="text-slate-700 dark:text-slate-300 truncate block">{repair.partsUsed}</span>
+                          <span className="text-slate-700 dark:text-slate-300 truncate block" title={repair.partsUsed}>{repair.partsUsed}</span>
                         </div>
                       )}
                     </div>
@@ -922,32 +916,34 @@ export default function TechnicianRepairs() {
 
                   return (
                     <tr key={repair.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-white">
+                      <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
                         #{repair.repairNumber}
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-600 dark:text-slate-400">
-                        {category}
+                      <td className="py-3.5 px-4 font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                        <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-md border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-800/60">
+                          {category}
+                        </Badge>
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-200">
+                      <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-200 max-w-[180px] truncate" title={`${repair.deviceBrand} ${repair.deviceModel}`}>
                         {repair.deviceBrand} {repair.deviceModel}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
+                      <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 max-w-[160px] truncate" title={repair.customerName || 'Walk-in'}>
                         {repair.customerName || 'Walk-in'}
                       </td>
                       <td className="py-3.5 px-4 max-w-xs truncate text-slate-600 dark:text-slate-400" title={repair.problemDescription}>
                         {repair.problemDescription || 'Inspection'}
                       </td>
-                      <td className="py-3.5 px-4">
-                        <Badge className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full", priorityMeta.badgeClass)}>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <Badge className={cn("text-[10px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap inline-flex items-center", priorityMeta.badgeClass)}>
                           {priorityMeta.label}
                         </Badge>
                       </td>
-                      <td className="py-3.5 px-4">
-                        <Badge className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border", statusInfo.badge)}>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <Badge className={cn("text-[10px] font-bold px-3 py-1 rounded-full border whitespace-nowrap inline-flex items-center shrink-0 shadow-2xs", statusInfo.badge)}>
                           {statusInfo.label}
                         </Badge>
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400">
+                      <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap">
                         {repair.expectedCompletionDate ? format(new Date(repair.expectedCompletionDate), 'dd MMM yyyy') : '—'}
                       </td>
                       <td className="py-3.5 px-4 text-right">

@@ -65,6 +65,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { TechnicianOverviewSkeleton } from './TechnicianSkeletons';
 
 export default function TechnicianOverview() {
   const { user } = useAuthStore();
@@ -319,15 +320,8 @@ export default function TechnicianOverview() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3 bg-[#f8f9fa] dark:bg-slate-950">
-        <Loader2 className="h-10 w-10 animate-spin text-indigo-600 dark:text-indigo-400" />
-        <p className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-widest">
-          Loading Technician Overview...
-        </p>
-      </div>
-    );
+  if (loading && repairs.length === 0) {
+    return <TechnicianOverviewSkeleton />;
   }
 
   return (
@@ -573,34 +567,47 @@ export default function TechnicianOverview() {
               {metrics.urgentRepairs.slice(0, 6).map((repair) => {
                 const priorityMeta = getPriorityMeta(repair);
                 const isOverdue = repair.expectedCompletionDate && new Date(repair.expectedCompletionDate).getTime() < Date.now();
+                const category = detectDeviceCategory(repair);
+                const statusInfo = STATUS_STYLES[repair.status] || {
+                  label: repair.status?.replace(/_/g, ' ') || 'Assigned',
+                  badge: 'bg-slate-100 text-slate-800 border-slate-300',
+                };
 
                 return (
                   <div
                     key={repair.id}
-                    className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between gap-3"
+                    className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between gap-3 min-w-0"
                   >
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono font-bold text-xs text-slate-900 dark:text-white">
-                          #{repair.repairNumber}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <Badge className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full", priorityMeta.badgeClass)}>
+                    <div className="space-y-2 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span className="font-mono font-bold text-xs bg-slate-950 dark:bg-white text-white dark:text-slate-950 px-2.5 py-0.5 rounded-lg shrink-0">
+                            #{repair.repairNumber}
+                          </span>
+                          <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-md border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-800/60 shrink-0">
+                            {category}
+                          </Badge>
+                          <Badge className={cn("text-[10px] font-bold px-2.5 py-0.5 rounded-full shrink-0", priorityMeta.badgeClass)}>
                             {priorityMeta.label}
                           </Badge>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                           {isOverdue && (
-                            <Badge className="bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] px-2 py-0.5 rounded-full">
+                            <Badge className="bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0">
                               Overdue
                             </Badge>
                           )}
+                          <Badge className={cn("text-[10px] font-bold px-3 py-1 rounded-full border whitespace-nowrap inline-flex items-center shrink-0 shadow-2xs", statusInfo.badge)}>
+                            {statusInfo.label}
+                          </Badge>
                         </div>
                       </div>
 
-                      <div className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                      <div className="font-black text-xs text-slate-900 dark:text-white truncate" title={`${repair.deviceBrand} ${repair.deviceModel}`}>
                         {repair.deviceBrand} {repair.deviceModel}
                       </div>
 
-                      <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
+                      <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 break-words" title={repair.problemDescription}>
                         {repair.problemDescription || 'Inspection & diagnosis'}
                       </p>
 
