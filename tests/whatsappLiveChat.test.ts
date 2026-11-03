@@ -131,6 +131,14 @@ test('9. Public layout integration and strict dashboard exclusion', () => {
     widgetContent.includes("location.pathname.startsWith('/dashboard')"),
     'Widget strictly hides on dashboard routes'
   );
+  assert.ok(
+    widgetContent.includes("location.pathname.startsWith('/technician')"),
+    'Widget strictly hides on technician workspace routes'
+  );
+  assert.ok(
+    widgetContent.includes("isInternalDashboardRoute"),
+    'Defines isInternalDashboardRoute boundary check'
+  );
 });
 
 test('10. Dark Mode & Light Mode support without hardcoded color clashes', () => {
@@ -149,3 +157,43 @@ test('11. Keyboard navigation (Escape closes widget)', () => {
 
   assert.ok(content.includes("e.key === 'Escape'"), 'Closes widget on Escape key press');
 });
+
+test('12. Comprehensive route boundary test: strict exclusion on all technician workspaces, internal dashboards, and inclusion on public pages', async () => {
+  // Test route logic directly via dynamic import
+  const { isInternalDashboardRoute } = await import('../src/components/common/WhatsAppChatWidget');
+
+  // Dedicated Technician Workspace Routes — MUST be excluded
+  assert.equal(isInternalDashboardRoute('/technician'), true, '/technician must be excluded');
+  assert.equal(isInternalDashboardRoute('/technician/'), true, '/technician/ must be excluded');
+  assert.equal(isInternalDashboardRoute('/technician/overview'), true, '/technician/overview must be excluded');
+  assert.equal(isInternalDashboardRoute('/technician/repairs'), true, '/technician/repairs must be excluded');
+  assert.equal(isInternalDashboardRoute('/technician/transfers'), true, '/technician/transfers must be excluded');
+  assert.equal(isInternalDashboardRoute('/technician/repairs/workorder-123'), true, 'nested technician workorder route must be excluded');
+
+  // Internal Dashboard & Admin Routes — MUST be excluded
+  assert.equal(isInternalDashboardRoute('/dashboard'), true, '/dashboard must be excluded');
+  assert.equal(isInternalDashboardRoute('/dashboard/overview'), true, '/dashboard/overview must be excluded');
+  assert.equal(isInternalDashboardRoute('/dashboard/repairs'), true, '/dashboard/repairs must be excluded');
+  assert.equal(isInternalDashboardRoute('/dashboard/attendance'), true, '/dashboard/attendance must be excluded');
+  assert.equal(isInternalDashboardRoute('/dashboard/repair-damage'), true, '/dashboard/repair-damage must be excluded');
+  assert.equal(isInternalDashboardRoute('/dashboard/settings'), true, '/dashboard/settings must be excluded');
+  assert.equal(isInternalDashboardRoute('/dashboard/technician'), true, '/dashboard/technician must be excluded');
+  assert.equal(isInternalDashboardRoute('/pending-approval'), true, '/pending-approval must be excluded');
+  assert.equal(isInternalDashboardRoute('/rejected-access'), true, '/rejected-access must be excluded');
+
+  // Public Website Pages — MUST NOT be excluded (returns false, so WhatsApp widget renders)
+  assert.equal(isInternalDashboardRoute('/'), false, 'Home page must be public');
+  assert.equal(isInternalDashboardRoute('/services'), false, 'Services page must be public');
+  assert.equal(isInternalDashboardRoute('/services/iphone-display-replacement'), false, 'Service detail must be public');
+  assert.equal(isInternalDashboardRoute('/price-finder'), false, 'Price finder must be public');
+  assert.equal(isInternalDashboardRoute('/track'), false, 'Track repair page must be public');
+  assert.equal(isInternalDashboardRoute('/shop'), false, 'Shop page must be public');
+  assert.equal(isInternalDashboardRoute('/about'), false, 'About page must be public');
+  assert.equal(isInternalDashboardRoute('/contact'), false, 'Contact page must be public');
+  assert.equal(isInternalDashboardRoute('/terms'), false, 'Terms page must be public');
+  assert.equal(isInternalDashboardRoute('/privacy'), false, 'Privacy page must be public');
+  assert.equal(isInternalDashboardRoute('/login'), false, 'Login page must be public');
+  assert.equal(isInternalDashboardRoute('/forgot-password'), false, 'Forgot password page must be public');
+  assert.equal(isInternalDashboardRoute('/reset-password'), false, 'Reset password page must be public');
+});
+

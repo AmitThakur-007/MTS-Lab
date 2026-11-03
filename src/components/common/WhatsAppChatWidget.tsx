@@ -57,6 +57,21 @@ export const QUICK_INQUIRIES: QuickInquiry[] = [
   },
 ];
 
+/**
+ * Determines whether a given route is an authenticated internal dashboard or technician workspace route.
+ * Floating public communication widgets (like WhatsApp Live Chat) must never render on these routes.
+ */
+export function isInternalDashboardRoute(pathname: string): boolean {
+  if (!pathname) return false;
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.startsWith('/dashboard') ||
+    normalized.startsWith('/technician') ||
+    normalized.startsWith('/pending-approval') ||
+    normalized.startsWith('/rejected-access')
+  );
+}
+
 export const MAX_MESSAGE_LENGTH = 500;
 
 export default function WhatsAppChatWidget() {
@@ -111,8 +126,19 @@ export default function WhatsAppChatWidget() {
     }
   }, [isOpen]);
 
-  // Exclude widget strictly from dashboard routes
-  if (location.pathname.startsWith('/dashboard')) {
+  // Automatically reset and close widget state if navigating to any internal workspace
+  useEffect(() => {
+    if (isInternalDashboardRoute(location.pathname)) {
+      setIsOpen(false);
+    }
+  }, [location.pathname]);
+
+  // Exclude widget strictly from dashboard and dedicated technician workspace routes
+  if (
+    location.pathname.startsWith('/dashboard') ||
+    location.pathname.startsWith('/technician') ||
+    isInternalDashboardRoute(location.pathname)
+  ) {
     return null;
   }
 
