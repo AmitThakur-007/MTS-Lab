@@ -59,6 +59,7 @@ interface RepairAssignmentsTabProps {
     assignmentNotes?: string;
   }) => Promise<boolean>;
   initialSelectedRepair?: RepairItem | null;
+  containerWidth?: number;
 }
 
 export const RepairAssignmentsTab: React.FC<RepairAssignmentsTabProps> = ({
@@ -67,7 +68,8 @@ export const RepairAssignmentsTab: React.FC<RepairAssignmentsTabProps> = ({
   loading,
   onRefresh,
   onAssignSubmit,
-  initialSelectedRepair = null
+  initialSelectedRepair = null,
+  containerWidth = 1200
 }) => {
   // Tabs: 'unassigned' | 'all'
   const [activeSubTab, setActiveSubTab] = useState<'unassigned' | 'all'>('unassigned');
@@ -202,57 +204,57 @@ export const RepairAssignmentsTab: React.FC<RepairAssignmentsTabProps> = ({
     switch (cat) {
       case 'IPHONE':
       case 'SMARTPHONE':
-        return <Smartphone className="w-4 h-4 text-sky-500" />;
+        return <Smartphone className="w-4 h-4 text-sky-500 shrink-0" />;
       case 'IPAD':
       case 'TABLET':
-        return <Tablet className="w-4 h-4 text-indigo-500" />;
+        return <Tablet className="w-4 h-4 text-indigo-500 shrink-0" />;
       case 'LAPTOP':
-        return <Laptop className="w-4 h-4 text-emerald-500" />;
+        return <Laptop className="w-4 h-4 text-emerald-500 shrink-0" />;
       case 'TV':
-        return <Tv className="w-4 h-4 text-amber-500" />;
+        return <Tv className="w-4 h-4 text-amber-500 shrink-0" />;
       default:
-        return <HelpCircle className="w-4 h-4 text-muted-foreground" />;
+        return <HelpCircle className="w-4 h-4 text-muted-foreground shrink-0" />;
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full min-w-0">
       {/* Top Banner / Guidance */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-card border border-border/80 shadow-sm">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
-            <UserCheck className="w-5 h-5 text-primary" />
-            Repair Assignments & Workload Balancing
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-card border border-border/80 shadow-sm min-w-0">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-2">
+            <UserCheck className="w-5 h-5 text-primary shrink-0" />
+            <span className="truncate">Repair Assignments & Workload Balancing</span>
           </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             Assign incoming workorders to qualified technicians or reassign jobs to balance workshop capacity.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={onRefresh}
             disabled={loading}
-            className="gap-2"
+            className="gap-2 shrink-0 w-full sm:w-auto h-9"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            <span>Refresh</span>
           </Button>
         </div>
       </div>
 
-      {/* Sub Tabs: Unassigned Queue vs All Repairs */}
-      <div className="flex items-center gap-2 border-b border-border pb-2">
+      {/* Sub Tabs: Unassigned Queue vs All Workshop Repairs - Guaranteed zero clipping */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2.5 min-w-0">
         <Button
           variant={activeSubTab === 'unassigned' ? 'default' : 'ghost'}
           onClick={() => setActiveSubTab('unassigned')}
-          className="gap-2 relative"
+          className="gap-2 shrink-0 cursor-pointer min-h-[38px] text-xs sm:text-sm font-semibold"
         >
-          <AlertTriangle className="w-4 h-4" />
-          Unassigned Queue
+          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500" />
+          <span>Unassigned Queue</span>
           {unassignedCount > 0 && (
-            <Badge variant="destructive" className="ml-1 text-xs px-2 py-0.5 animate-pulse">
+            <Badge variant="destructive" className="ml-1 text-[11px] px-1.5 py-0.2 shrink-0 animate-pulse">
               {unassignedCount} Urgent
             </Badge>
           )}
@@ -260,34 +262,34 @@ export const RepairAssignmentsTab: React.FC<RepairAssignmentsTabProps> = ({
         <Button
           variant={activeSubTab === 'all' ? 'default' : 'ghost'}
           onClick={() => setActiveSubTab('all')}
-          className="gap-2"
+          className="gap-2 shrink-0 cursor-pointer min-h-[38px] text-xs sm:text-sm font-semibold"
         >
-          <Wrench className="w-4 h-4" />
-          All Workshop Repairs
-          <Badge variant="secondary" className="ml-1 text-xs">
+          <Wrench className="w-4 h-4 shrink-0 text-primary" />
+          <span>All Workshop Repairs</span>
+          <Badge variant="secondary" className="ml-1 text-[11px] px-1.5 py-0.2 shrink-0 font-bold">
             {repairs.length}
           </Badge>
         </Button>
       </div>
 
-      {/* Filter Bar */}
-      <Card className="border-border/70">
-        <CardContent className="p-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+      {/* Filter Bar with adaptive multi-row wrapping */}
+      <Card className="border-border/70 min-w-0">
+        <CardContent className="p-3.5 sm:p-4 space-y-3 min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3">
             {/* Search */}
-            <div className="relative lg:col-span-2">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <div className="relative sm:col-span-2 lg:col-span-3 xl:col-span-2 min-w-0">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground shrink-0" />
               <Input
                 placeholder="Search ticket #, customer, model, IMEI, tech..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-sm"
+                className="pl-9 h-9 text-xs sm:text-sm w-full"
               />
             </div>
 
             {/* Category Filter */}
             <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as DeviceCategory)}>
-              <SelectTrigger className="h-9 text-sm">
+              <SelectTrigger className="h-9 text-xs sm:text-sm w-full min-w-0">
                 <SelectValue placeholder="Device Category" />
               </SelectTrigger>
               <SelectContent>
@@ -303,8 +305,8 @@ export const RepairAssignmentsTab: React.FC<RepairAssignmentsTabProps> = ({
 
             {/* Priority Filter */}
             <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Priority" />
+              <SelectTrigger className="h-9 text-xs sm:text-sm w-full min-w-0">
+                <SelectValue placeholder="Priority Filter" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Priorities</SelectItem>
@@ -318,23 +320,26 @@ export const RepairAssignmentsTab: React.FC<RepairAssignmentsTabProps> = ({
             {/* Technician Filter (only shown in 'all' subtab) */}
             {activeSubTab === 'all' ? (
               <Select value={technicianFilter} onValueChange={setTechnicianFilter}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Technician" />
+                <SelectTrigger className="h-9 text-xs sm:text-sm w-full min-w-0">
+                  <SelectValue placeholder="All Technicians" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All Technicians</SelectItem>
                   <SelectItem value="UNASSIGNED">Unassigned Only</SelectItem>
                   {technicians.map(t => (
                     <SelectItem key={t.id} value={t.id}>
-                      {t.name} ({t.activeRepairsCount} active)
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="truncate">{t.name}</span>
+                        <span className="text-muted-foreground text-xs shrink-0">({t.activeRepairsCount} active)</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             ) : (
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Status" />
+                <SelectTrigger className="h-9 text-xs sm:text-sm w-full min-w-0">
+                  <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All Statuses</SelectItem>
@@ -349,9 +354,9 @@ export const RepairAssignmentsTab: React.FC<RepairAssignmentsTabProps> = ({
 
           {/* Quick Active Filter Indicators */}
           {(searchQuery || categoryFilter !== 'ALL' || priorityFilter !== 'ALL' || technicianFilter !== 'ALL' || statusFilter !== 'ALL') && (
-            <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground pt-1.5 border-t border-border/50">
               <span className="flex items-center gap-1.5">
-                <Filter className="w-3.5 h-3.5 text-primary" />
+                <Filter className="w-3.5 h-3.5 text-primary shrink-0" />
                 Showing {filteredRepairs.length} of {repairs.length} repairs
               </span>
               <Button
@@ -373,21 +378,21 @@ export const RepairAssignmentsTab: React.FC<RepairAssignmentsTabProps> = ({
         </CardContent>
       </Card>
 
-      {/* Repairs List / Table */}
+      {/* Repairs List: Card View for Mobile/Tablet + Structured Table for Desktop */}
       {filteredRepairs.length === 0 ? (
-        <Card className="border-dashed p-10 text-center">
+        <Card className="border-dashed p-8 sm:p-10 text-center">
           <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
-            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3 shrink-0">
               {activeSubTab === 'unassigned' ? (
                 <CheckCircle2 className="w-6 h-6 text-emerald-500" />
               ) : (
                 <Wrench className="w-6 h-6 text-muted-foreground" />
               )}
             </div>
-            <h3 className="font-semibold text-lg">
+            <h3 className="font-semibold text-base sm:text-lg">
               {activeSubTab === 'unassigned' ? 'Unassigned Queue is Clear' : 'No repairs found'}
             </h3>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               {activeSubTab === 'unassigned'
                 ? 'All current repair tickets are actively assigned to workshop technicians.'
                 : 'Try adjusting your search criteria or filter selections.'}
@@ -395,132 +400,229 @@ export const RepairAssignmentsTab: React.FC<RepairAssignmentsTabProps> = ({
           </div>
         </Card>
       ) : (
-        <div className="border border-border rounded-xl bg-card overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs uppercase bg-muted/60 text-muted-foreground border-b border-border font-medium">
-                <tr>
-                  <th className="px-4 py-3">Repair # & Priority</th>
-                  <th className="px-4 py-3">Customer & Contact</th>
-                  <th className="px-4 py-3">Device & Issue</th>
-                  <th className="px-4 py-3">Current Assignment</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredRepairs.map((repair) => {
-                  const pMeta = getPriorityMeta(repair.priority);
-                  const sStyle = STATUS_STYLES[repair.status as keyof typeof STATUS_STYLES] || {
-                    badge: 'bg-muted text-muted-foreground',
-                    label: repair.status
-                  };
+        <div className="w-full min-w-0 space-y-3">
+          {/* 1. Mobile & Small Tablet Card Layout (Guarantees zero horizontal cutoff on narrow screens) */}
+          <div className="block lg:hidden space-y-3">
+            {filteredRepairs.map((repair) => {
+              const pMeta = getPriorityMeta(repair.priority);
+              const sStyle = STATUS_STYLES[repair.status as keyof typeof STATUS_STYLES] || {
+                badge: 'bg-muted text-muted-foreground',
+                label: repair.status
+              };
 
-                  return (
-                    <tr key={repair.id} className="hover:bg-muted/30 transition-colors">
-                      {/* Repair Ticket & Priority */}
-                      <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          <span className="font-mono font-semibold text-primary block">
-                            {repair.repairNumber}
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className={`text-xs px-2 py-0.5 font-semibold ${pMeta.badgeClass} flex items-center gap-1 w-fit`}
-                          >
-                            {pMeta.indicatorText}
-                          </Badge>
-                        </div>
-                      </td>
+              return (
+                <Card key={repair.id} className="border-border/80 shadow-xs hover:border-primary/40 transition-colors overflow-hidden">
+                  <CardContent className="p-4 space-y-3">
+                    {/* Top Row: Ticket Number, Priority Badge, Status */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-primary">
+                          {repair.repairNumber}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={`text-[11px] px-2 py-0.5 font-semibold ${pMeta.badgeClass} flex items-center gap-1 shrink-0`}
+                        >
+                          {pMeta.indicatorText}
+                        </Badge>
+                      </div>
+                      <Badge className={`${sStyle.badge} text-[11px] font-medium px-2.5 py-0.5 rounded-full border-0 shrink-0`}>
+                        {sStyle.label}
+                      </Badge>
+                    </div>
 
-                      {/* Customer */}
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-foreground">{repair.customerName}</div>
-                        <div className="text-xs text-muted-foreground">{repair.customerPhone}</div>
-                      </td>
-
-                      {/* Device & Issue */}
-                      <td className="px-4 py-3 max-w-xs">
-                        <div className="flex items-center gap-1.5 font-medium text-foreground truncate">
+                    {/* Middle Section: Device & Customer */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1 border-t border-border/50">
+                      <div>
+                        <span className="text-muted-foreground">Device: </span>
+                        <span className="font-semibold text-foreground inline-flex items-center gap-1">
                           {getDeviceIcon(repair.deviceCategory)}
-                          <span>
-                            {repair.deviceBrand || ''} {repair.deviceModel || 'Unknown Device'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5" title={repair.problemDescription || ''}>
-                          {repair.problemDescription || 'No description provided'}
-                        </p>
-                      </td>
+                          {repair.deviceBrand || ''} {repair.deviceModel || 'Unknown Device'}
+                        </span>
+                        {repair.problemDescription && (
+                          <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5" title={repair.problemDescription}>
+                            {repair.problemDescription}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Customer: </span>
+                        <span className="font-medium text-foreground">{repair.customerName}</span>
+                        {repair.customerPhone && (
+                          <span className="text-muted-foreground block text-[11px]">{repair.customerPhone}</span>
+                        )}
+                      </div>
+                    </div>
 
-                      {/* Assigned Tech */}
-                      <td className="px-4 py-3">
+                    {/* Bottom Row: Technician Assignment & Action Button */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border/50">
+                      <div className="text-xs">
+                        <span className="text-muted-foreground block sm:inline">Technician: </span>
                         {repair.technician ? (
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 font-medium text-foreground">
-                              <UserCheck className="w-3.5 h-3.5 text-emerald-500" />
-                              <span>{repair.technician.name}</span>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {repair.assignedAt ? `Assigned ${formatTimeAgo(repair.assignedAt)}` : 'Assigned'}
-                            </div>
-                          </div>
+                          <span className="font-semibold text-foreground inline-flex items-center gap-1.5 mt-0.5 sm:mt-0">
+                            <UserCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                            {repair.technician.name}
+                          </span>
                         ) : (
-                          <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 gap-1">
-                            <AlertTriangle className="w-3 h-3" />
+                          <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px] px-1.5 py-0.2 shrink-0">
                             Unassigned
                           </Badge>
                         )}
-                      </td>
+                      </div>
 
-                      {/* Status */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <Badge className={`${sStyle.badge} text-xs font-medium px-3 py-1 rounded-full border-0 whitespace-nowrap inline-flex items-center shrink-0`}>
-                          {sStyle.label}
-                        </Badge>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Created {formatTimeAgo(repair.createdAt)}
-                        </div>
-                      </td>
+                      <Button
+                        size="sm"
+                        variant={repair.technicianId ? 'outline' : 'default'}
+                        onClick={() => handleOpenAssign(repair)}
+                        className="gap-1.5 h-9 text-xs font-semibold w-full sm:w-auto shrink-0 cursor-pointer"
+                      >
+                        {repair.technicianId ? (
+                          <>
+                            <ArrowRightLeft className="w-3.5 h-3.5 shrink-0" />
+                            Reassign Tech
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                            Assign Tech
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
 
-                      {/* Actions */}
-                      <td className="px-4 py-3 text-right">
-                        <Button
-                          size="sm"
-                          variant={repair.technicianId ? 'outline' : 'default'}
-                          onClick={() => handleOpenAssign(repair)}
-                          className="gap-1.5 h-8 text-xs font-medium"
-                        >
-                          {repair.technicianId ? (
-                            <>
-                              <ArrowRightLeft className="w-3.5 h-3.5" />
-                              Reassign
-                            </>
+          {/* 2. Desktop Table Layout (for screens lg and above or spacious containers) */}
+          <div className="hidden lg:block border border-border rounded-xl bg-card overflow-hidden shadow-sm">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs uppercase bg-muted/60 text-muted-foreground border-b border-border font-medium">
+                  <tr>
+                    <th className="px-4 py-3 whitespace-nowrap">Repair # & Priority</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Customer & Contact</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Device & Issue</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Current Assignment</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Status</th>
+                    <th className="px-4 py-3 text-right whitespace-nowrap">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredRepairs.map((repair) => {
+                    const pMeta = getPriorityMeta(repair.priority);
+                    const sStyle = STATUS_STYLES[repair.status as keyof typeof STATUS_STYLES] || {
+                      badge: 'bg-muted text-muted-foreground',
+                      label: repair.status
+                    };
+
+                    return (
+                      <tr key={repair.id} className="hover:bg-muted/30 transition-colors">
+                        {/* Repair Ticket & Priority */}
+                        <td className="px-4 py-3 align-middle">
+                          <div className="space-y-1">
+                            <span className="font-mono font-semibold text-primary block text-xs sm:text-sm">
+                              {repair.repairNumber}
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className={`text-[11px] px-2 py-0.5 font-semibold ${pMeta.badgeClass} flex items-center gap-1 w-fit shrink-0`}
+                            >
+                              {pMeta.indicatorText}
+                            </Badge>
+                          </div>
+                        </td>
+
+                        {/* Customer */}
+                        <td className="px-4 py-3 align-middle">
+                          <div className="font-medium text-foreground text-xs sm:text-sm truncate max-w-[160px]">{repair.customerName}</div>
+                          <div className="text-xs text-muted-foreground">{repair.customerPhone}</div>
+                        </td>
+
+                        {/* Device & Issue */}
+                        <td className="px-4 py-3 align-middle max-w-xs">
+                          <div className="flex items-center gap-1.5 font-medium text-foreground truncate text-xs sm:text-sm">
+                            {getDeviceIcon(repair.deviceCategory)}
+                            <span className="truncate">
+                              {repair.deviceBrand || ''} {repair.deviceModel || 'Unknown Device'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5" title={repair.problemDescription || ''}>
+                            {repair.problemDescription || 'No description provided'}
+                          </p>
+                        </td>
+
+                        {/* Assigned Tech */}
+                        <td className="px-4 py-3 align-middle">
+                          {repair.technician ? (
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5 font-medium text-foreground text-xs sm:text-sm truncate max-w-[150px]">
+                                <UserCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                <span className="truncate">{repair.technician.name}</span>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {repair.assignedAt ? `Assigned ${formatTimeAgo(repair.assignedAt)}` : 'Assigned'}
+                              </div>
+                            </div>
                           ) : (
-                            <>
-                              <UserPlus className="w-3.5 h-3.5" />
-                              Assign Tech
-                            </>
+                            <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 gap-1 text-[11px] px-2 py-0.5 shrink-0">
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                              Unassigned
+                            </Badge>
                           )}
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-4 py-3 whitespace-nowrap align-middle">
+                          <Badge className={`${sStyle.badge} text-xs font-medium px-2.5 py-0.5 rounded-full border-0 whitespace-nowrap inline-flex items-center shrink-0`}>
+                            {sStyle.label}
+                          </Badge>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {formatTimeAgo(repair.createdAt)}
+                          </div>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-4 py-3 text-right whitespace-nowrap align-middle">
+                          <Button
+                            size="sm"
+                            variant={repair.technicianId ? 'outline' : 'default'}
+                            onClick={() => handleOpenAssign(repair)}
+                            className="gap-1.5 h-8 text-xs font-medium shrink-0 cursor-pointer"
+                          >
+                            {repair.technicianId ? (
+                              <>
+                                <ArrowRightLeft className="w-3.5 h-3.5 shrink-0" />
+                                Reassign
+                              </>
+                            ) : (
+                              <>
+                                <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                                Assign Tech
+                              </>
+                            )}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
       {/* Assignment / Reassignment Dialog */}
       <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserCheck className="w-5 h-5 text-primary" />
-              {selectedRepair?.technicianId ? 'Reassign Repair Workorder' : 'Assign Repair Workorder'}
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <UserCheck className="w-5 h-5 text-primary shrink-0" />
+              <span>{selectedRepair?.technicianId ? 'Reassign Repair Workorder' : 'Assign Repair Workorder'}</span>
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs sm:text-sm">
               Select a technician and assign the repair. The technician will receive an instant notification.
             </DialogDescription>
           </DialogHeader>

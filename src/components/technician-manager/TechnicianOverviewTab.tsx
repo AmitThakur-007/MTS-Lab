@@ -47,6 +47,7 @@ interface TechnicianOverviewTabProps {
   onOpenPriorityModal?: (repair: any) => void;
   onNavigateToTransfers?: () => void;
   onRefresh?: () => void;
+  containerWidth?: number;
 }
 
 export const TechnicianOverviewTab: React.FC<TechnicianOverviewTabProps> = ({
@@ -58,6 +59,7 @@ export const TechnicianOverviewTab: React.FC<TechnicianOverviewTabProps> = ({
   onOpenPriorityModal,
   onNavigateToTransfers,
   onRefresh,
+  containerWidth = 1200,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'AVAILABLE' | 'NORMAL' | 'HEAVY' | 'OVERLOADED'>('ALL');
@@ -388,21 +390,111 @@ export const TechnicianOverviewTab: React.FC<TechnicianOverviewTabProps> = ({
           )}
         </div>
 
-        {/* Table View (Desktop & Tablet) */}
-        <div className="overflow-x-auto">
+        {/* Mobile & Tablet Card Layout */}
+        <div className="block lg:hidden p-4 space-y-3">
+          {filteredTechnicians.length === 0 ? (
+            <div className="py-10 text-center text-slate-400">
+              <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm font-semibold">No technicians found matching filter criteria.</p>
+            </div>
+          ) : (
+            filteredTechnicians.map((tech) => {
+              const roleBadge = getRoleBadge(tech.role);
+              return (
+                <Card key={tech.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 p-4 space-y-3">
+                  {/* Header: Avatar, Name, Role, Workload Badge */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar className="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
+                        {tech.profileImage ? (
+                          <AvatarImage src={tech.profileImage} alt={tech.name} className="object-cover" />
+                        ) : null}
+                        <AvatarFallback className="bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-black text-xs">
+                          {tech.name ? tech.name.substring(0, 2).toUpperCase() : 'TC'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate block">
+                          {tech.name}
+                        </span>
+                        <Badge variant="outline" className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md border mt-0.5 ${roleBadge.class}`}>
+                          {roleBadge.label}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <Badge variant="outline" className={`text-[10px] font-black px-2 py-0.5 rounded-lg border shrink-0 inline-flex items-center gap-1 ${tech.workloadBadgeClass}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${tech.workloadDotColor}`} />
+                      <span>{tech.workloadLabel}</span>
+                    </Badge>
+                  </div>
+
+                  {/* Contact */}
+                  <div className="text-xs text-slate-400 truncate">
+                    {tech.email} {tech.phoneNumber ? `• ${tech.phoneNumber}` : ''}
+                  </div>
+
+                  {/* Workload Metric Chips */}
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-xs pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <div className="p-1.5 rounded-lg bg-card">
+                      <span className="text-[10px] text-slate-400 block font-medium">Active</span>
+                      <span className="font-extrabold text-slate-900 dark:text-white">{tech.activeRepairsCount}</span>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-card">
+                      <span className="text-[10px] text-slate-400 block font-medium">Pending</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">{tech.pendingCount}</span>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-card">
+                      <span className="text-[10px] text-slate-400 block font-medium">In Progress</span>
+                      <span className="font-bold text-sky-600 dark:text-sky-400">{tech.inProgressCount}</span>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-card">
+                      <span className="text-[10px] text-slate-400 block font-medium">Waiting Parts</span>
+                      <span className="font-bold text-amber-600 dark:text-amber-400">{tech.waitingForPartsCount}</span>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-card">
+                      <span className="text-[10px] text-slate-400 block font-medium">Done</span>
+                      <span className="font-bold text-teal-600 dark:text-teal-400">{tech.completedCount}</span>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-card">
+                      <span className="text-[10px] text-slate-400 block font-medium">Urgent</span>
+                      <span className="font-bold text-rose-600 dark:text-rose-400">{tech.highPriorityCount}</span>
+                    </div>
+                  </div>
+
+                  {/* Action CTA */}
+                  <div className="pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedTechForModal(tech)}
+                      className="w-full h-8.5 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 border-slate-200 dark:border-slate-700 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5 mr-1" />
+                      <span>View Workload Queue ({tech.activeRepairsCount})</span>
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden lg:block overflow-x-auto w-full">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase text-[10px] tracking-wider">
-                <th className="py-3 px-4">Technician</th>
-                <th className="py-3 px-3">Role</th>
-                <th className="py-3 px-3 text-center">Workload Status</th>
-                <th className="py-3 px-3 text-center">Active Jobs</th>
-                <th className="py-3 px-3 text-center">Pending / Diag</th>
-                <th className="py-3 px-3 text-center">In Progress</th>
-                <th className="py-3 px-3 text-center">Waiting Parts</th>
-                <th className="py-3 px-3 text-center">Completed</th>
-                <th className="py-3 px-3 text-center">Urgent / High</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3 px-4 whitespace-nowrap">Technician</th>
+                <th className="py-3 px-3 whitespace-nowrap">Role</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap">Workload Status</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap">Active Jobs</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap">Pending / Diag</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap">In Progress</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap">Waiting Parts</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap">Completed</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap">Urgent / High</th>
+                <th className="py-3 px-4 text-right whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -433,10 +525,10 @@ export const TechnicianOverviewTab: React.FC<TechnicianOverviewTabProps> = ({
                             </AvatarFallback>
                           </Avatar>
                           <div className="min-w-0">
-                            <span className="font-extrabold text-slate-900 dark:text-white truncate block">
+                            <span className="font-extrabold text-slate-900 dark:text-white truncate block max-w-[160px]">
                               {tech.name}
                             </span>
-                            <span className="text-[11px] text-slate-400 truncate block">
+                            <span className="text-[11px] text-slate-400 truncate block max-w-[160px]">
                               {tech.email} {tech.phoneNumber ? `• ${tech.phoneNumber}` : ''}
                             </span>
                           </div>
@@ -444,22 +536,22 @@ export const TechnicianOverviewTab: React.FC<TechnicianOverviewTabProps> = ({
                       </td>
 
                       {/* Role */}
-                      <td className="py-3.5 px-3">
-                        <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${roleBadge.class}`}>
+                      <td className="py-3.5 px-3 whitespace-nowrap">
+                        <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border shrink-0 ${roleBadge.class}`}>
                           {roleBadge.label}
                         </Badge>
                       </td>
 
                       {/* Workload Status */}
-                      <td className="py-3.5 px-3 text-center">
-                        <Badge variant="outline" className={`text-[10px] font-black px-2.5 py-0.5 rounded-lg border inline-flex items-center gap-1.5 ${tech.workloadBadgeClass}`}>
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                        <Badge variant="outline" className={`text-[10px] font-black px-2.5 py-0.5 rounded-lg border inline-flex items-center gap-1.5 shrink-0 ${tech.workloadBadgeClass}`}>
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${tech.workloadDotColor}`} />
                           <span>{tech.workloadLabel}</span>
                         </Badge>
                       </td>
 
                       {/* Active Jobs & Capacity bar */}
-                      <td className="py-3.5 px-3 text-center">
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <div className="inline-flex flex-col items-center">
                           <span className="font-extrabold text-sm text-slate-900 dark:text-white">
                             {tech.activeRepairsCount}
@@ -480,29 +572,29 @@ export const TechnicianOverviewTab: React.FC<TechnicianOverviewTabProps> = ({
                       </td>
 
                       {/* Pending / Diagnosing */}
-                      <td className="py-3.5 px-3 text-center font-bold text-slate-700 dark:text-slate-300">
+                      <td className="py-3.5 px-3 text-center font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {tech.pendingCount}
                       </td>
 
                       {/* In Progress */}
-                      <td className="py-3.5 px-3 text-center">
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded-md font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/80">
                           {tech.inProgressCount}
                         </span>
                       </td>
 
                       {/* Waiting for Parts */}
-                      <td className="py-3.5 px-3 text-center font-semibold text-slate-600 dark:text-slate-400">
+                      <td className="py-3.5 px-3 text-center font-semibold text-slate-600 dark:text-slate-400 whitespace-nowrap">
                         {tech.waitingForPartsCount}
                       </td>
 
                       {/* Completed */}
-                      <td className="py-3.5 px-3 text-center font-semibold text-teal-600 dark:text-teal-400">
+                      <td className="py-3.5 px-3 text-center font-semibold text-teal-600 dark:text-teal-400 whitespace-nowrap">
                         {tech.completedCount}
                       </td>
 
                       {/* Urgent / High */}
-                      <td className="py-3.5 px-3 text-center">
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         {tech.highPriorityCount > 0 ? (
                           <span className="px-2 py-0.5 rounded-md font-extrabold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center justify-center gap-1 mx-auto max-w-[50px]">
                             <Flame className="w-3 h-3" />
@@ -514,7 +606,7 @@ export const TechnicianOverviewTab: React.FC<TechnicianOverviewTabProps> = ({
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <Button
                           variant="ghost"
                           size="sm"

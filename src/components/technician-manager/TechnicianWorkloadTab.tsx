@@ -34,6 +34,7 @@ interface TechnicianWorkloadTabProps {
   onOpenAssignModal?: (repair: any) => void;
   onOpenPriorityModal?: (repair: any) => void;
   onRefresh?: () => void;
+  containerWidth?: number;
 }
 
 export const TechnicianWorkloadTab: React.FC<TechnicianWorkloadTabProps> = ({
@@ -42,6 +43,7 @@ export const TechnicianWorkloadTab: React.FC<TechnicianWorkloadTabProps> = ({
   onOpenAssignModal,
   onOpenPriorityModal,
   onRefresh,
+  containerWidth = 1200,
 }) => {
   const [selectedTechId, setSelectedTechId] = useState<string>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<DeviceCategory>('ALL');
@@ -228,7 +230,7 @@ export const TechnicianWorkloadTab: React.FC<TechnicianWorkloadTabProps> = ({
       {/* ====================================================================
           3. COMPARATIVE TECHNICIAN CARDS & QUEUES
          ==================================================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+      <div className={`grid grid-cols-1 ${containerWidth >= 1200 ? 'md:grid-cols-2 xl:grid-cols-3' : 'md:grid-cols-2'} gap-4 sm:gap-5 min-w-0`}>
         {displayedTechnicians.map((tech) => {
           // Filter repair queue by category if selected
           const filteredActiveRepairs = tech.activeRepairs.filter(r => {

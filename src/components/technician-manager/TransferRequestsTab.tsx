@@ -53,6 +53,7 @@ interface TransferRequestsTabProps {
   loading: boolean;
   onRefresh: () => void;
   onSelectRepair?: (repairId: string) => void;
+  containerWidth?: number;
 }
 
 export const TransferRequestsTab: React.FC<TransferRequestsTabProps> = ({
@@ -61,6 +62,7 @@ export const TransferRequestsTab: React.FC<TransferRequestsTabProps> = ({
   loading,
   onRefresh,
   onSelectRepair,
+  containerWidth = 1200,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<TransferStatus>('ALL');
@@ -333,142 +335,235 @@ export const TransferRequestsTab: React.FC<TransferRequestsTabProps> = ({
       </div>
 
       {/* ====================================================================
-          3. TRANSFER REQUESTS TABLE & LIST
+          3. TRANSFER REQUESTS TABLE & MOBILE CARDS
          ==================================================================== */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase text-[10px] tracking-wider">
-                <th className="py-3 px-4">Repair Workorder</th>
-                <th className="py-3 px-3">Current Technician</th>
-                <th className="py-3 px-3">Target Technician</th>
-                <th className="py-3 px-3">Reason / Details</th>
-                <th className="py-3 px-3 text-center">Status</th>
-                <th className="py-3 px-3">Requested At</th>
-                <th className="py-3 px-4 text-right">Manager Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredTransfers.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
-                    <ArrowRightLeft className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    <p className="text-sm font-semibold">No transfer requests found.</p>
-                  </td>
-                </tr>
-              ) : (
-                filteredTransfers.map((t) => {
-                  const statusMeta = getStatusBadge(t.status);
-                  const StatusIcon = statusMeta.icon;
+      {filteredTransfers.length === 0 ? (
+        <Card className="rounded-2xl border border-slate-200/80 dark:border-slate-800 p-8 sm:p-12 text-center bg-white dark:bg-slate-900 shadow-xs">
+          <ArrowRightLeft className="w-8 h-8 mx-auto mb-2 opacity-40 text-slate-400" />
+          <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">No transfer requests found matching filter criteria.</p>
+        </Card>
+      ) : (
+        <div className="w-full min-w-0 space-y-3">
+          {/* Mobile & Tablet Card Layout */}
+          <div className="block lg:hidden space-y-3">
+            {filteredTransfers.map((t) => {
+              const statusMeta = getStatusBadge(t.status);
+              const StatusIcon = statusMeta.icon;
 
-                  return (
-                    <tr
-                      key={t.id}
-                      className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
-                    >
-                      {/* Repair Workorder info */}
-                      <td className="py-3.5 px-4">
-                        <div className="space-y-0.5">
-                          <span className="font-mono font-black text-xs text-indigo-600 dark:text-indigo-400 block">
-                            #{t.repairNumber}
-                          </span>
-                          <span className="font-extrabold text-slate-900 dark:text-white truncate block">
-                            {t.deviceBrand} {t.deviceModel}
-                          </span>
-                          <span className="text-[11px] text-slate-400 truncate block">
-                            {t.customerName} {t.customerPhone ? `(${t.customerPhone})` : ''}
-                          </span>
+              return (
+                <Card key={t.id} className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
+                  <CardContent className="p-4 space-y-3">
+                    {/* Header: Ticket & Status */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-mono font-black text-xs text-indigo-600 dark:text-indigo-400">
+                        #{t.repairNumber}
+                      </span>
+                      <Badge variant="outline" className={`text-[10px] px-2.5 py-0.5 rounded-lg border inline-flex items-center gap-1.5 ${statusMeta.class}`}>
+                        <StatusIcon className="w-3 h-3 shrink-0" />
+                        <span>{statusMeta.label}</span>
+                      </Badge>
+                    </div>
+
+                    {/* Device & Customer */}
+                    <div className="space-y-0.5 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <span className="font-extrabold text-xs text-slate-900 dark:text-white block">
+                        {t.deviceBrand} {t.deviceModel}
+                      </span>
+                      <span className="text-[11px] text-slate-400 block">
+                        {t.customerName} {t.customerPhone ? `(${t.customerPhone})` : ''}
+                      </span>
+                    </div>
+
+                    {/* Sender -> Target Technicians */}
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-slate-400 block uppercase font-bold">From</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">{t.senderTechnicianName}</span>
+                      </div>
+                      <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-500 shrink-0 mx-1" />
+                      <div className="min-w-0 text-right">
+                        <span className="text-[10px] text-slate-400 block uppercase font-bold">To</span>
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400 truncate block">{t.targetTechnicianName}</span>
+                      </div>
+                    </div>
+
+                    {/* Reason */}
+                    {t.reason && (
+                      <p className="text-xs text-slate-600 dark:text-slate-300 italic bg-muted/40 p-2 rounded-lg">
+                        "{t.reason}"
+                      </p>
+                    )}
+
+                    {/* Timestamp & Actions */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                      <span className="text-slate-400">
+                        {formatTimeAgo(t.createdAt)}
+                      </span>
+
+                      {t.status === 'PENDING' ? (
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setApprovingTransfer(t);
+                              setApprovalNote('');
+                            }}
+                            className="flex-1 sm:flex-none h-8.5 rounded-xl px-3 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5 mr-1" />
+                            <span>Approve</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setRejectingTransfer(t);
+                              setRejectionReason('');
+                            }}
+                            className="flex-1 sm:flex-none h-8.5 rounded-xl px-3 text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900/50 dark:hover:bg-rose-950/40 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5 mr-1" />
+                            <span>Reject</span>
+                          </Button>
                         </div>
-                      </td>
+                      ) : (
+                        <span className="text-slate-400 italic">Completed</span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
 
-                      {/* Current Technician */}
-                      <td className="py-3.5 px-3">
-                        <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
-                          <User className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{t.senderTechnicianName}</span>
-                        </div>
-                      </td>
+          {/* Desktop Table View */}
+          <div className="hidden lg:block bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase text-[10px] tracking-wider">
+                    <th className="py-3 px-4 whitespace-nowrap">Repair Workorder</th>
+                    <th className="py-3 px-3 whitespace-nowrap">Current Technician</th>
+                    <th className="py-3 px-3 whitespace-nowrap">Target Technician</th>
+                    <th className="py-3 px-3 whitespace-nowrap">Reason / Details</th>
+                    <th className="py-3 px-3 text-center whitespace-nowrap">Status</th>
+                    <th className="py-3 px-3 whitespace-nowrap">Requested At</th>
+                    <th className="py-3 px-4 text-right whitespace-nowrap">Manager Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredTransfers.map((t) => {
+                    const statusMeta = getStatusBadge(t.status);
+                    const StatusIcon = statusMeta.icon;
 
-                      {/* Target Technician */}
-                      <td className="py-3.5 px-3">
-                        <div className="flex items-center gap-1.5 font-bold text-indigo-600 dark:text-indigo-400">
-                          <ArrowRightLeft className="w-3.5 h-3.5" />
-                          <span>{t.targetTechnicianName}</span>
-                        </div>
-                      </td>
-
-                      {/* Reason */}
-                      <td className="py-3.5 px-3 max-w-[220px]">
-                        <p className="text-slate-700 dark:text-slate-300 font-medium line-clamp-2">
-                          "{t.reason}"
-                        </p>
-                        {t.responseNote && (
-                          <p className="text-[10px] text-slate-400 italic mt-0.5 line-clamp-1">
-                            Response: {t.responseNote}
-                          </p>
-                        )}
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3.5 px-3 text-center">
-                        <Badge variant="outline" className={`text-[10px] px-2.5 py-0.5 rounded-lg border inline-flex items-center gap-1.5 ${statusMeta.class}`}>
-                          <StatusIcon className="w-3 h-3 shrink-0" />
-                          <span>{statusMeta.label}</span>
-                        </Badge>
-                      </td>
-
-                      {/* Timestamp */}
-                      <td className="py-3.5 px-3 text-slate-500 dark:text-slate-400 text-[11px]">
-                        <span>{formatTimeAgo(t.createdAt)}</span>
-                        <span className="block text-[10px] text-slate-400 font-mono">
-                          {format(new Date(t.createdAt), 'yyyy-MM-dd HH:mm')}
-                        </span>
-                      </td>
-
-                      {/* Manager Actions */}
-                      <td className="py-3.5 px-4 text-right">
-                        {t.status === 'PENDING' ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button
-                              size="sm"
-                              onClick={() => {
-                                setApprovingTransfer(t);
-                                setApprovalNote('');
-                              }}
-                              className="h-8 rounded-xl px-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs cursor-pointer"
-                            >
-                              <Check className="w-3.5 h-3.5 mr-1" />
-                              <span>Approve</span>
-                            </Button>
-
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setRejectingTransfer(t);
-                                setRejectionReason('');
-                              }}
-                              className="h-8 rounded-xl px-2.5 text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900/50 dark:hover:bg-rose-950/40 cursor-pointer"
-                            >
-                              <X className="w-3.5 h-3.5 mr-1" />
-                              <span>Reject</span>
-                            </Button>
+                    return (
+                      <tr
+                        key={t.id}
+                        className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
+                      >
+                        {/* Repair Workorder info */}
+                        <td className="py-3.5 px-4">
+                          <div className="space-y-0.5">
+                            <span className="font-mono font-black text-xs text-indigo-600 dark:text-indigo-400 block">
+                              #{t.repairNumber}
+                            </span>
+                            <span className="font-extrabold text-slate-900 dark:text-white truncate block max-w-[180px]">
+                              {t.deviceBrand} {t.deviceModel}
+                            </span>
+                            <span className="text-[11px] text-slate-400 truncate block max-w-[180px]">
+                              {t.customerName} {t.customerPhone ? `(${t.customerPhone})` : ''}
+                            </span>
                           </div>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 italic">
-                            Completed
+                        </td>
+
+                        {/* Current Technician */}
+                        <td className="py-3.5 px-3">
+                          <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
+                            <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate max-w-[130px]">{t.senderTechnicianName}</span>
+                          </div>
+                        </td>
+
+                        {/* Target Technician */}
+                        <td className="py-3.5 px-3">
+                          <div className="flex items-center gap-1.5 font-bold text-indigo-600 dark:text-indigo-400">
+                            <ArrowRightLeft className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate max-w-[130px]">{t.targetTechnicianName}</span>
+                          </div>
+                        </td>
+
+                        {/* Reason */}
+                        <td className="py-3.5 px-3 max-w-[220px]">
+                          <p className="text-slate-700 dark:text-slate-300 font-medium line-clamp-2">
+                            "{t.reason}"
+                          </p>
+                          {t.responseNote && (
+                            <p className="text-[10px] text-slate-400 italic mt-0.5 line-clamp-1">
+                              Response: {t.responseNote}
+                            </p>
+                          )}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                          <Badge variant="outline" className={`text-[10px] px-2.5 py-0.5 rounded-lg border inline-flex items-center gap-1.5 shrink-0 ${statusMeta.class}`}>
+                            <StatusIcon className="w-3 h-3 shrink-0" />
+                            <span>{statusMeta.label}</span>
+                          </Badge>
+                        </td>
+
+                        {/* Timestamp */}
+                        <td className="py-3.5 px-3 text-slate-500 dark:text-slate-400 text-[11px] whitespace-nowrap">
+                          <span>{formatTimeAgo(t.createdAt)}</span>
+                          <span className="block text-[10px] text-slate-400 font-mono">
+                            {format(new Date(t.createdAt), 'yyyy-MM-dd HH:mm')}
                           </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                        </td>
+
+                        {/* Manager Actions */}
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          {t.status === 'PENDING' ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setApprovingTransfer(t);
+                                  setApprovalNote('');
+                                }}
+                                className="h-8 rounded-xl px-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5 mr-1" />
+                                <span>Approve</span>
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setRejectingTransfer(t);
+                                  setRejectionReason('');
+                                }}
+                                className="h-8 rounded-xl px-2.5 text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900/50 dark:hover:bg-rose-950/40 cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5 mr-1" />
+                                <span>Reject</span>
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 italic">
+                              Completed
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ====================================================================
           4. APPROVE CONFIRMATION MODAL

@@ -55,6 +55,7 @@ interface PriorityManagementTabProps {
     reason?: string;
   }) => Promise<boolean>;
   initialSelectedRepair?: RepairItem | null;
+  containerWidth?: number;
 }
 
 export const PriorityManagementTab: React.FC<PriorityManagementTabProps> = ({
@@ -63,7 +64,8 @@ export const PriorityManagementTab: React.FC<PriorityManagementTabProps> = ({
   loading,
   onRefresh,
   onPrioritySubmit,
-  initialSelectedRepair = null
+  initialSelectedRepair = null,
+  containerWidth = 1200
 }) => {
   // Sub-view: 'urgent_high' (default focus) vs 'all'
   const [activeView, setActiveView] = useState<'urgent_high' | 'all'>('urgent_high');
@@ -185,16 +187,16 @@ export const PriorityManagementTab: React.FC<PriorityManagementTabProps> = ({
     switch (cat) {
       case 'IPHONE':
       case 'SMARTPHONE':
-        return <Smartphone className="w-4 h-4 text-sky-500" />;
+        return <Smartphone className="w-4 h-4 text-sky-500 shrink-0" />;
       case 'IPAD':
       case 'TABLET':
-        return <Tablet className="w-4 h-4 text-indigo-500" />;
+        return <Tablet className="w-4 h-4 text-indigo-500 shrink-0" />;
       case 'LAPTOP':
-        return <Laptop className="w-4 h-4 text-emerald-500" />;
+        return <Laptop className="w-4 h-4 text-emerald-500 shrink-0" />;
       case 'TV':
-        return <Tv className="w-4 h-4 text-amber-500" />;
+        return <Tv className="w-4 h-4 text-amber-500 shrink-0" />;
       default:
-        return <HelpCircle className="w-4 h-4 text-muted-foreground" />;
+        return <HelpCircle className="w-4 h-4 text-muted-foreground shrink-0" />;
     }
   };
 
@@ -230,133 +232,133 @@ export const PriorityManagementTab: React.FC<PriorityManagementTabProps> = ({
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full min-w-0">
       {/* Header banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-card border border-border/80 shadow-sm">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
-            <Flame className="w-5 h-5 text-red-500" />
-            Priority Management & Expedited Queue
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-card border border-border/80 shadow-sm min-w-0">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-2">
+            <Flame className="w-5 h-5 text-red-500 shrink-0" />
+            <span className="truncate">Priority Management & Expedited Queue</span>
           </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             Monitor expedited workorders and escalate jobs. Technicians receive immediate alerts upon priority escalation.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={onRefresh}
             disabled={loading}
-            className="gap-2"
+            className="gap-2 shrink-0 w-full sm:w-auto h-9"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            <span>Refresh</span>
           </Button>
         </div>
       </div>
 
       {/* Metric Highlight Banners */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-red-500/30 bg-red-500/5">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-red-500">Urgent Repairs</p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">{urgentCount}</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Immediate intervention</p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 min-w-0">
+        <Card className="border-red-500/30 bg-red-500/5 min-w-0">
+          <CardContent className="p-3.5 sm:p-4 flex items-center justify-between gap-2 min-w-0">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-red-500 truncate">Urgent Repairs</p>
+              <h3 className="text-xl sm:text-2xl font-bold text-foreground mt-0.5">{urgentCount}</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">Immediate escalation</p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500">
-              <Flame className="w-5 h-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-amber-500/30 bg-amber-500/5">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-amber-500">High Priority</p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">{highCount}</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Expedited turnaround</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
-              <AlertTriangle className="w-5 h-5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 shrink-0">
+              <Flame className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-border">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Active Workorders</p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">
+        <Card className="border-amber-500/30 bg-amber-500/5 min-w-0">
+          <CardContent className="p-3.5 sm:p-4 flex items-center justify-between gap-2 min-w-0">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-amber-500 truncate">High Priority</p>
+              <h3 className="text-xl sm:text-2xl font-bold text-foreground mt-0.5">{highCount}</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">Expedited queue</p>
+            </div>
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
+              <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border min-w-0">
+          <CardContent className="p-3.5 sm:p-4 flex items-center justify-between gap-2 min-w-0">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">Active Workorders</p>
+              <h3 className="text-xl sm:text-2xl font-bold text-foreground mt-0.5">
                 {repairs.filter(r => r.status !== 'COMPLETED' && r.status !== 'CANCELLED').length}
               </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">In workshop queue</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">In workshop queue</p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
-              <Clock className="w-5 h-5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground shrink-0">
+              <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-border">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Active Technicians</p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">{technicians.length}</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Handling active queues</p>
+        <Card className="border-border min-w-0">
+          <CardContent className="p-3.5 sm:p-4 flex items-center justify-between gap-2 min-w-0">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">Active Specialists</p>
+              <h3 className="text-xl sm:text-2xl font-bold text-foreground mt-0.5">{technicians.length}</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">Assigned benches</p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
-              <UserCheck className="w-5 h-5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground shrink-0">
+              <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Sub Tabs: Urgent & High Queue vs All Repairs */}
-      <div className="flex items-center gap-2 border-b border-border pb-2">
+      {/* Sub Tabs: Urgent & High Queue vs All Priority Levels - Guaranteed zero clipping */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2.5 min-w-0">
         <Button
           variant={activeView === 'urgent_high' ? 'default' : 'ghost'}
           onClick={() => setActiveView('urgent_high')}
-          className="gap-2 relative"
+          className="gap-2 shrink-0 cursor-pointer min-h-[38px] text-xs sm:text-sm font-semibold"
         >
-          <Flame className="w-4 h-4 text-red-400" />
-          Urgent & High Priority Queue
-          <Badge variant="secondary" className="ml-1 text-xs">
+          <Flame className="w-4 h-4 text-red-500 shrink-0" />
+          <span>Urgent & High Priority Queue</span>
+          <Badge variant="secondary" className="ml-1 text-[11px] px-1.5 py-0.2 shrink-0 font-bold">
             {urgentCount + highCount}
           </Badge>
         </Button>
         <Button
           variant={activeView === 'all' ? 'default' : 'ghost'}
           onClick={() => setActiveView('all')}
-          className="gap-2"
+          className="gap-2 shrink-0 cursor-pointer min-h-[38px] text-xs sm:text-sm font-semibold"
         >
-          <SlidersHorizontal className="w-4 h-4" />
-          All Priority Levels
-          <Badge variant="outline" className="ml-1 text-xs">
+          <SlidersHorizontal className="w-4 h-4 shrink-0 text-primary" />
+          <span>All Priority Levels</span>
+          <Badge variant="outline" className="ml-1 text-[11px] px-1.5 py-0.2 shrink-0 font-bold">
             {repairs.length}
           </Badge>
         </Button>
       </div>
 
-      {/* Filter Bar */}
-      <Card className="border-border/70">
-        <CardContent className="p-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Filter Bar with adaptive multi-row grid */}
+      <Card className="border-border/70 min-w-0">
+        <CardContent className="p-3.5 sm:p-4 space-y-3 min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
             {/* Search */}
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <div className="relative sm:col-span-2 lg:col-span-1 min-w-0">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground shrink-0" />
               <Input
                 placeholder="Search ticket #, customer, device, tech..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-sm"
+                className="pl-9 h-9 text-xs sm:text-sm w-full"
               />
             </div>
 
             {/* Category Filter */}
             <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as DeviceCategory)}>
-              <SelectTrigger className="h-9 text-sm">
+              <SelectTrigger className="h-9 text-xs sm:text-sm w-full min-w-0">
                 <SelectValue placeholder="Device Category" />
               </SelectTrigger>
               <SelectContent>
@@ -370,13 +372,13 @@ export const PriorityManagementTab: React.FC<PriorityManagementTabProps> = ({
               </SelectContent>
             </Select>
 
-            {/* Priority Filter (if on all view) */}
+            {/* Priority Filter */}
             <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Priority Filter" />
+              <SelectTrigger className="h-9 text-xs sm:text-sm w-full min-w-0">
+                <SelectValue placeholder="All Priority Levels" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All Priorities</SelectItem>
+                <SelectItem value="ALL">All Priority Levels</SelectItem>
                 <SelectItem value="URGENT">🔴 Urgent</SelectItem>
                 <SelectItem value="HIGH">🟠 High</SelectItem>
                 <SelectItem value="NORMAL">🔵 Normal</SelectItem>
@@ -386,15 +388,17 @@ export const PriorityManagementTab: React.FC<PriorityManagementTabProps> = ({
 
             {/* Technician Filter */}
             <Select value={technicianFilter} onValueChange={setTechnicianFilter}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Assigned Technician" />
+              <SelectTrigger className="h-9 text-xs sm:text-sm w-full min-w-0">
+                <SelectValue placeholder="All Technicians" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Technicians</SelectItem>
                 <SelectItem value="UNASSIGNED">Unassigned Only</SelectItem>
                 {technicians.map(t => (
                   <SelectItem key={t.id} value={t.id}>
-                    {t.name}
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="truncate">{t.name}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -403,15 +407,15 @@ export const PriorityManagementTab: React.FC<PriorityManagementTabProps> = ({
         </CardContent>
       </Card>
 
-      {/* Repairs Table */}
+      {/* Repairs Display: Mobile/Tablet Card View + Desktop Table */}
       {filteredRepairs.length === 0 ? (
-        <Card className="border-dashed p-10 text-center">
+        <Card className="border-dashed p-8 sm:p-10 text-center">
           <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
-            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3 shrink-0">
               <CheckCircle2 className="w-6 h-6 text-emerald-500" />
             </div>
-            <h3 className="font-semibold text-lg">No matching repairs</h3>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h3 className="font-semibold text-base sm:text-lg">No matching repairs</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               {activeView === 'urgent_high'
                 ? 'No urgent or high priority repairs currently match your filters.'
                 : 'Try adjusting your search criteria.'}
@@ -419,114 +423,202 @@ export const PriorityManagementTab: React.FC<PriorityManagementTabProps> = ({
           </div>
         </Card>
       ) : (
-        <div className="border border-border rounded-xl bg-card overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs uppercase bg-muted/60 text-muted-foreground border-b border-border font-medium">
-                <tr>
-                  <th className="px-4 py-3">Repair # & Current Priority</th>
-                  <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3">Device & Issue</th>
-                  <th className="px-4 py-3">Assigned Technician</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Adjust Priority</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredRepairs.map((repair) => {
-                  const pMeta = getPriorityMeta(repair.priority);
-                  const sStyle = STATUS_STYLES[repair.status as keyof typeof STATUS_STYLES] || {
-                    badge: 'bg-muted text-muted-foreground',
-                    label: repair.status
-                  };
+        <div className="w-full min-w-0 space-y-3">
+          {/* 1. Mobile & Small Tablet Card Layout */}
+          <div className="block lg:hidden space-y-3">
+            {filteredRepairs.map((repair) => {
+              const pMeta = getPriorityMeta(repair.priority);
+              const sStyle = STATUS_STYLES[repair.status as keyof typeof STATUS_STYLES] || {
+                badge: 'bg-muted text-muted-foreground',
+                label: repair.status
+              };
 
-                  return (
-                    <tr key={repair.id} className="hover:bg-muted/30 transition-colors">
-                      {/* Ticket # & Current Priority */}
-                      <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          <span className="font-mono font-semibold text-primary block">
-                            {repair.repairNumber}
-                          </span>
-                          <Badge
-                            variant="outline"
-                            className={`text-xs px-2 py-0.5 font-semibold ${pMeta.badgeClass} flex items-center gap-1 w-fit`}
-                          >
-                            {pMeta.indicatorText}
-                          </Badge>
-                        </div>
-                      </td>
+              return (
+                <Card key={repair.id} className="border-border/80 shadow-xs hover:border-primary/40 transition-colors overflow-hidden">
+                  <CardContent className="p-4 space-y-3">
+                    {/* Header Row: Ticket #, Priority, Status */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-primary">
+                          {repair.repairNumber}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={`text-[11px] px-2 py-0.5 font-semibold ${pMeta.badgeClass} flex items-center gap-1 shrink-0`}
+                        >
+                          {pMeta.indicatorText}
+                        </Badge>
+                      </div>
+                      <Badge className={`${sStyle.badge} text-[11px] font-medium px-2.5 py-0.5 rounded-full border-0 shrink-0`}>
+                        {sStyle.label}
+                      </Badge>
+                    </div>
 
-                      {/* Customer */}
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-foreground">{repair.customerName}</div>
-                        <div className="text-xs text-muted-foreground">{repair.customerPhone}</div>
-                      </td>
-
-                      {/* Device */}
-                      <td className="px-4 py-3 max-w-xs">
-                        <div className="flex items-center gap-1.5 font-medium text-foreground truncate">
+                    {/* Middle Section: Device & Customer */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1 border-t border-border/50">
+                      <div>
+                        <span className="text-muted-foreground">Device: </span>
+                        <span className="font-semibold text-foreground inline-flex items-center gap-1">
                           {getDeviceIcon(repair.deviceCategory)}
-                          <span>
-                            {repair.deviceBrand || ''} {repair.deviceModel || 'Unknown Device'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          {repair.problemDescription || 'No description provided'}
-                        </p>
-                      </td>
+                          {repair.deviceBrand || ''} {repair.deviceModel || 'Unknown Device'}
+                        </span>
+                        {repair.problemDescription && (
+                          <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5" title={repair.problemDescription}>
+                            {repair.problemDescription}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Customer: </span>
+                        <span className="font-medium text-foreground">{repair.customerName}</span>
+                        {repair.customerPhone && (
+                          <span className="text-muted-foreground block text-[11px]">{repair.customerPhone}</span>
+                        )}
+                      </div>
+                    </div>
 
-                      {/* Assigned Tech */}
-                      <td className="px-4 py-3">
+                    {/* Bottom Row: Technician & Action Button */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border/50">
+                      <div className="text-xs">
+                        <span className="text-muted-foreground block sm:inline">Technician: </span>
                         {repair.technician ? (
-                          <div className="flex items-center gap-1.5 font-medium text-foreground">
-                            <UserCheck className="w-3.5 h-3.5 text-emerald-500" />
-                            <span>{repair.technician.name}</span>
-                          </div>
+                          <span className="font-semibold text-foreground inline-flex items-center gap-1.5 mt-0.5 sm:mt-0">
+                            <UserCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                            {repair.technician.name}
+                          </span>
                         ) : (
-                          <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10">
+                          <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px] px-1.5 py-0.2 shrink-0">
                             Unassigned
                           </Badge>
                         )}
-                      </td>
+                      </div>
 
-                      {/* Status */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <Badge className={`${sStyle.badge} text-xs font-medium px-3 py-1 rounded-full border-0 whitespace-nowrap inline-flex items-center shrink-0`}>
-                          {sStyle.label}
-                        </Badge>
-                      </td>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenPriorityModal(repair)}
+                        className="gap-1.5 h-9 text-xs font-semibold w-full sm:w-auto shrink-0 cursor-pointer"
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span>Adjust Priority</span>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
 
-                      {/* Adjust Priority Action */}
-                      <td className="px-4 py-3 text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleOpenPriorityModal(repair)}
-                          className="gap-1.5 h-8 text-xs font-medium"
-                        >
-                          <SlidersHorizontal className="w-3.5 h-3.5 text-primary" />
-                          Change Priority
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          {/* 2. Desktop Table Layout */}
+          <div className="hidden lg:block border border-border rounded-xl bg-card overflow-hidden shadow-sm">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs uppercase bg-muted/60 text-muted-foreground border-b border-border font-medium">
+                  <tr>
+                    <th className="px-4 py-3 whitespace-nowrap">Repair # & Current Priority</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Customer</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Device & Issue</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Assigned Technician</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Status</th>
+                    <th className="px-4 py-3 text-right whitespace-nowrap">Adjust Priority</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredRepairs.map((repair) => {
+                    const pMeta = getPriorityMeta(repair.priority);
+                    const sStyle = STATUS_STYLES[repair.status as keyof typeof STATUS_STYLES] || {
+                      badge: 'bg-muted text-muted-foreground',
+                      label: repair.status
+                    };
+
+                    return (
+                      <tr key={repair.id} className="hover:bg-muted/30 transition-colors">
+                        {/* Ticket # & Current Priority */}
+                        <td className="px-4 py-3 align-middle">
+                          <div className="space-y-1">
+                            <span className="font-mono font-semibold text-primary block text-xs sm:text-sm">
+                              {repair.repairNumber}
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className={`text-[11px] px-2 py-0.5 font-semibold ${pMeta.badgeClass} flex items-center gap-1 w-fit shrink-0`}
+                            >
+                              {pMeta.indicatorText}
+                            </Badge>
+                          </div>
+                        </td>
+
+                        {/* Customer */}
+                        <td className="px-4 py-3 align-middle">
+                          <div className="font-medium text-foreground text-xs sm:text-sm truncate max-w-[160px]">{repair.customerName}</div>
+                          <div className="text-xs text-muted-foreground">{repair.customerPhone}</div>
+                        </td>
+
+                        {/* Device */}
+                        <td className="px-4 py-3 align-middle max-w-xs">
+                          <div className="flex items-center gap-1.5 font-medium text-foreground truncate text-xs sm:text-sm">
+                            {getDeviceIcon(repair.deviceCategory)}
+                            <span className="truncate">
+                              {repair.deviceBrand || ''} {repair.deviceModel || 'Unknown Device'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5" title={repair.problemDescription || ''}>
+                            {repair.problemDescription || 'No description provided'}
+                          </p>
+                        </td>
+
+                        {/* Assigned Tech */}
+                        <td className="px-4 py-3 align-middle">
+                          {repair.technician ? (
+                            <div className="flex items-center gap-1.5 font-medium text-foreground text-xs sm:text-sm truncate max-w-[150px]">
+                              <UserCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                              <span className="truncate">{repair.technician.name}</span>
+                            </div>
+                          ) : (
+                            <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px] px-2 py-0.5 shrink-0">
+                              Unassigned
+                            </Badge>
+                          )}
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-4 py-3 whitespace-nowrap align-middle">
+                          <Badge className={`${sStyle.badge} text-xs font-medium px-2.5 py-0.5 rounded-full border-0 whitespace-nowrap inline-flex items-center shrink-0`}>
+                            {sStyle.label}
+                          </Badge>
+                        </td>
+
+                        {/* Adjust Priority Action */}
+                        <td className="px-4 py-3 text-right whitespace-nowrap align-middle">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenPriorityModal(repair)}
+                            className="gap-1.5 h-8 text-xs font-medium shrink-0 cursor-pointer"
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <span>Change Priority</span>
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
       {/* Priority Change Dialog */}
       <Dialog open={priorityModalOpen} onOpenChange={setPriorityModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <SlidersHorizontal className="w-5 h-5 text-primary" />
-              Adjust Repair Priority
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <SlidersHorizontal className="w-5 h-5 text-primary shrink-0" />
+              <span>Adjust Repair Priority</span>
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs sm:text-sm">
               Escalate or adjust the turnaround urgency. Changes are recorded in audit logs and notify the assigned technician.
             </DialogDescription>
           </DialogHeader>

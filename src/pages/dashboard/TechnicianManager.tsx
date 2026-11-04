@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { useRealtimeSync } from '@/services/realtime';
+import { useDashboardSidebar } from '@/context/SidebarContext';
 import { toast } from 'sonner';
 
 import {
@@ -41,8 +42,41 @@ const REALTIME_ENTITIES = ['repair', 'repair_transfer', 'repairLog', 'user', 'no
 
 export default function TechnicianManager() {
   const { user } = useAuthStore();
+  const { isCollapsed } = useDashboardSidebar();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+
+  // Container width sensing for responsive layout when desktop sidebar expands/collapses
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(1200);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      if (el) {
+        setContainerWidth(el.getBoundingClientRect().width);
+      }
+    };
+
+    measure();
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0) {
+          setContainerWidth(entry.contentRect.width);
+        }
+      }
+    });
+
+    observer.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [isCollapsed]);
 
   // Active tab state from URL search params or default to 'overview'
   const currentTab = (searchParams.get('tab') as ManagerTabKey) || 'overview';
@@ -272,22 +306,24 @@ export default function TechnicianManager() {
   }
 
   return (
-    <div className="space-y-6 pb-12">
+    <div ref={containerRef} className="@container w-full max-w-full min-w-0 space-y-6 pb-12 overflow-x-hidden">
       {/* Top Main Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border/80 pb-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
-              <UserCog className="w-6 h-6" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border/80 pb-4 min-w-0">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0 mt-0.5 sm:mt-0">
+              <UserCog className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-                Technician Manager
-                <Badge variant="secondary" className="text-xs font-normal">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground truncate">
+                  Technician Manager
+                </h1>
+                <Badge variant="secondary" className="text-xs font-normal shrink-0">
                   Control Center
                 </Badge>
-              </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 line-clamp-2 sm:line-clamp-1">
                 Centralized technician workloads, repair transfers, active queues, and workorder priority management.
               </p>
             </div>
@@ -295,64 +331,64 @@ export default function TechnicianManager() {
         </div>
 
         {/* Global Action / Refresh Controls */}
-        <div className="flex items-center gap-2 self-stretch sm:self-auto">
+        <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0">
           <Button
             variant="outline"
             size="sm"
             onClick={() => fetchData(false)}
             disabled={loading || refreshing}
-            className="gap-2 shrink-0"
+            className="gap-2 shrink-0 w-full sm:w-auto h-9"
           >
             <RefreshCw className={`w-4 h-4 ${refreshing || loading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Refresh Data</span>
+            <span>Refresh Data</span>
           </Button>
         </div>
       </div>
 
       {/* Error Alert if any */}
       {error && (
-        <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive text-sm flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive text-sm flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
             <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+            <span className="truncate">{error}</span>
           </div>
-          <Button variant="outline" size="sm" onClick={() => fetchData(false)}>
+          <Button variant="outline" size="sm" onClick={() => fetchData(false)} className="shrink-0">
             Retry
           </Button>
         </div>
       )}
 
-      {/* 5 Primary Navigation Tabs */}
-      <div className="overflow-x-auto no-scrollbar">
+      {/* 5 Primary Navigation Tabs with Horizontal Scroll & Touch Friendly Layout */}
+      <div className="overflow-x-auto no-scrollbar scroll-smooth w-full min-w-0 pb-1 -mx-1 px-1">
         <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border w-max min-w-full sm:min-w-0">
           {/* Tab 1: Overview */}
           <button
             type="button"
             onClick={() => setActiveTab('overview')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all shrink-0 cursor-pointer min-h-[38px] ${
               currentTab === 'overview'
                 ? 'bg-card text-foreground shadow-sm font-semibold'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
-            <Users className="w-4 h-4 text-primary" />
-            <span>Technician Overview</span>
+            <Users className="w-4 h-4 text-primary shrink-0" />
+            <span className="whitespace-nowrap">Technician Overview</span>
           </button>
 
           {/* Tab 2: Transfer Requests */}
           <button
             type="button"
             onClick={() => setActiveTab('transfers')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all shrink-0 cursor-pointer min-h-[38px] ${
               currentTab === 'transfers'
                 ? 'bg-card text-foreground shadow-sm font-semibold'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
-            <ArrowRightLeft className="w-4 h-4 text-blue-500" />
-            <span>Transfer Requests</span>
+            <ArrowRightLeft className="w-4 h-4 text-blue-500 shrink-0" />
+            <span className="whitespace-nowrap">Transfer Requests</span>
             {pendingTransfersCount > 0 && (
-              <Badge variant="destructive" className="ml-1 text-[11px] px-1.5 py-0.2 animate-pulse">
+              <Badge variant="destructive" className="ml-1 text-[11px] px-1.5 py-0.2 shrink-0 animate-pulse">
                 {pendingTransfersCount}
               </Badge>
             )}
@@ -362,30 +398,30 @@ export default function TechnicianManager() {
           <button
             type="button"
             onClick={() => setActiveTab('workload')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all shrink-0 cursor-pointer min-h-[38px] ${
               currentTab === 'workload'
                 ? 'bg-card text-foreground shadow-sm font-semibold'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
-            <Gauge className="w-4 h-4 text-emerald-500" />
-            <span>Technician Workload</span>
+            <Gauge className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span className="whitespace-nowrap">Technician Workload</span>
           </button>
 
           {/* Tab 4: Repair Assignments */}
           <button
             type="button"
             onClick={() => setActiveTab('assignments')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all shrink-0 cursor-pointer min-h-[38px] ${
               currentTab === 'assignments'
                 ? 'bg-card text-foreground shadow-sm font-semibold'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
-            <UserCheck className="w-4 h-4 text-violet-500" />
-            <span>Repair Assignments</span>
+            <UserCheck className="w-4 h-4 text-violet-500 shrink-0" />
+            <span className="whitespace-nowrap">Repair Assignments</span>
             {unassignedRepairsCount > 0 && (
-              <Badge variant="outline" className="ml-1 text-[11px] px-1.5 py-0.2 border-amber-500/40 text-amber-500 bg-amber-500/10">
+              <Badge variant="outline" className="ml-1 text-[11px] px-1.5 py-0.2 shrink-0 border-amber-500/40 text-amber-500 bg-amber-500/10">
                 {unassignedRepairsCount}
               </Badge>
             )}
@@ -395,16 +431,16 @@ export default function TechnicianManager() {
           <button
             type="button"
             onClick={() => setActiveTab('priority')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-all shrink-0 cursor-pointer min-h-[38px] ${
               currentTab === 'priority'
                 ? 'bg-card text-foreground shadow-sm font-semibold'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
-            <Flame className="w-4 h-4 text-red-500" />
-            <span>Priority Management</span>
+            <Flame className="w-4 h-4 text-red-500 shrink-0" />
+            <span className="whitespace-nowrap">Priority Management</span>
             {urgentRepairsCount > 0 && (
-              <Badge variant="destructive" className="ml-1 text-[11px] px-1.5 py-0.2">
+              <Badge variant="destructive" className="ml-1 text-[11px] px-1.5 py-0.2 shrink-0">
                 {urgentRepairsCount}
               </Badge>
             )}
@@ -413,7 +449,7 @@ export default function TechnicianManager() {
       </div>
 
       {/* Tab Panels */}
-      <div>
+      <div className="w-full min-w-0">
         {currentTab === 'overview' && (
           <TechnicianOverviewTab
             summary={summary}
@@ -424,6 +460,7 @@ export default function TechnicianManager() {
             onOpenPriorityModal={handleOpenPriorityModal}
             onNavigateToTransfers={() => setActiveTab('transfers')}
             onRefresh={() => fetchData(false)}
+            containerWidth={containerWidth}
           />
         )}
 
@@ -433,6 +470,7 @@ export default function TechnicianManager() {
             technicians={technicians}
             loading={loading}
             onRefresh={() => fetchData(false)}
+            containerWidth={containerWidth}
           />
         )}
 
@@ -443,6 +481,7 @@ export default function TechnicianManager() {
             onRefresh={() => fetchData(false)}
             onOpenAssignModal={handleOpenAssignModal}
             onOpenPriorityModal={handleOpenPriorityModal}
+            containerWidth={containerWidth}
           />
         )}
 
@@ -454,6 +493,7 @@ export default function TechnicianManager() {
             onRefresh={() => fetchData(false)}
             onAssignSubmit={handleAssignSubmit}
             initialSelectedRepair={selectedRepairForAssign}
+            containerWidth={containerWidth}
           />
         )}
 
@@ -465,6 +505,7 @@ export default function TechnicianManager() {
             onRefresh={() => fetchData(false)}
             onPrioritySubmit={handlePrioritySubmit}
             initialSelectedRepair={selectedRepairForPriority}
+            containerWidth={containerWidth}
           />
         )}
       </div>
