@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAuthStore } from './store/authStore';
@@ -60,6 +60,11 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode, roles?
   return <>{children}</>;
 }
 
+function DirectRepairRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/dashboard/repairs/${id || ''}`} replace />;
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -86,6 +91,16 @@ export default function App() {
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/pending-approval" element={<PendingApproval />} />
                 <Route path="/rejected-access" element={<RejectedAccess />} />
+
+                {/* Direct Repair Route (Deep Linking) */}
+                <Route
+                  path="/repairs/:id"
+                  element={
+                    <ProtectedRoute>
+                      <DirectRepairRedirect />
+                    </ProtectedRoute>
+                  }
+                />
 
                 {/* Protected Dashboard Routes */}
                 <Route 

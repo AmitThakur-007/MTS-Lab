@@ -60,8 +60,11 @@ import { api } from '@/services/api';
 import { format } from 'date-fns';
 import { useRealtimeSync } from '@/services/realtime';
 import { useAppTheme } from '@/context/ThemeContext';
+import { SidebarProvider, useDashboardSidebar } from '@/context/SidebarContext';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export { useDashboardSidebar } from '@/context/SidebarContext';
+
+function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuthStore();
   const { 
     effectiveTheme, 
@@ -73,18 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setPreviewFestival 
   } = useAppTheme();
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
-  // Persistent Collapsible Sidebar for Desktop (scoped to user account)
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      const storageKey = `mtslab-sidebar-collapsed:${user?.id || 'default'}`;
-      return localStorage.getItem(storageKey) === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const { isSidebarOpen, setIsSidebarOpen, isCollapsed, toggleSidebarCollapse } = useDashboardSidebar();
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -101,28 +93,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     'TECHNICAL_ASSISTANT'
   ].includes(user?.role || '');
 
-  // Restore user-specific collapsed preference when logged in user changes
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const storageKey = `mtslab-sidebar-collapsed:${user?.id || 'default'}`;
-      const saved = localStorage.getItem(storageKey);
-      if (saved !== null) {
-        setIsCollapsed(saved === 'true');
-      }
-    } catch {}
-  }, [user?.id]);
-
-  const toggleSidebarCollapse = () => {
-    setIsCollapsed(prev => {
-      const next = !prev;
-      try {
-        const storageKey = `mtslab-sidebar-collapsed:${user?.id || 'default'}`;
-        localStorage.setItem(storageKey, String(next));
-      } catch (_) {}
-      return next;
-    });
-  };
 
   const fetchNotifications = async () => {
     try {
@@ -1102,7 +1072,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Viewport Content Area */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-7 xl:p-8 min-w-0 w-full transition-colors">
+        <div className={cn(
+          "flex-1 overflow-y-auto p-3 sm:p-5 min-w-0 w-full transition-all",
+          isCollapsed ? "lg:p-7 xl:p-8" : "lg:p-5 xl:p-6"
+        )}>
           <div className="max-w-7xl mx-auto w-full min-w-0">
             <FestivalDecorations />
             {children}
@@ -1112,3 +1085,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </div>
   );
 }
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <SidebarProvider>
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+    </SidebarProvider>
+  );
+}
+

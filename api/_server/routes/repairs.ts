@@ -59,6 +59,57 @@ export function enrichRepairTimeline<T extends Record<string, any>>(repair: T): 
   };
 }
 
+export function normalizeRepairRecord<T extends Record<string, any>>(repair: T): T & {
+  device_brand: string | null;
+  device_model: string | null;
+  imei_sn: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_email: string | null;
+  customer_address: string | null;
+  problem_description: string | null;
+  assigned_technician: any;
+  assigned_technician_name: string | null;
+  estimated_cost: number | null;
+  advance_paid: number;
+  total_paid: number;
+  payment_status: string;
+} {
+  if (!repair) return repair as any;
+  const rawBrand = repair.deviceBrand || repair.device_brand || repair.brand || null;
+  const rawModel = repair.deviceModel || repair.device_model || repair.model || null;
+  const imei = repair.imeiNumber || repair.imei_sn || repair.imei || null;
+  const customerName = repair.customerName || repair.customer?.name || repair.customer_name || null;
+  const customerPhone = repair.customerPhone || repair.customer?.phone || repair.customer_phone || null;
+  const customerEmail = repair.customerEmail || repair.customer?.email || repair.customer_email || null;
+  const customerAddress = repair.customerAddress || repair.customer?.address || repair.customer_address || null;
+  const problemDesc = repair.problemDescription || repair.problem_description || repair.issue || null;
+  const tech = repair.technician || repair.assigned_technician || null;
+  const techName = repair.technician?.name || repair.assignedByName || repair.technician_name || null;
+  const estCost = repair.estimatedCost != null ? Number(repair.estimatedCost) : (repair.estimated_cost != null ? Number(repair.estimated_cost) : null);
+  const advPaid = repair.advancePaid != null ? Number(repair.advancePaid) : (repair.advance_paid != null ? Number(repair.advance_paid) : 0);
+  const totPaid = repair.totalPaid != null ? Number(repair.totalPaid) : (repair.total_paid != null ? Number(repair.total_paid) : (advPaid || 0));
+  const payStatus = repair.paymentStatus || repair.payment_status || (estCost && totPaid >= estCost ? 'PAID' : (totPaid > 0 ? 'PARTIAL' : 'UNPAID'));
+
+  return {
+    ...repair,
+    device_brand: rawBrand,
+    device_model: rawModel,
+    imei_sn: imei,
+    customer_name: customerName,
+    customer_phone: customerPhone,
+    customer_email: customerEmail,
+    customer_address: customerAddress,
+    problem_description: problemDesc,
+    assigned_technician: tech,
+    assigned_technician_name: techName,
+    estimated_cost: estCost,
+    advance_paid: advPaid,
+    total_paid: totPaid,
+    payment_status: payStatus,
+  };
+}
+
 const ALLOWED_REPAIR_COLUMNS = new Set([
   'customerId',
   'customerName',
@@ -854,10 +905,12 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ error: 'Repair ticket not found or has been cancelled.' });
           }
         }
-        return res.json({
-          ...enrichRepairTimeline(byNum),
-          smsSummary: getRepairSmsSummary(byNum.id),
-        });
+        return res.json(
+          normalizeRepairRecord({
+            ...enrichRepairTimeline(byNum),
+            smsSummary: getRepairSmsSummary(byNum.id),
+          })
+        );
       }
       return res.status(404).json({ error: 'Repair ticket not found.' });
     }
@@ -870,10 +923,12 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    return res.json({
-      ...enrichRepairTimeline(repair),
-      smsSummary: getRepairSmsSummary(repair.id),
-    });
+    return res.json(
+      normalizeRepairRecord({
+        ...enrichRepairTimeline(repair),
+        smsSummary: getRepairSmsSummary(repair.id),
+      })
+    );
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to load repair record.' });
   }

@@ -1,19 +1,32 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 import { createApp } from './api/_server/app';
 
 dotenv.config();
 
-// Ensure base-ui patch is applied if needed (fast in-process check)
+// Ensure unhandled exceptions don't terminate the dev server
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]:', err?.message || err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED REJECTION]:', reason);
+});
+
+// Ensure base-ui patch is applied if needed (fast in-process string patch without spawning node)
 try {
   const checkFile = path.join(process.cwd(), 'node_modules/@base-ui/react/floating-ui-react/hooks/useDismiss.mjs');
   if (fs.existsSync(checkFile)) {
     const text = fs.readFileSync(checkFile, 'utf8');
-    if (!text.includes('passive: true') && fs.existsSync(path.join(process.cwd(), 'scripts', 'patch-base-ui.cjs'))) {
-      execSync('node scripts/patch-base-ui.cjs', { stdio: 'ignore' });
+    if (!text.includes('passive: true')) {
+      const updated = text.replace(
+        'addEventListener(target, event.type, () => {\n      listener(event);\n      unsubscribe();\n    })',
+        'addEventListener(target, event.type, () => {\n      listener(event);\n      unsubscribe();\n    }, event.type === \'touchstart\' || event.type === \'touchmove\' ? { passive: true } : undefined)'
+      );
+      if (updated !== text) {
+        fs.writeFileSync(checkFile, updated, 'utf8');
+      }
     }
   }
 } catch (_) {}
@@ -33,6 +46,32 @@ function resolvePort(): number {
   }
 
   return Number(process.env.PORT) || 3000;
+}
+
+function listenWithRetry(app: express.Application, port: number, maxRetries = 10, delayMs = 1000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    let retries = 0;
+
+    function attempt() {
+      const server = app.listen(port, '0.0.0.0', () => {
+        console.log(`Server running on port ${port}`);
+        resolve(server);
+      });
+
+      server.on('error', (err: any) => {
+        if (err.code === 'EADDRINUSE' && retries < maxRetries) {
+          retries++;
+          console.warn(`[PORT ${port} IN USE] Socket occupied; retrying in ${delayMs}ms (${retries}/${maxRetries})...`);
+          setTimeout(attempt, delayMs);
+        } else {
+          console.error(`[SERVER ERROR on port ${port}]:`, err?.message || err);
+          reject(err);
+        }
+      });
+    }
+
+    attempt();
+  });
 }
 
 async function startServer() {
@@ -56,7 +95,7 @@ async function startServer() {
       const distPath = path.join(process.cwd(), 'dist');
       if (fs.existsSync(distPath)) {
         app.use(express.static(distPath));
-        app.get('*', (req, res) => {
+        app.get('*', (_req, res) => {
           res.sendFile(path.join(distPath, 'index.html'));
         });
       }
@@ -64,22 +103,12 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-
-  server.on('error', (err: any) => {
-    console.error(`[SERVER ERROR on port ${PORT}]:`, err?.message || err);
-    if (err.code === 'EADDRINUSE') {
-      console.warn(`[PORT IN USE] Port ${PORT} occupied. Exiting to allow supervisor restart.`);
-      process.exit(1);
-    }
-  });
+  const server = await listenWithRetry(app, PORT);
 
   const cleanup = () => {
     server.close(() => {
