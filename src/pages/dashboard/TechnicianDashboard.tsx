@@ -37,7 +37,6 @@ import {
   LayoutDashboard,
   ClipboardList,
   CheckSquare,
-  Sparkles,
   TrendingUp,
   AlertCircle,
   FileText,

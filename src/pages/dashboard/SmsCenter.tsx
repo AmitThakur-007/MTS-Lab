@@ -61,6 +61,41 @@ import { cn } from '@/lib/utils';
 import SendSmsModal from '@/components/repair/SendSmsModal';
 import { useRealtimeSync } from '@/services/realtime';
 import { useDashboardCache } from '@/store/dashboardCache';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { SmsKpiCardsSkeleton, TableSkeleton } from '@/components/common/SkeletonLoaders';
+
+export interface SmsStatsState {
+  totalSmsSent: number;
+  smsChannelTotal: number;
+  staffConfirmedSms: number;
+  carrierConfirmedDelivered: number;
+  failedSms: number;
+  pendingSms: number;
+  notSentSms: number;
+  whatsappSent: number;
+  whatsappPending: number;
+  whatsappFailed: number;
+  whatsappDelivered: number;
+  whatsappRead: number;
+  totalNotifications: number;
+  uniqueCustomersNotified: number;
+  uniqueCustomersNotNotified: number;
+}
+
+export type SmsMetricType =
+  | 'TOTAL_SMS_SENT'
+  | 'SMS_CHANNEL_TOTAL'
+  | 'STAFF_CONFIRMED'
+  | 'CARRIER_DELIVERED'
+  | 'FAILED_SMS'
+  | 'PENDING_DRAFT'
+  | 'WHATSAPP_SENT';
 
 export default function SmsCenter() {
   const navigate = useNavigate();
@@ -79,39 +114,30 @@ export default function SmsCenter() {
   // Cached state access
   const cachedSmsCenter = useDashboardCache.getState().smsCenter;
 
+  // Global Date Filter State (NPT) - synchronized across KPI cards and tables
+  const [globalPreset, setGlobalPreset] = useState<string>('TODAY');
+  const [globalCustomStart, setGlobalCustomStart] = useState<string>('');
+  const [globalCustomEnd, setGlobalCustomEnd] = useState<string>('');
+
   // Pending Confirmations State
   const [pendingConfirmationsList, setPendingConfirmationsList] = useState<any[]>([]);
   const [pendingConfirmationsLoading, setPendingConfirmationsLoading] = useState<boolean>(false);
 
-  // Stats - prehydrated from cache if present
-  const [stats, setStats] = useState<{
-    totalSmsSent: number;
-    staffConfirmedSms: number;
-    carrierConfirmedDelivered: number;
-    failedSms: number;
-    pendingSms: number;
-    whatsappSent: number;
-    notSentSms: number;
-    whatsappPending: number;
-    whatsappFailed: number;
-    totalNotifications: number;
-    uniqueCustomersNotified: number;
-    uniqueCustomersNotNotified: number;
-  }>(() => cachedSmsCenter.stats || {
-    totalSmsSent: 0,
-    staffConfirmedSms: 0,
-    carrierConfirmedDelivered: 0,
-    failedSms: 0,
-    pendingSms: 0,
-    whatsappSent: 0,
-    notSentSms: 0,
-    whatsappPending: 0,
-    whatsappFailed: 0,
-    totalNotifications: 0,
-    uniqueCustomersNotified: 0,
-    uniqueCustomersNotNotified: 0,
-  });
-  const [statsLoading, setStatsLoading] = useState(false);
+  // Stats - prehydrated from cache if present; null indicates initial loading to prevent false 0s
+  const [stats, setStats] = useState<SmsStatsState | null>(() => cachedSmsCenter.stats || null);
+  const [statsLoading, setStatsLoading] = useState<boolean>(() => !cachedSmsCenter.stats);
+  const [statsError, setStatsError] = useState<string | null>(null);
+
+  // Clickable Metric Card Modal State
+  const [selectedMetric, setSelectedMetric] = useState<SmsMetricType | null>(null);
+  const [isMetricModalOpen, setIsMetricModalOpen] = useState<boolean>(false);
+  const [activeMetricTitle, setActiveMetricTitle] = useState<string>('');
+  const [activeMetricSubtitle, setActiveMetricSubtitle] = useState<string>('');
+  const [metricRecords, setMetricRecords] = useState<any[]>([]);
+  const [metricRecordsTotal, setMetricRecordsTotal] = useState<number>(0);
+  const [metricRecordsPage, setMetricRecordsPage] = useState<number>(1);
+  const [metricRecordsLoading, setMetricRecordsLoading] = useState<boolean>(false);
+  const [metricSearch, setMetricSearch] = useState<string>('');
 
   // Repaired Devices State - prehydrated from cache if present
   const [repairedPreset, setRepairedPreset] = useState<string>('TODAY');
@@ -150,14 +176,26 @@ export default function SmsCenter() {
   const [modalNotificationType, setModalNotificationType] = useState<'REPAIR_COMPLETED' | 'DEVICE_RECEIVED'>('REPAIR_COMPLETED');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Load summary stats
-  const fetchStats = async () => {
+  // Load summary stats with date filtering and graceful error handling
+  const fetchStats = useCallback(async (
+    preset = globalPreset,
+    customStart = globalCustomStart,
+    customEnd = globalCustomEnd
+  ) => {
     try {
       setStatsLoading(true);
-      const res = await api.get('/sms/stats');
-      if (res) {
-        const newStats = {
+      setStatsError(null);
+      const params: any = { filterPreset: preset };
+      if (preset === 'CUSTOM') {
+        if (customStart) params.startDate = customStart;
+        if (customEnd) params.endDate = customEnd;
+      }
+      const queryStr = new URLSearchParams(params).toString();
+      const res = await api.get(`/sms/stats?${queryStr}`);
+      if (res && res.success) {
+        const newStats: SmsStatsState = {
           totalSmsSent: res.totalSmsSent || 0,
+          smsChannelTotal: res.smsChannelTotal !== undefined ? res.smsChannelTotal : (res.totalSms || 0),
           staffConfirmedSms: res.staffConfirmedSms || 0,
           carrierConfirmedDelivered: res.carrierConfirmedDelivered || 0,
           failedSms: res.failedSms || 0,
@@ -166,6 +204,8 @@ export default function SmsCenter() {
           notSentSms: res.notSentSms || 0,
           whatsappPending: res.whatsappPending || 0,
           whatsappFailed: res.whatsappFailed || 0,
+          whatsappDelivered: res.whatsappDelivered || 0,
+          whatsappRead: res.whatsappRead || 0,
           totalNotifications: res.totalNotifications || 0,
           uniqueCustomersNotified: res.uniqueCustomersNotified || 0,
           uniqueCustomersNotNotified: res.uniqueCustomersNotNotified || 0,
@@ -173,11 +213,60 @@ export default function SmsCenter() {
         setStats(newStats);
         useDashboardCache.getState().setSmsCenter({ stats: newStats }, user?.id);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('[FETCH SMS STATS WARN]', err);
+      setStatsError(err?.message || 'Failed to retrieve SMS statistics.');
     } finally {
       setStatsLoading(false);
     }
+  }, [globalPreset, globalCustomStart, globalCustomEnd, user?.id]);
+
+  // Fetch filtered records corresponding to the clicked KPI card
+  const fetchMetricRecords = useCallback(async (
+    metric: SmsMetricType,
+    preset = globalPreset,
+    search = metricSearch,
+    page = metricRecordsPage
+  ) => {
+    try {
+      setMetricRecordsLoading(true);
+      const params: any = {
+        metric,
+        filterPreset: preset,
+        limit: 15,
+        offset: (page - 1) * 15,
+      };
+      if (preset === 'CUSTOM') {
+        if (globalCustomStart) params.startDate = globalCustomStart;
+        if (globalCustomEnd) params.endDate = globalCustomEnd;
+      }
+      if (search.trim()) {
+        params.search = search.trim();
+      }
+      const queryStr = new URLSearchParams(params).toString();
+      const res = await api.get(`/sms/notifications?${queryStr}`);
+      if (res && res.success) {
+        setMetricRecords(res.items || []);
+        setMetricRecordsTotal(res.total || 0);
+        setMetricRecordsPage(page);
+      }
+    } catch (err: any) {
+      console.warn('[FETCH METRIC RECORDS WARN]', err);
+      toast.error('Failed to load metric records.');
+    } finally {
+      setMetricRecordsLoading(false);
+    }
+  }, [globalPreset, globalCustomStart, globalCustomEnd, metricSearch, metricRecordsPage]);
+
+  // Open interactive modal for a clicked KPI card
+  const handleCardClick = (metric: SmsMetricType, title: string, subtitle: string) => {
+    setSelectedMetric(metric);
+    setActiveMetricTitle(title);
+    setActiveMetricSubtitle(subtitle);
+    setMetricRecordsPage(1);
+    setMetricSearch('');
+    setIsMetricModalOpen(true);
+    fetchMetricRecords(metric, globalPreset, '', 1);
   };
 
   // Load Repaired Devices
@@ -438,125 +527,292 @@ export default function SmsCenter() {
         </div>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        {/* Total SMS Sent */}
-        <Card className="bg-slate-900 border-slate-800 text-white shadow-md">
-          <CardContent className="p-3.5 sm:p-4">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">Total SMS Sent</span>
-            <div className="text-2xl sm:text-3xl font-black text-white mt-1">
-              {statsLoading ? '...' : stats.totalSmsSent}
-            </div>
-            <span className="text-[10px] text-cyan-400 font-medium flex items-center gap-1 mt-1">
-              <Check className="w-3 h-3" />
-              <span>SMS channel total</span>
-            </span>
-          </CardContent>
-        </Card>
+      {/* Global Date Filter Bar for SMS Center (Asia/Kathmandu NPT) */}
+      <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mr-1 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                <span>Date Period (NPT):</span>
+              </span>
 
-        {/* Staff-Confirmed Sent */}
-        <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-          <CardContent className="p-3.5 sm:p-4">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Staff-Confirmed</span>
-            <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-              {statsLoading ? '...' : stats.staffConfirmedSms}
+              {[
+                { label: 'Today', value: 'TODAY' },
+                { label: 'Yesterday', value: 'YESTERDAY' },
+                { label: 'This Week', value: 'THIS_WEEK' },
+                { label: 'This Month', value: 'THIS_MONTH' },
+                { label: 'All Time', value: 'ALL' },
+                { label: 'Custom', value: 'CUSTOM' },
+              ].map((p) => (
+                <Button
+                  key={p.value}
+                  type="button"
+                  size="sm"
+                  variant={globalPreset === p.value ? "default" : "outline"}
+                  className={cn(
+                    "h-7 text-xs font-semibold px-2.5 transition-all cursor-pointer",
+                    globalPreset === p.value
+                      ? "bg-cyan-600 text-white hover:bg-cyan-700 shadow-xs"
+                      : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  )}
+                  onClick={() => {
+                    setGlobalPreset(p.value);
+                    setRepairedPreset(p.value);
+                    setReceivedPreset(p.value);
+                    fetchStats(p.value);
+                  }}
+                >
+                  {p.label}
+                </Button>
+              ))}
             </div>
-            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-              <span>Verified sent</span>
-            </span>
-          </CardContent>
-        </Card>
 
-        {/* Carrier Confirmed Delivered */}
-        <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-          <CardContent className="p-3.5 sm:p-4">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Carrier Delivered</span>
-            <div className="text-2xl sm:text-3xl font-black text-cyan-600 dark:text-cyan-400 mt-1">
-              {statsLoading ? '...' : stats.carrierConfirmedDelivered}
-            </div>
-            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-              <ShieldCheck className="w-3 h-3 text-cyan-500" />
-              <span>Network receipt</span>
-            </span>
-          </CardContent>
-        </Card>
+            {globalPreset === 'CUSTOM' && (
+              <div className="flex items-center gap-2 pt-2 sm:pt-0">
+                <Input
+                  type="date"
+                  value={globalCustomStart}
+                  onChange={(e) => setGlobalCustomStart(e.target.value)}
+                  className="h-7 text-xs w-32 bg-slate-50 dark:bg-slate-950"
+                  aria-label="Custom start date"
+                />
+                <span className="text-xs text-slate-400">to</span>
+                <Input
+                  type="date"
+                  value={globalCustomEnd}
+                  onChange={(e) => setGlobalCustomEnd(e.target.value)}
+                  className="h-7 text-xs w-32 bg-slate-50 dark:bg-slate-950"
+                  aria-label="Custom end date"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    fetchStats('CUSTOM', globalCustomStart, globalCustomEnd);
+                  }}
+                  className="h-7 text-xs bg-cyan-600 hover:bg-cyan-700 text-white cursor-pointer"
+                >
+                  Apply
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Failed SMS */}
-        <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-          <CardContent className="p-3.5 sm:p-4">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Failed SMS</span>
-            <div className="text-2xl sm:text-3xl font-black text-rose-600 dark:text-rose-400 mt-1">
-              {statsLoading ? '...' : stats.failedSms}
-            </div>
-            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-              <XCircle className="w-3 h-3 text-rose-500" />
-              <span>Attention needed</span>
+      {/* Summary KPI Cards (7 Clickable Interactive Cards with Skeleton Loading) */}
+      {statsLoading && !stats ? (
+        <SmsKpiCardsSkeleton count={7} />
+      ) : statsError && !stats ? (
+        <Card className="bg-rose-50/60 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/60 p-4">
+          <div className="flex items-center justify-between gap-3 text-xs text-rose-700 dark:text-rose-300">
+            <span className="flex items-center gap-1.5 font-medium">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{statsError}</span>
             </span>
-          </CardContent>
+            <Button size="sm" variant="outline" onClick={() => fetchStats()} className="h-7 text-xs">
+              Retry
+            </Button>
+          </div>
         </Card>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3.5">
+          {/* 1. Total SMS Sent */}
+          <Card
+            onClick={() => handleCardClick('TOTAL_SMS_SENT', 'Total SMS Sent', 'All SMS messages confirmed sent')}
+            className={cn(
+              "bg-slate-900 border-slate-800 text-white shadow-md cursor-pointer hover:border-cyan-500/80 transition-all select-none group",
+              selectedMetric === 'TOTAL_SMS_SENT' && "ring-2 ring-cyan-400 scale-[1.02]"
+            )}
+          >
+            <CardContent className="p-3 sm:p-3.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block truncate">Total SMS Sent</span>
+              <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
+                {stats?.totalSmsSent ?? 0}
+              </div>
+              <div className="text-[10px] text-cyan-400 font-medium flex items-center justify-between mt-1 pt-0.5 border-t border-slate-800">
+                <span className="flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  <span>SMS Sent</span>
+                </span>
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity">View →</span>
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Pending / Draft SMS */}
-        <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-          <CardContent className="p-3.5 sm:p-4">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Pending / Draft</span>
-            <div className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 mt-1">
-              {statsLoading ? '...' : stats.pendingSms}
-            </div>
-            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-              <Clock className="w-3 h-3 text-amber-500" />
-              <span>Awaiting send</span>
-            </span>
-          </CardContent>
-        </Card>
+          {/* 2. SMS Channel Total */}
+          <Card
+            onClick={() => handleCardClick('SMS_CHANNEL_TOTAL', 'SMS Channel Total', 'All messages processed on SMS channels')}
+            className={cn(
+              "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-indigo-500/80 transition-all select-none group",
+              selectedMetric === 'SMS_CHANNEL_TOTAL' && "ring-2 ring-indigo-500 scale-[1.02]"
+            )}
+          >
+            <CardContent className="p-3 sm:p-3.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">SMS Channel Total</span>
+              <div className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-0.5">
+                {stats?.smsChannelTotal ?? 0}
+              </div>
+              <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-0.5 border-t border-slate-100 dark:border-slate-800">
+                <span className="flex items-center gap-1">
+                  <Smartphone className="w-3 h-3 text-indigo-500" />
+                  <span>All SMS</span>
+                </span>
+                <span className="opacity-0 group-hover:opacity-100 text-indigo-600 dark:text-indigo-400 transition-opacity">View →</span>
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* WhatsApp Sent */}
-        <Card className="bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 shadow-xs">
-          <CardContent className="p-3.5 sm:p-4">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 block">WhatsApp Sent</span>
-            <div className="text-2xl sm:text-3xl font-black text-emerald-700 dark:text-emerald-400 mt-1">
-              {statsLoading ? '...' : stats.whatsappSent}
-            </div>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-1">
-              <MessageSquare className="w-3 h-3" />
-              <span>Alternative channel</span>
-            </span>
-          </CardContent>
-        </Card>
-      </div>
+          {/* 3. Staff-Confirmed */}
+          <Card
+            onClick={() => handleCardClick('STAFF_CONFIRMED', 'Staff-Confirmed SMS', 'SMS messages verified as sent by authorized staff')}
+            className={cn(
+              "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-emerald-500/80 transition-all select-none group",
+              selectedMetric === 'STAFF_CONFIRMED' && "ring-2 ring-emerald-500 scale-[1.02]"
+            )}
+          >
+            <CardContent className="p-3 sm:p-3.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">Staff-Confirmed</span>
+              <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                {stats?.staffConfirmedSms ?? 0}
+              </div>
+              <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-0.5 border-t border-slate-100 dark:border-slate-800">
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  <span>Verified</span>
+                </span>
+                <span className="opacity-0 group-hover:opacity-100 text-emerald-600 dark:text-emerald-400 transition-opacity">View →</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 4. Carrier Delivered */}
+          <Card
+            onClick={() => handleCardClick('CARRIER_DELIVERED', 'Carrier-Delivered SMS', 'Messages with network delivery receipts')}
+            className={cn(
+              "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-cyan-500/80 transition-all select-none group",
+              selectedMetric === 'CARRIER_DELIVERED' && "ring-2 ring-cyan-500 scale-[1.02]"
+            )}
+          >
+            <CardContent className="p-3 sm:p-3.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">Carrier Delivered</span>
+              <div className="text-xl sm:text-2xl font-black text-cyan-600 dark:text-cyan-400 mt-0.5">
+                {stats?.carrierConfirmedDelivered ?? 0}
+              </div>
+              <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-0.5 border-t border-slate-100 dark:border-slate-800">
+                <span className="flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-cyan-500" />
+                  <span>Receipts</span>
+                </span>
+                <span className="opacity-0 group-hover:opacity-100 text-cyan-600 dark:text-cyan-400 transition-opacity">View →</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 5. Failed SMS */}
+          <Card
+            onClick={() => handleCardClick('FAILED_SMS', 'Failed SMS Records', 'Messages that failed or could not be delivered')}
+            className={cn(
+              "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-rose-500/80 transition-all select-none group",
+              selectedMetric === 'FAILED_SMS' && "ring-2 ring-rose-500 scale-[1.02]"
+            )}
+          >
+            <CardContent className="p-3 sm:p-3.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">Failed SMS</span>
+              <div className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400 mt-0.5">
+                {stats?.failedSms ?? 0}
+              </div>
+              <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-0.5 border-t border-slate-100 dark:border-slate-800">
+                <span className="flex items-center gap-1">
+                  <XCircle className="w-3 h-3 text-rose-500" />
+                  <span>Failed</span>
+                </span>
+                <span className="opacity-0 group-hover:opacity-100 text-rose-600 dark:text-rose-400 transition-opacity">View →</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 6. Pending / Draft */}
+          <Card
+            onClick={() => handleCardClick('PENDING_DRAFT', 'Pending & Draft SMS', 'Messages prepared, opened, or awaiting sending')}
+            className={cn(
+              "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-amber-500/80 transition-all select-none group",
+              selectedMetric === 'PENDING_DRAFT' && "ring-2 ring-amber-500 scale-[1.02]"
+            )}
+          >
+            <CardContent className="p-3 sm:p-3.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">Pending / Draft</span>
+              <div className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 mt-0.5">
+                {stats?.pendingSms ?? 0}
+              </div>
+              <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-0.5 border-t border-slate-100 dark:border-slate-800">
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-amber-500" />
+                  <span>Pending</span>
+                </span>
+                <span className="opacity-0 group-hover:opacity-100 text-amber-600 dark:text-amber-400 transition-opacity">View →</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 7. WhatsApp Sent */}
+          <Card
+            onClick={() => handleCardClick('WHATSAPP_SENT', 'WhatsApp Sent Records', 'WhatsApp messages confirmed sent')}
+            className={cn(
+              "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 shadow-xs cursor-pointer hover:border-emerald-500/80 transition-all select-none group",
+              selectedMetric === 'WHATSAPP_SENT' && "ring-2 ring-emerald-500 scale-[1.02]"
+            )}
+          >
+            <CardContent className="p-3 sm:p-3.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 block truncate">WhatsApp Sent</span>
+              <div className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400 mt-0.5">
+                {stats?.whatsappSent ?? 0}
+              </div>
+              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center justify-between mt-1 pt-0.5 border-t border-emerald-200/60 dark:border-emerald-800/60">
+                <span className="flex items-center gap-1">
+                  <MessageSquare className="w-3 h-3" />
+                  <span>WhatsApp</span>
+                </span>
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity">View →</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
 
       {/* Extended Metrics & Customer Reach Strip */}
       <div className="flex items-center justify-between flex-wrap gap-2 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
         <div className="flex items-center gap-4 flex-wrap text-slate-600 dark:text-slate-400">
           <span className="flex items-center gap-1.5 font-medium">
             <span className="text-slate-400 font-normal">Total Notifications:</span>
-            <strong className="text-slate-800 dark:text-slate-200 font-bold">{statsLoading ? '...' : stats.totalNotifications}</strong>
+            <strong className="text-slate-800 dark:text-slate-200 font-bold">{statsLoading ? '...' : (stats?.totalNotifications ?? 0)}</strong>
           </span>
           <span className="text-slate-300 dark:text-slate-700">|</span>
           <span className="flex items-center gap-1.5 font-medium">
             <span className="text-slate-400 font-normal">Unique Customers Notified:</span>
-            <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{statsLoading ? '...' : stats.uniqueCustomersNotified}</strong>
+            <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{statsLoading ? '...' : (stats?.uniqueCustomersNotified ?? 0)}</strong>
           </span>
           <span className="text-slate-300 dark:text-slate-700">|</span>
           <span className="flex items-center gap-1.5 font-medium">
             <span className="text-slate-400 font-normal">WhatsApp Pending:</span>
-            <strong className="text-amber-600 dark:text-amber-400 font-bold">{statsLoading ? '...' : stats.whatsappPending}</strong>
+            <strong className="text-amber-600 dark:text-amber-400 font-bold">{statsLoading ? '...' : (stats?.whatsappPending ?? 0)}</strong>
           </span>
-          {stats.whatsappFailed > 0 && (
+          {(stats?.whatsappFailed ?? 0) > 0 && (
             <>
               <span className="text-slate-300 dark:text-slate-700">|</span>
               <span className="flex items-center gap-1.5 font-medium text-rose-600 dark:text-rose-400">
                 <span>WhatsApp Failed:</span>
-                <strong>{stats.whatsappFailed}</strong>
+                <strong>{stats?.whatsappFailed}</strong>
               </span>
             </>
           )}
-          {stats.notSentSms > 0 && (
+          {(stats?.notSentSms ?? 0) > 0 && (
             <>
               <span className="text-slate-300 dark:text-slate-700">|</span>
               <span className="flex items-center gap-1.5 font-medium text-slate-500">
                 <span>SMS Skipped:</span>
-                <strong>{stats.notSentSms}</strong>
+                <strong>{stats?.notSentSms}</strong>
               </span>
             </>
           )}
@@ -762,9 +1018,8 @@ export default function SmsCenter() {
                   </Button>
                 </div>
               ) : repairedLoading ? (
-                <div className="py-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-cyan-600" />
-                  <span>Retrieving completed repairs from database...</span>
+                <div className="p-4">
+                  <TableSkeleton rows={6} columns={7} />
                 </div>
               ) : repairedList.length === 0 ? (
                 <div className="py-16 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-slate-950/20 m-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
@@ -1102,9 +1357,8 @@ export default function SmsCenter() {
                   </Button>
                 </div>
               ) : receivedLoading ? (
-                <div className="py-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-cyan-600" />
-                  <span>Retrieving received devices from database...</span>
+                <div className="p-4">
+                  <TableSkeleton rows={6} columns={7} />
                 </div>
               ) : receivedList.length === 0 ? (
                 <div className="py-16 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-slate-950/20 m-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
@@ -1334,9 +1588,8 @@ export default function SmsCenter() {
 
             <CardContent>
               {pendingConfirmationsLoading ? (
-                <div className="py-16 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
-                  <span>Checking awaiting confirmations...</span>
+                <div className="py-2">
+                  <TableSkeleton rows={4} columns={7} />
                 </div>
               ) : pendingConfirmationsList.length === 0 ? (
                 <div className="py-16 text-center text-xs text-slate-400 bg-emerald-50/40 dark:bg-emerald-950/20 rounded-xl border border-dashed border-emerald-200 dark:border-emerald-800/40 space-y-2">
@@ -1517,9 +1770,8 @@ export default function SmsCenter() {
             </CardHeader>
             <CardContent>
               {historyLoading ? (
-                <div className="py-16 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin text-cyan-600" />
-                  <span>Loading history logs...</span>
+                <div className="py-2">
+                  <TableSkeleton rows={6} columns={8} />
                 </div>
               ) : historyList.length === 0 ? (
                 <div className="py-16 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
@@ -1623,6 +1875,242 @@ export default function SmsCenter() {
           }}
         />
       )}
+
+      {/* Interactive Metric Records Dialog for Clickable KPI Cards */}
+      <Dialog open={isMetricModalOpen} onOpenChange={setIsMetricModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-0 overflow-hidden bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+          <DialogHeader className="p-4 sm:p-5 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-3 pr-6">
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <span>{activeMetricTitle || 'Metric Records'}</span>
+                  <Badge variant="secondary" className="text-xs px-2 py-0.5 font-mono bg-cyan-100 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-300">
+                    {metricRecordsTotal} {metricRecordsTotal === 1 ? 'record' : 'records'}
+                  </Badge>
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  {activeMetricSubtitle} • Period: <span className="font-semibold text-slate-700 dark:text-slate-300">{globalPreset === 'ALL' ? 'All Time' : globalPreset.replace('_', ' ')} (Asia/Kathmandu)</span>
+                </DialogDescription>
+              </div>
+            </div>
+
+            {/* Filter Bar inside Modal */}
+            <div className="flex items-center gap-2 pt-3">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <Input
+                  placeholder="Search by customer, phone, repair #, staff..."
+                  value={metricSearch}
+                  onChange={(e) => setMetricSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && selectedMetric) {
+                      setMetricRecordsPage(1);
+                      fetchMetricRecords(selectedMetric, globalPreset, metricSearch, 1);
+                    }
+                  }}
+                  className="h-8 text-xs pl-8 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (selectedMetric) {
+                    setMetricRecordsPage(1);
+                    fetchMetricRecords(selectedMetric, globalPreset, metricSearch, 1);
+                  }
+                }}
+                className="h-8 text-xs shrink-0"
+              >
+                <Search className="w-3 h-3 mr-1" />
+                Filter
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setMetricSearch('');
+                  if (selectedMetric) {
+                    setMetricRecordsPage(1);
+                    fetchMetricRecords(selectedMetric, globalPreset, '', 1);
+                  }
+                }}
+                className="h-8 text-xs shrink-0 text-slate-500"
+              >
+                Clear
+              </Button>
+            </div>
+          </DialogHeader>
+
+          {/* Modal Body / Table */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+            {metricRecordsLoading ? (
+              <div className="py-2">
+                <TableSkeleton rows={6} columns={7} />
+              </div>
+            ) : metricRecords.length === 0 ? (
+              <div className="py-12 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 space-y-1.5 p-4">
+                <AlertCircle className="w-6 h-6 text-slate-400 mx-auto" />
+                <p className="font-semibold text-slate-700 dark:text-slate-300">No records found for this metric</p>
+                <p className="text-[11px] text-slate-500">
+                  {metricSearch ? 'No matches for your search query. Try clearing the search filter.' : 'There are no notification logs matching this metric in the selected period.'}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-950 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="py-2 px-3">Repair #</th>
+                      <th className="py-2 px-3">Customer</th>
+                      <th className="py-2 px-3">Channel</th>
+                      <th className="py-2 px-3">Status</th>
+                      <th className="py-2 px-3">Staff</th>
+                      <th className="py-2 px-3">Message</th>
+                      <th className="py-2 px-3 text-right">Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {metricRecords.map((item) => {
+                      const isWa = item.channel === 'WHATSAPP';
+                      const isConfirmed = item.status === 'STAFF_CONFIRMED_SENT' || item.status === 'SENT';
+                      const isDelivered = item.status === 'DELIVERED';
+                      const isFailed = item.status === 'FAILED';
+                      const timestamp = item.confirmedAt || item.sentAt || item.initiatedAt || item.createdAt;
+
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className="py-2.5 px-3 font-mono font-bold">
+                            <span
+                              className="text-cyan-600 hover:underline cursor-pointer"
+                              onClick={() => {
+                                setIsMetricModalOpen(false);
+                                navigate(`/dashboard/repairs/${item.repairId}`);
+                              }}
+                            >
+                              #{item.repairNumber || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="font-semibold text-slate-800 dark:text-slate-200">{item.customerName || 'Customer'}</div>
+                            <div className="font-mono text-[11px] text-slate-500">{item.customerPhoneNormalized || item.customerPhoneRaw || '—'}</div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] font-medium",
+                                isWa
+                                  ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400"
+                                  : "text-indigo-700 bg-indigo-50 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400"
+                              )}
+                            >
+                              {isWa ? 'WhatsApp' : 'SMS'}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] font-bold",
+                                isConfirmed || isDelivered
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400"
+                                  : isFailed
+                                  ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400"
+                                  : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-400"
+                              )}
+                            >
+                              {item.status?.replace(/_/g, ' ') || 'UNKNOWN'}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400">
+                            <div>{item.senderStaffName || 'Staff'}</div>
+                            <div className="text-[10px] text-slate-400">{item.senderStaffRole || ''}</div>
+                          </td>
+                          <td className="py-2.5 px-3 max-w-[200px]">
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate text-slate-600 dark:text-slate-300 italic text-[11px]" title={item.messageContent}>
+                                "{item.messageContent || '—'}"
+                              </span>
+                              {item.messageContent && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(item.messageContent);
+                                    toast.success('Message copied!');
+                                  }}
+                                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0 p-1"
+                                  title="Copy text"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-[11px] font-mono text-slate-500 whitespace-nowrap">
+                            {timestamp ? new Date(timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Modal Footer with Pagination */}
+          <div className="p-3 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex items-center justify-between gap-3 text-xs">
+            <span className="text-slate-500">
+              Showing {metricRecords.length} of {metricRecordsTotal} total entries
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={metricRecordsPage <= 1 || metricRecordsLoading}
+                onClick={() => {
+                  if (selectedMetric && metricRecordsPage > 1) {
+                    const prev = metricRecordsPage - 1;
+                    setMetricRecordsPage(prev);
+                    fetchMetricRecords(selectedMetric, globalPreset, metricSearch, prev);
+                  }
+                }}
+                className="h-7 text-xs"
+              >
+                <ChevronLeft className="w-3 h-3 mr-1" />
+                Previous
+              </Button>
+              <span className="font-mono text-slate-600 dark:text-slate-400">
+                Page {metricRecordsPage} of {Math.max(1, Math.ceil(metricRecordsTotal / 15))}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={metricRecordsPage * 15 >= metricRecordsTotal || metricRecordsLoading}
+                onClick={() => {
+                  if (selectedMetric) {
+                    const next = metricRecordsPage + 1;
+                    setMetricRecordsPage(next);
+                    fetchMetricRecords(selectedMetric, globalPreset, metricSearch, next);
+                  }
+                }}
+                className="h-7 text-xs"
+              >
+                Next
+                <ChevronRight className="w-3 h-3 ml-1" />
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setIsMetricModalOpen(false)}
+                className="h-7 text-xs bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 ml-2"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -21,6 +21,7 @@ import {
   getPendingConfirmations,
   getSmsNotificationsForCustomer,
   getCustomerNotificationSummary,
+  ensureSmsStorageSynced,
   SmsNotificationRecord,
   SmsNotificationStatus,
   SmsNotificationChannel,
@@ -44,10 +45,13 @@ function isRepairedStatusEligible(status?: string | null): boolean {
 
 /**
  * 1. GET /api/sms/stats — High-accuracy backend-calculated SMS & WhatsApp statistics
- * Roles: SUPER_ADMIN, ADMIN, MANAGER
+ * Roles: SUPER_ADMIN, ADMIN, MANAGER, RECEPTIONIST
  */
 router.get('/stats', authenticate, authorize(SMS_REPORT_ROLES), async (req: AuthRequest, res: Response) => {
   try {
+    // Crucial: Wait for authoritative Supabase sync before computing stats so first request after login never returns 0!
+    await ensureSmsStorageSynced();
+
     const { startDate, endDate, filterPreset } = req.query as {
       startDate?: string;
       endDate?: string;
@@ -57,10 +61,10 @@ router.get('/stats', authenticate, authorize(SMS_REPORT_ROLES), async (req: Auth
     let computedStartDate = startDate;
     let computedEndDate = endDate;
 
-    if (filterPreset && filterPreset !== 'ALL' && !startDate && !endDate) {
-      const validPresets: DateFilterPreset[] = ['TODAY', 'YESTERDAY', 'THIS_WEEK', 'THIS_MONTH'];
+    if (filterPreset && filterPreset !== 'ALL') {
+      const validPresets: DateFilterPreset[] = ['TODAY', 'YESTERDAY', 'THIS_WEEK', 'THIS_MONTH', 'CUSTOM'];
       if (validPresets.includes(filterPreset as DateFilterPreset)) {
-        const bounds = getNptIsoBoundsForPreset(filterPreset as DateFilterPreset);
+        const bounds = getNptIsoBoundsForPreset(filterPreset as DateFilterPreset, startDate, endDate);
         computedStartDate = bounds.startIso || undefined;
         computedEndDate = bounds.endIso || undefined;
       } else if (filterPreset === 'LAST_7_DAYS') {
@@ -70,6 +74,9 @@ router.get('/stats', authenticate, authorize(SMS_REPORT_ROLES), async (req: Auth
         const now = new Date();
         computedStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
       }
+    } else if (filterPreset === 'ALL') {
+      computedStartDate = undefined;
+      computedEndDate = undefined;
     }
 
     const stats = getSmsStatistics({
@@ -94,34 +101,67 @@ router.get('/stats', authenticate, authorize(SMS_REPORT_ROLES), async (req: Auth
 
 /**
  * 2. GET /api/sms/notifications — Searchable, filterable list of all notification records
+ * Supports direct metric filtering for 1-to-1 matching with clickable KPI cards
  * Roles: SUPER_ADMIN, ADMIN, MANAGER, RECEPTIONIST
  */
 router.get('/notifications', authenticate, authorize(SMS_VIEW_ROLES), async (req: AuthRequest, res: Response) => {
   try {
-    const { search, status, channel, staffId, startDate, endDate, limit, offset } = req.query as {
+    await ensureSmsStorageSynced();
+
+    const { search, status, channel, staffId, metric, filterPreset, startDate, endDate, limit, offset } = req.query as {
       search?: string;
       status?: string;
       channel?: string;
       staffId?: string;
+      metric?: string;
+      filterPreset?: string;
       startDate?: string;
       endDate?: string;
       limit?: string;
       offset?: string;
     };
 
+    let computedStartDate = startDate;
+    let computedEndDate = endDate;
+
+    if (filterPreset && filterPreset !== 'ALL') {
+      const validPresets: DateFilterPreset[] = ['TODAY', 'YESTERDAY', 'THIS_WEEK', 'THIS_MONTH', 'CUSTOM'];
+      if (validPresets.includes(filterPreset as DateFilterPreset)) {
+        const bounds = getNptIsoBoundsForPreset(filterPreset as DateFilterPreset, startDate, endDate);
+        computedStartDate = bounds.startIso || undefined;
+        computedEndDate = bounds.endIso || undefined;
+      } else if (filterPreset === 'LAST_7_DAYS') {
+        const now = new Date();
+        computedStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      } else if (filterPreset === 'LAST_30_DAYS') {
+        const now = new Date();
+        computedStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      }
+    } else if (filterPreset === 'ALL') {
+      computedStartDate = undefined;
+      computedEndDate = undefined;
+    }
+
     const result = getAllSmsNotifications({
       search,
       status,
       channel,
       staffId,
-      startDate,
-      endDate,
+      metric,
+      startDate: computedStartDate,
+      endDate: computedEndDate,
       limit: limit ? parseInt(limit, 10) : 50,
       offset: offset ? parseInt(offset, 10) : 0,
     });
 
     return res.json({
       success: true,
+      filter: {
+        startDate: computedStartDate || null,
+        endDate: computedEndDate || null,
+        filterPreset: filterPreset || 'ALL',
+        metric: metric || 'ALL',
+      },
       ...result,
     });
   } catch (err: any) {
@@ -136,6 +176,7 @@ router.get('/notifications', authenticate, authorize(SMS_VIEW_ROLES), async (req
  */
 router.get('/pending-confirmations', authenticate, authorize(SMS_VIEW_ROLES), async (_req: AuthRequest, res: Response) => {
   try {
+    await ensureSmsStorageSynced();
     const pending = getPendingConfirmations();
     return res.json({
       success: true,
@@ -154,6 +195,7 @@ router.get('/pending-confirmations', authenticate, authorize(SMS_VIEW_ROLES), as
  */
 router.get('/customer/:id', authenticate, authorize(SMS_VIEW_ROLES), async (req: AuthRequest, res: Response) => {
   try {
+    await ensureSmsStorageSynced();
     const { id } = req.params;
     const { phone } = req.query as { phone?: string };
 
@@ -585,6 +627,7 @@ router.get('/devices/received', authenticate, authorize(SMS_VIEW_ROLES), async (
  */
 router.get('/repair/:id', authenticate, authorize(SMS_VIEW_ROLES), async (req: AuthRequest, res: Response) => {
   try {
+    await ensureSmsStorageSynced();
     const { id } = req.params;
     const { data: repair, error } = await supabaseAdmin
       .from('Repair')

@@ -85,6 +85,7 @@ import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { format } from 'date-fns';
 import { useAuthStore } from '@/store/authStore';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { StatCardSkeleton, TableSkeleton, FilterBarSkeleton } from '@/components/common/SkeletonLoaders';
 
 // Safe date formatter that will never throw RangeError on invalid or missing date
 const formatSafeDate = (dateVal: any, formatStr: string = 'MMM dd, yyyy', fallback: string = 'N/A'): string => {
@@ -658,13 +659,33 @@ export function StaffManagementContent() {
 
   if (loading) {
     return (
-      <div className="min-h-[400px] flex flex-col items-center justify-center p-8 space-y-4">
-        <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 animate-pulse">
-          <Loader2 className="h-6 w-6 animate-spin" />
+      <div className="space-y-6 pb-20 max-w-[1600px] mx-auto animate-pulse">
+        {/* Header Skeleton */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+          <div className="space-y-2">
+            <div className="h-8 w-48 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+            <div className="h-4 w-72 bg-slate-100 dark:bg-slate-800/60 rounded" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-10 w-28 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+            <div className="h-10 w-36 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+          </div>
         </div>
-        <div className="text-center space-y-1">
-          <p className="font-bold text-slate-800 text-base">Loading Staff Directory...</p>
-          <p className="text-xs text-slate-400">Fetching real-time team records & security permissions</p>
+
+        {/* Metric Counters Skeleton */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+
+        {/* Filter Bar Skeleton */}
+        <FilterBarSkeleton />
+
+        {/* Table Skeleton */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+          <TableSkeleton rows={7} columns={7} />
         </div>
       </div>
     );

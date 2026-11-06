@@ -9,8 +9,7 @@ import {
   CalendarCheck,
   ArrowRight,
   ShieldAlert,
-  Layers,
-  Sparkles
+  Layers
 } from 'lucide-react';
 import { OverviewData } from './types';
 import { OverviewStatCard } from './OverviewStatCard';

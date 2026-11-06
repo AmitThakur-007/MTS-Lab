@@ -65,6 +65,7 @@ import { cn } from '@/lib/utils';
 import { useRealtimeSync } from '@/services/realtime';
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { motion, AnimatePresence } from 'motion/react';
+import { TableSkeleton } from '@/components/common/SkeletonLoaders';
 
 const NEPAL_DISTRICTS = [
   'Kathmandu', 'Lalitpur', 'Bhaktapur', 'Morang', 'Sunsari', 'Jhapa', 'Kaski',
@@ -898,9 +899,8 @@ export default function CustomerHub() {
 
       {/* Main Content Area: Table View or Cards View */}
       {loading ? (
-        <div className="p-12 text-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-500 mb-3" />
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Loading customer records...</p>
+        <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs">
+          <TableSkeleton rows={7} columns={6} />
         </div>
       ) : customers.length === 0 ? (
         <div className="p-12 text-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">

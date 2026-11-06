@@ -25,7 +25,6 @@ import {
   Tv,
   Tablet,
   RotateCcw,
-  Sparkles,
   AlertTriangle,
   X
 } from 'lucide-react';

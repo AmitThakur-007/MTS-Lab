@@ -120,6 +120,7 @@ import EditRepairModal from '@/components/repair/EditRepairModal';
 import SendSmsModal from '@/components/repair/SendSmsModal';
 import { Pagination } from '@/components/common/Pagination';
 import { REPAIRS_PER_PAGE } from '@/lib/pagination';
+import { TableSkeleton } from '@/components/common/SkeletonLoaders';
 
 
 // Status badge styling
@@ -1266,9 +1267,8 @@ export default function Repairs() {
 
       {/* 3. Professional Repair Table & Responsive Cards */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-32 gap-3 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
-          <Loader2 className="h-10 w-10 text-slate-400 dark:text-slate-500 animate-spin" />
-          <p className="text-slate-500 dark:text-slate-400 font-semibold text-sm">Loading authorized repair records...</p>
+        <div className="p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
+          <TableSkeleton rows={8} columns={7} />
         </div>
       ) : finalFilteredRepairs.length === 0 ? (
         <div className="text-center py-24 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">

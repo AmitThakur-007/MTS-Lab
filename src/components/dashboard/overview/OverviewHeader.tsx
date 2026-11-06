@@ -4,7 +4,6 @@ import {
   Clock,
   PlusCircle,
   RefreshCw,
-  Sparkles,
   ShieldCheck,
   UserCheck,
   Wrench,

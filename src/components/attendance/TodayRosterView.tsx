@@ -11,7 +11,6 @@ import {
   Calendar,
   Trash2,
   Lock,
-  Sparkles,
   HelpCircle,
   ChevronRight,
   ShieldCheck,

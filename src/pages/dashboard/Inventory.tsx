@@ -85,6 +85,7 @@ import { syncEntityToSupabase as syncEntityToRtdb, deleteEntityFromSupabase as d
 import DashboardRefreshButton from '@/components/DashboardRefreshButton';
 import { format } from 'date-fns';
 import { InventoryFilesManager } from '@/components/inventory/InventoryFilesManager';
+import { StatCardSkeleton, TableSkeleton, FilterBarSkeleton } from '@/components/common/SkeletonLoaders';
 
 const REPAIR_CATEGORIES = [
   'Displays',
@@ -1295,9 +1296,34 @@ export default function Inventory() {
 
   if (loading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 min-h-[60vh]">
-        <Loader2 className="h-12 w-12 text-slate-400 animate-spin" />
-        <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Opening Inventory Vault...</p>
+      <div className="space-y-6 pb-32 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div className="space-y-2">
+            <div className="h-8 w-56 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+            <div className="h-4 w-72 bg-slate-100 dark:bg-slate-800/60 rounded" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-10 w-28 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+            <div className="h-10 w-36 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+          </div>
+        </div>
+
+        {/* 4 Stat Cards Skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+
+        {/* Filter Bar Skeleton */}
+        <FilterBarSkeleton />
+
+        {/* Table Skeleton */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+          <TableSkeleton rows={8} columns={8} />
+        </div>
       </div>
     );
   }

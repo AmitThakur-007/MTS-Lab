@@ -32,7 +32,6 @@ import {
   DollarSign,
   Calendar,
   Layers,
-  Sparkles,
   HelpCircle,
   CheckCircle,
   Tag

@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   XCircle,
   Calendar,
-  Sparkles,
   TrendingUp,
   Percent,
   History,

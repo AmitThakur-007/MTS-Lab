@@ -440,6 +440,18 @@ export function initializeSmsStorage(): void {
 }
 
 /**
+ * Ensures authoritative SMS database records are synchronized before reading statistics or lists.
+ * This completely prevents the race condition where the first API request after login returned 0 records.
+ */
+export async function ensureSmsStorageSynced(forceRefresh = false): Promise<void> {
+  initializeSmsStorage();
+  if (!forceRefresh && isInitialized && !isSyncingPromise && smsCache.size > 0) {
+    return;
+  }
+  return syncSmsStorageFromDatabase();
+}
+
+/**
  * Validate and normalize Nepal mobile numbers (98XXXXXXXX, 97XXXXXXXX, 96XXXXXXXX)
  */
 export function validateAndNormalizeNepalPhone(rawPhone: string | null | undefined): {
@@ -866,13 +878,14 @@ export function getSmsNotificationsForRepair(repairIdOrNumber: string): SmsNotif
 }
 
 /**
- * Get all notifications with optional search, channel, status, and date filters
+ * Get all notifications with optional search, channel, status, metric, and date filters
  */
 export function getAllSmsNotifications(options: {
   search?: string;
   status?: string;
   channel?: string;
   staffId?: string;
+  metric?: string;
   startDate?: string;
   endDate?: string;
   limit?: number;
@@ -900,8 +913,30 @@ export function getAllSmsNotifications(options: {
     });
   }
 
-  // Status filter
-  if (options.status && options.status !== 'ALL') {
+  // Metric-based filter for direct 1-to-1 clickable KPI cards
+  if (options.metric && options.metric !== 'ALL') {
+    const m = options.metric.toUpperCase();
+    if (m === 'TOTAL_SMS_SENT') {
+      list = list.filter((item) => item.channel !== 'WHATSAPP' && !item.messageType?.includes('WHATSAPP') && isStatusSent(item.status));
+    } else if (m === 'SMS_CHANNEL_TOTAL' || m === 'SMS_ALL') {
+      list = list.filter((item) => item.channel !== 'WHATSAPP' && !item.messageType?.includes('WHATSAPP'));
+    } else if (m === 'STAFF_CONFIRMED') {
+      list = list.filter((item) => item.channel !== 'WHATSAPP' && !item.messageType?.includes('WHATSAPP') && isStatusStaffConfirmed(item.status));
+    } else if (m === 'CARRIER_DELIVERED') {
+      list = list.filter((item) => item.channel !== 'WHATSAPP' && !item.messageType?.includes('WHATSAPP') && isStatusDelivered(item.status));
+    } else if (m === 'FAILED_SMS') {
+      list = list.filter((item) => item.channel !== 'WHATSAPP' && !item.messageType?.includes('WHATSAPP') && isStatusFailed(item.status));
+    } else if (m === 'PENDING_DRAFT') {
+      list = list.filter((item) => item.channel !== 'WHATSAPP' && !item.messageType?.includes('WHATSAPP') && isStatusPending(item.status));
+    } else if (m === 'WHATSAPP_SENT') {
+      list = list.filter((item) => (item.channel === 'WHATSAPP' || item.messageType?.includes('WHATSAPP')) && isStatusSent(item.status));
+    } else if (m === 'WHATSAPP_ALL') {
+      list = list.filter((item) => item.channel === 'WHATSAPP' || item.messageType?.includes('WHATSAPP'));
+    }
+  }
+
+  // Status filter (when metric is not already filtering status)
+  if (!options.metric && options.status && options.status !== 'ALL') {
     const s = options.status.toUpperCase();
     if (s === 'SENT' || s === 'STAFF_CONFIRMED_SENT') {
       list = list.filter((item) => isStatusSent(item.status));
@@ -916,8 +951,8 @@ export function getAllSmsNotifications(options: {
     }
   }
 
-  // Channel filter
-  if (options.channel && options.channel !== 'ALL') {
+  // Channel filter (when metric is not already filtering channel)
+  if (!options.metric && options.channel && options.channel !== 'ALL') {
     list = list.filter((item) => item.channel === options.channel);
   }
 
@@ -926,20 +961,22 @@ export function getAllSmsNotifications(options: {
     list = list.filter((item) => item.senderStaffId === options.staffId);
   }
 
-  // Date filters (inclusive start, exclusive end for NPT half-open interval)
-  if (options.startDate) {
-    const startMs = new Date(options.startDate).getTime();
-    list = list.filter((item) => {
-      const recTime = new Date(item.confirmedAt || item.sentAt || item.createdAt).getTime();
-      return recTime >= startMs;
-    });
-  }
+  // Date filters with accurate lifecycle timestamp evaluation
+  if (options.startDate || options.endDate) {
+    const startMs = options.startDate ? new Date(options.startDate).getTime() : null;
+    const endMs = options.endDate ? new Date(options.endDate).getTime() : null;
 
-  if (options.endDate) {
-    const endMs = new Date(options.endDate).getTime();
     list = list.filter((item) => {
-      const recTime = new Date(item.confirmedAt || item.sentAt || item.createdAt).getTime();
-      return recTime < endMs;
+      let ts = item.confirmedAt || item.sentAt || item.createdAt;
+      if (isStatusFailed(item.status)) {
+        ts = item.failedAt || item.updatedAt || item.createdAt;
+      } else if (isStatusPending(item.status)) {
+        ts = item.initiatedAt || item.createdAt;
+      }
+      const recTime = new Date(ts).getTime();
+      if (startMs !== null && recTime < startMs) return false;
+      if (endMs !== null && recTime >= endMs) return false; // Strict half-open interval: < endMs
+      return true;
     });
   }
 
@@ -970,6 +1007,7 @@ export function getSmsStatistics(options: {
 }): {
   // SMS statistics
   totalSmsSent: number;
+  smsChannelTotal: number;
   staffConfirmedSms: number;
   carrierConfirmedDelivered: number;
   failedSms: number;
@@ -1014,23 +1052,25 @@ export function getSmsStatistics(options: {
 } {
   initializeSmsStorage();
 
-  let list = Array.from(smsCache.values());
+  const allCached = Array.from(smsCache.values());
 
-  if (options.startDate) {
-    const startMs = new Date(options.startDate).getTime();
-    list = list.filter((item) => {
-      const itemMs = new Date(item.confirmedAt || item.sentAt || item.createdAt).getTime();
-      return itemMs >= startMs;
-    });
-  }
+  const startMs = options.startDate ? new Date(options.startDate).getTime() : null;
+  const endMs = options.endDate ? new Date(options.endDate).getTime() : null;
 
-  if (options.endDate) {
-    const endMs = new Date(options.endDate).getTime();
-    list = list.filter((item) => {
-      const itemMs = new Date(item.confirmedAt || item.sentAt || item.createdAt).getTime();
-      return itemMs < endMs;
-    });
-  }
+  // Filter list by accurate lifecycle timestamp
+  const list = allCached.filter((item) => {
+    if (startMs === null && endMs === null) return true;
+    let ts = item.confirmedAt || item.sentAt || item.createdAt;
+    if (isStatusFailed(item.status)) {
+      ts = item.failedAt || item.updatedAt || item.createdAt;
+    } else if (isStatusPending(item.status)) {
+      ts = item.initiatedAt || item.createdAt;
+    }
+    const itemMs = new Date(ts).getTime();
+    if (startMs !== null && itemMs < startMs) return false;
+    if (endMs !== null && itemMs >= endMs) return false; // Strict half-open: < endMs
+    return true;
+  });
 
   // SMS metrics
   let totalSmsSent = 0;
@@ -1198,6 +1238,7 @@ export function getSmsStatistics(options: {
 
   return {
     totalSmsSent,
+    smsChannelTotal: totalSms,
     staffConfirmedSms,
     carrierConfirmedDelivered,
     failedSms,

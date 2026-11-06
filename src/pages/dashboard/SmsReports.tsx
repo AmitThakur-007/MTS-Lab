@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
+import { SmsKpiCardsSkeleton, TableSkeleton, StatCardSkeleton } from '@/components/common/SkeletonLoaders';
 
 export default function SmsReports() {
   const { user } = useAuthStore();
@@ -36,7 +37,7 @@ export default function SmsReports() {
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<{
     // SMS Statistics
     totalSmsSent: number;
@@ -291,6 +292,7 @@ export default function SmsReports() {
               {[
                 { label: 'Today', value: 'TODAY' },
                 { label: 'Yesterday', value: 'YESTERDAY' },
+                { label: 'This Week', value: 'THIS_WEEK' },
                 { label: 'Last 7 Days', value: 'LAST_7_DAYS' },
                 { label: 'Last 30 Days', value: 'LAST_30_DAYS' },
                 { label: 'This Month', value: 'THIS_MONTH' },
@@ -352,93 +354,147 @@ export default function SmsReports() {
             <Smartphone className="w-4 h-4 text-cyan-600" />
             <span>SMS Channel Metrics</span>
           </h2>
-          <span className="text-[11px] text-slate-400 font-medium">Single-segment GSM-7 compliance</span>
+          <span className="text-[11px] text-slate-400 font-medium">Single-segment GSM-7 compliance (click to filter audit log)</span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          {/* Total SMS Sent */}
-          <Card className="bg-slate-900 border-slate-800 text-white shadow-md">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">Total SMS Sent</span>
-              <div className="text-2xl sm:text-3xl font-black text-white mt-1">
-                {loading ? '...' : stats.totalSmsSent}
-              </div>
-              <span className="text-[10px] text-cyan-400 font-medium flex items-center gap-1 mt-1">
-                <Smartphone className="w-3 h-3" />
-                <span>SMS channel total</span>
-              </span>
-            </CardContent>
-          </Card>
+        {loading ? (
+          <SmsKpiCardsSkeleton count={6} />
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+            {/* Total SMS Sent */}
+            <Card
+              onClick={() => {
+                setHistoryChannelFilter('ALL');
+                setHistoryStatusFilter('STAFF_CONFIRMED_SENT');
+                document.getElementById('audit-log-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-slate-900 border-slate-800 text-white shadow-md cursor-pointer hover:border-cyan-500 transition-all select-none group"
+            >
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block truncate">Total SMS Sent</span>
+                <div className="text-2xl sm:text-3xl font-black text-white mt-1">
+                  {stats.totalSmsSent}
+                </div>
+                <div className="text-[10px] text-cyan-400 font-medium flex items-center justify-between mt-1 pt-1 border-t border-slate-800">
+                  <span className="flex items-center gap-1">
+                    <Smartphone className="w-3 h-3" />
+                    <span>SMS channel total</span>
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity">Filter ↓</span>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Staff-Confirmed Sent */}
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Staff-Confirmed</span>
-              <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                {loading ? '...' : stats.staffConfirmedSms}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                <span>Verified by staff</span>
-              </span>
-            </CardContent>
-          </Card>
+            {/* Staff-Confirmed Sent */}
+            <Card
+              onClick={() => {
+                setHistoryChannelFilter('ALL');
+                setHistoryStatusFilter('STAFF_CONFIRMED_SENT');
+                document.getElementById('audit-log-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-emerald-500 transition-all select-none group"
+            >
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">Staff-Confirmed</span>
+                <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                  {stats.staffConfirmedSms}
+                </div>
+                <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                    <span>Verified by staff</span>
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 text-emerald-600 dark:text-emerald-400 transition-opacity">Filter ↓</span>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Carrier Confirmed Delivered */}
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Carrier Delivered</span>
-              <div className="text-2xl sm:text-3xl font-black text-cyan-600 dark:text-cyan-400 mt-1">
-                {loading ? '...' : stats.carrierConfirmedDelivered}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <ShieldCheck className="w-3 h-3 text-cyan-500" />
-                <span>Network receipt</span>
-              </span>
-            </CardContent>
-          </Card>
+            {/* Carrier Confirmed Delivered */}
+            <Card
+              onClick={() => {
+                setHistoryChannelFilter('ALL');
+                setHistoryStatusFilter('STAFF_CONFIRMED_SENT');
+                document.getElementById('audit-log-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-cyan-500 transition-all select-none group"
+            >
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">Carrier Delivered</span>
+                <div className="text-2xl sm:text-3xl font-black text-cyan-600 dark:text-cyan-400 mt-1">
+                  {stats.carrierConfirmedDelivered}
+                </div>
+                <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <span className="flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-cyan-500" />
+                    <span>Network receipt</span>
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 text-cyan-600 dark:text-cyan-400 transition-opacity">Filter ↓</span>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Failed SMS Attempts */}
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Failed SMS</span>
-              <div className="text-2xl sm:text-3xl font-black text-rose-600 dark:text-rose-400 mt-1">
-                {loading ? '...' : stats.failedSms}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <XCircle className="w-3 h-3 text-rose-500" />
-                <span>Reported failed</span>
-              </span>
-            </CardContent>
-          </Card>
+            {/* Failed SMS Attempts */}
+            <Card
+              onClick={() => {
+                setHistoryChannelFilter('ALL');
+                setHistoryStatusFilter('FAILED');
+                document.getElementById('audit-log-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-rose-500 transition-all select-none group"
+            >
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">Failed SMS</span>
+                <div className="text-2xl sm:text-3xl font-black text-rose-600 dark:text-rose-400 mt-1">
+                  {stats.failedSms}
+                </div>
+                <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <span className="flex items-center gap-1">
+                    <XCircle className="w-3 h-3 text-rose-500" />
+                    <span>Reported failed</span>
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 text-rose-600 dark:text-rose-400 transition-opacity">Filter ↓</span>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Pending SMS */}
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Pending SMS</span>
-              <div className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 mt-1">
-                {loading ? '...' : stats.pendingSms}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <Clock className="w-3 h-3 text-amber-500" />
-                <span>Awaiting dispatch</span>
-              </span>
-            </CardContent>
-          </Card>
+            {/* Pending SMS */}
+            <Card
+              onClick={() => {
+                setHistoryChannelFilter('ALL');
+                setHistoryStatusFilter('PENDING');
+                document.getElementById('audit-log-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-amber-500 transition-all select-none group"
+            >
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">Pending SMS</span>
+                <div className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 mt-1">
+                  {stats.pendingSms}
+                </div>
+                <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-amber-500" />
+                    <span>Awaiting dispatch</span>
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 text-amber-600 dark:text-amber-400 transition-opacity">Filter ↓</span>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Not Sent SMS */}
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Not Sent / Skipped</span>
-              <div className="text-2xl sm:text-3xl font-black text-slate-600 dark:text-slate-400 mt-1">
-                {loading ? '...' : stats.notSentSms}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <Clock className="w-3 h-3 text-slate-400" />
-                <span>Staff skipped</span>
-              </span>
-            </CardContent>
-          </Card>
-        </div>
+            {/* Not Sent SMS */}
+            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">Not Sent / Skipped</span>
+                <div className="text-2xl sm:text-3xl font-black text-slate-600 dark:text-slate-400 mt-1">
+                  {stats.notSentSms}
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
+                  <Clock className="w-3 h-3 text-slate-400" />
+                  <span>Staff skipped</span>
+                </span>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Section 2: WhatsApp Channel Performance */}
@@ -450,77 +506,121 @@ export default function SmsReports() {
           </h2>
           <span className="text-[11px] text-slate-400 font-medium">Click-to-Chat direct notifications</span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-          {/* WhatsApp Sent */}
-          <Card className="bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 block">WhatsApp Sent</span>
-              <div className="text-2xl sm:text-3xl font-black text-emerald-700 dark:text-emerald-400 mt-1">
-                {loading ? '...' : stats.whatsappSent}
-              </div>
-              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-1">
-                <CheckCircle2 className="w-3 h-3" />
-                <span>Verified dispatch</span>
-              </span>
-            </CardContent>
-          </Card>
+        {loading ? (
+          <SmsKpiCardsSkeleton count={5} />
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+            {/* WhatsApp Sent */}
+            <Card
+              onClick={() => {
+                setHistoryChannelFilter('WHATSAPP');
+                setHistoryStatusFilter('STAFF_CONFIRMED_SENT');
+                document.getElementById('audit-log-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 shadow-xs cursor-pointer hover:border-emerald-500 transition-all select-none group"
+            >
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 block truncate">WhatsApp Sent</span>
+                <div className="text-2xl sm:text-3xl font-black text-emerald-700 dark:text-emerald-400 mt-1">
+                  {stats.whatsappSent}
+                </div>
+                <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center justify-between mt-1 pt-1 border-t border-emerald-200/60 dark:border-emerald-800/60">
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Verified dispatch</span>
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity">Filter ↓</span>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* WhatsApp Pending */}
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">WhatsApp Pending</span>
-              <div className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 mt-1">
-                {loading ? '...' : stats.whatsappPending}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <Clock className="w-3 h-3 text-amber-500" />
-                <span>Awaiting confirm</span>
-              </span>
-            </CardContent>
-          </Card>
+            {/* WhatsApp Pending */}
+            <Card
+              onClick={() => {
+                setHistoryChannelFilter('WHATSAPP');
+                setHistoryStatusFilter('PENDING');
+                document.getElementById('audit-log-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-amber-500 transition-all select-none group"
+            >
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">WhatsApp Pending</span>
+                <div className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 mt-1">
+                  {stats.whatsappPending}
+                </div>
+                <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-amber-500" />
+                    <span>Awaiting confirm</span>
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 text-amber-600 dark:text-amber-400 transition-opacity">Filter ↓</span>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* WhatsApp Failed */}
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">WhatsApp Failed</span>
-              <div className="text-2xl sm:text-3xl font-black text-rose-600 dark:text-rose-400 mt-1">
-                {loading ? '...' : stats.whatsappFailed}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <XCircle className="w-3 h-3 text-rose-500" />
-                <span>Dispatch failed</span>
-              </span>
-            </CardContent>
-          </Card>
+            {/* WhatsApp Failed */}
+            <Card
+              onClick={() => {
+                setHistoryChannelFilter('WHATSAPP');
+                setHistoryStatusFilter('FAILED');
+                document.getElementById('audit-log-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-rose-500 transition-all select-none group"
+            >
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">WhatsApp Failed</span>
+                <div className="text-2xl sm:text-3xl font-black text-rose-600 dark:text-rose-400 mt-1">
+                  {stats.whatsappFailed}
+                </div>
+                <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <span className="flex items-center gap-1">
+                    <XCircle className="w-3 h-3 text-rose-500" />
+                    <span>Dispatch failed</span>
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 text-rose-600 dark:text-rose-400 transition-opacity">Filter ↓</span>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* WhatsApp Delivered */}
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">WhatsApp Delivered</span>
-              <div className="text-2xl sm:text-3xl font-black text-cyan-600 dark:text-cyan-400 mt-1">
-                {loading ? '...' : stats.whatsappDelivered}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <ShieldCheck className="w-3 h-3 text-cyan-500" />
-                <span>Double tick receipt</span>
-              </span>
-            </CardContent>
-          </Card>
+            {/* WhatsApp Delivered */}
+            <Card
+              onClick={() => {
+                setHistoryChannelFilter('WHATSAPP');
+                setHistoryStatusFilter('STAFF_CONFIRMED_SENT');
+                document.getElementById('audit-log-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer hover:border-cyan-500 transition-all select-none group"
+            >
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">WhatsApp Delivered</span>
+                <div className="text-2xl sm:text-3xl font-black text-cyan-600 dark:text-cyan-400 mt-1">
+                  {stats.whatsappDelivered}
+                </div>
+                <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between mt-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <span className="flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-cyan-500" />
+                    <span>Double tick receipt</span>
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 text-cyan-600 dark:text-cyan-400 transition-opacity">Filter ↓</span>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* WhatsApp Read */}
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">WhatsApp Read</span>
-              <div className="text-2xl sm:text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
-                {loading ? '...' : stats.whatsappRead}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <CheckCircle2 className="w-3 h-3 text-indigo-500" />
-                <span>Blue tick receipt</span>
-              </span>
-            </CardContent>
-          </Card>
-        </div>
+            {/* WhatsApp Read */}
+            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block truncate">WhatsApp Read</span>
+                <div className="text-2xl sm:text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
+                  {stats.whatsappRead}
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
+                  <CheckCircle2 className="w-3 h-3 text-indigo-500" />
+                  <span>Blue tick receipt</span>
+                </span>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Section 3: Combined Metrics & Customer Reach */}
@@ -532,58 +632,67 @@ export default function SmsReports() {
           </h2>
           <span className="text-[11px] text-slate-400 font-medium">Distinct customer deduplication</span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Total Notifications</span>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-1">
-                {loading ? '...' : stats.totalNotifications}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <span>{stats.totalSms} SMS · {stats.totalWhatsApp} WhatsApp</span>
-              </span>
-            </CardContent>
-          </Card>
+        {loading ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Total Notifications</span>
+                <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-1">
+                  {stats.totalNotifications}
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
+                  <span>{stats.totalSms} SMS · {stats.totalWhatsApp} WhatsApp</span>
+                </span>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Staff-Confirmed Total</span>
-              <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                {loading ? '...' : stats.totalStaffConfirmed}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                <span>Across all channels</span>
-              </span>
-            </CardContent>
-          </Card>
+            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Staff-Confirmed Total</span>
+                <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                  {stats.totalStaffConfirmed}
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  <span>Across all channels</span>
+                </span>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Unique Customers Notified</span>
-              <div className="text-2xl sm:text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
-                {loading ? '...' : stats.uniqueCustomersNotified}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <Users className="w-3 h-3 text-indigo-500" />
-                <span>Received notification</span>
-              </span>
-            </CardContent>
-          </Card>
+            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Unique Customers Notified</span>
+                <div className="text-2xl sm:text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
+                  {stats.uniqueCustomersNotified}
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
+                  <Users className="w-3 h-3 text-indigo-500" />
+                  <span>Received notification</span>
+                </span>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
-            <CardContent className="p-3.5 sm:p-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Customers Awaiting Alert</span>
-              <div className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 mt-1">
-                {loading ? '...' : stats.uniqueCustomersNotNotified}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
-                <Clock className="w-3 h-3 text-amber-500" />
-                <span>Pending contact</span>
-              </span>
-            </CardContent>
-          </Card>
-        </div>
+            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs">
+              <CardContent className="p-3.5 sm:p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Customers Awaiting Alert</span>
+                <div className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 mt-1">
+                  {stats.uniqueCustomersNotNotified}
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-1">
+                  <Clock className="w-3 h-3 text-amber-500" />
+                  <span>Pending contact</span>
+                </span>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Staff Activity Breakdown Table */}
@@ -598,7 +707,11 @@ export default function SmsReports() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {stats.staffActivity.length === 0 ? (
+          {loading ? (
+            <div className="py-2">
+              <TableSkeleton rows={4} columns={7} />
+            </div>
+          ) : stats.staffActivity.length === 0 ? (
             <div className="py-8 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
               No staff activity recorded for the selected period.
             </div>
@@ -703,7 +816,7 @@ export default function SmsReports() {
       )}
 
       {/* Complete Permitted Notification History */}
-      <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+      <Card id="audit-log-section" className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
         <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -770,9 +883,8 @@ export default function SmsReports() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-cyan-600" />
-              <span>Loading audit logs...</span>
+            <div className="py-2">
+              <TableSkeleton rows={6} columns={8} />
             </div>
           ) : historyList.length === 0 ? (
             <div className="py-12 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">

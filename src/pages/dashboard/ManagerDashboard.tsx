@@ -97,6 +97,7 @@ import {
 } from '@/components/repair/RepairTimelineTracker';
 import { getRepairTimelineMetrics } from '@/lib/repairTimeline';
 import { calculateRepairMetrics } from '@/lib/repairStatus';
+import { StatCardSkeleton, TableSkeleton } from '@/components/common/SkeletonLoaders';
 
 
 const statusConfig: Record<string, { label: string; badge: string; bgSoft: string; textClass: string }> = {
@@ -733,17 +734,27 @@ export default function ManagerDashboard() {
       </div>
 
       {/* 2. Operations Overview KPI Metrics Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        {/* Total Repairs */}
-        <Card
-          onClick={() => { setStatusFilter('ALL'); setTechFilter('ALL'); }}
-          className={cn(
-            "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
-            statusFilter === 'ALL' 
-              ? "border-slate-900 bg-slate-900 text-white shadow-md dark:border-slate-100 dark:bg-slate-800" 
-              : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-          )}
-        >
+      {loading && !hasCachedRepairs ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+          {/* Total Repairs */}
+          <Card
+            onClick={() => { setStatusFilter('ALL'); setTechFilter('ALL'); }}
+            className={cn(
+              "p-4 rounded-3xl border transition-all cursor-pointer hover:shadow-md",
+              statusFilter === 'ALL' 
+                ? "border-slate-900 bg-slate-900 text-white shadow-md dark:border-slate-100 dark:bg-slate-800" 
+                : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+            )}
+          >
           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider opacity-80">
             <span>Total Repairs</span>
             <Layers className="h-4 w-4" />
@@ -848,8 +859,9 @@ export default function ManagerDashboard() {
           <p className={cn("text-[11px] font-bold mt-1", statusFilter === 'RE_PROBLEM' ? "text-rose-100" : "text-rose-600")}>
             Re-problem cases
           </p>
-        </Card>
-      </div>
+          </Card>
+        </div>
+      )}
 
       {/* ATTENDANCE & REPAIR-RELATED DAMAGE PERSONAL SUMMARY CARDS */}
       <UserOverviewCards />
@@ -1159,7 +1171,11 @@ export default function ManagerDashboard() {
           </div>
         </div>
 
-        {filteredRepairs.length === 0 ? (
+        {loading && !hasCachedRepairs ? (
+          <div className="bg-white rounded-[32px] border border-slate-200 p-6 shadow-sm">
+            <TableSkeleton rows={8} columns={8} />
+          </div>
+        ) : filteredRepairs.length === 0 ? (
           <Card className="rounded-[36px] border-slate-200 p-12 text-center bg-white">
             <Smartphone className="h-12 w-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-base font-bold text-slate-800">No matching repairs found</h3>

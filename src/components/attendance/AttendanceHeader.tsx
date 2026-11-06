@@ -8,7 +8,6 @@ import {
   Lock,
   ShieldCheck,
   UserCheck,
-  Sparkles,
   Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
