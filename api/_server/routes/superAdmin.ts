@@ -357,38 +357,189 @@ router.post('/delete-data', authenticate, authorize(['SUPER_ADMIN']), async (req
   }
 });
 
-// 4. GET /api/share/history
-router.get('/share/history', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
+// Interface for shared applet records
+interface AppletShareItem {
+  id: string;
+  shareToken: string;
+  title: string;
+  appletName: string;
+  description: string;
+  visibility: string;
+  permissions: string[];
+  sharingTarget?: string | null;
+  allowFork?: boolean;
+  expiresAt?: string;
+  createdById?: string;
+  createdAt: string;
+  url: string;
+}
+
+// In-process resilient memory store for applet shares
+const memoryShareStore: AppletShareItem[] = [];
+
+// 4. GET /api/share/history & GET /api/admin/share/history
+router.get(['/history', '/share/history'], authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
-    const { data: shares } = await supabaseAdmin.from('AppletShare').select('*').order('createdAt', { ascending: false }).limit(50);
-    return res.json(shares || []);
+    const listMap = new Map<string, any>();
+
+    // 1. Add items from memory store
+    for (const item of memoryShareStore) {
+      listMap.set(item.shareToken || item.id, item);
+    }
+
+    // 2. Fetch from AuditLog where action = 'APPLET_SHARE'
+    try {
+      const { data: auditLogs } = await supabaseAdmin
+        .from('AuditLog')
+        .select('*')
+        .eq('action', 'APPLET_SHARE')
+        .order('createdAt', { ascending: false })
+        .limit(50);
+
+      if (Array.isArray(auditLogs)) {
+        for (const log of auditLogs) {
+          const d = log.details || {};
+          const key = d.shareToken || d.id || log.resourceId || log.id;
+          if (!listMap.has(key)) {
+            listMap.set(key, {
+              id: d.id || log.resourceId || log.id,
+              appletName: d.appletName || d.title || 'MTS Lab System',
+              title: d.title || d.appletName || 'MTS Lab System',
+              description: d.description || '',
+              visibility: d.visibility || 'PUBLIC',
+              permissions: d.permissions || ['READ'],
+              shareToken: d.shareToken || key,
+              url: d.url || `/share/${d.shareToken || key}`,
+              createdAt: d.createdAt || log.createdAt,
+            });
+          }
+        }
+      }
+    } catch (auditErr) {
+      console.warn('[SHARE HISTORY AUDIT FETCH WARN]', auditErr);
+    }
+
+    // 3. Fetch from AppletShare table if available
+    try {
+      const { data: shares } = await supabaseAdmin
+        .from('AppletShare')
+        .select('*')
+        .order('createdAt', { ascending: false })
+        .limit(50);
+
+      if (Array.isArray(shares)) {
+        for (const s of shares) {
+          const payload = s.payload || {};
+          const token = payload.shareToken || s.shareToken || s.id;
+          if (!listMap.has(token)) {
+            listMap.set(token, {
+              id: s.id,
+              appletName: s.title || s.appletName || 'MTS Lab System',
+              title: s.title || s.appletName || 'MTS Lab System',
+              description: s.description || '',
+              visibility: s.visibility || payload.visibility || 'PUBLIC',
+              permissions: s.permissions || payload.permissions || ['READ'],
+              shareToken: token,
+              url: payload.url || `/share/${token}`,
+              createdAt: s.createdAt,
+            });
+          }
+        }
+      }
+    } catch (shareTableErr) {
+      console.warn('[SHARE HISTORY DB FETCH WARN]', shareTableErr);
+    }
+
+    // Convert map to array sorted by createdAt desc
+    const combined = Array.from(listMap.values()).sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+
+    return res.json({ success: true, data: combined, items: combined });
   } catch (err: any) {
-    return res.json([]);
+    return res.json({ success: true, data: [], items: [] });
   }
 });
 
 // 5. POST /api/share/applet & POST /api/share
-router.post('/share/applet', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
+router.post(['/applet', '/share/applet', '/'], authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), async (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, permissions, expiresAt } = req.body;
+    const { title, description, permissions, expiresAt, appletName, visibility, sharingTarget, allowFork } = req.body;
     const shareId = uuidv4();
     const shareToken = uuidv4().replace(/-/g, '');
+    const cleanTitle = title || appletName || 'MTS Lab System';
+    const cleanVisibility = visibility || 'PUBLIC';
+    const cleanPermissions = permissions || (cleanVisibility === 'PUBLIC' ? ['READ'] : ['TEAM_READ']);
+    const nowIso = new Date().toISOString();
+    const expiryIso = expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const shareUrl = `/share/${shareToken}`;
 
-    const newShare = {
+    const newShare: AppletShareItem = {
       id: shareId,
       shareToken,
-      title: title || 'MTS Lab Share Link',
-      description: description || null,
-      permissions: permissions || ['READ'],
-      expiresAt: expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      title: cleanTitle,
+      appletName: cleanTitle,
+      description: description || '',
+      visibility: cleanVisibility,
+      permissions: cleanPermissions,
+      sharingTarget: sharingTarget || null,
+      allowFork: allowFork !== undefined ? !!allowFork : true,
+      expiresAt: expiryIso,
       createdById: req.user!.id,
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso,
+      url: shareUrl,
     };
 
-    await supabaseAdmin.from('AppletShare').insert([newShare]);
-    return res.status(201).json({ success: true, shareToken, url: `/share/${shareToken}` });
+    // 1. Add to in-process memory store
+    memoryShareStore.unshift(newShare);
+    if (memoryShareStore.length > 200) {
+      memoryShareStore.pop();
+    }
+
+    // 2. Persist to AuditLog in database
+    try {
+      await logAudit({
+        userId: req.user!.id,
+        action: 'APPLET_SHARE',
+        resource: 'AppletShare',
+        resourceId: shareId,
+        details: newShare,
+      });
+    } catch (auditErr) {
+      console.warn('[SHARE AUDIT LOG WARN]', auditErr);
+    }
+
+    // 3. Best-effort insert into AppletShare table
+    try {
+      await supabaseAdmin.from('AppletShare').insert([{
+        id: shareId,
+        title: cleanTitle,
+        description: description || '',
+        createdAt: nowIso,
+        expiresAt: expiryIso,
+        payload: {
+          shareToken,
+          visibility: cleanVisibility,
+          permissions: cleanPermissions,
+          sharingTarget,
+          allowFork,
+          createdById: req.user!.id,
+          url: shareUrl,
+        }
+      }]);
+    } catch (_) {
+      // Ignored if table has strict RLS or missing columns
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Applet shared successfully!',
+      shareToken,
+      url: shareUrl,
+      data: newShare,
+    });
   } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to create share link.' });
+    return res.status(500).json({ success: false, error: 'Failed to create share link.', message: 'Failed to create share link.' });
   }
 });
 

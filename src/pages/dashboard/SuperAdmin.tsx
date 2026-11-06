@@ -245,9 +245,10 @@ export default function SuperAdmin() {
   const fetchShareHistory = async () => {
     try {
       const response = await api.get('/share/history');
-      if (response && response.success) {
-        setSharingHistory(response.data || []);
-        useDashboardCache.getState().setSuperAdmin({ sharingHistory: response.data || [] }, user?.id);
+      if (response && (response.success || Array.isArray(response) || Array.isArray(response.data))) {
+        const list = Array.isArray(response) ? response : (response.data || response.items || []);
+        setSharingHistory(list);
+        useDashboardCache.getState().setSuperAdmin({ sharingHistory: list }, user?.id);
       }
     } catch (err: any) {
       console.error("[SHARE HISTORY LOAD ERROR]", err);
