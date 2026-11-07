@@ -49,6 +49,7 @@ import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { FestivalDecorations } from '@/components/theme/FestivalDecorations';
 import { 
   DropdownMenu, 
@@ -171,6 +172,21 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       fetchPendingTransferCount();
     }
   );
+
+  // Desktop keyboard shortcut listener to toggle sidebar collapse (Ctrl+[ / Cmd+[ / Ctrl+B / Cmd+B)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '[' || e.key === 'b' || e.key === 'B')) {
+        const tag = (document.activeElement?.tagName || '').toLowerCase();
+        if (tag !== 'input' && tag !== 'textarea') {
+          e.preventDefault();
+          toggleSidebarCollapse();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleSidebarCollapse]);
 
   const handleMarkAllRead = async () => {
     try {
@@ -319,6 +335,57 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     return current === item.path || (item.path !== '/dashboard' && current.startsWith(item.path));
   };
 
+  const getFeatureTooltip = (item: { name: string; path: string }): string => {
+    switch (item.name) {
+      case 'Overview':
+        return 'Overview Dashboard';
+      case 'Manager Hub':
+        return 'Manager Hub';
+      case 'Repairs':
+        return 'Repair Workorders';
+      case 'New Repair':
+        return 'New Repair Intake';
+      case 'Transfers':
+        return 'Transfer Queue';
+      case 'Technician Manager':
+        return 'Technician Manager';
+      case 'Customer Hub':
+        return 'Customer Hub';
+      case 'SMS Center':
+        return 'SMS Center';
+      case 'SMS Reports':
+        return 'SMS Reports';
+      case 'Courier Hub':
+        return 'Courier Hub';
+      case 'Battery Warranty Hub':
+        return 'Battery Warranty Hub';
+      case 'Services & Repair Prices':
+        return 'Services & Repair Prices';
+      case 'Slideshow CMS':
+        return 'Slideshow CMS';
+      case 'Inventory Hub':
+        return 'Inventory Hub';
+      case 'Attendance':
+        return 'Attendance Hub';
+      case 'Repair-Related Damage':
+        return 'Repair-Related Damage QA';
+      case 'Staff Management':
+        return 'Staff Management';
+      case 'Security & Surveillance':
+        return 'Security & Surveillance';
+      case 'Revenue Hub':
+        return 'Revenue Hub';
+      case 'Super Admin':
+        return 'Super Admin Audit Console';
+      case 'Theme Controller':
+        return 'Theme Controller';
+      case 'Settings':
+        return 'Settings';
+      default:
+        return item.name;
+    }
+  };
+
   const navItems = useMemo(() => {
     if (isTechnicianRole) {
       return [
@@ -415,79 +482,115 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           {/* Sidebar Header: Brand + Desktop Collapse Toggle + Mobile Close */}
           <div className={cn(
             "flex items-center h-16 sm:h-20 border-b border-slate-100 dark:border-slate-800/80 shrink-0 transition-all",
-            isCollapsed ? "px-3 md:justify-center" : "justify-between px-5 sm:px-6"
+            isCollapsed ? "justify-center px-2 md:h-20" : "justify-between px-5 sm:px-6"
           )}>
-            <NavLink 
-              to="/dashboard" 
-              className={cn("flex items-center gap-3 min-w-0 group", isCollapsed && "md:justify-center")}
-              title="MTS Lab Dashboard"
-            >
+            {/* Expanded Desktop & Mobile view */}
+            <div className={cn("flex items-center justify-between w-full", isCollapsed && "md:hidden")}>
+              <NavLink 
+                to="/dashboard" 
+                className="flex items-center gap-2.5 min-w-0 group"
+                title="MTS Lab Dashboard"
+                onClick={() => setIsSidebarOpen(false)}
+              >
               <BrandLogo
                 variant="icon"
                 size="md"
                 linkTo={null}
-                imgClassName="w-10 h-10 drop-shadow-md group-hover:scale-105"
+                imgClassName="w-10 h-10 drop-shadow-md group-hover:scale-105 transition-all"
               />
-              <div className={cn("min-w-0 transition-opacity", isCollapsed && "md:hidden")}>
-                <span className="text-base font-black tracking-tight text-slate-900 dark:text-white block truncate">
-                  MTS<span className="text-indigo-600 dark:text-indigo-400 font-bold ml-0.5">LAB</span>
-                </span>
-                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider block -mt-0.5 truncate">
-                  Repair Systems
-                </span>
+                <div className="min-w-0">
+                  <span className="font-black tracking-tight text-slate-900 dark:text-white block truncate text-base">
+                    MTS<span className="text-indigo-600 dark:text-indigo-400 font-bold ml-0.5">LAB</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider block -mt-0.5 truncate">
+                    Repair Systems
+                  </span>
+                </div>
+              </NavLink>
+
+              <div className="flex items-center gap-1">
+                {/* Desktop Collapse Toggle */}
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="hidden md:flex rounded-xl h-8 w-8 text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 cursor-pointer transition-colors"
+                  onClick={toggleSidebarCollapse}
+                  aria-label="Collapse sidebar navigation"
+                  title="Collapse sidebar (Ctrl+[)"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </Button>
+
+                {/* Mobile Close Button */}
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="md:hidden rounded-lg h-9 w-9 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 cursor-pointer" 
+                  onClick={() => setIsSidebarOpen(false)}
+                  aria-label="Close sidebar"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
               </div>
-            </NavLink>
-
-            {/* Desktop Sidebar Collapse Toggle Button */}
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className={cn(
-                "hidden md:flex rounded-xl h-9 w-9 text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 cursor-pointer transition-colors",
-                isCollapsed && "md:hidden"
-              )}
-              onClick={toggleSidebarCollapse}
-              aria-label={isCollapsed ? "Expand sidebar navigation" : "Collapse sidebar navigation"}
-              title="Collapse sidebar (Ctrl+[)"
-            >
-              <PanelLeftClose className="h-4 w-4" />
-            </Button>
-
-            {/* Mobile Close Button */}
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="md:hidden rounded-lg h-9 w-9 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 cursor-pointer" 
-              onClick={() => setIsSidebarOpen(false)}
-              aria-label="Close sidebar"
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-
-          {/* Quick Expand Button when collapsed on Desktop */}
-          {isCollapsed && (
-            <div className="hidden md:flex items-center justify-center pt-2 pb-1 shrink-0">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleSidebarCollapse}
-                className="h-8 w-8 rounded-xl text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
-                title="Expand sidebar"
-                aria-label="Expand sidebar"
-              >
-                <PanelLeftOpen className="h-4 w-4" />
-              </Button>
             </div>
-          )}
 
-          {/* Sidebar Navigation */}
-          <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto min-h-0">
-            {!isCollapsed && (
-              <div className="px-3 mb-2">
-                 <p className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Management Core</p>
+            {/* Collapsed Desktop View: Centered Brand Icon & Expand Toggle with Portaled Tooltips */}
+            {isCollapsed && (
+              <div className="hidden md:flex flex-col items-center justify-center gap-2 py-2 w-full">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <NavLink 
+                        to="/dashboard" 
+                        className="cursor-pointer group flex items-center justify-center p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        aria-label="MTS Lab Repair Systems"
+                      >
+                        <BrandLogo
+                          variant="icon"
+                          size="sm"
+                          linkTo={null}
+                          imgClassName="w-8 h-8 drop-shadow-md group-hover:scale-105 transition-all"
+                        />
+                      </NavLink>
+                    }
+                  />
+                  <TooltipContent side="right" sideOffset={14} className="font-bold text-xs py-1.5 px-3 z-50">
+                    MTS Lab Repair Systems
+                  </TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="rounded-lg h-7 w-7 text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 cursor-pointer transition-colors"
+                        onClick={toggleSidebarCollapse}
+                        aria-label="Expand sidebar navigation"
+                      >
+                        <PanelLeftOpen className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent side="right" sideOffset={14} className="font-semibold text-xs py-1.5 px-3 z-50">
+                    Expand sidebar (Ctrl+[)
+                  </TooltipContent>
+                </Tooltip>
               </div>
             )}
+          </div>
+
+          {/* Sidebar Navigation */}
+          <nav className={cn(
+            "flex-1 py-3 overflow-y-auto min-h-0",
+            isCollapsed ? "px-2 space-y-1.5" : "px-3 space-y-1"
+          )}>
+            {!isCollapsed ? (
+              <div className="px-3 mb-2">
+                <p className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Management Core</p>
+              </div>
+            ) : null}
 
             {navItems.map((item: any) => {
               const hasAlert = (item.name === 'Access Requests' && pendingAccessCount > 0) ||
@@ -500,35 +603,60 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 ? pendingTransferCount
                 : pendingAttendanceCount;
               const active = isLinkActive(item);
+              const tooltipLabel = getFeatureTooltip(item);
 
-              // When collapsed on desktop, render as icon with Tooltip
+              // When collapsed on desktop: Display ONLY feature icons to save horizontal space with floating tooltips
               if (isCollapsed) {
                 return (
                   <div key={item.path} className="relative">
-                    {/* Collapsed desktop icon with Tooltip title */}
+                    {/* Collapsed desktop item: Centered Icon + Portaled Floating Tooltip */}
                     <div className="hidden md:block">
-                      <NavLink
-                        to={item.path}
-                        title={item.name}
-                        className={cn(
-                          "relative flex items-center justify-center w-11 h-11 mx-auto rounded-xl transition-all group cursor-pointer",
-                          active 
-                            ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950 shadow-md font-extrabold" 
-                            : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-white"
-                        )}
-                        aria-label={item.name}
-                      >
-                        <item.icon className="h-4 w-4 shrink-0 transition-transform group-hover:scale-110" />
-                        {hasAlert && (
-                          <span className={cn(
-                            "absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-slate-900 animate-pulse",
-                            item.name === 'Transfers' ? "bg-amber-500" : "bg-rose-500"
-                          )} />
-                        )}
-                      </NavLink>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <NavLink
+                              to={item.path}
+                              className={cn(
+                                "relative flex items-center justify-center w-11 h-11 mx-auto rounded-xl transition-all cursor-pointer group",
+                                active 
+                                  ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950 shadow-md shadow-slate-950/15 font-extrabold" 
+                                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100/90 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-white"
+                              )}
+                              aria-label={tooltipLabel}
+                            >
+                              <item.icon className="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" />
+                              {hasAlert && (
+                                <span className={cn(
+                                  "absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-4.5 px-1 text-[9px] font-black rounded-full shadow-xs animate-pulse",
+                                  item.name === 'Transfers' ? "bg-amber-500 text-slate-950" : "bg-rose-500 text-white"
+                                )}>
+                                  {alertCount}
+                                </span>
+                              )}
+                            </NavLink>
+                          }
+                        />
+                        <TooltipContent 
+                          side="right" 
+                          sideOffset={14}
+                          className="font-semibold text-xs py-1.5 px-3 z-50 shadow-xl border border-slate-700/50 bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{tooltipLabel}</span>
+                            {hasAlert && (
+                              <span className={cn(
+                                "px-1.5 py-0.2 rounded-full text-[9px] font-black",
+                                item.name === 'Transfers' ? "bg-amber-500 text-slate-950" : "bg-rose-500 text-white"
+                              )}>
+                                {alertCount}
+                              </span>
+                            )}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
 
-                    {/* Mobile drawer rendering (always full text) */}
+                    {/* Mobile drawer rendering (always full text and touch-friendly) */}
                     <div className="md:hidden">
                       <NavLink
                         to={item.path}
@@ -572,7 +700,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                   onClick={() => setIsSidebarOpen(false)}
                 >
                   <span className="flex items-center gap-2.5 min-w-0">
-                    <item.icon className="h-4 w-4 shrink-0" />
+                    <item.icon className="h-4 w-4 shrink-0 transition-transform group-hover:scale-105" />
                     <span className="truncate">{item.name}</span>
                   </span>
                   {hasAlert && (
@@ -593,37 +721,57 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
           {/* Sidebar User Profile Bottom Box */}
           <div className={cn(
-            "p-3 sm:p-4 shrink-0 border-t border-slate-100 dark:border-slate-800",
-            isCollapsed && "md:p-2"
+            "shrink-0 border-t border-slate-100 dark:border-slate-800",
+            isCollapsed ? "p-2" : "p-3 sm:p-4"
           )}>
             {isCollapsed ? (
-              <div className="hidden md:flex flex-col items-center gap-2 p-1.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
-                <button
-                  onClick={() => navigate('/dashboard/settings')}
-                  className="cursor-pointer group focus:outline-none"
-                  aria-label="Open Account Settings"
-                  title={`${user?.name || 'Staff User'} (${roleInfo.label})`}
-                >
-                  <Avatar className="h-9 w-9 border border-white dark:border-slate-700 shadow-xs font-bold overflow-hidden rounded-xl">
-                    {user?.profileImage ? (
-                      <AvatarImage src={user.profileImage} className="object-cover" />
-                    ) : null}
-                    <AvatarFallback className="bg-slate-950 dark:bg-white text-white dark:text-slate-950 text-[11px] font-black">
-                      {user?.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
+              <div className="hidden md:flex flex-col items-center gap-2 py-1">
+                {/* User Avatar with Tooltip */}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        onClick={() => navigate('/dashboard/settings')}
+                        className="focus:outline-none cursor-pointer group"
+                        aria-label={`Account Settings: ${user?.name || 'Staff'}`}
+                      >
+                        <Avatar className="h-10 w-10 border border-slate-200 dark:border-slate-700 shadow-xs font-bold overflow-hidden rounded-xl transition-transform group-hover:scale-105">
+                          {user?.profileImage ? (
+                            <AvatarImage src={user.profileImage} className="object-cover" />
+                          ) : null}
+                          <AvatarFallback className="bg-slate-950 dark:bg-white text-white dark:text-slate-950 text-xs font-black">
+                            {user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+                          </AvatarFallback>
+                        </Avatar>
+                      </button>
+                    }
+                  />
+                  <TooltipContent side="right" sideOffset={14} className="font-medium text-xs py-1.5 px-3 z-50">
+                    <div className="font-bold text-slate-900 dark:text-white">{user?.name || 'Staff'}</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">{roleInfo.label} • Settings</div>
+                  </TooltipContent>
+                </Tooltip>
 
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  className="h-8 w-8 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
-                  onClick={handleLogout}
-                  aria-label="Log Out"
-                  title="Log Out"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                </Button>
+                {/* Logout Button with Tooltip */}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="h-9 w-9 rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                        onClick={handleLogout}
+                        aria-label="Log Out"
+                      >
+                        <LogOut className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent side="right" sideOffset={14} className="font-semibold text-xs py-1 px-2.5 z-50">
+                    Log Out
+                  </TooltipContent>
+                </Tooltip>
               </div>
             ) : null}
 
@@ -638,7 +786,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                     <AvatarImage src={user.profileImage} className="object-cover" />
                   ) : null}
                   <AvatarFallback className="bg-slate-950 dark:bg-white text-white dark:text-slate-950 text-[11px] font-black">
-                    {user?.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
+                    {user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
@@ -703,6 +851,19 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
             {/* Desktop Authoritative Role Workspace Context */}
             <div className="hidden md:flex items-center gap-2.5 min-w-0">
+              {isCollapsed && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-xl h-8 w-8 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 cursor-pointer transition-colors"
+                  onClick={toggleSidebarCollapse}
+                  aria-label="Expand sidebar navigation"
+                  title="Expand sidebar (Ctrl+[)"
+                >
+                  <PanelLeftOpen className="h-4 w-4" />
+                </Button>
+              )}
+
               <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl shrink-0">
                 <RoleIcon className="w-4 h-4 text-slate-700 dark:text-slate-300 shrink-0" />
                 <Badge variant="outline" className={cn("text-xs font-black uppercase tracking-wide px-2 py-0.5 rounded-lg border", roleInfo.badgeClass)}>
