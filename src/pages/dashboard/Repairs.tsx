@@ -783,18 +783,26 @@ export default function Repairs() {
       return;
     }
 
+    const targetId = statusModalRepair.id;
+    const previousRepairs = repairs;
+
+    // Apply optimistic update immediately
+    setRepairs(prev => prev.map(r => r.id === targetId ? { ...r, status: newStatusValue } : r));
+    setStatusModalRepair(null);
     setStatusUpdateLoading(true);
+
     try {
       const payload: any = { status: newStatusValue };
       if (statusUpdateNote.trim()) {
         payload.note = statusUpdateNote.trim();
       }
-      const updated = await api.patch(`/repairs/${statusModalRepair.id}`, payload);
+      const updated = await api.patch(`/repairs/${targetId}`, payload);
       toast.success(`Status updated to ${newStatusValue.replace(/_/g, ' ')}`);
-      setRepairs(prev => prev.map(r => r.id === statusModalRepair.id ? { ...r, ...updated } : r));
-      setStatusModalRepair(null);
+      setRepairs(prev => prev.map(r => r.id === targetId ? { ...r, ...updated } : r));
     } catch (err: any) {
-      toast.error(err.message || 'Failed to update repair status');
+      // Rollback to previous state on failure
+      setRepairs(previousRepairs);
+      toast.error(err.message || 'Failed to update repair status. Reverted change.');
     } finally {
       setStatusUpdateLoading(false);
     }
@@ -808,15 +816,28 @@ export default function Repairs() {
 
   const handleSaveTechnicianAssignment = async () => {
     if (!assignModalRepair) return;
+    const targetId = assignModalRepair.id;
+    const techId = selectedTechId === 'UNASSIGNED' ? null : selectedTechId;
+    const assignedTech = technicians.find(t => t.id === techId);
+    const previousRepairs = repairs;
+
+    // Apply optimistic update immediately
+    setRepairs(prev => prev.map(r => r.id === targetId ? {
+      ...r,
+      technicianId: techId,
+      technician: assignedTech ? { id: assignedTech.id, name: assignedTech.name } : null
+    } : r));
+    setAssignModalRepair(null);
     setAssignLoading(true);
+
     try {
-      const techId = selectedTechId === 'UNASSIGNED' ? null : selectedTechId;
-      const updated = await api.post(`/repairs/${assignModalRepair.id}/assign`, { technicianId: techId });
+      const updated = await api.post(`/repairs/${targetId}/assign`, { technicianId: techId });
       toast.success(techId ? 'Technician assigned successfully' : 'Technician unassigned');
-      setRepairs(prev => prev.map(r => r.id === assignModalRepair.id ? { ...r, ...updated } : r));
-      setAssignModalRepair(null);
+      setRepairs(prev => prev.map(r => r.id === targetId ? { ...r, ...updated } : r));
     } catch (err: any) {
-      toast.error(err.message || 'Failed to assign technician');
+      // Rollback to previous state on failure
+      setRepairs(previousRepairs);
+      toast.error(err.message || 'Failed to assign technician. Reverted change.');
     } finally {
       setAssignLoading(false);
     }

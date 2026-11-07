@@ -177,3 +177,111 @@ export function SectionLoadingSkeleton({ title = 'Loading...' }: { title?: strin
     </div>
   );
 }
+
+/**
+ * Grid of Repair Card Skeletons
+ */
+export function RepairCardsGridSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <Card key={i} className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex justify-between items-start">
+              <div className="space-y-1.5 flex-1">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-36" />
+              </div>
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+              <Skeleton className="h-3 w-4/5" />
+              <Skeleton className="h-3 w-3/5" />
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <Skeleton className="h-6 w-20 rounded-lg" />
+              <Skeleton className="h-6 w-16 rounded-lg" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Form Input Fields Skeleton
+ */
+export function FormSkeleton({ fields = 6 }: { fields?: number }) {
+  return (
+    <div className="space-y-5 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+      <Skeleton className="h-5 w-48 mb-2" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {Array.from({ length: fields }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-10 w-full rounded-xl" />
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+        <Skeleton className="h-9 w-20 rounded-xl" />
+        <Skeleton className="h-9 w-28 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Customer Profile Header & Details Skeleton
+ */
+export function CustomerProfileSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Skeleton className="w-16 h-16 rounded-2xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-44" />
+            <Skeleton className="h-3.5 w-32" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-24 rounded-xl" />
+          <Skeleton className="h-9 w-28 rounded-xl" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+      </div>
+      <TableSkeleton rows={5} columns={5} />
+    </div>
+  );
+}
+
+/**
+ * Public Website Service / Catalog Cards Skeleton
+ */
+export function PublicServicesSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+          <Skeleton className="w-12 h-12 rounded-2xl" />
+          <Skeleton className="h-5 w-40" />
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-4/5" />
+          </div>
+          <div className="pt-2 flex justify-between items-center">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-4 rounded-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+

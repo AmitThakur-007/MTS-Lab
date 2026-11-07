@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Smartphone,
@@ -180,9 +180,34 @@ export default function RepairRecordDetail({
   const [paymentNote, setPaymentNote] = useState('');
   const [recordingPayment, setRecordingPayment] = useState(false);
 
-  // Communication Notes
+  // Communication Notes with persistent draft autosave
   const [newNote, setNewNote] = useState('');
   const [submittingNote, setSubmittingNote] = useState(false);
+
+  // Restore unsaved draft note on mount
+  useEffect(() => {
+    if (repair?.id) {
+      try {
+        const saved = localStorage.getItem(`mts_note_draft_${repair.id}`);
+        if (saved) {
+          setNewNote(saved);
+        }
+      } catch (_) {}
+    }
+  }, [repair?.id]);
+
+  // Persist draft note automatically as user types
+  useEffect(() => {
+    if (repair?.id) {
+      try {
+        if (newNote.trim()) {
+          localStorage.setItem(`mts_note_draft_${repair.id}`, newNote);
+        } else {
+          localStorage.removeItem(`mts_note_draft_${repair.id}`);
+        }
+      } catch (_) {}
+    }
+  }, [newNote, repair?.id]);
 
   // Device display parsing
   const device = getRepairDeviceDisplay(repair);
@@ -339,6 +364,9 @@ export default function RepairRecordDetail({
       });
       toast.success('Communication note recorded');
       setNewNote('');
+      try {
+        if (repair?.id) localStorage.removeItem(`mts_note_draft_${repair.id}`);
+      } catch (_) {}
       if (onRefresh) onRefresh();
     } catch (err: any) {
       toast.error(err.message || 'Failed to add note');
@@ -1514,7 +1542,15 @@ export default function RepairRecordDetail({
               onChange={(e) => setNewNote(e.target.value)}
               className="rounded-2xl border-slate-200 dark:border-slate-800 text-xs font-medium min-h-[70px] bg-slate-50/60 dark:bg-slate-950/60 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-slate-100"
             />
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-between">
+              <div>
+                {newNote.trim() && (
+                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 select-none">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Draft auto-saved
+                  </span>
+                )}
+              </div>
               <Button
                 size="sm"
                 disabled={submittingNote || !newNote.trim()}

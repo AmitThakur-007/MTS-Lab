@@ -38,9 +38,13 @@ import {
   Check,
   Smartphone,
   MessageSquare,
+  UserCog,
   ArrowLeftRight,
-  UserCog
+  Search
 } from 'lucide-react';
+import { CommandPalette } from '@/components/common/CommandPalette';
+import { KeyboardShortcutsModal } from '@/components/common/KeyboardShortcutsModal';
+import { RoleTierBadge } from '@/components/common/RoleTierBadge';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -83,6 +87,8 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const [pendingAccessCount, setPendingAccessCount] = useState(0);
   const [pendingAttendanceCount, setPendingAttendanceCount] = useState(0);
   const [pendingTransferCount, setPendingTransferCount] = useState(0);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -712,8 +718,41 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {/* Right: Festival Indicator + Theme Selector + Notifications + User Account */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Right: Search / Command Palette + Festival Indicator + Theme Selector + Notifications + User Account */}
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {/* Quick Command Palette Trigger (Cmd+K) */}
+            <button
+              onClick={() => setIsCommandPaletteOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer shadow-2xs"
+              title="Search or press Cmd+K / Ctrl+K"
+              aria-label="Open Command Palette"
+            >
+              <Search className="w-3.5 h-3.5 text-slate-400" />
+              <span className="hidden md:inline">Quick Search...</span>
+              <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300">
+                ⌘K
+              </kbd>
+            </button>
+
+            {/* Mobile Command Palette Icon */}
+            <button
+              onClick={() => setIsCommandPaletteOpen(true)}
+              className="sm:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700 cursor-pointer"
+              title="Open Command Palette (Cmd+K)"
+              aria-label="Search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+
+            {/* Keyboard Shortcuts Trigger Button */}
+            <button
+              onClick={() => setIsShortcutsOpen(true)}
+              className="hidden lg:flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer shadow-2xs"
+              title="Keyboard Shortcuts (Cmd + /)"
+              aria-label="Keyboard Shortcuts"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
             
             {/* Global Festival Mode Indicator (Active) */}
             {isFestivalEnforced && (
@@ -1081,6 +1120,10 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             {children}
           </div>
         </div>
+
+        {/* Global Command Palette and Keyboard Shortcuts Modal */}
+        <CommandPalette open={isCommandPaletteOpen} onOpenChange={setIsCommandPaletteOpen} />
+        <KeyboardShortcutsModal open={isShortcutsOpen} onOpenChange={setIsShortcutsOpen} />
       </main>
     </div>
   );

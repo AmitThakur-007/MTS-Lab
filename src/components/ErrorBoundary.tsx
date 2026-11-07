@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ArrowLeft, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[ErrorBoundary caught error]:', error, errorInfo);
+    console.error('[ErrorBoundary caught exception]:', error, errorInfo);
   }
 
   private handleReset = () => {
@@ -40,19 +40,22 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="p-6 max-w-2xl mx-auto my-8">
-          <Card className="p-8 rounded-3xl border border-rose-200 bg-white shadow-xl text-center space-y-5">
-            <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center mx-auto text-rose-600 shadow-sm">
-              <AlertTriangle className="h-8 w-8" />
+        <div className="p-4 sm:p-6 max-w-2xl mx-auto my-8 font-sans antialiased">
+          <Card className="p-6 sm:p-8 rounded-3xl border border-rose-200 dark:border-rose-900/70 bg-white dark:bg-slate-900 shadow-xl text-center space-y-5 transition-colors">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-100 dark:border-rose-900 flex items-center justify-center mx-auto text-rose-600 dark:text-rose-400 shadow-xs">
+              <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8" />
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-xl font-black text-slate-900">
-                {this.props.fallbackTitle || 'Something went wrong in Staff Management. Please try again.'}
+              <span className="text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                ERROR RECOVERY
+              </span>
+              <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                {this.props.fallbackTitle || 'An unexpected interface error occurred.'}
               </h2>
-              <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-md mx-auto">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-medium max-w-md mx-auto leading-relaxed">
                 {this.props.fallbackMessage ||
-                  'An unexpected rendering error occurred. The application remains running safely. You can reload this view to restore full functionality.'}
+                  'The application caught a rendering exception. Your session remains secure. You can retry this component or return to the dashboard.'}
               </p>
             </div>
 
@@ -60,24 +63,23 @@ export class ErrorBoundary extends Component<Props, State> {
               <Button
                 type="button"
                 onClick={this.handleReset}
-                className="h-11 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm gap-2 shadow-md shadow-slate-900/10 cursor-pointer transition-all active:scale-95"
+                className="h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-slate-950 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 font-bold text-xs sm:text-sm gap-2 shadow-sm cursor-pointer transition-all active:scale-95"
               >
-                <RefreshCw className="h-4 w-4 text-indigo-400" />
-                Reload Staff Management
+                <RefreshCw className="h-4 w-4 text-cyan-400 dark:text-slate-950" />
+                Retry Component
               </Button>
-              {this.props.showBackHome && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    window.location.href = '/dashboard';
-                  }}
-                  className="h-11 px-5 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs sm:text-sm gap-2 cursor-pointer"
-                >
-                  <ArrowLeft className="h-4 w-4 text-slate-500" />
-                  Back to Dashboard
-                </Button>
-              )}
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  window.location.href = '/dashboard';
+                }}
+                className="h-10 sm:h-11 px-4 sm:px-5 rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold text-xs sm:text-sm gap-2 cursor-pointer"
+              >
+                <Home className="h-4 w-4 text-slate-400" />
+                Dashboard Home
+              </Button>
             </div>
           </Card>
         </div>

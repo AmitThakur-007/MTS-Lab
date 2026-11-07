@@ -1,0 +1,1014 @@
+# MASTER PROMPT: MTS LAB — COMPLETE WEBSITE, BACKEND, DASHBOARD & ALL USER ROLES ENTERPRISE-GRADE OPTIMIZATION
+
+Act as a principal full-stack software architect, senior frontend and backend engineer, database specialist, SaaS product designer, security engineer, and performance optimization expert.
+
+Your mission is to comprehensively audit, optimize, upgrade, and make the **entire existing MTS LAB website and Repair Management System production-ready**.
+
+This task covers the complete public website, frontend, backend, database, authentication, all dashboards, every user role, all pages, all existing features, and all user interactions.
+
+**This is an existing production application. Do not rebuild it from scratch. Inspect the actual source code, identify root causes, and improve the existing system while preserving its data, architecture, business logic, and working functionality.**
+
+Website: https://www.mobiletechnologystation.com.np/
+
+Business: MTS LAB — Professional Smartphone Repair  
+Location: New Road / Pakosadak, Kathmandu, Nepal  
+Design direction: Premium technology aesthetic using charcoal, graphite, black, silver, and electric cyan.
+
+---
+
+# PART 1 — COMPLETE SYSTEM AUDIT
+
+## 1. Inspect the entire existing application
+
+Before implementing anything, inspect the complete repository and understand:
+
+- Frontend framework and architecture.
+- Backend framework and API structure.
+- Database schema, relationships, and migrations.
+- Authentication and session management.
+- All user roles and RBAC permissions.
+- Public website routes and pages.
+- Staff dashboard routes and pages.
+- Existing navigation and sidebar architecture.
+- Global theme controller.
+- Forms, tables, filters, modals, and reusable components.
+- Data-fetching and caching architecture.
+- Realtime subscriptions and notification systems.
+- SMS Center and SMS Reports.
+- WhatsApp integration.
+- Repair management workflows.
+- Customer and staff management.
+- Inventory, revenue, attendance, warranty, and courier modules.
+- Existing error-handling and validation mechanisms.
+
+Identify outdated implementations, duplicated logic, slow APIs, unnecessary database queries, loading problems, race conditions, inconsistent UI patterns, security weaknesses, and broken user workflows.
+
+Create an implementation plan based on actual findings.
+
+Do not assume routes, database fields, frameworks, APIs, or permissions. Verify them from the repository.
+
+# PART 2 — IMPLEMENT THE FOLLOWING 20 FEATURES SYSTEM-WIDE
+
+## 2. Optimistic UI Updates
+
+Implement optimistic updates for appropriate user actions.
+
+Examples:
+
+- Updating repair status.
+- Assigning technicians.
+- Updating customer information.
+- Updating inventory records.
+- Confirming attendance.
+- Updating warranty information.
+- Managing courier records.
+- Updating staff information.
+- Updating service prices.
+- Managing slideshow content.
+- Marking notifications as read.
+- Other suitable CRUD operations.
+
+Requirements:
+
+- Update the interface immediately after user interaction.
+- Send the actual request to the backend.
+- Confirm the update after successful server response.
+- Roll back the optimistic update if the request fails.
+- Display a clear error notification.
+- Prevent duplicate submissions.
+- Keep frontend state consistent with authoritative backend data.
+- Handle concurrent updates safely.
+- Never display an optimistic success as a permanently saved result before server confirmation.
+
+## 3. Skeleton Loaders
+
+Implement reusable, professional skeleton loading components across the entire application.
+
+Apply them to:
+
+- Public website pages where dynamic content is loaded.
+- Dashboard overview cards.
+- Charts and analytics.
+- Tables and lists.
+- Repair records.
+- New Repair forms.
+- Technician Manager.
+- Customer Hub.
+- SMS Center.
+- SMS Reports.
+- Courier Hub.
+- Battery Warranty Hub.
+- Services and Repair Prices.
+- Slideshow CMS.
+- Inventory Hub.
+- Attendance.
+- Repair-Related Damage.
+- Staff Management.
+- Revenue Hub.
+- Settings.
+- Transfer.
+- Notifications.
+- Search results.
+- Product and service details.
+- All other asynchronous features.
+
+Requirements:
+
+- Use feature-specific skeleton layouts.
+- Reuse shared skeleton components.
+- Avoid blank screens and layout shifts.
+- Support Dark Mode and Light Mode.
+- Show skeletons only for the components currently loading.
+- Preserve existing content during background refreshes where appropriate.
+- Never display fake zero values while statistics are loading.
+- Replace skeletons with actual data when requests finish.
+- Provide appropriate empty and error states.
+- Respect reduced-motion preferences.
+
+## 4. Command Palette
+
+Implement a powerful global command palette for the staff dashboard.
+
+Suggested shortcut:
+
+`Ctrl + K` / `Cmd + K`
+
+Features:
+
+- Search dashboard pages.
+- Navigate to authorized modules.
+- Search relevant records where permitted.
+- Find customers and repairs.
+- Open frequently used actions.
+- Access settings and reports.
+- Display recent pages or frequently used actions where appropriate.
+
+Requirements:
+
+- Show only actions and pages accessible to the current role.
+- Enforce backend authorization for data-related actions.
+- Support keyboard navigation.
+- Support Enter to select.
+- Support Escape to close.
+- Provide search suggestions.
+- Display loading, empty, and error states.
+- Debounce search requests.
+- Avoid unnecessary API requests.
+- Make the interface responsive.
+
+Do not expose sensitive information through unauthorized command results.
+
+## 5. Persistent Sidebar Navigation
+
+Optimize the existing dashboard sidebar.
+
+Requirements:
+
+- Consistent navigation across authorized dashboard pages.
+- Expand and collapse functionality.
+- Preserve appropriate navigation state during route changes.
+- Highlight the active page and parent section.
+- Support nested navigation.
+- Add tooltips for collapsed navigation.
+- Show notification badges only when backed by actual data.
+- Display only authorized modules.
+- Support desktop, tablet, and mobile layouts.
+- Use a responsive mobile navigation drawer.
+- Avoid unnecessary sidebar remounting.
+- Preserve navigation state where appropriate.
+
+The sidebar should remain stable when switching between dashboard modules.
+
+## 6. Loading and Empty States
+
+Create a unified loading, empty, and error-state system.
+
+Every page and data-driven component must handle:
+
+1. Initial loading.
+2. Background refreshing.
+3. Successfully loaded content.
+4. Genuine empty data.
+5. API errors.
+6. Unauthorized access.
+7. Expired sessions.
+8. Network failures.
+9. Partial data availability.
+
+Requirements:
+
+- Use skeletons for initial loading.
+- Use subtle refresh indicators for background updates.
+- Show meaningful empty-state messages.
+- Provide relevant actions when appropriate.
+- Include retry functionality for recoverable errors.
+- Never show an empty table when the actual problem is a failed API request.
+- Never replace API failures with fake empty arrays or zero statistics.
+
+## 7. Autosave Functions
+
+Implement autosave for appropriate forms and editable content.
+
+Potential areas:
+
+- Repair notes and permitted draft fields.
+- Customer information drafts.
+- Internal staff notes.
+- CMS content.
+- Slideshow editing.
+- Service descriptions.
+- Settings.
+- Other suitable long-form editing workflows.
+
+Requirements:
+
+- Save changes automatically after a short inactivity period.
+- Display clear states: Saving, Saved, Unsaved Changes, and Save Failed.
+- Prevent unnecessary repeated requests.
+- Handle network interruption.
+- Retry safely where appropriate.
+- Preserve unsaved work during temporary failures.
+- Avoid overwriting newer data with older requests.
+- Use server-side validation and authorization.
+- Prevent autosave from accidentally submitting or completing a repair.
+- Respect existing business workflows and explicit confirmation requirements.
+
+Do not autosave sensitive or destructive actions without appropriate user confirmation.
+
+## 8. Debouncing
+
+Implement appropriate debouncing for:
+
+- Customer search.
+- Repair number search.
+- Phone number search.
+- Product and inventory search.
+- SMS and WhatsApp message searches.
+- Staff search.
+- Service search.
+- Report filters.
+- Command palette search.
+- Other search fields that trigger API requests.
+
+Requirements:
+
+- Prevent an API request for every keystroke.
+- Use an appropriate configurable delay.
+- Cancel or ignore outdated requests.
+- Display responsive search loading indicators.
+- Ensure the latest search result is displayed.
+- Preserve immediate local input responsiveness.
+- Avoid duplicate requests.
+
+## 9. Throttling
+
+Use throttling for appropriate high-frequency interactions:
+
+- Scroll-based events.
+- Resize events.
+- Repeated button actions.
+- Infinite-scroll loading.
+- Frequent refresh actions.
+- Realtime event processing.
+- Other high-frequency UI interactions.
+
+Prevent excessive API requests and expensive rendering without making the interface feel unresponsive.
+
+Clean up timers, event listeners, and subscriptions correctly.
+
+## 10. Smart Form Validation
+
+Implement consistent frontend and backend validation.
+
+Requirements:
+
+- Validate required fields.
+- Validate phone numbers using the application's actual supported formats.
+- Validate email addresses.
+- Validate numeric values and prices.
+- Validate dates and date ranges.
+- Validate file types and file sizes.
+- Validate repair and customer information.
+- Validate role-specific form fields.
+- Provide clear field-level error messages.
+- Prevent invalid submissions.
+- Display loading and success states.
+- Preserve user-entered values when validation fails.
+- Prevent duplicate submissions.
+- Validate all important business rules on the backend.
+
+Frontend validation must never replace backend validation.
+
+Do not change existing business rules without verifying their intended behavior.
+
+## 11. Bulk Actions on Lists
+
+Implement or optimize bulk actions where appropriate.
+
+Potential modules:
+
+- Repairs.
+- Customers.
+- Staff.
+- Inventory.
+- Attendance.
+- SMS records.
+- Courier records.
+- Warranty records.
+- Notifications.
+- Other suitable list-based features.
+
+Requirements:
+
+- Row selection.
+- Select all visible records.
+- Clear selection.
+- Bulk update where authorized.
+- Bulk status changes where permitted.
+- Bulk export where permitted.
+- Bulk archive or delete only when supported by existing business rules.
+- Confirmation before destructive actions.
+- Show selected record count.
+- Display progress for long-running operations.
+- Report successful and failed records individually.
+- Prevent duplicate processing.
+- Enforce permissions on the backend.
+
+Never perform destructive bulk actions without explicit confirmation.
+
+## 12. Reusable Data Table
+
+Create or optimize a shared, reusable data table architecture.
+
+Use it across relevant modules:
+
+- Repairs.
+- Customers.
+- Staff.
+- SMS Center.
+- SMS Reports.
+- Inventory.
+- Attendance.
+- Courier Hub.
+- Battery Warranty Hub.
+- Revenue Hub.
+- Repair-Related Damage.
+- Other record-based features.
+
+Required capabilities:
+
+- Server-side pagination.
+- Search.
+- Sorting.
+- Column visibility where appropriate.
+- Advanced filtering.
+- Row selection.
+- Bulk actions.
+- Responsive layout.
+- Loading skeletons.
+- Empty states.
+- Error states.
+- Retry actions.
+- Row-level actions.
+- Export where authorized.
+- Consistent Dark Mode and Light Mode.
+
+Requirements:
+
+- Use actual backend records.
+- Avoid loading entire database tables unnecessarily.
+- Preserve filter and pagination state where appropriate.
+- Avoid duplicated table implementations.
+- Keep module-specific functionality configurable.
+- Maintain accessible keyboard and screen-reader behavior.
+
+Do not force every feature into an identical table when cards, timelines, forms, or other layouts are more appropriate.
+
+## 13. Advanced Data Filtering
+
+Implement consistent and efficient advanced filtering across relevant modules.
+
+Support appropriate combinations of:
+
+- Search.
+- Status.
+- Date range.
+- Today.
+- Yesterday.
+- This Week.
+- This Month.
+- Custom Date Range.
+- Staff member.
+- Assigned technician.
+- Customer.
+- Repair number.
+- Device model.
+- Category.
+- Payment status.
+- Channel.
+- Other module-specific fields.
+
+Requirements:
+
+- Backend-supported filtering.
+- Efficient database queries.
+- Correct pagination.
+- Accurate filter combinations.
+- Clear all-filters action.
+- Active-filter indicators.
+- Filter persistence where appropriate.
+- Consistent timezone handling using `Asia/Kathmandu` for business dates.
+- No inaccurate statistics caused by frontend-only filtering.
+
+Do not apply irrelevant filters to modules that do not support them.
+
+## 14. Keyboard Shortcuts
+
+Implement a consistent keyboard shortcut system.
+
+Suggested shortcuts:
+
+| Shortcut | Action |
+|---|---|
+| Ctrl/Cmd + K | Open Command Palette |
+| Ctrl/Cmd + / | Show available shortcuts |
+| Escape | Close active modal or palette |
+| Ctrl/Cmd + S | Save current editable form where appropriate |
+| Ctrl/Cmd + Enter | Submit an eligible form where safe |
+| / | Focus search when not typing in an input |
+| Arrow keys | Navigate menus and selectable lists |
+
+Requirements:
+
+- Avoid conflicts with browser and operating-system shortcuts.
+- Do not override normal text input behavior.
+- Respect active modal and form context.
+- Show a keyboard shortcut help panel.
+- Support accessibility.
+- Make shortcuts configurable if the existing architecture supports it.
+
+## 15. Tier-Based UI Indicators
+
+Inspect the existing application for subscription plans, service tiers, staff permission tiers, or feature access levels.
+
+If actual tier or subscription functionality exists:
+
+- Display accurate tier indicators.
+- Show available and restricted features appropriately.
+- Display upgrade information only where applicable.
+- Reflect actual backend entitlement data.
+- Enforce restrictions on the backend.
+
+If no tier-based subscription system exists, do not invent one or add fake plan badges. Instead, apply this feature only to existing permission or access-level indicators where meaningful.
+
+## 16. Onboarding Data Capture
+
+Improve onboarding and first-time user experiences where appropriate.
+
+Potential areas:
+
+- Staff onboarding.
+- Customer registration.
+- Customer profile completion.
+- New repair intake.
+- Supplier or partner registration if supported.
+- First-time dashboard guidance.
+
+Requirements:
+
+- Clear instructions.
+- Minimal required fields.
+- Step-by-step forms where useful.
+- Field validation.
+- Save progress where appropriate.
+- Prevent duplicate registrations.
+- Respect existing staff approval and account authorization rules.
+- Enforce data privacy and permissions.
+
+Do not collect unnecessary personal information.
+
+## 17. Referral and Affiliate Pages
+
+Inspect whether the existing MTS LAB system already supports referral, affiliate, or partner functionality.
+
+If it exists:
+
+- Optimize referral and affiliate pages.
+- Display accurate referral records.
+- Provide referral tracking.
+- Display commissions and statuses only if supported by actual business logic.
+- Provide authorized search, filters, and reports.
+- Ensure secure referral attribution.
+- Prevent duplicate or fraudulent referral claims.
+
+If referral or affiliate functionality does not exist, do not invent commission calculations, payment systems, or fake referral data. Report the missing functionality separately rather than silently adding an unrelated business module.
+
+## 18. Custom 404 Page
+
+Implement a professional MTS LAB branded 404 page.
+
+Requirements:
+
+- Clear "Page Not Found" message.
+- Professional visual design.
+- Link to the homepage.
+- Link to the appropriate dashboard when the user is authenticated and authorized.
+- Back navigation option.
+- Responsive layout.
+- Dark Mode and Light Mode support.
+- No unnecessary animations.
+
+Also ensure unauthorized and missing-resource pages are handled correctly without exposing protected information.
+
+## 19. Mobile-Optimized SaaS Layouts
+
+Optimize the complete public website and internal dashboards for:
+
+- iPhone.
+- Android smartphones.
+- iPad.
+- Tablets.
+- Laptops.
+- Desktop monitors.
+- Large and ultrawide screens.
+- Supported smart TV browsers.
+
+Requirements:
+
+- Responsive navigation.
+- Compact dashboard cards.
+- Mobile-friendly tables.
+- Proper drawer and modal sizing.
+- Touch-friendly buttons.
+- Responsive filters.
+- Readable typography.
+- No horizontal overflow.
+- Correct safe-area handling.
+- Smooth scrolling.
+- Responsive skeleton layouts.
+- Consistent layouts across portrait and landscape orientations.
+
+Do not simply scale desktop screens down. Adapt the interface for actual mobile usage.
+
+## 20. Destructive Action Protection
+
+Protect sensitive and irreversible operations.
+
+Examples:
+
+- Deleting customers.
+- Deleting staff.
+- Deleting repair records.
+- Deleting SMS or WhatsApp records.
+- Deleting warranty records.
+- Deleting inventory records.
+- Deleting financial records.
+- Permanent deletion.
+- Bulk deletion.
+- Other destructive operations.
+
+Requirements:
+
+- Display a clear confirmation dialog.
+- Identify what will be affected.
+- Show the number of affected records for bulk operations.
+- Require explicit confirmation.
+- Use stronger verification for sensitive actions based on existing security policy.
+- Enforce permissions on the backend.
+- Maintain audit logs for sensitive actions where supported.
+- Prevent accidental double-click execution.
+- Use soft deletion or archival where appropriate.
+- Preserve historical relationships and audit information.
+- Avoid destructive cascade deletion.
+- Never permanently delete production records unexpectedly.
+
+Reuse existing MFA/2FA and verification mechanisms for sensitive actions where implemented.
+
+## 21. Graceful Error Recovery
+
+Implement consistent error handling across frontend and backend.
+
+Handle:
+
+- Network failures.
+- API timeouts.
+- Server errors.
+- Validation failures.
+- Authentication expiration.
+- Permission errors.
+- Database errors.
+- Realtime disconnections.
+- File upload failures.
+- Concurrent editing conflicts.
+- Partial data loading.
+- Unexpected frontend exceptions.
+
+Requirements:
+
+- Clear user-friendly messages.
+- Retry options for recoverable errors.
+- Preserve user input where possible.
+- Avoid losing unsaved work.
+- Avoid exposing internal stack traces or sensitive backend details.
+- Log technical details securely.
+- Use appropriate error boundaries.
+- Recover affected components without unnecessarily reloading the entire application.
+- Provide a safe fallback when a noncritical feature fails.
+
+---
+
+# PART 3 — COMPLETE WEBSITE AND BACKEND OPTIMIZATION
+
+## 22. Public website frontend
+
+Apply consistent performance, accessibility, and responsive improvements to all existing public pages, including:
+
+- Home.
+- Services.
+- Individual service pages.
+- Track Repair.
+- Contact.
+- About.
+- Shop.
+- Product details.
+- Search results.
+- Other existing public pages.
+
+Optimize:
+
+- Initial loading.
+- Navigation.
+- Images.
+- Forms.
+- Search.
+- Service cards.
+- Product listings.
+- Page transitions.
+- Responsive layouts.
+- Error and empty states.
+- Theme compatibility where applicable.
+
+Preserve the existing MTS LAB brand identity, content, SEO structure, and working features.
+
+## 23. All staff dashboards and roles
+
+Optimize every existing authorized dashboard feature for:
+
+- SUPER_ADMIN.
+- ADMIN.
+- MANAGER.
+- RECEPTIONIST.
+- HEAD_TECHNICIAN.
+- TECHNICIAN.
+
+Inspect actual permissions before changing navigation or feature access.
+
+Cover existing modules, including:
+
+- Overview.
+- Repairs.
+- New Repair.
+- Technician Manager.
+- Customer Hub.
+- SMS Center.
+- SMS Reports.
+- Courier Hub.
+- Battery Warranty Hub.
+- Services and Repair Prices.
+- Slideshow CMS.
+- Inventory Hub.
+- Attendance.
+- Repair-Related Damage.
+- Staff Management.
+- Revenue Hub.
+- Settings.
+- Theme Controller.
+- Transfer.
+- Notifications.
+- All other existing modules.
+
+Do not add restricted modules to roles that are not authorized to use them.
+
+## 24. Backend API and database optimization
+
+Audit the entire backend.
+
+Optimize:
+
+- API response times.
+- Database queries.
+- Query aggregation.
+- Pagination.
+- Search.
+- Filtering.
+- Authentication.
+- Authorization.
+- Validation.
+- Caching.
+- Realtime events.
+- Error handling.
+- Transactions.
+- File uploads.
+- Data consistency.
+
+Requirements:
+
+- Backend remains the source of truth.
+- Enforce RBAC on every protected API.
+- Prevent IDOR/BOLA.
+- Validate all user input.
+- Prevent duplicate records where business rules require uniqueness.
+- Use database transactions where appropriate.
+- Avoid N+1 queries.
+- Add indexes based on actual query patterns.
+- Preserve existing database relationships.
+- Avoid unnecessary schema changes.
+- Protect customer and staff information.
+- Maintain auditability for sensitive operations.
+
+## 25. Authentication and session performance
+
+Ensure:
+
+- Dashboard initialization waits for valid authentication and permissions.
+- Protected pages do not issue unauthorized requests during session initialization.
+- Expired sessions follow the existing refresh and logout workflow.
+- Role changes update accessible navigation and cached data.
+- Sensitive cached information is cleared on logout.
+- Multiple tabs do not cause inconsistent authentication states.
+- Login and logout remain secure and responsive.
+
+Do not weaken existing authentication or account approval policies.
+
+## 26. Global theme controller
+
+Optimize the existing global Dark Mode and Light Mode controller.
+
+Ensure theme consistency across:
+
+- Public pages where supported.
+- Every dashboard role.
+- Sidebar.
+- Command Palette.
+- Data tables.
+- Forms.
+- Modals.
+- Drawers.
+- Charts.
+- Skeletons.
+- Loading states.
+- Error states.
+- Empty states.
+- Notifications.
+
+Requirements:
+
+- Avoid incorrect theme flashes on page load.
+- Preserve existing user preferences.
+- Use shared design tokens.
+- Maintain accessible contrast.
+- Do not create duplicate theme systems.
+
+---
+
+# PART 4 — PERFORMANCE, RELIABILITY AND PRODUCTION QUALITY
+
+## 27. Application performance optimization
+
+Perform a complete performance audit covering:
+
+- First load.
+- Dashboard initialization.
+- Navigation.
+- API calls.
+- Database performance.
+- Component rendering.
+- Large lists.
+- Images.
+- JavaScript bundles.
+- Search interactions.
+- Realtime events.
+- Memory usage.
+
+Use appropriate techniques already compatible with the application:
+
+- Code splitting.
+- Lazy loading.
+- Efficient caching.
+- Background revalidation.
+- Memoization where beneficial.
+- Server-side pagination.
+- Debouncing.
+- Throttling.
+- Progressive rendering.
+- Optimized images.
+- Reusable components.
+
+Do not sacrifice data accuracy or security for performance.
+
+## 28. Reliability and data consistency
+
+Ensure that:
+
+- Frontend state matches backend data.
+- Optimistic updates roll back correctly.
+- Autosave does not overwrite newer changes.
+- Realtime updates do not duplicate records.
+- Statistics use authoritative database data.
+- Date filtering is consistent.
+- Role-specific views show authorized records only.
+- Concurrent updates are handled safely.
+- Failed requests can recover.
+- No feature depends on manual page refresh to display current data.
+
+## 29. Accessibility and usability
+
+Implement appropriate accessibility across the system:
+
+- Semantic HTML.
+- Accessible form labels.
+- Keyboard navigation.
+- Visible focus indicators.
+- Screen-reader support.
+- Appropriate ARIA attributes.
+- Accessible modal behavior.
+- Sufficient contrast.
+- Reduced-motion support.
+- Touch-friendly controls.
+
+Ensure the features remain usable on mobile devices and with keyboard-only navigation.
+
+---
+
+# PART 5 — TESTING AND VERIFICATION
+
+## 30. Test every role and every page
+
+Test each role separately:
+
+- SUPER_ADMIN.
+- ADMIN.
+- MANAGER.
+- RECEPTIONIST.
+- HEAD_TECHNICIAN.
+- TECHNICIAN.
+
+For every role:
+
+1. Log in.
+2. Verify authentication and permissions.
+3. Open the dashboard.
+4. Verify skeleton loading.
+5. Navigate through every authorized module.
+6. Test search, filters, forms, and tables.
+7. Test keyboard shortcuts.
+8. Test optimistic updates.
+9. Test autosave where implemented.
+10. Test bulk actions where permitted.
+11. Test error recovery.
+12. Test Dark Mode and Light Mode.
+13. Verify responsive layouts.
+14. Confirm restricted modules remain inaccessible.
+
+## 31. Test public website pages
+
+Test all public pages:
+
+- Home.
+- Services.
+- Service details.
+- Track Repair.
+- Contact.
+- About.
+- Shop.
+- Product details.
+- Search.
+- Custom 404.
+
+Verify:
+
+- Navigation.
+- Loading states.
+- Responsive layouts.
+- Forms.
+- Search.
+- Links.
+- Theme compatibility where supported.
+- Existing SEO and metadata.
+- Error handling.
+
+## 32. Technical verification
+
+Run the actual project commands and available tests:
+
+- Lint.
+- Type checking.
+- Unit tests.
+- Integration tests.
+- End-to-end tests.
+- Production build.
+- API verification.
+- Database query verification.
+- Authentication and RBAC tests.
+- Responsive UI tests.
+- Browser console checks.
+
+Test slow networks, failed requests, expired sessions, and concurrent updates.
+
+Do not claim a test passed unless it was actually executed.
+
+---
+
+# PART 6 — STRICT DEVELOPMENT RULES
+
+1. Inspect the complete existing repository before modifying code.
+2. Identify the root cause of each existing problem.
+3. Follow the existing framework and architecture.
+4. Reuse existing components, APIs, database tables, and libraries wherever appropriate.
+5. Avoid unnecessary dependencies.
+6. Do not rebuild working features without a technical reason.
+7. Do not introduce duplicate state-management, theme, or realtime systems.
+8. Do not use fake, hardcoded, or mock data in production features.
+9. Do not weaken authentication or RBAC.
+10. Do not expose restricted customer, staff, financial, or operational information.
+11. Do not perform destructive database migrations.
+12. Preserve all existing production records and relationships.
+13. Preserve unrelated uncommitted changes.
+14. Do not remove existing business functionality.
+15. Do not commit, push, or deploy.
+
+If a requested feature does not exist in the current application, determine whether it can be safely integrated into the existing architecture. Do not invent fake functionality or silently introduce unrelated business systems.
+
+---
+
+# PART 7 — FINAL COMPLETION REPORT
+
+After completing the implementation, provide a detailed report containing:
+
+### A. System audit
+- Existing architecture inspected.
+- Root causes identified.
+- Major issues discovered.
+
+### B. Frontend improvements
+- Public pages optimized.
+- Dashboard pages optimized.
+- Reusable components created or improved.
+- Skeleton loading implementation.
+- Responsive design improvements.
+
+### C. The 20 requested features
+Provide a status for each feature:
+
+- Implemented.
+- Already supported and optimized.
+- Not applicable.
+- Blocked, with an explanation.
+
+### D. Backend and database
+- API improvements.
+- Database query optimizations.
+- Schema/index changes, if any.
+- Authentication and permission improvements.
+- Data consistency improvements.
+
+### E. Role-based testing
+Report the results separately for SUPER_ADMIN, ADMIN, MANAGER, RECEPTIONIST, HEAD_TECHNICIAN, and TECHNICIAN.
+
+### F. Technical verification
+- Lint results.
+- Typecheck results.
+- Unit and integration test results.
+- End-to-end test results.
+- Production build results.
+- Performance findings.
+
+### G. Changed files
+List the actual files created, modified, and removed, with a brief explanation.
+
+### H. Remaining limitations
+Clearly identify anything that could not be completed or verified.
+
+---
+
+# FINAL ACCEPTANCE CRITERIA
+
+The task is complete only when:
+
+- The entire existing public website is optimized.
+- The complete backend is audited and improved.
+- Every authorized dashboard role receives a consistent, smooth experience.
+- Every existing page and feature uses appropriate loading, empty, and error states.
+- All 20 requested capabilities are implemented where applicable.
+- Shared components are reusable and consistent.
+- Forms, tables, navigation, filters, and search work reliably.
+- Frontend and backend data remain synchronized.
+- All permissions and security rules are preserved.
+- Dark Mode and Light Mode work correctly.
+- The application is responsive across supported devices.
+- Existing production data and business workflows remain intact.
+- Actual tests and production builds pass, or remaining failures are explicitly documented.
+
+**FINAL OBJECTIVE: Transform the existing MTS LAB website and Repair Management System into a premium, enterprise-quality, production-ready application with smooth interactions, fast loading, reusable architecture, reliable backend operations, secure role-based access, and a consistent user experience across every page, feature, and user role.**
+
+Do not merely make the interface look modern. Make the complete application technically reliable, performant, secure, maintainable, and genuinely smooth to use.

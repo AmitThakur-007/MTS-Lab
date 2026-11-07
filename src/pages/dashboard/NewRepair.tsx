@@ -55,6 +55,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { api } from '@/services/api';
 import { toast } from 'sonner';
+import { validateNepalPhone, validateEmail } from '@/lib/validation';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatNPR } from '@/lib/format';
 import { syncRepairToSupabase as syncRepairToRtdb, syncRepairToSupabase } from '@/lib/supabase';
@@ -561,10 +562,26 @@ export default function NewRepair() {
       return;
     }
 
-    const cleanPhone = customer.phone.replace(/\D/g, '');
-    if (cleanPhone.length < 8) {
-      toast.error('Please enter a valid phone number');
+    const phoneVal = validateNepalPhone(customer.phone);
+    if (!phoneVal.isValid) {
+      toast.error(phoneVal.error || 'Please enter a valid Nepali phone number');
       return;
+    }
+
+    if (customer.alternativePhone && customer.alternativePhone.trim()) {
+      const secPhoneVal = validateNepalPhone(customer.alternativePhone);
+      if (!secPhoneVal.isValid) {
+        toast.error(`Secondary Phone: ${secPhoneVal.error}`);
+        return;
+      }
+    }
+
+    if (customer.email && customer.email.trim()) {
+      const emailVal = validateEmail(customer.email, false);
+      if (!emailVal.isValid) {
+        toast.error(emailVal.error || 'Please enter a valid email address');
+        return;
+      }
     }
 
     if (receivingMethod === 'COURIER') {
